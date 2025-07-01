@@ -1,3 +1,4 @@
+# run.py
 import subprocess
 import os
 import sys
@@ -21,7 +22,6 @@ def print_color(text, color="green"):
 def run_command(command, shell=True, capture_output=False, check=False):
     """Executa um comando no shell e retorna o resultado, com opção de parar em caso de erro."""
     print_color(f"\n> Executando: {command}", "blue")
-    # Usar 'utf-8' para evitar problemas de encoding em diferentes sistemas
     result = subprocess.run(command, shell=shell, capture_output=capture_output, text=True, encoding='utf-8')
     if check and result.returncode != 0:
         print_color(f"Erro ao executar o comando: {command}", "red")
@@ -91,32 +91,18 @@ def start_bot(mode):
     data_volume = f"-v \"{os.path.abspath('data')}:/app/data\""
     logs_volume = f"-v \"{os.path.abspath('logs')}:/app/logs\""
     
-    # Define os parâmetros de execução com base no modo
-    if mode in ['test', 'trade']:
-        # Modos de serviço contínuo: rodam em segundo plano e reiniciam sempre
-        run_params = "-d --restart always"
-    elif mode == 'optimize':
-        # Modo de tarefa: roda em segundo plano, mas não reinicia automaticamente.
-        # O --rm é removido para que possamos ver os logs depois.
-        run_params = "-d" 
-    else:
-        # Modo padrão para qualquer outro comando (se houver): roda em primeiro plano e remove ao sair
-        run_params = "--rm"
-
-    # Garante que não haja um container antigo com o mesmo nome
-    print_color(f"Removendo container antigo '{container_name}' se existir...", "yellow")
-    run_command(f"docker rm -f {container_name}", capture_output=True)
-
+    run_params = "-d --restart always" if mode in ['test', 'trade'] else "--rm"
+    
     command = (f"docker run {run_params} --name {container_name} --env-file .env -e MODE={mode} {data_volume} {logs_volume} {DOCKER_IMAGE_NAME}")
     
     run_command(command, check=True)
     
-    # Mensagem de sucesso unificada para todos os modos que rodam em segundo plano
-    if mode in ['test', 'trade', 'optimize']:
-        print_color(f"Bot no modo '{mode}' iniciado em segundo plano. Para ver os logs, use:", "green")
-        print_color(f"python run.py logs", "blue")
-    else:
-        print_color("Processo iniciado. Você pode acompanhar o progresso nesta janela.", "yellow")
+    if mode in ['test', 'trade']:
+        print_color(f"Bot iniciado em segundo plano. Para ver os logs, use:", "green")
+        print_color("python run.py logs", "blue")
+    else: # Modo optimize
+        print_color("Otimização iniciada. O processo pode levar horas ou dias.", "yellow")
+        print_color(f"Você pode acompanhar o progresso nesta janela. Para parar de forma segura, pressione CTRL+C.", "yellow")
 
 def stop_bot():
     """Para e remove todos os containers do bot (funciona no Windows, Linux e macOS)."""
@@ -138,43 +124,44 @@ def stop_bot():
     print_color("Containers parados e removidos com sucesso.", "green")
 
 def show_logs():
-    """Mostra os logs de um container do bot que estiver ativo (test, trade ou optimize)."""
+    """Mostra os logs do container de test ou trade que estiver ativo."""
     check_docker_running()
-    print_color("--- Procurando por containers do bot ativos ---", "yellow")
+    print_color("--- Procurando por containers do bot ativos (test/trade) ---", "yellow")
 
-    # Lista de modos para procurar, em ordem de prioridade
-    modes_to_check = ["optimize", "test", "trade"]
+    result_test = run_command("docker ps -q --filter \"name=gcsbot-test\"", capture_output=True)
+    if result_test.stdout.strip():
+        container_name = "gcsbot-test"
+        print_color(f"Anexando aos logs do container '{container_name}'. Pressione CTRL+C para sair.", "green")
+        try:
+            subprocess.run(f"docker logs -f {container_name}", shell=True)
+        except KeyboardInterrupt:
+            print_color("\n\nDesanexado dos logs.", "yellow")
+        return
 
-    for mode in modes_to_check:
-        container_name = f"gcsbot-{mode}"
-        # Verifica se o container com esse nome está em execução
-        result = run_command(f"docker ps -q --filter \"name={container_name}\"", capture_output=True)
-        
-        if result.stdout.strip():
-            print_color(f"Anexando aos logs do container '{container_name}'. Pressione CTRL+C para sair.", "green")
-            try:
-                # Usa subprocess.run para que o CTRL+C seja capturado corretamente
-                subprocess.run(f"docker logs -f {container_name}", shell=True)
-            except KeyboardInterrupt:
-                print_color("\n\nDesanexado dos logs.", "yellow")
-            except subprocess.CalledProcessError:
-                 # Ocorre se o container parar enquanto os logs estão sendo vistos
-                 print_color(f"\nO container '{container_name}' parou de executar.", "yellow")
-            return # Sai da função após encontrar e mostrar os logs
+    result_trade = run_command("docker ps -q --filter \"name=gcsbot-trade\"", capture_output=True)
+    if result_trade.stdout.strip():
+        container_name = "gcsbot-trade"
+        print_color(f"Anexando aos logs do container '{container_name}'. Pressione CTRL+C para sair.", "green")
+        try:
+            subprocess.run(f"docker logs -f {container_name}", shell=True)
+        except KeyboardInterrupt:
+            print_color("\n\nDesanexado dos logs.", "yellow")
+        return
 
-    print_color("Nenhum container do bot (gcsbot-optimize, gcsbot-test ou gcsbot-trade) está em execução.", "red")
+    print_color("Nenhum container do bot (gcsbot-test ou gcsbot-trade) está em execução.", "red")
+
 
 def main():
     if len(sys.argv) < 2:
         print_color("Uso: python run.py [comando]", "blue")
         print("Comandos disponíveis:")
-        print("  setup      - Instala dependências e verifica o ambiente.")
-        print("  build      - Constrói a imagem Docker do bot.")
-        print("  optimize   - Roda a otimização em segundo plano via Docker.")
-        print("  test       - Roda o bot em modo TEST na Testnet 24/7 via Docker.")
-        print("  trade      - Roda o bot em modo TRADE na conta real 24/7 via Docker.")
-        print("  stop       - Para e remove todos os containers do bot.")
-        print("  logs       - Mostra os logs do bot que está rodando (optimize/test/trade).")
+        print("  setup         - Instala dependências e verifica o ambiente.")
+        print("  build         - Constrói a imagem Docker do bot.")
+        print("  optimize      - Roda o processo de otimização via Docker.")
+        print("  test          - Roda o bot em modo TEST na Testnet 24/7 via Docker.")
+        print("  trade         - Roda o bot em modo TRADE na conta real 24/7 via Docker.")
+        print("  stop          - Para e remove todos os containers do bot.")
+        print("  logs          - Mostra os logs do bot que está rodando em modo test/trade.")
         return
 
     command = sys.argv[1].lower()

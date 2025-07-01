@@ -20,8 +20,6 @@ def get_config_var(var_name, default_value=None):
 
 # --- MODO DE OPERAÇÃO ---
 MODE = get_config_var("MODE", "optimize").lower()
-FORCE_OFFLINE_MODE = get_config_var("FORCE_OFFLINE_MODE", "False").lower() == 'true'
-
 
 # --- CONFIGURAÇÕES DA BINANCE ---
 SYMBOL = get_config_var("SYMBOL", "BTCUSDT").upper()
@@ -32,8 +30,8 @@ API_KEY = get_config_var("BINANCE_TESTNET_API_KEY") if USE_TESTNET else get_conf
 API_SECRET = get_config_var("BINANCE_TESTNET_API_SECRET") if USE_TESTNET else get_config_var("BINANCE_API_SECRET")
 
 # Validação crítica das chaves de API
-if MODE in ['test', 'trade'] and not FORCE_OFFLINE_MODE and (not API_KEY or not API_SECRET):
-    raise ValueError(f"Para MODE='{MODE}' em modo online, as chaves da API devem ser configuradas no .env")
+if MODE in ['test', 'trade'] and (not API_KEY or not API_SECRET):
+    raise ValueError(f"Para MODE='{MODE}', as chaves da API correspondentes devem ser configuradas no .env")
 
 # --- ESTRATÉGIA DE GESTÃO DE PORTFÓLIO E RISCO ---
 # O MÁXIMO de capital em USDT que este bot tem permissão para gerenciar.
@@ -68,3 +66,5 @@ STRATEGY_PARAMS_FILE = os.path.join(DATA_DIR, "strategy_params.json")
 WFO_TRAIN_MINUTES = int(get_config_var("WFO_TRAIN_MINUTES", 43200)) # ~30 dias
 WFO_TEST_MINUTES = int(get_config_var("WFO_TEST_MINUTES", 10080))  # ~7 dias
 WFO_STEP_MINUTES = int(get_config_var("WFO_STEP_MINUTES", 10080))  # ~7 dias
+
+FORCE_OFFLINE_MODE = get_config_var("FORCE_OFFLINE_MODE", False)

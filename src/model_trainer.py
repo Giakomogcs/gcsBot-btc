@@ -11,7 +11,7 @@ from src.logger import logger
 from src.config import MODEL_FILE, SCALER_FILE
 from ta.volatility import BollingerBands, AverageTrueRange
 from ta.trend import MACD, ADXIndicator
-from ta.momentum import StochasticOscillator, RSIIndicator
+from ta.momentum import StochasticOscillator
 
 @jit(nopython=True)
 def create_labels_triple_barrier(
@@ -62,11 +62,11 @@ class ModelTrainer:
         # Lista definitiva de features. A "mente" completa do bot.
         self.feature_names = [
             'sma_7', 'sma_25', 'rsi', 'price_change_1m', 'price_change_5m',
-            'bb_width', 'bb_pband',
+            'bb_width', 'bb_pband', # Adicionada a feature %B (pband)
             'atr', 'macd_diff', 'stoch_osc',
-            'adx', 'adx_pos', 'adx_neg',
-            'dxy_close_change', 'vix_close_change',
-            'gold_close_change', 'us10y_close_change' # Corrigido para tnx -> us10y para consistência
+            'adx', 'adx_pos', 'adx_neg', # Features de Regime de Mercado
+            'dxy_close_change', 'vix_close_change', # Features Macro
+            'gold_close_change', 'tnx_close_change'
         ]
 
     def _prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -80,7 +80,7 @@ class ModelTrainer:
         df['atr'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=14).average_true_range()
         bb = BollingerBands(close=df['close'], window=20, window_dev=2)
         df['bb_width'] = (bb.bollinger_hband() - bb.bollinger_lband()) / (bb.bollinger_mavg() + epsilon)
-        df['bb_pband'] = bb.bollinger_pband()
+        df['bb_pband'] = bb.bollinger_pband() # %B para identificar sobrecompra/venda em mercados laterais
 
         # --- Tendência e Regime de Mercado ---
         df['sma_7'] = df['close'].rolling(window=7).mean()
@@ -92,7 +92,10 @@ class ModelTrainer:
         # --- Momento ---
         df['price_change_1m'] = df['close'].pct_change(1)
         df['price_change_5m'] = df['close'].pct_change(5)
-        df['rsi'] = RSIIndicator(close=df['close'], window=14).rsi()
+        delta = df['close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        df['rsi'] = 100 - (100 / (1 + (gain / (loss + epsilon))))
         df['stoch_osc'] = StochasticOscillator(high=df['high'], low=df['low'], close=df['close']).stoch()
 
         # --- Features Macroeconômicas (Variação na última hora) ---
@@ -100,32 +103,25 @@ class ModelTrainer:
             'dx_close': 'dxy_close_change',
             'vix_close': 'vix_close_change',
             'gc_close': 'gold_close_change',
-            'us10y_close': 'us10y_close_change' # Corrigido para tnx -> us10y para consistência
+            'tnx_close': 'tnx_close_change'
         }
         for col_in, col_out in macro_map.items():
             if col_in in df.columns:
-                # ## AJUSTE CRÍTICO ##
-                # Removemos o .fillna(0). Os NaNs gerados no início do dataset
-                # serão tratados de forma limpa pelo df.dropna() no final da função.
-                # Isso impede que o modelo aprenda com dados artificiais ("variação de 0%").
-                df[col_out] = df[col_in].pct_change(60)
+                df[col_out] = df[col_in].pct_change(60).fillna(0)
             else:
                 df[col_out] = 0 # Garante que a coluna exista mesmo que a busca de dados falhe
         
         # --- CORREÇÃO CRÍTICA: ELIMINAÇÃO DO LOOK-AHEAD BIAS ---
-        # Desloca os dados em 1 período para garantir que o modelo não veja dados do futuro.
+        # Desloca todas as colunas de features em uma vela para o futuro.
         df[self.feature_names] = df[self.feature_names].shift(1)
         
-        # --- Limpeza final de dados ---
-        # Remove quaisquer valores infinitos que possam ter sido gerados
+        # Limpeza final de dados
         df.replace([np.inf, -np.inf], np.nan, inplace=True)
-        # Remove todas as linhas que contêm qualquer valor NaN, garantindo um dataset 100% limpo para o treino
         df.dropna(inplace=True)
         
         return df
 
     def train(self, data: pd.DataFrame, all_params: dict):
-        """Prepara os dados, treina e retorna o modelo e o normalizador."""
         if len(data) < 500:
             logger.warning(f"Dados insuficientes para treino ({len(data)} registros). Pulando.")
             return None, None
@@ -152,9 +148,8 @@ class ModelTrainer:
         y = pd.Series(labels_np, index=df_full.index, name="label")
         X = df_full[self.feature_names]
         
-        # Valida se há exemplos suficientes de ambas as classes (compra e venda)
         if y.value_counts().get(1, 0) < 20 or y.value_counts().get(2, 0) < 20:
-            logger.warning(f"Não há exemplos suficientes de compra/venda para um treino confiável. Counts: {y.value_counts().to_dict()}")
+            logger.warning(f"Não há exemplos suficientes de compra/venda. Counts: {y.value_counts().to_dict()}")
             return None, None
             
         logger.debug("Normalizando features e treinando o modelo LightGBM...")
@@ -174,7 +169,6 @@ class ModelTrainer:
             'lambda_l2': all_params.get('lambda_l2', 0.1),
         }
 
-        # class_weight='balanced' é crucial para dados financeiros desbalanceados
         model = LGBMClassifier(**model_params, random_state=42, n_jobs=-1, class_weight='balanced', verbosity=-1)
         model.fit(X_scaled, y)
         

@@ -24,6 +24,3 @@ LONG_TERM_HOLD_PCT=0.50
 # Do capital de TRADING restante, qual a % de risco por operação? Este é o seu principal controle.
 # Ex: 0.02 = 2% do capital de trading será arriscado em cada nova operação.
 RISK_PER_TRADE_PCT=0.02
-
-# Útil para desenvolvimento sem internet ou em redes restritivas.
-FORCE_OFFLINE_MODE=False

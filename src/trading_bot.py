@@ -38,13 +38,13 @@ class PortfolioManager:
         self.trading_btc_balance = 0.0
 
     def sync_with_live_balance(self):
-        """Sincroniza o estado do portfólio com o saldo REAL da conta na Binance."""
+        """
+        Sincroniza o estado do portfólio com o saldo REAL da conta na Binance.
+        Esta é a função mais importante para a gestão dinâmica.
+        """
         try:
             logger.info("Sincronizando com o saldo real da conta Binance...")
-            # É mais seguro pegar o preço atual por uma chamada de API separada
-            data_manager = DataManager()
-            current_price = data_manager.client.get_symbol_ticker(symbol=SYMBOL)['price']
-            current_price = float(current_price)
+            current_price = float(self.client.get_symbol_ticker(symbol=SYMBOL)['price'])
             
             usdt_balance = float(self.client.get_asset_balance(asset='USDT')['free'])
             btc_balance = float(self.client.get_asset_balance(asset=SYMBOL.replace("USDT", ""))['free'])
@@ -53,11 +53,12 @@ class PortfolioManager:
             logger.info(f"Saldo real detectado: {usdt_balance:,.2f} USDT e {btc_balance:.8f} BTC. Valor total: ${real_total_portfolio_usdt:,.2f}")
             
             working_capital = min(real_total_portfolio_usdt, self.max_usdt_allocation)
-            logger.info(f"Capital de trabalho para o bot definido em: ${working_capital:,.2f}")
+            logger.info(f"Capital de trabalho para o bot definido em: ${working_capital:,.2f} (menor valor entre o saldo real e a alocação máxima)")
 
+            # Recalcula as alocações com base no capital de trabalho atual
             self.long_term_btc_holdings = (working_capital * self.long_term_hold_pct) / current_price
             self.trading_capital_usdt = working_capital * (1 - self.long_term_hold_pct)
-            self.trading_btc_balance = 0.0
+            self.trading_btc_balance = 0.0 # Zera o BTC de trading, pois ele será gerenciado pelas operações
 
             logger.info("--- Portfólio Sincronizado com Saldo Real ---")
             self.log_portfolio_status(current_price)
@@ -99,15 +100,15 @@ class PortfolioManager:
 
 class TradingBot:
     def __init__(self):
-        # A inicialização do cliente da Binance é gerenciada pelo DataManager
-        self.data_manager = DataManager()
-        self.client = self.data_manager.client
-        self.portfolio = PortfolioManager(self.client)
+        self.client = Client(API_KEY, API_SECRET, tld='com', testnet=USE_TESTNET)
         self.model = None
         self.scaler = None
+        self.data_manager = DataManager()
+        self.portfolio = PortfolioManager(self.client)
         
         self.in_trade_position = False
         self.buy_price = 0.0
+        
         self.strategy_params = {}
         
         signal.signal(signal.SIGINT, self.graceful_shutdown)
@@ -122,25 +123,34 @@ class TradingBot:
         sys.exit(0)
 
     def _initialize_trade_log(self):
-        header = ['timestamp', 'type', 'price', 'quantity_btc', 'value_usdt', 'reason', 'pnl_usdt', 'pnl_percent', 'total_portfolio_value_usdt']
+        header = [
+            'timestamp', 'type', 'price', 'quantity_btc', 'value_usdt', 'reason', 
+            'pnl_usdt', 'pnl_percent', 'total_portfolio_value_usdt', 
+            'trading_capital_usdt', 'trading_btc_balance', 'long_term_btc_holdings'
+        ]
         if not os.path.exists(TRADES_LOG_FILE):
             with open(TRADES_LOG_FILE, 'w', newline='', encoding='utf-8') as f:
                 csv.writer(f).writerow(header)
 
-    def _log_trade(self, trade_type, price, quantity_btc, reason, pnl_usdt=None, pnl_percent=None):
-        current_total_value = self.portfolio.get_total_portfolio_value_usdt(price)
+    def _log_trade(self, trade_type, price, quantity_btc, reason, current_btc_price, pnl_usdt=None, pnl_percent=None):
         with open(TRADES_LOG_FILE, 'a', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerow([
-                pd.Timestamp.now(tz='UTC'), trade_type, f"{price:.2f}", f"{quantity_btc:.8f}",
+                pd.Timestamp.now(tz='UTC'), trade_type, f"{price:.2f}", f"{quantity_btc:.8f}", 
                 f"{price * quantity_btc:.2f}", reason,
                 f"{pnl_usdt:.2f}" if pnl_usdt is not None else "",
                 f"{pnl_percent:.4f}" if pnl_percent is not None else "",
-                f"{current_total_value:.2f}"
+                f"{self.portfolio.get_total_portfolio_value_usdt(current_btc_price):.2f}",
+                f"{self.portfolio.trading_capital_usdt:.2f}",
+                f"{self.portfolio.trading_btc_balance:.8f}",
+                f"{self.portfolio.long_term_btc_holdings:.8f}"
             ])
 
     def _save_state(self):
-        portfolio_state = {k: v for k, v in self.portfolio.__dict__.items() if k != 'client'}
+        # O objeto `client` não pode ser salvo em JSON, então o removemos antes de salvar.
+        portfolio_state = self.portfolio.__dict__.copy()
+        portfolio_state.pop('client', None)
+
         state = {
             'in_trade_position': self.in_trade_position,
             'buy_price': self.buy_price,
@@ -148,156 +158,132 @@ class TradingBot:
         }
         with open(BOT_STATE_FILE, 'w') as f:
             json.dump(state, f, indent=4)
-        logger.info("Estado do bot salvo.")
+        logger.info(f"Estado do bot salvo.")
 
     def _load_state(self):
         if os.path.exists(BOT_STATE_FILE):
             try:
-                with open(BOT_STATE_FILE, 'r') as f: state = json.load(f)
+                with open(BOT_STATE_FILE, 'r') as f:
+                    state = json.load(f)
                 self.in_trade_position = state.get('in_trade_position', False)
                 self.buy_price = state.get('buy_price', 0.0)
-                if 'portfolio' in state: self.portfolio.__dict__.update(state['portfolio'])
-                logger.info("Estado anterior do bot carregado com sucesso.")
+                if 'portfolio' in state:
+                    self.portfolio.__dict__.update(state['portfolio'])
+                logger.info("Estado do bot carregado com sucesso.")
                 return True
             except Exception as e:
-                logger.error(f"Erro ao ler o arquivo de estado: {e}. Iniciando com um portfólio novo.")
+                logger.error(f"Erro ao ler o arquivo de estado: {e}. Iniciando do zero.")
         else:
-            logger.info("Nenhum arquivo de estado encontrado. Iniciando com um portfólio novo.")
+            logger.info("Nenhum arquivo de estado encontrado. Iniciando do zero.")
         return False
 
-    def load_model_and_params(self):
+    def load_model(self):
         try:
             self.model = joblib.load(MODEL_FILE)
             self.scaler = joblib.load(SCALER_FILE)
             logger.info("✅ Modelo e normalizador carregados com sucesso.")
-            with open(STRATEGY_PARAMS_FILE, 'r') as f: self.strategy_params = json.load(f)
-            logger.info(f"✅ Parâmetros da estratégia carregados: {self.strategy_params}")
             return True
-        except FileNotFoundError as e:
-            logger.error(f"ERRO: Arquivo '{e.filename}' não encontrado. Execute o modo 'optimize' primeiro.")
+        except FileNotFoundError:
+            logger.error("ERRO: Arquivos de modelo/normalizador não encontrados. Execute o modo 'optimize' primeiro.")
             return False
 
-    def _prepare_prediction_data(self):
-        """Prepara os dados mais recentes para que o modelo possa fazer uma predição."""
+    def _load_strategy_params(self):
         try:
-            # ## CORREÇÃO CRÍTICA ##
-            # Usamos a função principal do DataManager para garantir que TODOS os dados (crypto + macro)
-            # sejam carregados e atualizados a partir de seus caches.
-            df_combined = self.data_manager.update_and_load_data()
-            
-            # Garante que temos dados suficientes para calcular todos os indicadores
-            if df_combined.empty or len(df_combined) < 200:
-                 logger.warning(f"Dados insuficientes para predição ({len(df_combined)} linhas). Aguardando...")
-                 return None, None
+            with open(STRATEGY_PARAMS_FILE, 'r') as f:
+                self.strategy_params = json.load(f)
+            logger.info(f"✅ Parâmetros da estratégia carregados: {self.strategy_params}")
+        except FileNotFoundError:
+            logger.warning(f"Arquivo de parâmetros '{STRATEGY_PARAMS_FILE}' não encontrado. Use o modo 'optimize' para gerá-lo.")
 
-            # Usa a mesma classe ModelTrainer para garantir consistência na criação de features
+    def _prepare_prediction_data(self):
+        try:
+            end_date = pd.Timestamp.now(tz='UTC')
+            start_date = end_date - pd.Timedelta(days=2)
+            df_combined = self.data_manager.get_historical_data_by_batch(SYMBOL, '1m', start_date, end_date)
+            if df_combined.empty: return pd.DataFrame(), None
             trainer = ModelTrainer()
             df_features = trainer._prepare_features(df_combined.copy())
-            
-            if df_features.empty:
-                logger.warning("DataFrame de features ficou vazio após o preparo. Não é possível prever.")
-                return None, None
-            
-            # Pega a última linha de features disponível (que corresponde à vela mais recente)
-            last_feature_row = df_features.iloc[[-1]]
+            if df_features.empty: return pd.DataFrame(), None
+            last_feature_row = df_features.reindex(columns=trainer.feature_names, fill_value=0).tail(1)
             current_price = df_combined['close'].iloc[-1]
-            
             return last_feature_row, current_price
         except Exception as e:
             logger.error(f"Erro ao preparar dados para predição: {e}", exc_info=True)
-            return None, None
+            return pd.DataFrame(), None
 
     def execute_trade(self, side, quantity):
-        """Envia uma ordem de mercado para a exchange e retorna o resultado real."""
         try:
-            # Formata a quantidade para a precisão correta do BTC
+            # A precisão para BTC é geralmente de 6 a 8 casas decimais. 6 é seguro.
             formatted_quantity = "{:.6f}".format(quantity)
-            logger.info(f"Enviando ordem de mercado: Lado={side}, Quantidade={formatted_quantity}")
-            
+            logger.info(f"Enviando ordem: Lado={side}, Quantidade={formatted_quantity}")
             order = self.client.create_order(symbol=SYMBOL, side=side, type=Client.ORDER_TYPE_MARKET, quantity=formatted_quantity)
-            logger.info(f"ORDEM EXECUTADA: {order}")
-            
-            # Usa os 'fills' para obter o preço médio real da execução, que é mais preciso
+            logger.info(f"ORDEM ENVIADA: {order}")
             fills = order.get('fills', [])
             if fills:
                 avg_price = sum(float(f['price']) * float(f['qty']) for f in fills) / sum(float(f['qty']) for f in fills)
                 executed_qty = sum(float(f['qty']) for f in fills)
                 return order, avg_price, executed_qty
-            
-            # Fallback caso 'fills' não esteja presente (menos comum)
             return order, float(order.get('price', 0)), float(order.get('executedQty', 0))
         except BinanceAPIException as e:
             logger.error(f"ERRO DE API AO EXECUTAR ORDEM: {e}")
+            return None, None, None
         except Exception as e:
             logger.error(f"ERRO INESPERADO AO EXECUTAR ORDEM: {e}")
-        return None, None, None
+            return None, None, None
 
     def run(self):
-        """O loop principal do bot de trading."""
-        if not self.client:
-            logger.error("Cliente da Binance não inicializado. O bot não pode operar em modo de trade. Verifique as chaves de API e a conexão.")
-            return
-
-        if not self.load_model_and_params(): return
+        if not self.load_model(): return
         
         self._initialize_trade_log()
+        self._load_strategy_params()
         
         if not self._load_state():
             if not self.portfolio.sync_with_live_balance():
-                logger.error("Não foi possível inicializar o portfólio. Abortando.")
+                logger.error("Não foi possível inicializar o portfólio com o saldo real. Abortando.")
                 return
+
+        self.portfolio.log_portfolio_status(self.data_manager.get_current_price(SYMBOL))
 
         while True:
             try:
                 features_df, current_price = self._prepare_prediction_data()
-                
-                if features_df is None or current_price is None:
-                    time.sleep(60)
-                    continue
+                if features_df.empty or current_price is None:
+                    time.sleep(60); continue
 
                 if self.in_trade_position:
-                    profit_pct = (current_price / self.buy_price) - 1 if self.buy_price > 0 else 0
-                    if (profit_pct >= self.strategy_params['profit_threshold'] or 
-                        profit_pct <= -self.strategy_params['stop_loss_threshold']):
-                        
-                        logger.info(f"Sinal de Saída: Take-Profit/Stop-Loss atingido. PnL Atual: {profit_pct:.2%}")
+                    profit_pct = (current_price / self.buy_price) - 1
+                    if profit_pct >= self.strategy_params['profit_threshold'] or profit_pct <= -self.strategy_params['stop_loss_threshold']:
                         quantity_to_sell = self.portfolio.trading_btc_balance
-                        
-                        if quantity_to_sell > 0:
-                            order, sell_price, executed_qty = self.execute_trade(Client.SIDE_SELL, quantity_to_sell)
-                            if order and executed_qty > 0:
-                                pnl_usdt = (sell_price - self.buy_price) * executed_qty
-                                pnl_percent = (sell_price / self.buy_price) - 1 if self.buy_price > 0 else 0
-                                self.portfolio.update_on_sell(executed_qty, sell_price)
-                                self._log_trade("SELL", sell_price, executed_qty, "Take-Profit/Stop-Loss", pnl_usdt, pnl_percent)
-                                self.in_trade_position = False
-                                self._save_state()
-                else: # Se não está em posição, avalia a entrada
+                        order, sell_price, executed_qty = self.execute_trade(Client.SIDE_SELL, quantity_to_sell)
+                        if order and executed_qty > 0:
+                            pnl_usdt = (sell_price - self.buy_price) * executed_qty
+                            pnl_percent = (sell_price / self.buy_price) - 1 if self.buy_price > 0 else 0
+                            self.portfolio.update_on_sell(executed_qty, sell_price)
+                            self._log_trade("SELL", sell_price, executed_qty, "Take-Profit/Stop-Loss", current_price, pnl_usdt, pnl_percent)
+                            self.in_trade_position = False
+                            self._save_state()
+                else:
                     scaled_features = self.scaler.transform(features_df)
                     buy_confidence = self.model.predict_proba(scaled_features)[0][1]
-                    logger.info(f"Preço Atual: ${current_price:,.2f} | Confiança de Compra do Modelo: {buy_confidence:.2%}")
+                    logger.info(f"Preço: ${current_price:,.2f} | Confiança de Compra: {buy_confidence:.2%}")
                     
                     if buy_confidence > self.strategy_params.get('prediction_confidence', 0.75):
                         trade_size_usdt = self.portfolio.get_trade_size_usdt()
-                        if self.portfolio.trading_capital_usdt >= trade_size_usdt and trade_size_usdt > 10:
-                            logger.info(f"Sinal de Compra Forte! Executando trade de ~${trade_size_usdt:,.2f}...")
+                        if self.portfolio.trading_capital_usdt >= trade_size_usdt and trade_size_usdt > 10: # Mínimo de $10 para um trade
                             quantity_to_buy = trade_size_usdt / current_price
                             order, buy_price_filled, executed_qty = self.execute_trade(Client.SIDE_BUY, quantity_to_buy)
                             if order and executed_qty > 0:
                                 self.buy_price = buy_price_filled
                                 self.in_trade_position = True
                                 self.portfolio.update_on_buy(executed_qty, buy_price_filled)
-                                self._log_trade("BUY", buy_price_filled, executed_qty, f"Sinal do ML ({buy_confidence:.2%})")
+                                self._log_trade("BUY", buy_price_filled, executed_qty, f"Sinal do ML ({buy_confidence:.2%})", current_price)
                                 self._save_state()
                         else:
-                            logger.warning(f"Sinal de compra ignorado. Capital insuficiente ou tamanho do trade muito pequeno.")
+                            logger.warning(f"Sinal de compra, mas capital de trading ({self.portfolio.trading_capital_usdt:.2f}) insuficiente ou trade size ({trade_size_usdt:.2f}) muito baixo.")
 
-                logger.info("--- Ciclo de Decisão Concluído ---")
+                logger.info("--- Ciclo concluído, aguardando 60 segundos ---")
                 self.portfolio.log_portfolio_status(current_price)
                 time.sleep(60)
-            
-            except KeyboardInterrupt:
-                self.graceful_shutdown(None, None)
             except Exception as e:
                 logger.error(f"Erro inesperado no loop principal: {e}", exc_info=True)
                 time.sleep(60)
