@@ -63,7 +63,8 @@ class ModelTrainer:
             'adx', 'adx_pos', 'adx_neg',
             'regime_tendencia', 'regime_volatilidade',
             'dxy_close_change', 'vix_close_change',
-            'gold_close_change', 'tnx_close_change'
+            'gold_close_change', 'tnx_close_change',
+            'rsi_1h', 'macd_diff_1h', 'rsi_4h'
         ]
 
     def _prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -101,6 +102,21 @@ class ModelTrainer:
                 df[col_out] = df[col_in].pct_change(60).fillna(0)
             else:
                 df[col_out] = 0
+
+        logger.debug("Adicionando features de contexto de 1h e 4h...")
+        
+        # Agrega os dados para 1 hora
+        df_1h = df['close'].resample('h').last()
+        df['rsi_1h'] = RSIIndicator(close=df_1h, window=14).rsi().reindex(df.index, method='ffill')
+        df['macd_diff_1h'] = MACD(close=df_1h, window_fast=12, window_slow=26, window_sign=9).macd_diff().reindex(df.index, method='ffill')
+
+        # Agrega os dados para 4 horas
+        df_4h = df['close'].resample('4h').last()
+        df['rsi_4h'] = RSIIndicator(close=df_4h, window=14).rsi().reindex(df.index, method='ffill')
+        
+        # Preenche quaisquer NaNs restantes no início do dataframe
+        for col in ['rsi_1h', 'macd_diff_1h', 'rsi_4h']:
+            df[col] = df[col].bfill()
         
         df[self.feature_names] = df[self.feature_names].shift(1)
         df.replace([np.inf, -np.inf], np.nan, inplace=True)

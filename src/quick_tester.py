@@ -52,7 +52,7 @@ class QuickTester:
         df = pd.DataFrame(portfolio_history).set_index('timestamp')
         df['pnl'] = df['value'].diff()
         
-        monthly_report = df.resample('M').agg(
+        monthly_report = df.resample('ME').agg(
             start_capital=pd.NamedAgg(column='value', aggfunc='first'),
             end_capital=pd.NamedAgg(column='value', aggfunc='last'),
             total_pnl=pd.NamedAgg(column='pnl', aggfunc='sum'),
