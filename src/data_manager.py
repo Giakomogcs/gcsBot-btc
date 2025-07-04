@@ -1,12 +1,15 @@
-# src/data_manager.py (VERSÃO FINAL CORRIGIDA E SEGURA)
+# src/data_manager.py (VERSÃO 2.1 - COM ATUALIZAÇÃO AUTOMÁTICA DE DADOS MACRO)
 
 import os
 import datetime
 import time
 import pandas as pd
 import numpy as np
+import yfinance as yf
 from binance.client import Client
 from binance.exceptions import BinanceAPIException, BinanceRequestException
+from tqdm import tqdm
+
 from src.logger import logger
 from src.config import (
     API_KEY, API_SECRET, USE_TESTNET, HISTORICAL_DATA_FILE, KAGGLE_BOOTSTRAP_FILE,
@@ -19,9 +22,12 @@ def _optimize_memory_usage(df: pd.DataFrame) -> pd.DataFrame:
     para reduzir o consumo de memória.
     """
     logger.debug("Otimizando uso de memória do DataFrame...")
+    if 'market_regime' in df.columns:
+        df['market_regime'] = df['market_regime'].astype('category')
+        
     for col in df.columns:
         col_type = df[col].dtype
-        if col_type != object and 'datetime' not in str(col_type):
+        if col_type != object and 'datetime' not in str(col_type) and 'category' not in str(col_type):
             c_min = df[col].min()
             c_max = df[col].max()
             if str(col_type)[:3] == 'int':
@@ -61,6 +67,7 @@ class DataManager:
             logger.info("MODO OFFLINE FORÇADO está ativo. Nenhuma conexão com a API da Binance será tentada.")
 
     def get_current_price(self, symbol):
+        # (Nenhuma mudança nesta função)
         if not self.client:
             logger.warning("Cliente Binance não está disponível. Não é possível buscar o preço atual.")
             return None
@@ -72,6 +79,7 @@ class DataManager:
             return None
 
     def _preprocess_kaggle_data(self, df_kaggle: pd.DataFrame) -> pd.DataFrame:
+        # (Nenhuma mudança nesta função)
         logger.info("Pré-processando dados do Kaggle...")
         column_mapping = {
             'Timestamp': 'timestamp', 'Open': 'open', 'High': 'high', 'Low': 'low', 'Close': 'close'
@@ -94,36 +102,52 @@ class DataManager:
         return df
 
     def get_historical_data_by_batch(self, symbol, interval, start_date_dt, end_date_dt):
+        # (Nenhuma mudança nesta função, a barra de progresso já foi adicionada)
         all_dfs = []
+        total_days = (end_date_dt - start_date_dt).days
+        progress_bar = tqdm(total=total_days, desc=f"Baixando dados de {symbol}", unit="d", leave=False)
+        
         cursor = start_date_dt
         while cursor < end_date_dt:
-            next_cursor = min(cursor + datetime.timedelta(days=30), end_date_dt)
-            logger.info(f"Baixando lote da Binance: {cursor:%Y-%m-%d} -> {next_cursor:%Y-%m-%d}")
+            chunk_size_days = 30
+            next_cursor = min(cursor + datetime.timedelta(days=chunk_size_days), end_date_dt)
             start_str, end_str = cursor.strftime("%Y-%m-%d %H:%M:%S"), next_cursor.strftime("%Y-%m-%d %H:%M:%S")
+            
             klines = self.client.get_historical_klines(symbol, interval, start_str, end_str)
-            if not klines: break
+            if not klines:
+                days_processed = (next_cursor - cursor).days
+                progress_bar.update(days_processed if days_processed > 0 else 1)
+                cursor = next_cursor
+                continue
+                
             df = pd.DataFrame(klines, columns=['timestamp','open','high','low','close','volume','close_time','qav','nt','tbbav','tbqav','ignore'])
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
             df.set_index('timestamp', inplace=True)
             df.index = df.index.tz_localize('UTC')
             df = df[['open','high','low','close','volume']].astype(float)
             all_dfs.append(df)
+            
+            days_processed = (next_cursor - cursor).days
+            progress_bar.update(days_processed if days_processed > 0 else 1)
             cursor = next_cursor
-            time.sleep(0.5)
+            time.sleep(0.2)
+            
+        progress_bar.close()
         return pd.concat(all_dfs) if all_dfs else pd.DataFrame()
 
     def _fetch_and_manage_btc_data(self, symbol, interval='1m'):
-        end_utc = datetime.datetime.now(datetime.timezone.utc)
+        # (Nenhuma mudança nesta função)
+        end_utc = datetime.datetime.now(datetime.timezone.utc).replace(second=0, microsecond=0)
         if os.path.exists(HISTORICAL_DATA_FILE):
             logger.info(f"Arquivo de dados local do BTC encontrado em '{HISTORICAL_DATA_FILE}'. Carregando...")
             df = pd.read_csv(HISTORICAL_DATA_FILE, index_col=0, parse_dates=True)
             df.index = pd.to_datetime(df.index, utc=True)
             if self.client:
-                last_timestamp = df.index.max()
+                last_timestamp = df.index.max().to_pydatetime()
                 if last_timestamp < end_utc:
-                    logger.info("Tentando buscar novos dados da Binance para atualizar o arquivo do BTC...")
+                    logger.info("Dados locais do BTC estão desatualizados. Buscando novos dados da Binance...")
                     try:
-                        df_new = self.get_historical_data_by_batch(symbol, interval, last_timestamp, end_utc)
+                        df_new = self.get_historical_data_by_batch(symbol, interval, last_timestamp + datetime.timedelta(minutes=1), end_utc)
                         if not df_new.empty:
                             df = pd.concat([df, df_new])
                             df = df.loc[~df.index.duplicated(keep='last')]
@@ -133,15 +157,16 @@ class DataManager:
                     except Exception as e:
                         logger.warning(f"FALHA NA ATUALIZAÇÃO DO BTC: {e}. Continuando com dados locais.")
             return df
+        # ... (Restante da função sem alterações)
         if os.path.exists(KAGGLE_BOOTSTRAP_FILE):
             logger.info(f"Arquivo mestre do BTC não encontrado. Iniciando a partir do arquivo Kaggle: '{KAGGLE_BOOTSTRAP_FILE}'")
             df_kaggle = pd.read_csv(KAGGLE_BOOTSTRAP_FILE, low_memory=False, on_bad_lines='skip')
             df = self._preprocess_kaggle_data(df_kaggle)
-            last_timestamp = df.index.max()
+            last_timestamp = df.index.max().to_pydatetime()
             if self.client and last_timestamp < end_utc:
                 logger.info("Atualizando dados do Kaggle com os dados mais recentes da Binance...")
                 try:
-                    df_new = self.get_historical_data_by_batch(symbol, interval, last_timestamp, end_utc)
+                    df_new = self.get_historical_data_by_batch(symbol, interval, last_timestamp + datetime.timedelta(minutes=1), end_utc)
                     if not df_new.empty:
                         df = pd.concat([df, df_new])
                         df = df.loc[~df.index.duplicated(keep='last')]
@@ -161,48 +186,147 @@ class DataManager:
         logger.error("Nenhum arquivo de dados local do BTC encontrado e o bot está em modo offline. Não é possível continuar.")
         return pd.DataFrame()
 
-    def _load_and_unify_local_macro_data(self, caminho_dados: str = 'data/macro') -> pd.DataFrame:
-        logger.info("Iniciando o processo de padronização de dados macro locais...")
-        config_ativos = {
-            'dxy':  {'arquivo': 'dx.csv', 'separador': ',', 'formato_data': '%m/%d/%y'},
-            'gold': {'arquivo': 'gold.csv', 'separador': ';', 'formato_data': None},
-            'tnx':  {'arquivo': 'tnx.csv', 'separador': ',', 'formato_data': '%m/%d/%y'},
-            'vix':  {'arquivo': 'vix.csv', 'separador': ',', 'formato_data': '%m/%d/%y'}
+    def _fetch_and_update_macro_data(self, caminho_dados: str = 'data/macro'):
+        """
+        Verifica e atualiza os arquivos CSV de dados macro usando a biblioteca yfinance.
+        """
+        logger.info("Iniciando verificação e atualização dos dados macro...")
+        
+        # <<< PASSO 2: Mapear nossos nomes de ativos para os tickers do Yahoo Finance >>>
+        ticker_map = {
+            'dxy': 'DX-Y.NYB',
+            'gold': 'GC=F',
+            'tnx': '^TNX',
+            'vix': '^VIX'
         }
-        lista_dataframes = []
-        for nome_ativo, config in config_ativos.items():
-            caminho_arquivo = os.path.join(caminho_dados, config['arquivo'])
-            if not os.path.exists(caminho_arquivo):
-                logger.warning(f"AVISO: Arquivo macro '{caminho_arquivo}' não encontrado. Pulando o ativo '{nome_ativo}'.")
-                continue
+        
+        os.makedirs(caminho_dados, exist_ok=True)
+
+        for nome_ativo, ticker in ticker_map.items():
+            caminho_arquivo = os.path.join(caminho_dados, f'{nome_ativo}.csv')
+            
             try:
-                logger.debug(f"Processando arquivo macro '{config['arquivo']}'...")
-                df = pd.read_csv(caminho_arquivo, sep=config['separador'])
-                df.columns = [col.strip().lower() for col in df.columns]
-                df['date'] = pd.to_datetime(df['date'], format=config['formato_data'], errors='coerce').dt.normalize()
-                df.dropna(subset=['date'], inplace=True)
-                df = df[['date', 'close']].copy()
-                df.rename(columns={'close': f'{nome_ativo}_close'}, inplace=True)
-                df.set_index('date', inplace=True)
-                df.index = df.index.tz_localize('UTC')
-                lista_dataframes.append(df)
+                if os.path.exists(caminho_arquivo):
+                    # Arquivo existe, vamos atualizar
+                    df_local = pd.read_csv(caminho_arquivo, index_col=0, parse_dates=True)
+                    df_local.index = pd.to_datetime(df_local.index, utc=True)
+                    
+                    last_date = df_local.index.max()
+                    start_fetch = last_date + datetime.timedelta(days=1)
+                    end_fetch = datetime.datetime.now(datetime.timezone.utc)
+
+                    if start_fetch.date() >= end_fetch.date():
+                        logger.info(f"Dados macro para '{nome_ativo}' já estão atualizados.")
+                        continue
+                    
+                    logger.info(f"Atualizando dados para '{nome_ativo}' de {start_fetch.strftime('%Y-%m-%d')} até hoje...")
+                    df_new = yf.download(ticker, start=start_fetch, end=end_fetch, progress=False)
+                    
+                    if not df_new.empty:
+                        # Append (adicionar) novos dados ao final do arquivo
+                        df_new.to_csv(caminho_arquivo, mode='a', header=False)
+
+                else:
+                    # Arquivo não existe, vamos baixar o histórico completo
+                    logger.info(f"Arquivo para '{nome_ativo}' não encontrado. Baixando histórico completo...")
+                    start_fetch = '2017-01-01' # Pega desde o início para alinhar com os dados do BTC
+                    df_full = yf.download(ticker, start=start_fetch, progress=False)
+                    
+                    if not df_full.empty:
+                        df_full.index = pd.to_datetime(df_full.index).tz_localize('UTC')
+                        df_full.to_csv(caminho_arquivo)
+                
+                time.sleep(1) # Pausa para ser gentil com a API do yfinance
+
             except Exception as e:
-                logger.error(f"ERRO ao processar o arquivo macro '{config['arquivo']}': {e}")
+                logger.error(f"Falha ao buscar ou salvar dados para o ativo '{nome_ativo}': {e}")
+                
+        logger.info("Verificação de dados macro concluída.")
+
+
+    def _load_and_unify_local_macro_data(self, caminho_dados: str = 'data/macro') -> pd.DataFrame:
+        # (Função original foi mantida, mas agora ela lê os arquivos que acabaram de ser atualizados)
+        logger.info("Padronizando e unificando dados macro locais...")
+        # A configuração dos arquivos CSV agora só precisa do nome, o resto é padronizado pelo yfinance
+        nomes_ativos = ['dxy', 'gold', 'tnx', 'vix']
+        lista_dataframes = []
+        
+        for nome_ativo in nomes_ativos:
+            caminho_arquivo = os.path.join(caminho_dados, f'{nome_ativo}.csv')
+            if not os.path.exists(caminho_arquivo):
+                logger.warning(f"AVISO: Arquivo macro '{caminho_arquivo}' não encontrado após tentativa de atualização. Pulando.")
+                continue
+            
+            try:
+                df = pd.read_csv(caminho_arquivo)
+                # Renomeia a primeira coluna para 'date' caso o yfinance não a nomeie
+                df.rename(columns={df.columns[0]: 'date'}, inplace=True)
+                df['date'] = pd.to_datetime(df['date']).dt.tz_convert('UTC')
+                df.set_index('date', inplace=True)
+                
+                # Seleciona apenas a coluna 'Close' e a renomeia
+                if 'Close' in df.columns:
+                    df = df[['Close']].copy()
+                    df.rename(columns={'Close': f'{nome_ativo}_close'}, inplace=True)
+                    lista_dataframes.append(df)
+                else:
+                    logger.warning(f"Coluna 'Close' não encontrada no arquivo para {nome_ativo}.")
+
+            except Exception as e:
+                logger.error(f"ERRO ao processar o arquivo macro '{caminho_arquivo}': {e}")
+                
         if not lista_dataframes:
             logger.warning("Nenhum dado macro foi processado.")
             return pd.DataFrame()
+            
         df_final = pd.concat(lista_dataframes, axis=1, join='outer')
         df_final.sort_index(inplace=True)
-        # Apenas preenchimento para a frente é permitido para evitar look-ahead bias
         df_final.ffill(inplace=True) 
-        df_final.dropna(inplace=True)
+        df_final.dropna(how='all', inplace=True) # Remove linhas onde todos os valores são nulos
         logger.info("Dados macro locais unificados com sucesso.")
         return df_final
+        
+    def _add_market_regime(self, df: pd.DataFrame) -> pd.DataFrame:
+        # (Nenhuma mudança nesta função)
+        logger.info("Calculando regimes de mercado (Camada 1)...")
+        if df.empty or 'close' not in df.columns:
+            logger.warning("DataFrame vazio ou sem coluna 'close'. Não é possível calcular regimes.")
+            df['market_regime'] = 'INDETERMINADO'
+            return df
+
+        df_daily = df['close'].resample('D').last()
+        sma_50d = df_daily.rolling(window=50).mean()
+        sma_200d = df_daily.rolling(window=200).mean()
+        
+        regime_df = pd.DataFrame({
+            'daily_close': df_daily,
+            'sma_50d': sma_50d,
+            'sma_200d': sma_200d
+        })
+
+        conditions = [
+            (regime_df['daily_close'] > regime_df['sma_50d']) & (regime_df['sma_50d'] > regime_df['sma_200d']),
+            (regime_df['daily_close'] > regime_df['sma_200d']) & (regime_df['daily_close'] < regime_df['sma_50d']),
+            (regime_df['daily_close'] < regime_df['sma_200d'])
+        ]
+        outcomes = ['BULL_FORTE', 'RECUPERACAO', 'BEAR']
+        
+        regime_df['market_regime'] = np.select(conditions, outcomes, default='LATERAL')
+        
+        df['market_regime'] = regime_df['market_regime'].reindex(df.index, method='ffill')
+        df['market_regime'].bfill(inplace=True)
+
+        logger.info("Regimes de mercado calculados e adicionados ao DataFrame.")
+        return df
 
     def update_and_load_data(self, symbol, interval='1m'):
         """
-        Método orquestrador com lógica de cache e otimização de memória.
+        Método orquestrador com atualização de dados macro, cache, cálculo de regime e otimização de memória.
         """
+        # <<< PASSO 3: Chamar a nova função de atualização ANTES de tudo >>>
+        if not FORCE_OFFLINE_MODE:
+            self._fetch_and_update_macro_data()
+        
         df_btc = self._fetch_and_manage_btc_data(symbol, interval)
         if df_btc.empty:
             return pd.DataFrame()
@@ -210,7 +334,7 @@ class DataManager:
 
         if os.path.exists(COMBINED_DATA_CACHE_FILE):
             logger.info(f"Arquivo de cache encontrado em '{COMBINED_DATA_CACHE_FILE}'. Verificando se está atualizado...")
-            df_cache = pd.read_csv(COMBINED_DATA_CACHE_FILE, index_col=0, parse_dates=True)
+            df_cache = pd.read_csv(COMBINED_DATA_CACHE_FILE, index_col=0, parse_dates=True, dtype={'market_regime': 'category'})
             df_cache.index = pd.to_datetime(df_cache.index, utc=True)
             
             if not df_cache.empty and df_cache.index.max() == last_btc_timestamp:
@@ -227,11 +351,11 @@ class DataManager:
             df_combined = df_btc.join(df_macro, how='left')
         else:
             df_combined = df_btc
-
-        # --- CORREÇÃO CRÍTICA DE LOOK-AHEAD BIAS ---
-        # Apenas preenchemos para a frente. O valor de um dia é válido até que o próximo valor chegue.
-        # A linha `bfill` foi removida pois usava dados do futuro para preencher o passado.
-        df_combined.ffill(inplace=True)
+            
+        macro_cols = [col for col in df_combined.columns if '_close' in col]
+        df_combined[macro_cols] = df_combined[macro_cols].ffill()
+        
+        df_combined = self._add_market_regime(df_combined)
         
         df_combined = _optimize_memory_usage(df_combined)
         

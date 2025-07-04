@@ -13,15 +13,8 @@ Um framework de ponta para pesquisa, validação e execução de estratégias de
 - [🧠 A Filosofia do Bot: Como Ele Pensa?](#-a-filosofia-do-bot-como-ele-pensa)
 - [⚙️ Ecossistema do Bot: Como os Módulos Interagem](#️-ecossistema-do-bot-como-os-módulos-interagem)
 - [🚀 Guia de Início Rápido](#-guia-de-início-rápido)
-  - [Pré-requisitos](#pré-requisitos)
-  - [Instalação](#instalação)
 - [🔧 Configuração do Ambiente (`.env`)](#-configuração-do-ambiente-env)
 - [▶️ O Workflow Profissional: Como Usar](#️-o-workflow-profissional-como-usar)
-  - [Fase 1: Pesquisa e Otimização (`optimize`)](#fase-1-pesquisa-e-otimização-optimize)
-  - [Fase 2: Validação Fora da Amostra (`backtest`)](#fase-2-validação-fora-da-amostra-backtest)
-  - [Fase 3: Operação em Ambiente de Teste (`test`)](#fase-3-operação-em-ambiente-de-teste-test)
-  - [Fase 4: Operação em Produção (`trade`)](#fase-4-operação-em-produção-trade)
-  - [Comandos de Gerenciamento](#comandos-de-gerenciamento)
 - [📂 Estrutura do Projeto](#-estrutura-do-projeto)
 - [📜 Licença](#-licença)
 
@@ -37,50 +30,62 @@ O núcleo do projeto é um processo de **Walk-Forward Optimization (WFO)** que g
 
 ## ✨ Features de Destaque
 
-- **🧠 Inteligência Autoadaptativa:**
+- **🧠 Inteligência Multi-Camada:**
 
-  - **Confiança Dinâmica:** O bot ajusta sua própria "coragem" (`prediction_confidence`) com base em seus lucros e prejuízos recentes, tornando-se mais ousado em sequências de vitórias e mais cauteloso após perdas.
-  - **Risco Dinâmico (Bet Sizing):** O tamanho de cada operação é proporcional à convicção do modelo no sinal, arriscando mais em oportunidades de alta probabilidade.
-  - **Otimização da Personalidade:** O sistema utiliza `Optuna` para encontrar não apenas os melhores parâmetros de modelo, mas a melhor "personalidade" para o bot, incluindo seu apetite de risco e velocidade de aprendizado.
+  - **Gestão Ativa de Posição:** Uma vez em um trade, o bot gerencia ativamente o risco com técnicas de **Breakeven Stop, Realização de Lucro Parcial e Trailing Stop**.
+  - **Estratégia de Duplo Objetivo:** O bot não só busca lucro em USDT, mas também o utiliza para **acumular um "Tesouro de BTC"** a longo prazo, alocando uma porcentagem dos lucros para essa finalidade.
+  - **Confiança Dinâmica:** O bot ajusta sua própria "coragem" com base na performance de uma **janela de trades recentes**, tornando-se mais ousado em sequências de vitórias e mais cauteloso após perdas.
+  - **Risco Dinâmico (Bet Sizing):** O tamanho de cada operação é proporcional à convicção do modelo e ao regime de mercado atual, arriscando de forma inteligente.
 
 - **🤖 Metodologia de Nível Profissional:**
 
-  - **Validação Robusta (Train/Validate/Test):** O processo de otimização utiliza uma metodologia rigorosa que impede o vazamento de dados do futuro (_look-ahead bias_), garantindo que os resultados dos testes sejam honestos.
-  - **Rotulagem de 3 Classes (Buy/Sell/Hold):** O modelo aprende a identificar mercados laterais e a ficar de fora, reduzindo trades desnecessários e focando em sinais de alta qualidade.
-  - **Análise de Regime de Mercado:** O bot utiliza features de longo prazo (`SMA200`, `ATR`) para entender o contexto do mercado (tendência vs. lateralidade, alta vs. baixa volatilidade) antes de tomar decisões.
+  - **Otimização Robusta (Calmar Ratio):** O sistema utiliza `Optuna` para otimizar a estratégia buscando o melhor **Calmar Ratio** (Retorno Anualizado / Máximo Drawdown), priorizando a segurança do capital.
+  - **Filtro de Regime de Mercado:** O bot primeiro identifica o estado do mercado (ex: `BULL_FORTE`, `BEAR`, `LATERAL`) e ajusta seu comportamento de risco ou até mesmo bloqueia operações.
+  - **Validação Robusta (Train/Validate/Test):** O processo de otimização utiliza uma metodologia rigorosa que impede o vazamento de dados do futuro (_look-ahead bias_).
 
 - **⚙️ Engenharia de Ponta:**
-  - **Backtest Realista:** Todas as simulações incluem custos operacionais (taxas de `0.1%` e derrapagem de `0.05%`) para uma avaliação de performance fiel à realidade.
-  - **Integração de Dados Macroeconômicos:** Utiliza a variação de indicadores como DXY (dólar), VIX (volatilidade), Ouro e Títulos de 10 anos para um contexto de mercado mais rico.
+  - **Backtest Realista:** Todas as simulações incluem custos operacionais (taxas e slippage) para uma avaliação de performance fiel à realidade.
+  - **Atualização Automática de Dados:** Coleta e atualiza automaticamente não só os dados de cripto da Binance, mas também os **dados macroeconômicos** (DXY, Ouro, VIX, TNX) via `yfinance`.
   - **Deployment com Docker:** Ambiente 100% conteinerizado para uma execução consistente e livre de problemas de dependências.
-  - **Cache Inteligente e Modo Offline:** Processa e armazena dados para inicializações futuras quase instantâneas e permite rodar o modo de otimização completamente offline.
+  - **Logs e Visualização Avançados:** Utiliza `tqdm` e `tabulate` para oferecer barras de progresso e relatórios claros e fáceis de ler.
 
 ---
 
 ## 🧠 A Filosofia do Bot: Como Ele Pensa?
 
-A tomada de decisão do gcsBot segue uma hierarquia de inteligência em quatro etapas:
+A tomada de decisão do gcsBot segue uma **hierarquia de inteligência em 3 camadas**, imitando uma estrutura de comando militar para garantir decisões robustas e bem fundamentadas:
 
-1.  **Contexto (O Cenário):** Primeiro, o bot analisa o **regime de mercado**. "Estamos em uma tendência de alta ou de baixa? A volatilidade está alta ou baixa?" Isso é feito através das features de regime (`regime_tendencia`, `regime_volatilidade`).
+### **Camada 1: O General (Estratégia)**
 
-2.  **Sinal (A Oportunidade):** Dentro desse contexto, o modelo de Machine Learning busca por um **padrão preditivo** de curto prazo, uma ineficiência que sugira uma oportunidade de compra.
+- **Pergunta:** "O campo de batalha é favorável? Devemos lutar hoje?"
+- **Ação:** Analisa o **regime de mercado** de longo prazo (`BULL_FORTE`, `BEAR`, etc.) usando médias móveis diárias. Com base nesse cenário, ele define a política de risco geral: se os trades são permitidos e qual o nível de agressividade. Em um regime `BEAR`, o General pode ordenar a retirada total, preservando o capital.
 
-3.  **Convicção (A Coragem):** Uma vez que um sinal é encontrado, o bot consulta seu **nível de confiança adaptativo**. "Baseado na minha performance recente, eu deveria arriscar neste sinal ou é melhor ter paciência?"
+### **Camada 2: O Capitão (Tática)**
 
-4.  **Ação (O Tamanho da Posição):** Se a convicção for alta o suficiente, o bot calcula o **tamanho do risco** a ser tomado, proporcional à força do sinal. Um sinal "ok" recebe uma alocação pequena; um sinal "perfeito" recebe uma alocação maior.
+- **Pergunta:** "Dado que o General deu sinal verde, este é o momento exato para atacar?"
+- **Ação:** O **modelo de Machine Learning**, treinado com dados recentes e ciente do regime de mercado, busca por padrões de curto prazo que indiquem uma oportunidade de compra com alta probabilidade. Ele gera um sinal de "confiança de compra".
 
-Este processo transforma o bot de um simples executor de regras em um agente estratégico que pensa em múltiplas camadas.
+### **Camada 3: O Soldado (Execução e Gestão)**
+
+- **Pergunta:** "Ataque iniciado. Como gerenciamos esta posição para maximizar ganhos e minimizar perdas?"
+- **Ação:** Uma vez que a compra é executada, este módulo assume o controle com regras precisas:
+  1.  **Proteção:** Move o stop para o _breakeven_ assim que o trade atinge um pequeno lucro, eliminando o risco sobre o capital principal.
+  2.  **Realização:** Garante parte do lucro vendendo uma fração da posição ao atingir o alvo de lucro.
+  3.  **Maximização:** Deixa o restante da posição "correr" com um _trailing stop_ para capturar tendências maiores.
+  4.  **Tesouraria:** Aloca uma parte do lucro realizado para o "Tesouro de BTC", cumprindo o objetivo de acumulação de longo prazo.
+
+Este processo transforma o bot de um simples executor de sinais em um agente estratégico que pensa em múltiplas camadas.
 
 ---
 
 ## ⚙️ Ecossistema do Bot: Como os Módulos Interagem
 
-- **`optimizer.py`**: O cérebro da pesquisa. Gerencia o WFO, chama o `model_trainer` e o `backtest`, e usa o `Optuna` para encontrar os melhores parâmetros.
-- **`model_trainer.py`**: O "cientista de dados". Prepara todas as features (técnicas, macro e de regime) e treina o modelo LightGBM.
-- **`confidence_manager.py`**: O "psicólogo" do bot. Implementa a lógica para ajustar a confiança com base nos resultados.
-- **`backtest.py`**: O simulador. Executa a estratégia de forma realista, utilizando o `confidence_manager` para testar o desempenho da estratégia adaptativa.
-- **`quick_tester.py`**: O "auditor". Permite validar um modelo já treinado em um período de tempo futuro completamente novo.
-- **`trading_bot.py`**: O "piloto". Módulo que opera no mercado real, utilizando os artefatos (`.pkl`, `.json`) gerados pela otimização.
+- **`optimizer.py`**: O cérebro da pesquisa. Gerencia o WFO, chama o `model_trainer` e o `backtest`, e usa o `Optuna` para encontrar os melhores parâmetros para a estratégia completa, otimizando pelo Calmar Ratio.
+- **`model_trainer.py`**: O "cientista de dados". Prepara todas as features (técnicas, macro e de regime) e treina o modelo LightGBM para que ele entenda o contexto do mercado.
+- **`confidence_manager.py`**: O "psicólogo" do bot. Implementa a lógica para ajustar a confiança com base na performance recente, tornando-o mais estável.
+- **`backtest.py`**: O simulador de combate. Executa a estratégia Multi-Camada completa de forma realista para fornecer as métricas de performance (Drawdown, Retorno) para o otimizador.
+- **`quick_tester.py`**: O "auditor". Permite validar um modelo já treinado em um período de tempo futuro, gerando um relatório completo com as novas métricas de performance.
+- **`trading_bot.py`**: O "piloto de elite". Módulo que opera no mercado real, implementando a mesma estratégia Multi-Camada validada na otimização.
 
 ---
 
@@ -98,7 +103,7 @@ Siga estes passos para colocar o bot em funcionamento.
 
 1.  **Clone o repositório:**
     ```bash
-    git clone [https://github.com/SEU_USUARIO/gcsbot-btc.git](https://github.com/SEU_USUARIO/gcsbot-btc.git)
+    git clone https://github.com/SEU_USUARIO/gcsbot-btc.git
     cd gcsbot-btc
     ```
 2.  **Execute o Setup Automático:**
@@ -131,23 +136,27 @@ O arquivo `.env` é o painel de controle principal do bot.
 
 #### Gestão de Portfólio (Para os modos `test` e `trade`)
 
-- `MAX_USDT_ALLOCATION`: O **MÁXIMO** de capital em USDT que o bot tem permissão para gerenciar.
-- `LONG_TERM_HOLD_PCT`: Percentual do capital para holding de longo prazo (ex: `0.50` para 50%).
-
-#### Parâmetros de Backtest e Fallback
-
-- `RISK_PER_TRADE_PCT`: **Fallback** do risco por operação, caso o valor não seja encontrado nos parâmetros otimizados.
-- `BACKTEST_START_DATE` & `BACKTEST_END_DATE`: Período para a simulação do modo `backtest`.
-
-> ⚠️ **NUNCA** envie seu arquivo `.env` para repositórios públicos! O `.gitignore` já está configurado para ignorá-lo.
+- `MAX_USDT_ALLOCATION`: O **MÁXIMO** de capital em USDT que o bot tem permissão para gerenciar na sua parte de trading.
 
 ---
 
-## ▶️ Como Usar (Workflow Profissional)
+## ▶️ O Workflow Profissional: Como Usar
 
 A interação com o bot é feita através do orquestrador `run.py`. Siga estas fases na ordem correta.
 
-### Fase 1: Otimização
+### Passo Zero: Limpeza do Ambiente (MUITO IMPORTANTE)
+
+Antes de iniciar uma **nova** otimização para uma estratégia reformulada, é essencial apagar os artefatos antigos para garantir que o sistema comece do zero, sem nenhuma informação da estratégia anterior.
+
+**Apague os seguintes arquivos do seu diretório `/data`:**
+
+- `model.joblib`
+- `scaler.joblib`
+- `strategy_params.json`
+- `wfo_optimization_state.json`
+- `combined_data_cache.csv`
+
+### Fase 1: Pesquisa e Otimização (`optimize`)
 
 O passo mais importante. O bot irá estudar todo o histórico para encontrar a melhor estratégia e criar os arquivos de modelo.
 
@@ -161,37 +170,35 @@ Este processo é longo e pode levar horas ou dias. Ao final, os arquivos `tradin
 
 ### Fase 2: Backtest Rápido
 
-Após a otimização, valide a estratégia no mercado ao vivo com dinheiro de teste.
+Após a otimização, valide a nova estratégia em um período que o modelo nunca viu durante o treino.
 
 ```bash
-python run.py backtest
+python run.py backtest --start "2024-01-01" --end "2025-01-01"
 ```
 
-O bot irá rodar a simulação no período definido no .env e imprimir um relatório de performance mês a mês no terminal.
+O bot irá rodar a simulação e imprimir um relatório de performance completo, incluindo Calmar Ratio e o Tesouro de BTC acumulado.
 
 ---
 
 ### Fase 3: Validação em Testnet
 
-Após a otimização, valide a estratégia no mercado ao vivo com dinheiro de teste.
+Se a validação for positiva, teste a estratégia no mercado ao vivo com dinheiro de teste.
 
 ```bash
 python run.py test
 ```
 
-O bot iniciará em segundo plano e rodará 24/7. Ele usará o modelo e os parâmetros criados na Fase 1. Deixe rodando por pelo menos 1-2 semanas para obter dados estatísticos relevantes.
+Ele usará o modelo e os parâmetros criados na Fase 1. Deixe rodando por pelo menos 1-2 semanas para observar o comportamento em tempo real.
 
 ---
 
 ### Fase 3: Trading Real
 
-Após a otimização, valide a estratégia no mercado ao vivo com dinheiro de teste.
+O passo final. O bot operará da mesma forma que no modo test, mas utilizando sua conta real da Binance e sua alocação de capital definida.
 
 ```bash
 python run.py trade
 ```
-
-O bot operará da mesma forma que no modo test, mas utilizando sua conta real da Binance.
 
 ---
 

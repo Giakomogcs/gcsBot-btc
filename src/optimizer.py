@@ -1,4 +1,4 @@
-# src/optimizer.py (VERSÃO FINAL COM INTELIGÊNCIA COMPLETA)
+# src/optimizer.py (VERSÃO 2.1 - COM CARIMBO DE VALIDADE)
 
 import optuna
 import pandas as pd
@@ -8,15 +8,19 @@ import signal
 import os
 import math
 import gc
+from tabulate import tabulate
+from datetime import datetime, timezone # <<< PASSO 1: Importar datetime
+from dateutil.relativedelta import relativedelta # <<< PASSO 1: Importar relativedelta
 
 from src.model_trainer import ModelTrainer
 from src.backtest import run_backtest
 from src.logger import logger
 from src.config import (
     WFO_TRAIN_MINUTES, WFO_TEST_MINUTES, WFO_STEP_MINUTES, WFO_STATE_FILE,
-    STRATEGY_PARAMS_FILE, MODEL_FILE, SCALER_FILE
+    STRATEGY_PARAMS_FILE, MODEL_FILE, SCALER_FILE,
+    # <<< PASSO 2: Importar novas variáveis de configuração >>>
+    MODEL_METADATA_FILE, MODEL_VALIDITY_MONTHS
 )
-# A importação do RISK_PER_TRADE_PCT do config não é mais necessária, pois ele será otimizado
 from src.confidence_manager import AdaptiveConfidenceManager
 
 class WalkForwardOptimizer:
@@ -28,8 +32,7 @@ class WalkForwardOptimizer:
         signal.signal(signal.SIGINT, self.graceful_shutdown)
         signal.signal(signal.SIGTERM, self.graceful_shutdown)
 
-    # --- Funções de controle (graceful_shutdown, _save_wfo_state, etc.) ---
-    # Nenhuma alteração necessária aqui, elas já estão corretas.
+    # --- Funções de controle (sem alterações) ---
     def graceful_shutdown(self, signum, frame):
         if not self.shutdown_requested:
             logger.warning("\n" + "="*50)
@@ -63,18 +66,42 @@ class WalkForwardOptimizer:
             except Exception as e:
                 logger.error(f"Erro ao carregar estado da WFO: {e}. Começando do zero.")
         return 0, 1, [], 100.0
+        
+    # <<< PASSO 3: Criar a função para salvar os metadados >>>
+    def _save_model_metadata(self):
+        """Salva um arquivo com a data da otimização e a data de validade do modelo."""
+        try:
+            logger.info("  -> Salvando metadados e data de validade do modelo...")
+            now_utc = datetime.now(timezone.utc)
+            valid_until = now_utc + relativedelta(months=MODEL_VALIDITY_MONTHS)
+
+            metadata = {
+                'last_optimization_date': now_utc.isoformat(),
+                'valid_until': valid_until.isoformat(),
+            }
+
+            with open(MODEL_METADATA_FILE, 'w') as f:
+                json.dump(metadata, f, indent=4)
+
+            logger.info(f"  -> ✅ Metadados salvos. O modelo é considerado válido até {valid_until.strftime('%Y-%m-%d')}.")
+        except Exception as e:
+            logger.error(f"  -> Falha ao salvar metadados do modelo: {e}")
+
 
     def _progress_callback(self, study, trial):
         n_trials = self.n_trials_for_cycle
-        best_value = 0.0 if study.best_value is None else study.best_value
-        print(f"\r    - [Progresso Optuna] Trial {trial.number + 1}/{n_trials} concluído... Melhor Sharpe (Validação): {best_value:.4f}", end="", flush=True)
+        if trial.number > 0 and trial.number % 10 == 0:
+             logger.info(
+                f"  [Progresso Optuna] Trial {trial.number}/{n_trials} | "
+                f"Melhor Calmar até agora: {study.best_value:.4f}"
+            )
 
-    # --- A MENTE DO OTIMIZADOR ---
     def _objective(self, trial, train_data, validation_data):
-        if self.shutdown_requested: raise optuna.exceptions.TrialPruned()
+        # (Nenhuma mudança nesta função)
+        if self.shutdown_requested:
+            raise optuna.exceptions.TrialPruned()
         
         all_params = {
-            # === PARÂMETROS DO MODELO DE MACHINE LEARNING (PREENCHIDOS) ===
             'n_estimators': trial.suggest_int('n_estimators', 200, 800),
             'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.2),
             'num_leaves': trial.suggest_int('num_leaves', 30, 100),
@@ -85,21 +112,13 @@ class WalkForwardOptimizer:
             'bagging_freq': trial.suggest_int('bagging_freq', 1, 7),
             'lambda_l1': trial.suggest_float('lambda_l1', 1e-8, 10.0, log=True),
             'lambda_l2': trial.suggest_float('lambda_l2', 1e-8, 10.0, log=True),
-            
-            # === PARÂMETROS DA CRIAÇÃO DE LABELS (O QUE O BOT DEVE APRENDER A PROCURAR) ===
-            'future_periods': trial.suggest_int('future_periods', 5, 120),
-            'profit_mult': trial.suggest_float('profit_mult', 0.5, 5.0),
-            'stop_mult': trial.suggest_float('stop_mult', 0.5, 5.0),
-            
-            # === PARÂMETROS DA ESTRATÉGIA DE TRADING (COMO O BOT DEVE AGIR) ===
-            'profit_threshold': trial.suggest_float('profit_threshold', 0.003, 0.05),
-            'stop_loss_threshold': trial.suggest_float('stop_loss_threshold', 0.003, 0.05),
-            'initial_confidence': trial.suggest_float('initial_confidence', 0.51, 0.75),
-            
-            ### NOVO: OTIMIZAÇÃO DOS PARÂMETROS DE INTELIGÊNCIA ADAPTATIVA ###
-            # O bot vai aprender qual o melhor risco para o período
-            'risk_per_trade_pct': trial.suggest_float('risk_per_trade_pct', 0.01, 0.10), # De 1% a 10% de risco
-            # O bot vai aprender quão rápido ele deve ajustar sua própria confiança
+            'future_periods': trial.suggest_int('future_periods', 15, 240),
+            'profit_mult': trial.suggest_float('profit_mult', 1.0, 6.0),
+            'stop_mult': trial.suggest_float('stop_mult', 1.0, 6.0),
+            'profit_threshold': trial.suggest_float('profit_threshold', 0.01, 0.08),
+            'stop_loss_threshold': trial.suggest_float('stop_loss_threshold', 0.01, 0.05),
+            'initial_confidence': trial.suggest_float('initial_confidence', 0.51, 0.85),
+            'risk_per_trade_pct': trial.suggest_float('risk_per_trade_pct', 0.01, 0.15),
             'confidence_learning_rate': trial.suggest_float('confidence_learning_rate', 0.01, 0.20)
         }
         
@@ -108,28 +127,30 @@ class WalkForwardOptimizer:
 
         validation_features = self.trainer._prepare_features(validation_data.copy())
         if validation_features.empty: return -2.0
+
+        strategy_params = {k: v for k, v in all_params.items() if k in self.trainer.base_feature_names or k in ['profit_threshold', 'stop_loss_threshold', 'initial_confidence', 'risk_per_trade_pct', 'confidence_learning_rate']}
         
-        # Passa todos os parâmetros relevantes para a simulação de backtest
-        strategy_params = {
-            'profit_threshold': all_params['profit_threshold'],
-            'stop_loss_threshold': all_params['stop_loss_threshold'],
-            'initial_confidence': all_params['initial_confidence'],
-            'risk_per_trade_pct': all_params['risk_per_trade_pct'],
-            'confidence_learning_rate': all_params['confidence_learning_rate']
-        }
-        
-        capital, sharpe_ratio = run_backtest(
-            model=model, scaler=scaler,
+        final_capital, annualized_return, max_drawdown, trade_count = run_backtest(
+            model=model,
+            scaler=scaler,
             test_data_with_features=validation_features,
             strategy_params=strategy_params,
-            feature_names=self.trainer.feature_names
+            feature_names=self.trainer.final_feature_names
         )
-        return sharpe_ratio
+        
+        if max_drawdown == 0 or trade_count < 5: return -1.0 
 
-    # --- O LOOP PRINCIPAL WALK-FORWARD ---
+        calmar_ratio = annualized_return / abs(max_drawdown)
+        trade_penalty = np.log1p(trade_count) * 0.1
+        final_score = calmar_ratio - trade_penalty
+        
+        if math.isnan(final_score) or math.isinf(final_score): return -1.0
+        return final_score
+
     def run(self):
+        # ... (Início da função sem alterações)
         logger.info("="*80)
-        logger.info("--- INICIANDO OTIMIZAÇÃO WALK-FORWARD COM INTELIGÊNCIA COMPLETA ---")
+        logger.info("--- INICIANDO OTIMIZAÇÃO WALK-FORWARD (OBJETIVO: CALMAR RATIO) ---")
         
         optuna.logging.set_verbosity(optuna.logging.WARNING)
         self.full_data.sort_index(inplace=True)
@@ -142,6 +163,7 @@ class WalkForwardOptimizer:
         start_index, cycle, all_results, cumulative_capital = self._load_wfo_state()
 
         while start_index + train_val_size + test_size <= n_total:
+            # ... (Loop principal sem alterações até o final do ciclo)
             if self.shutdown_requested: break
 
             validation_pct = 0.20
@@ -156,55 +178,61 @@ class WalkForwardOptimizer:
             logger.info(f"  - Período de Treino:      {train_data.index.min():%Y-%m-%d} a {train_data.index.max():%Y-%m-%d}")
             logger.info(f"  - Período de Validação:   {validation_data.index.min():%Y-%m-%d} a {validation_data.index.max():%Y-%m-%d}")
             logger.info(f"  - Período de Teste Final: {test_data.index.min():%Y-%m-%d} a {test_data.index.max():%Y-%m-%d}")
+            logger.info("-" * 80)
 
             self.n_trials_for_cycle = 100
             study = optuna.create_study(direction='maximize')
             study.optimize(lambda trial: self._objective(trial, train_data, validation_data), n_trials=self.n_trials_for_cycle, n_jobs=-1, callbacks=[self._progress_callback])
+            
             if self.shutdown_requested: break
             
             best_trial = study.best_trial
-            logger.info(f"\n  - Otimização do ciclo concluída. Melhor Sharpe na VALIDAÇÃO: {best_trial.value:.4f}")
+            logger.info(f"\n  -> Otimização do ciclo concluída. Melhor Score (Calmar - Penalty) na VALIDAÇÃO: {best_trial.value:.4f}")
+            logger.info("  -> Melhores Hiperparâmetros encontrados para este ciclo:")
+            params_data = {k: [v] for k, v in best_trial.params.items()}
+            print(tabulate(params_data, headers="keys", tablefmt="grid", numalign="center"))
 
             if best_trial.value > 0.1:
-                logger.info("  - Treinando modelo final do ciclo com os melhores parâmetros...")
-                # No treino final, usamos todos os parâmetros encontrados, incluindo os do ML
+                logger.info("  -> Treinando modelo final do ciclo com os melhores parâmetros...")
                 final_model, final_scaler = self.trainer.train(train_val_data.copy(), best_trial.params)
                 
                 if final_model:
-                    # Salva apenas os parâmetros da ESTRATÉGIA para o bot de trading usar
-                    strategy_params = {
-                        'profit_threshold': best_trial.params['profit_threshold'],
-                        'stop_loss_threshold': best_trial.params['stop_loss_threshold'],
-                        'initial_confidence': best_trial.params['initial_confidence'],
-                        'risk_per_trade_pct': best_trial.params['risk_per_trade_pct'],
-                        'confidence_learning_rate': best_trial.params['confidence_learning_rate']
-                    }
+                    strategy_params = {k: v for k, v in best_trial.params.items() if k not in ['n_estimators', 'learning_rate', 'num_leaves', 'max_depth', 'min_child_samples', 'feature_fraction', 'bagging_fraction', 'bagging_freq', 'lambda_l1', 'lambda_l2', 'future_periods', 'profit_mult', 'stop_mult']}
                     self.trainer.save_model(final_model, final_scaler)
                     with open(STRATEGY_PARAMS_FILE, 'w') as f: json.dump(strategy_params, f, indent=4)
                     
-                    logger.info("  - Executando backtest final no período de TESTE...")
+                    # <<< PASSO 4: Salvar os metadados toda vez que um novo modelo é salvo >>>
+                    self._save_model_metadata()
+                    
+                    logger.info("  -> Executando backtest final no período de TESTE (Out-of-Sample)...")
                     test_features_final = self.trainer._prepare_features(test_data.copy())
                     
-                    capital, sharpe = run_backtest(
+                    capital, annualized_return, max_drawdown, trade_count = run_backtest(
                         model=final_model, scaler=final_scaler, 
                         test_data_with_features=test_features_final, 
                         strategy_params=strategy_params, 
-                        feature_names=self.trainer.feature_names
+                        feature_names=self.trainer.final_feature_names
                     )
                     
+                    calmar_final = annualized_return / abs(max_drawdown) if max_drawdown != 0 else 0
                     result_pct = (capital - 100) / 100 if capital > 0 else 0
-                    all_results.append({'period': f"{test_data.index.min():%Y-%m-%d}_a_{test_data.index.max():%Y-%m-%d}", 'capital': capital, 'sharpe': sharpe})
+                    all_results.append({
+                        'period': f"{test_data.index.min():%Y-%m-%d}_a_{test_data.index.max():%Y-%m-%d}", 
+                        'capital': capital, 'calmar': calmar_final, 'max_drawdown': max_drawdown
+                    })
                     
                     new_cumulative_capital = cumulative_capital * (1 + result_pct)
-                    logger.info("-" * 25 + f" RESULTADO REAL DO CICLO {cycle} " + "-" * 26)
-                    logger.info(f"  - Resultado do Período de Teste: {result_pct:+.2%}")
+                    logger.info("\n" + "=" * 25 + f" RESULTADO DO CICLO DE TESTE #{cycle} " + "=" * 25)
+                    logger.info(f"  - Resultado do Período: {result_pct:+.2%}")
                     logger.info(f"  - Capital Simulado Acumulado: ${cumulative_capital:,.2f} -> ${new_cumulative_capital:,.2f}")
-                    logger.info(f"  - Sharpe Ratio (Anualizado): {sharpe:.2f}")
+                    logger.info(f"  - Calmar Ratio (Anualizado): {calmar_final:.2f}")
+                    logger.info(f"  - Máximo Drawdown: {max_drawdown:.2%}")
+                    logger.info("=" * 80)
                     cumulative_capital = new_cumulative_capital
                 else:
-                    logger.error("  - Falha ao treinar o modelo final do ciclo. Pulando.")
+                    logger.error("  -> Falha ao treinar o modelo final do ciclo. Pulando.")
             else:
-                logger.warning(f"  - Melhor resultado na validação não foi positivo o suficiente. Pulando para o próximo ciclo.")
+                logger.warning(f"  -> Melhor score na validação ({best_trial.value:.4f}) não atingiu o limiar de 0.1. Pulando para o próximo ciclo sem gerar modelo.")
             
             start_index += step_size
             cycle += 1
