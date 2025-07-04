@@ -13,5 +13,4 @@ yfinance
 lightgbm
 tabulate
 yfinance
-collections
 python-dateutil

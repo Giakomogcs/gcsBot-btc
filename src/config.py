@@ -82,3 +82,4 @@ BACKTEST_END_DATE = get_config_var("BACKTEST_END_DATE", "2025-03-31")
 
 # <<< PASSO 3: Adicionar o parâmetro de validade do modelo >>>
 MODEL_VALIDITY_MONTHS = int(get_config_var("MODEL_VALIDITY_MONTHS", 3)) # O modelo será considerado válido por 3 meses
+QUICK_OPTIMIZE = get_config_var("QUICK_OPTIMIZE", "False").lower() == 'true'

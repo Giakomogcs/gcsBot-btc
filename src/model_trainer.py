@@ -169,8 +169,8 @@ class ModelTrainer:
 
         logger.debug("Normalizando features e treinando o modelo LightGBM...")
         scaler = StandardScaler()
-        X_scaled = scaler.fit_transform(X)
-
+        X_scaled = pd.DataFrame(scaler.fit_transform(X), index=X.index, columns=X.columns)
+        
         model_params = {k: v for k, v in all_params.items() if k in LGBMClassifier().get_params().keys()}
         
         model = LGBMClassifier(**model_params, random_state=42, n_jobs=-1, class_weight='balanced', verbosity=-1)
