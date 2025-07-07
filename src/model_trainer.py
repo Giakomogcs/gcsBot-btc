@@ -1,14 +1,15 @@
-# src/model_trainer.py (VERSÃO 4.1 - COM TYPE HINTING CORRIGIDO)
+# src/model_trainer.py (VERSÃO 4.3 - COM IMPORT CORRIGIDO)
 
 import pandas as pd
 import numpy as np
 from lightgbm import LGBMClassifier
 from sklearn.preprocessing import StandardScaler
 from numba import jit
-from typing import tuple, list, Any # Para type hinting correto
+from typing import Tuple, List, Any
 
 from src.logger import logger
-from src.config import log_table # Importando a função de log para consistência
+# 1. CORREÇÃO: A função 'log_table' foi movida para 'src.logger'.
+from src.logger import log_table 
 from ta.volatility import BollingerBands, AverageTrueRange
 from ta.trend import MACD, ADXIndicator
 from ta.momentum import StochasticOscillator, RSIIndicator
@@ -56,8 +57,7 @@ class ModelTrainer:
             'gold_close_change', 'tnx_close_change',
         ]
 
-    ### PASSO 1: Corrigir a anotação de tipo (type hint) do retorno ###
-    def _prepare_features(self, df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+    def _prepare_features(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]]:
         """
         Calcula todas as features e retorna o DataFrame processado e a lista
         final de nomes de features usadas. Este método agora é stateless.
@@ -125,8 +125,7 @@ class ModelTrainer:
         
         return df, final_feature_names
 
-    ### PASSO 2: Corrigir e especificar a anotação de tipo do retorno ###
-    def train(self, data: pd.DataFrame, all_params: dict) -> tuple[LGBMClassifier | None, StandardScaler | None, list[str] | None]:
+    def train(self, data: pd.DataFrame, all_params: dict) -> Tuple[LGBMClassifier | None, StandardScaler | None, List[str] | None]:
         """
         Prepara os dados, treina o modelo e retorna o modelo, o normalizador
         e a lista de features utilizadas.

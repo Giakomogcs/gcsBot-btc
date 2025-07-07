@@ -1,4 +1,4 @@
-# src/trading_bot.py (VERSÃO 5.2 - LÓGICA COMPLETA E CORRIGIDA)
+# src/trading_bot.py (VERSÃO 5.2 - FINAL CORRIGIDO)
 
 import pandas as pd
 import numpy as np
@@ -12,6 +12,7 @@ import sys
 from binance.client import Client
 from binance.exceptions import BinanceAPIException, BinanceRequestException
 
+# Importa o logger e a função de tabela centralizada
 from src.logger import logger, log_table
 from src.config import (
     API_KEY, API_SECRET, USE_TESTNET, SYMBOL, DATA_DIR, TRADES_LOG_FILE,
@@ -301,7 +302,6 @@ class TradingBot:
         ], headers=["Métrica", "Valor"])
         
         if buy_confidence > current_confidence_threshold:
-            ### CORREÇÃO: Usar 'buy_confidence' em vez de 'conviction' ###
             signal_strength = (buy_confidence - current_confidence_threshold) / (1.0 - current_confidence_threshold)
             
             base_risk = params.get('risk_per_trade_pct', 0.05)
@@ -385,8 +385,6 @@ class TradingBot:
         except (BinanceAPIException, BinanceRequestException, Exception) as e:
             logger.error(f"ERRO AO EXECUTAR VENDA: {e}", exc_info=True)
 
-    ### REMOÇÃO: O método _prepare_prediction_data não é mais necessário ###
-
     def _initialize_trade_log(self):
         if not os.path.exists(TRADES_LOG_FILE):
             with open(TRADES_LOG_FILE, 'w', newline='', encoding='utf-8') as f:
@@ -399,7 +397,6 @@ class TradingBot:
             writer.writerow([pd.Timestamp.now(tz='UTC').isoformat(), trade_type, price, qty, pnl_usdt, pnl_pct, reason])
 
     def _save_state(self):
-        # Apenas salva o estado do trade e do portfólio. Modelos são estáticos.
         state = {
             'in_trade_position': self.in_trade_position,
             'buy_price': self.buy_price,
@@ -438,7 +435,8 @@ class TradingBot:
             return True
         except Exception as e:
             logger.error(f"Não foi possível carregar o estado anterior: {e}. Iniciando com um estado limpo.")
-            os.remove(BOT_STATE_FILE) # Remove o arquivo de estado corrompido
+            if os.path.exists(BOT_STATE_FILE):
+                os.remove(BOT_STATE_FILE)
             return False
 
     def graceful_shutdown(self, signum, frame):
