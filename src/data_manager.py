@@ -1,4 +1,4 @@
-# src/data_manager.py (VERSÃO 3.0 - FINAL CONSOLIDADA)
+# src/data_manager.py (VERSÃO 3.1 - FINAL POLIDO)
 
 import os
 import datetime
@@ -195,7 +195,10 @@ class DataManager:
             (regime_df['daily_close'] < regime_df['sma_200d'])]
         outcomes = ['BULL_FORTE', 'RECUPERACAO', 'BEAR']
         regime_df['market_regime'] = np.select(conditions, outcomes, default='LATERAL')
-        df['market_regime'] = regime_df['market_regime'].reindex(df.index, method='ffill'); df['market_regime'].bfill(inplace=True)
+
+        df['market_regime'] = regime_df['market_regime'].reindex(df.index, method='ffill')
+        df['market_regime'] = df['market_regime'].bfill() # Usar a atribuição direta
+
         logger.info("Regimes de mercado calculados e adicionados ao DataFrame.")
         return df
 

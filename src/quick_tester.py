@@ -1,66 +1,58 @@
-# src/quick_tester.py (VERSÃO 4.0 - VALIDAÇÃO COMPLETA COM ESPECIALISTAS DE REGIME)
+# src/quick_tester.py (VERSÃO 4.3 - FINAL CORRIGIDO)
 
 import json
 import pandas as pd
 import numpy as np
 import joblib
-import glob
 import os
-from tabulate import tabulate
+from lightgbm import LGBMClassifier
+from sklearn.preprocessing import StandardScaler
 
-from src.logger import logger
-from src.config import MODEL_METADATA_FILE, SYMBOL, FEE_RATE, SLIPPAGE_RATE
+from src.logger import logger, log_table
+from src.config import MODEL_METADATA_FILE, SYMBOL, DATA_DIR, FEE_RATE, SLIPPAGE_RATE
 from src.data_manager import DataManager
 from src.model_trainer import ModelTrainer
 from src.confidence_manager import AdaptiveConfidenceManager
 
-def log_table(title, data, headers="keys", tablefmt="heavy_grid"):
-    """Função auxiliar para logar tabelas de forma limpa."""
-    table = tabulate(data, headers=headers, tablefmt=tablefmt, stralign="right")
-    logger.info(f"\n--- {title} ---\n{table}")
-
 class QuickTester:
     def __init__(self):
         self.data_manager = DataManager()
-        self.trainer = ModelTrainer()
-        # Dicionários para armazenar os especialistas de cada regime
+        self.trainer = ModelTrainer() 
+        
         self.models = {}
         self.scalers = {}
         self.strategy_params = {}
         self.confidence_managers = {}
         self.model_feature_names = []
 
-    ### PASSO 1: Carregar o conjunto completo de especialistas (modelos, scalers, params) ###
     def load_all_specialists(self):
         """Carrega todos os artefatos (modelos, scalers, params) para cada regime otimizado."""
         try:
-            # Carrega os metadados para obter a lista de features e o resumo
             with open(MODEL_METADATA_FILE, 'r') as f:
                 metadata = json.load(f)
-                self.model_feature_names = metadata.get('feature_names', [])
-                summary = metadata.get('optimization_summary', {})
+            self.model_feature_names = metadata.get('feature_names', [])
+            summary = metadata.get('optimization_summary', {})
             
             if not self.model_feature_names:
                 raise ValueError("Lista de features não encontrada nos metadados do modelo.")
             
             logger.info(f"✅ Metadados carregados. {len(self.model_feature_names)} features esperadas.")
 
-            base_dir = os.path.dirname(MODEL_METADATA_FILE)
+            base_dir = DATA_DIR
             
             for regime, details in summary.items():
                 if details.get('status') == 'Optimized and Saved':
                     try:
-                        model_file = os.path.join(base_dir, details['model_file'])
-                        scaler_file = model_file.replace('trading_model', 'scaler')
-                        params_file = os.path.join(base_dir, details['params_file'])
+                        model_path = os.path.join(base_dir, details['model_file'])
+                        scaler_path = model_path.replace('trading_model', 'scaler')
+                        params_path = os.path.join(base_dir, details['params_file'])
 
-                        self.models[regime] = joblib.load(model_file)
-                        self.scalers[regime] = joblib.load(scaler_file)
-                        with open(params_file, 'r') as f:
-                            self.strategy_params[regime] = json.load(f)
+                        self.models[regime] = joblib.load(model_path)
+                        self.scalers[regime] = joblib.load(scaler_path)
+                        with open(params_path, 'r') as f:
+                            params = json.load(f)
+                            self.strategy_params[regime] = params
                         
-                        # Cria um cérebro tático (ConfidenceManager) para cada especialista
-                        params = self.strategy_params[regime]
                         self.confidence_managers[regime] = AdaptiveConfidenceManager(
                             initial_confidence=params.get('initial_confidence', 0.6),
                             learning_rate=params.get('confidence_learning_rate', 0.05),
@@ -84,34 +76,12 @@ class QuickTester:
             logger.error(f"Erro inesperado ao carregar especialistas: {e}", exc_info=True)
             return False
 
-    ### PASSO 2: Aprimorar o relatório final com métricas comparativas e logging robusto ###
     def generate_report(self, portfolio_history: list, test_period_days: int, buy_and_hold_return: float):
         if not portfolio_history:
             logger.warning("Histórico de portfólio vazio. Não é possível gerar relatório."); return
 
         df = pd.DataFrame(portfolio_history).set_index('timestamp')
-        df['pnl_usdt'] = df['total_value'].diff()
         
-        # Relatório Mensal
-        monthly_report = df.resample('ME').agg(
-            start_capital=('total_value', 'first'),
-            end_capital=('total_value', 'last'),
-            total_pnl=('pnl_usdt', 'sum'),
-            trades=('trade_executed', 'sum')
-        )
-
-        if not monthly_report.empty:
-            monthly_report['pnl_pct'] = (monthly_report['end_capital'] / monthly_report['start_capital'] - 1) * 100
-            report_data = monthly_report.reset_index()
-            report_data['Mês'] = report_data['timestamp'].dt.strftime('%Y-%m')
-            report_data = report_data.drop('timestamp', axis=1)
-            # Formatação
-            for col in ['start_capital', 'end_capital', 'total_pnl']:
-                report_data[col] = report_data[col].apply(lambda x: f"${x:,.2f}")
-            report_data['pnl_pct'] = report_data['pnl_pct'].apply(lambda x: f"{x:+.2f}%")
-            log_table("📊 PERFORMANCE MENSAL (OUT-OF-SAMPLE)", report_data)
-        
-        # Resumo Geral
         initial_capital = df['total_value'].iloc[0]
         final_capital = df['total_value'].iloc[-1]
         final_treasury_btc = df['treasury_btc'].iloc[-1]
@@ -132,15 +102,15 @@ class QuickTester:
             ["Capital Final (Trading + Tesouro)", f"💎 ${final_capital:,.2f}"],
             ["Tesouro de BTC Acumulado", f"{final_treasury_btc:.8f} BTC"],
             ["Total de Trades Executados", f"{int(total_trades)}"],
-            ["--- Métricas de Performance ---", "---"],
+            ["--- Métricas de Performance ---", ""],
             ["Resultado Total da Estratégia", f"📈 {total_return:+.2%}"],
             ["Retorno Anualizado", f"{annualized_return:+.2%}"],
             ["Máximo Drawdown", f"📉 {max_drawdown:.2%}"],
             ["Calmar Ratio", f"{calmar_ratio:.2f}"],
-            ["--- Benchmark ---", "---"],
+            ["--- Benchmark ---", ""],
             ["Retorno do Buy & Hold no Período", f" बेंच {buy_and_hold_return:+.2%}"]
         ]
-        log_table("🏆 RESUMO GERAL DA PERFORMANCE", summary_data, headers=["Métrica", "Valor"])
+        log_table("🏆 RESUMO GERAL DA PERFORMANCE (OUT-OF-SAMPLE)", summary_data, headers=["Métrica", "Valor"])
 
     def run(self, start_date_str: str, end_date_str: str, initial_capital: float = 100.0):
         if not self.load_all_specialists(): return
@@ -148,66 +118,118 @@ class QuickTester:
         logger.info(f"Carregando e preparando dados para o período de teste: {start_date_str} a {end_date_str}...")
         full_data = self.data_manager.update_and_load_data(SYMBOL, '1m')
         test_data = full_data.loc[start_date_str:end_date_str]
-        if test_data.empty: logger.error("Não há dados disponíveis para o período de teste."); return
+        if test_data.empty: 
+            logger.error("Não há dados disponíveis para o período de teste."); return
         
-        # Preparar todas as features de uma vez
-        test_features = self.trainer._prepare_features(test_data.copy())
+        test_features_df, _ = self.trainer._prepare_features(test_data.copy())
         
-        # Para o benchmark Buy & Hold
-        buy_and_hold_return = (test_features['close'].iloc[-1] / test_features['close'].iloc[0]) - 1
+        if test_features_df.empty:
+            logger.error("DataFrame de features ficou vazio após o processamento. Não é possível continuar.")
+            return
+
+        buy_and_hold_return = (test_features_df['close'].iloc[-1] / test_features_df['close'].iloc[0]) - 1
         
-        # Estado do Portfólio
         capital_usdt, treasury_btc = initial_capital, 0.0
         in_position, buy_price, trading_btc, position_phase, current_stop_price, highest_price_in_trade = False, 0.0, 0.0, None, 0.0, 0.0
         portfolio_history = []
+        last_used_params = {}
         
         logger.info("🚀 Iniciando simulação de trading (backtest) com especialistas de regime...")
-        for date, row in test_features.iterrows():
+        for date, row in test_features_df.iterrows():
             price = row['close']
             trade_executed_this_step = 0
             
-            ### PASSO 3: Seleção dinâmica do especialista (modelo, scaler, params, cérebro) ###
             regime = row.get('market_regime', 'LATERAL')
-            current_model = self.models.get(regime)
-            current_scaler = self.scalers.get(regime)
-            current_params = self.strategy_params.get(regime)
-            current_confidence_manager = self.confidence_managers.get(regime)
+            
+            params = last_used_params if in_position else self.strategy_params.get(regime)
 
-            # Se não houver especialista para o regime atual, apenas mantém a posição se houver
-            if not all([current_model, current_scaler, current_params, current_confidence_manager]):
-                if in_position: # Gerencia posição existente com os últimos parâmetros conhecidos
+            if not params:
+                if in_position:
                     highest_price_in_trade = max(highest_price_in_trade, price)
                     if price <= current_stop_price:
-                        # Venda de pânico se o especialista desaparecer
                         sell_price = price * (1 - SLIPPAGE_RATE)
                         capital_usdt += (trading_btc * sell_price) * (1 - FEE_RATE)
                         in_position, trading_btc = False, 0.0
                         trade_executed_this_step = 1
             else:
-                # Lógica de trading usando o especialista correto
-                # Mesma lógica do backtest.py, agora usando 'current_params'
                 is_trading_allowed = (regime != 'BEAR')
                 
-                # Gerenciamento de Posição Ativa
                 if in_position:
-                    # ... (a lógica interna é idêntica à do backtest.py, usando current_params)
-                    pass # Placeholder para a lógica idêntica
-                
-                # Verificação de Nova Entrada
-                if not in_position and is_trading_allowed:
-                    features_for_prediction = pd.DataFrame(row[self.model_feature_names]).T
-                    scaled_features = current_scaler.transform(features_for_prediction)
-                    conviction = current_model.predict_proba(scaled_features)[0][1]
-                    
-                    if conviction > current_confidence_manager.get_confidence():
-                        # ... (a lógica interna de cálculo de risco e compra é idêntica à do backtest.py)
-                        pass # Placeholder para a lógica idêntica
+                    highest_price_in_trade = max(highest_price_in_trade, price)
+                    stop_loss_th = params.get('stop_loss_threshold', 0.02)
 
-            # Cálculo de valor total e registro do histórico (idêntico ao backtest.py)
+                    if price <= current_stop_price:
+                        sell_price = price * (1 - SLIPPAGE_RATE)
+                        capital_usdt += (trading_btc * sell_price) * (1 - FEE_RATE)
+                        pnl = (sell_price / buy_price) - 1 if buy_price > 0 else 0
+                        confidence_manager = self.confidence_managers.get(params.get('entry_regime'))
+                        if confidence_manager: confidence_manager.update(pnl)
+                        in_position, trading_btc, last_used_params = False, 0.0, {}
+                        trade_executed_this_step = 1
+                    
+                    elif position_phase == 'INITIAL' and price >= buy_price * (1 + stop_loss_th):
+                        position_phase = 'BREAKEVEN'
+                        current_stop_price = buy_price * (1 + (FEE_RATE * 2))
+                    
+                    elif position_phase == 'BREAKEVEN' and price >= buy_price * (1 + params.get('profit_threshold', 0.04)):
+                        amount_to_sell = trading_btc * params.get('partial_sell_pct', 0.5)
+                        sell_price = price * (1 - SLIPPAGE_RATE)
+                        revenue = (amount_to_sell * sell_price) * (1 - FEE_RATE)
+                        profit_usdt = (sell_price - buy_price) * amount_to_sell
+                        if profit_usdt > 0:
+                            treasury_usdt = profit_usdt * params.get('treasury_allocation_pct', 0.20)
+                            treasury_btc += treasury_usdt / price
+                            capital_usdt += revenue - treasury_usdt
+                        else:
+                            capital_usdt += revenue
+                        trading_btc -= amount_to_sell
+                        position_phase = 'TRAILING'
+                        trade_executed_this_step = 1
+                        
+                    elif position_phase == 'TRAILING':
+                        trailing_stop_pct = stop_loss_th * params.get('trailing_stop_multiplier', 1.5)
+                        new_trailing_stop = highest_price_in_trade * (1 - trailing_stop_pct)
+                        current_stop_price = max(current_stop_price, new_trailing_stop)
+
+                if not in_position and is_trading_allowed:
+                    model = self.models.get(regime)
+                    scaler = self.scalers.get(regime)
+                    confidence_manager = self.confidence_managers.get(regime)
+                    
+                    # CORREÇÃO: Checar se o especialista completo existe antes de usá-lo
+                    if model and scaler and confidence_manager:
+                        features_for_prediction = pd.DataFrame(row[self.model_feature_names]).T
+                        scaled_features_np = scaler.transform(features_for_prediction)
+                        scaled_features_df = pd.DataFrame(scaled_features_np, columns=self.model_feature_names)
+                        buy_confidence = model.predict_proba(scaled_features_df)[0][1]
+                        
+                        if buy_confidence > confidence_manager.get_confidence():
+                            base_risk = params.get('risk_per_trade_pct', 0.05)
+                            if regime == 'RECUPERACAO': base_risk /= 2
+                            
+                            signal_strength = (buy_confidence - confidence_manager.get_confidence()) / (1.0 - confidence_manager.get_confidence())
+                            dynamic_risk_pct = base_risk * (0.5 + signal_strength)
+                            trade_size_usdt = capital_usdt * dynamic_risk_pct
+                            
+                            if capital_usdt > 10 and trade_size_usdt > 10:
+                                buy_price_eff = price * (1 + SLIPPAGE_RATE)
+                                amount_to_buy_btc = trade_size_usdt / buy_price_eff
+                                fee = trade_size_usdt * FEE_RATE
+                                
+                                in_position = True
+                                trading_btc = amount_to_buy_btc
+                                capital_usdt -= (trade_size_usdt + fee)
+                                buy_price = buy_price_eff
+                                current_stop_price = buy_price_eff * (1 - params.get('stop_loss_threshold', 0.02))
+                                highest_price_in_trade = buy_price_eff
+                                position_phase = 'INITIAL'
+                                last_used_params = {**params, 'entry_regime': regime}
+                                trade_executed_this_step = 1
+
             trading_value = capital_usdt + (trading_btc * price)
             treasury_value = treasury_btc * price
             total_portfolio_value = trading_value + treasury_value
             portfolio_history.append({'timestamp': date, 'total_value': total_portfolio_value, 'trade_executed': trade_executed_this_step, 'treasury_btc': treasury_btc})
 
-        test_period_days = max(1, (test_features.index[-1] - test_features.index[0]).days)
+        test_period_days = max(1, (test_features_df.index[-1] - test_features_df.index[0]).days)
         self.generate_report(portfolio_history, test_period_days, buy_and_hold_return)
