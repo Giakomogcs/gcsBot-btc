@@ -1,57 +1,69 @@
-# src/logger.py
+# src/logger.py (VERSÃO 4.1 - COM UTILITÁRIO log_table CENTRALIZADO)
+
 import logging
 from logging.handlers import TimedRotatingFileHandler
 import sys
 import os
+from tabulate import tabulate
 
-# Importa o MODO para que o logger saiba em qual ambiente está rodando
-# Usamos um try-except para evitar erros de importação circular se este arquivo for importado antes do config
+# Configuração do Logger
 try:
-    from src.config import MODE
+    from src.config import MODE, LOGS_DIR
 except ImportError:
+    # Fallback para caso este módulo seja importado antes do config
     MODE = os.getenv("MODE", "optimize").lower()
+    LOGS_DIR = "logs"
 
-# Cria o diretório de logs se ele não existir
-log_dir = "logs"
-os.makedirs(log_dir, exist_ok=True)
+os.makedirs(LOGS_DIR, exist_ok=True)
 
-# Configuração base do logger
 logger = logging.getLogger("gcsBot")
-logger.setLevel(logging.DEBUG)  # Captura TODOS os níveis de log
+logger.setLevel(logging.DEBUG)
 
-# Evita adicionar handlers duplicados
 if not logger.handlers:
-    # --- Handler para Arquivo (Sempre Ativo) ---
-    # Este é o nosso log principal e seguro. Ele grava tudo em um arquivo.
-    log_file_path = os.path.join(log_dir, 'gcs_bot.log')
+    # --- Handler para Arquivo (Log Completo) ---
+    log_file_path = os.path.join(LOGS_DIR, 'gcs_bot.log')
     file_handler = TimedRotatingFileHandler(
-        log_file_path,
-        when="midnight",
-        interval=1,
-        backupCount=14, # Aumentei para 14 dias de histórico
-        encoding='utf-8'
+        log_file_path, when="midnight", interval=1, backupCount=14, encoding='utf-8'
     )
-    # Define um formato detalhado para o arquivo de log
     file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     file_handler.setFormatter(file_formatter)
-    file_handler.setLevel(logging.DEBUG) # Grava TUDO no arquivo
+    file_handler.setLevel(logging.DEBUG)
     logger.addHandler(file_handler)
 
-    # --- Handler para Console (Inteligente e Leve) ---
+    # --- Handler para Console (Log Inteligente) ---
     console_handler = logging.StreamHandler(sys.stdout)
-    
-    # ### A MÁGICA ACONTECE AQUI ###
-    # O formato e o nível do log no console dependem do MODO
     if MODE == 'optimize':
-        # No modo de otimização, queremos um console LIMPO.
-        # Mostraremos apenas logs de nível INFO e acima, e com formato simples.
-        console_formatter = logging.Formatter('%(message)s') # Formato super limpo
-        console_handler.setLevel(logging.INFO) # Nível mais alto para não poluir
-    else: # Nos modos 'test' e 'trade', queremos mais detalhes no console
+        # Console limpo para otimização, mostrando apenas mensagens de alto nível
+        console_formatter = logging.Formatter('%(message)s')
+        console_handler.setLevel(logging.INFO)
+    else:
+        # Console detalhado para trading e backtesting
         console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-        console_handler.setLevel(logging.INFO) # INFO é um bom padrão para monitoramento
+        console_handler.setLevel(logging.INFO)
 
     console_handler.setFormatter(console_formatter)
     logger.addHandler(console_handler)
 
-logger.info(f"Logger configurado para o modo: '{MODE.upper()}'")
+    logger.info(f"Logger configurado para o modo: '{MODE.upper()}'")
+
+### PASSO 1: Centralizar a função 'log_table' aqui ###
+def log_table(title, data, headers="keys", tablefmt="heavy_grid"):
+    """
+    Formata dados em uma tabela bonita e a envia para o logger principal.
+    
+    Args:
+        title (str): O título a ser exibido acima da tabela.
+        data (list of lists or list of dicts): Os dados a serem tabulados.
+        headers (any): O tipo de cabeçalho a ser usado pelo tabulate.
+        tablefmt (str): O formato da tabela (ex: 'heavy_grid', 'pipe').
+    """
+    try:
+        # Garante que os dados não estejam vazios para evitar erro no tabulate
+        if not data:
+            logger.info(f"\n--- {title} ---\n(Sem dados para exibir)")
+            return
+            
+        table = tabulate(data, headers=headers, tablefmt=tablefmt, stralign="right")
+        logger.info(f"\n--- {title} ---\n{table}")
+    except Exception as e:
+        logger.error(f"Erro ao gerar a tabela '{title}': {e}")

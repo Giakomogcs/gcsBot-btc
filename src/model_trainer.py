@@ -1,27 +1,22 @@
-# src/model_trainer.py (VERSÃO 2.0 - COM FEATURE DE REGIME DE MERCADO)
+# src/model_trainer.py (VERSÃO 4.1 - COM TYPE HINTING CORRIGIDO)
 
 import pandas as pd
 import numpy as np
 from lightgbm import LGBMClassifier
 from sklearn.preprocessing import StandardScaler
-import joblib
 from numba import jit
+from typing import tuple, list, Any # Para type hinting correto
 
 from src.logger import logger
-from src.config import MODEL_FILE, SCALER_FILE
+from src.config import log_table # Importando a função de log para consistência
 from ta.volatility import BollingerBands, AverageTrueRange
 from ta.trend import MACD, ADXIndicator
 from ta.momentum import StochasticOscillator, RSIIndicator
 
 @jit(nopython=True)
 def create_labels_triple_barrier(
-    closes: np.ndarray,
-    highs: np.ndarray,
-    lows: np.ndarray,
-    atr: np.ndarray,
-    future_periods: int,
-    profit_multiplier: float,
-    stop_multiplier: float
+    closes: np.ndarray, highs: np.ndarray, lows: np.ndarray, atr: np.ndarray,
+    future_periods: int, profit_multiplier: float, stop_multiplier: float
 ) -> np.ndarray:
     """
     Implementação da Barreira Tripla com 3 classes de rótulos:
@@ -43,7 +38,6 @@ def create_labels_triple_barrier(
             if future_high >= profit_barrier:
                 labels[i] = 1 # Lucro
                 break
-            
             if future_low <= stop_barrier:
                 labels[i] = 2 # Prejuízo
                 break
@@ -52,122 +46,123 @@ def create_labels_triple_barrier(
 
 class ModelTrainer:
     def __init__(self):
-        # <<< PASSO 1: Definir as features de base >>>
-        # A lista agora contém apenas as features numéricas calculadas.
-        # As features de regime serão adicionadas dinamicamente.
         self.base_feature_names = [
-            'sma_7', 'sma_25', 'rsi', 'price_change_1m', 'price_change_5m',
-            'bb_width', 'bb_pband',
-            'atr', 'macd_diff', 'stoch_osc',
-            'adx', 'adx_pos', 'adx_neg',
+            'rsi', 'rsi_1h', 'rsi_4h', 'macd_diff', 'macd_diff_1h', 'stoch_osc',
+            'adx', 'adx_power',
+            'atr', 'bb_width', 'bb_pband',
+            'sma_7_25_diff', 'close_sma_25_dist',
+            'price_change_1m', 'price_change_5m',
             'dxy_close_change', 'vix_close_change',
             'gold_close_change', 'tnx_close_change',
-            'rsi_1h', 'macd_diff_1h', 'rsi_4h'
         ]
-        # Esta lista guardará o nome de todas as features finais (base + regime)
-        self.final_feature_names = []
 
-    def _prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        logger.debug("Preparando features com a estratégia híbrida...")
+    ### PASSO 1: Corrigir a anotação de tipo (type hint) do retorno ###
+    def _prepare_features(self, df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
+        """
+        Calcula todas as features e retorna o DataFrame processado e a lista
+        final de nomes de features usadas. Este método agora é stateless.
+        """
+        logger.debug("Iniciando preparação de features...")
         epsilon = 1e-10
         
-        # --- Cálculo de Indicadores Técnicos (sem alterações) ---
+        # --- Cálculo de Indicadores Técnicos ---
         df['atr'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=14).average_true_range()
         bb = BollingerBands(close=df['close'], window=20, window_dev=2)
         df['bb_width'] = (bb.bollinger_hband() - bb.bollinger_lband()) / (bb.bollinger_mavg() + epsilon)
         df['bb_pband'] = bb.bollinger_pband()
 
-        df['sma_7'] = df['close'].rolling(window=7).mean()
-        df['sma_25'] = df['close'].rolling(window=25).mean()
+        sma_7 = df['close'].rolling(window=7).mean()
+        sma_25 = df['close'].rolling(window=25).mean()
+        df['sma_7_25_diff'] = (sma_7 - sma_25) / (df['close'] + epsilon)
+        df['close_sma_25_dist'] = (df['close'] - sma_25) / (sma_25 + epsilon)
+        
         df['macd_diff'] = MACD(close=df['close']).macd_diff()
         
         adx_indicator = ADXIndicator(high=df['high'], low=df['low'], close=df['close'], window=14)
-        df['adx'], df['adx_pos'], df['adx_neg'] = adx_indicator.adx(), adx_indicator.adx_pos(), adx_indicator.adx_neg()
-        
+        df['adx'] = adx_indicator.adx()
+        df['adx_power'] = (adx_indicator.adx_pos() - adx_indicator.adx_neg())
+
         df['price_change_1m'] = df['close'].pct_change(1)
         df['price_change_5m'] = df['close'].pct_change(5)
         df['rsi'] = RSIIndicator(close=df['close'], window=14).rsi()
         df['stoch_osc'] = StochasticOscillator(high=df['high'], low=df['low'], close=df['close']).stoch()
 
+        # --- Features Macroeconômicas ---
         macro_map = {
             'dxy_close': 'dxy_close_change', 'vix_close': 'vix_close_change',
             'gold_close': 'gold_close_change', 'tnx_close': 'tnx_close_change'
         }
         for col_in, col_out in macro_map.items():
-            if col_in in df.columns:
-                df[col_out] = df[col_in].pct_change(60).fillna(0) # Mudança de 1 dia -> 60 min
-            else:
-                df[col_out] = 0
+            df[col_out] = df[col_in].pct_change(60).fillna(0) if col_in in df.columns else 0
 
-        logger.debug("Adicionando features de contexto de 1h e 4h...")
+        # --- Features Multi-Timeframe (MTC) ---
         df_1h = df['close'].resample('h').last()
         df['rsi_1h'] = RSIIndicator(close=df_1h, window=14).rsi().reindex(df.index, method='ffill')
-        df['macd_diff_1h'] = MACD(close=df_1h, window_fast=12, window_slow=26, window_sign=9).macd_diff().reindex(df.index, method='ffill')
+        df['macd_diff_1h'] = MACD(close=df_1h).macd_diff().reindex(df.index, method='ffill')
         df_4h = df['close'].resample('4h').last()
         df['rsi_4h'] = RSIIndicator(close=df_4h, window=14).rsi().reindex(df.index, method='ffill')
         for col in ['rsi_1h', 'macd_diff_1h', 'rsi_4h']:
-            df[col] = df[col].bfill()
+            df[col] = df[col].bfill().ffill()
+
+        # --- Construção da lista final de features ---
+        final_feature_names = self.base_feature_names.copy()
         
-        # --- PASSO 2: One-Hot Encoding da feature de Regime de Mercado ---
         if 'market_regime' in df.columns:
             logger.debug("Aplicando One-Hot Encoding para a feature 'market_regime'...")
-            regime_dummies = pd.get_dummies(df['market_regime'], prefix='regime', dtype=int)
+            regime_dummies = pd.get_dummies(df['market_regime'], prefix='regime', dtype=float)
             df = pd.concat([df, regime_dummies], axis=1)
-            
-            # Adiciona as novas colunas de regime à lista final de features
-            self.final_feature_names = self.base_feature_names + list(regime_dummies.columns)
-        else:
-            logger.warning("Coluna 'market_regime' não encontrada. O modelo não usará o contexto de regime.")
-            self.final_feature_names = self.base_feature_names
+            final_feature_names.extend(regime_dummies.columns)
         
-        # Garante que a lista de features não tenha duplicatas
-        self.final_feature_names = list(dict.fromkeys(self.final_feature_names))
+        final_feature_names = sorted(list(set(final_feature_names)))
         
-        # Realiza o shift e dropna usando a lista final e completa de features
-        df[self.final_feature_names] = df[self.final_feature_names].shift(1)
-        df.replace([np.inf, -np.inf], np.nan, inplace=True)
-        df.dropna(subset=self.final_feature_names, inplace=True)
-        
-        return df
+        for col in final_feature_names:
+            if col not in df.columns:
+                df[col] = 0.0
 
-    def train(self, data: pd.DataFrame, all_params: dict):
-        """Prepara os dados, treina e retorna o modelo e o normalizador."""
+        df[final_feature_names] = df[final_feature_names].shift(1)
+        df.replace([np.inf, -np.inf], np.nan, inplace=True)
+        df.dropna(subset=final_feature_names, inplace=True)
+        
+        return df, final_feature_names
+
+    ### PASSO 2: Corrigir e especificar a anotação de tipo do retorno ###
+    def train(self, data: pd.DataFrame, all_params: dict) -> tuple[LGBMClassifier | None, StandardScaler | None, list[str] | None]:
+        """
+        Prepara os dados, treina o modelo e retorna o modelo, o normalizador
+        e a lista de features utilizadas.
+        """
         if len(data) < 500:
             logger.warning(f"Dados insuficientes para treino ({len(data)} registros). Pulando.")
-            return None, None
+            return None, None, None
 
-        logger.debug("Iniciando preparação de features para o treinamento...")
-        df_full = self._prepare_features(data.copy())
+        logger.debug("Iniciando o processo de treino do modelo...")
+        df_processed, final_feature_names = self._prepare_features(data.copy())
 
-        if df_full.empty:
+        if df_processed.empty:
             logger.warning("DataFrame ficou vazio após a preparação de features. Pulando trial.")
-            return None, None
+            return None, None, None
 
         future_periods = all_params.get('future_periods', 30)
         profit_mult = all_params.get('profit_mult', 2.0)
         stop_mult = all_params.get('stop_mult', 2.0)
 
-        logger.debug(f"Gerando labels com: future_periods={future_periods}, profit_mult={profit_mult}, stop_mult={stop_mult}")
-
         labels_np = create_labels_triple_barrier(
-            closes=df_full['close'].to_numpy(), highs=df_full['high'].to_numpy(),
-            lows=df_full['low'].to_numpy(), atr=df_full['atr'].to_numpy(),
+            closes=df_processed['close'].to_numpy(), highs=df_processed['high'].to_numpy(),
+            lows=df_processed['low'].to_numpy(), atr=df_processed['atr'].to_numpy(),
             future_periods=future_periods, profit_multiplier=profit_mult, stop_multiplier=stop_mult
         )
-
-        y = pd.Series(labels_np, index=df_full.index, name="label")
+        y = pd.Series(labels_np, index=df_processed.index, name="label")
         
-        # <<< PASSO 3: Usar a lista final de features, incluindo os regimes, para o treino >>>
-        X = df_full[self.final_feature_names]
+        X = df_processed[final_feature_names]
 
-        logger.info(f"Distribuição dos labels no treino: \n{y.value_counts(normalize=True).to_string()}")
-        
         counts = y.value_counts()
         if counts.get(1, 0) < 20 or counts.get(2, 0) < 20:
-            logger.warning(f"Não há exemplos suficientes de compra(1) ou venda(2) para um treino confiável. Counts: {counts.to_dict()}")
-            return None, None
+            logger.warning(f"Não há exemplos suficientes de compra(1) ou venda(2). Counts: {counts.to_dict()}")
+            return None, None, None
 
-        logger.debug("Normalizando features e treinando o modelo LightGBM...")
+        logger.info(f"Treinando modelo com {len(final_feature_names)} features.")
+        log_table("Distribuição dos Labels no Treino", y.value_counts(normalize=True).reset_index(), headers=["Label", "Frequência"])
+        
         scaler = StandardScaler()
         X_scaled = pd.DataFrame(scaler.fit_transform(X), index=X.index, columns=X.columns)
         
@@ -177,8 +172,5 @@ class ModelTrainer:
         model.fit(X_scaled, y)
 
         logger.debug("Treinamento do modelo concluído com sucesso.")
-        return model, scaler
-
-    def save_model(self, model, scaler):
-        joblib.dump(model, MODEL_FILE); joblib.dump(scaler, SCALER_FILE)
-        logger.info(f"✅ Modelo e normalizador salvos em '{MODEL_FILE}' e '{SCALER_FILE}'")
+        
+        return model, scaler, final_feature_names
