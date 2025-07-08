@@ -1,4 +1,4 @@
-# src/model_trainer.py (VERSÃO 4.3 - COM IMPORT CORRIGIDO)
+# src/model_trainer.py (VERSÃO 5.0 - FEATURES ROBUSTAS)
 
 import pandas as pd
 import numpy as np
@@ -8,7 +8,6 @@ from numba import jit
 from typing import Tuple, List, Any
 
 from src.logger import logger
-# 1. CORREÇÃO: A função 'log_table' foi movida para 'src.logger'.
 from src.logger import log_table 
 from ta.volatility import BollingerBands, AverageTrueRange
 from ta.trend import MACD, ADXIndicator
@@ -47,6 +46,7 @@ def create_labels_triple_barrier(
 
 class ModelTrainer:
     def __init__(self):
+        # --- NOVO --- Adicionamos as novas features à lista base
         self.base_feature_names = [
             'rsi', 'rsi_1h', 'rsi_4h', 'macd_diff', 'macd_diff_1h', 'stoch_osc',
             'adx', 'adx_power',
@@ -55,6 +55,8 @@ class ModelTrainer:
             'price_change_1m', 'price_change_5m',
             'dxy_close_change', 'vix_close_change',
             'gold_close_change', 'tnx_close_change',
+            'atr_long_avg', # Para ajuste de risco pela volatilidade
+            'volume_sma_50', # Para filtro de confirmação de volume
         ]
 
     def _prepare_features(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]]:
@@ -86,6 +88,11 @@ class ModelTrainer:
         df['price_change_5m'] = df['close'].pct_change(5)
         df['rsi'] = RSIIndicator(close=df['close'], window=14).rsi()
         df['stoch_osc'] = StochasticOscillator(high=df['high'], low=df['low'], close=df['close']).stoch()
+        
+        # --- NOVAS FEATURES DE ROBUSTEZ ---
+        df['atr_long_avg'] = df['atr'].rolling(window=100).mean()
+        df['volume_sma_50'] = df['volume'].rolling(window=50).mean()
+        # --------------------------------
 
         # --- Features Macroeconômicas ---
         macro_map = {
@@ -119,11 +126,13 @@ class ModelTrainer:
             if col not in df.columns:
                 df[col] = 0.0
 
-        df[final_feature_names] = df[final_feature_names].shift(1)
-        df.replace([np.inf, -np.inf], np.nan, inplace=True)
-        df.dropna(subset=final_feature_names, inplace=True)
+        # --- MUDANÇA --- Garantindo que o shift aconteça após todos os cálculos
+        df_final = df.copy()
+        df_final[final_feature_names] = df_final[final_feature_names].shift(1)
+        df_final.replace([np.inf, -np.inf], np.nan, inplace=True)
+        df_final.dropna(subset=final_feature_names, inplace=True)
         
-        return df, final_feature_names
+        return df_final, final_feature_names
 
     def train(self, data: pd.DataFrame, all_params: dict) -> Tuple[LGBMClassifier | None, StandardScaler | None, List[str] | None]:
         """

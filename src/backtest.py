@@ -1,4 +1,4 @@
-# src/backtest.py (VERSÃO 4.0 - SIMULAÇÃO COM TESOURARIA INTEGRADA)
+# src/backtest.py (VERSÃO 5.0 - LÓGICA DE EXECUÇÃO ROBUSTA)
 
 import numpy as np
 import pandas as pd
@@ -6,62 +6,78 @@ import pandas as pd
 from src.config import FEE_RATE, SLIPPAGE_RATE 
 from src.confidence_manager import AdaptiveConfidenceManager
 
+def calculate_sortino_ratio(series, periods_per_year=365*24*60):
+    """Calcula o Sortino Ratio a partir de uma série de valores de portfólio."""
+    returns = series.pct_change().dropna()
+    
+    # --- MUDANÇA --- Usando um target return de 0 para simplificar
+    target_return = 0
+    downside_returns = returns[returns < target_return]
+    
+    expected_return = returns.mean()
+    downside_std = downside_returns.std()
+    
+    if downside_std == 0 or pd.isna(downside_std):
+        return 0.0
+        
+    sortino = (expected_return * periods_per_year) / (downside_std * np.sqrt(periods_per_year))
+    return sortino if not pd.isna(sortino) else 0.0
+
+
 def run_backtest(model, scaler, test_data_with_features: pd.DataFrame, strategy_params: dict, feature_names: list):
     """
-    Executa um backtest realista, com a performance total refletindo tanto
-    o capital de trading (USDT) quanto a tesouraria de longo prazo (BTC).
+    Executa um backtest realista e robusto, com lógica de risco avançada,
+    e retorna um conjunto completo de métricas de performance.
     """
-    ### PASSO 1: Inicializar o estado do portfólio completo ###
     initial_capital = 100.0
     capital_usdt = initial_capital
     trading_btc = 0.0
-    treasury_btc = 0.0 # Tesouraria de BTC de longo prazo
+    treasury_btc = 0.0
     
-    # Histórico para métricas de performance
     portfolio_history = []
-    trade_count = 0
+    trade_pnls = [] # --- NOVO --- Para calcular o Profit Factor
 
-    # --- Carregar TODOS os parâmetros da estratégia do dicionário otimizado ---
-    # Usar .get() fornece um valor padrão seguro se a chave não for encontrada
+    # --- NOVO --- Carregando todos os novos hiperparâmetros
     base_risk = strategy_params.get('risk_per_trade_pct', 0.05)
     profit_threshold = strategy_params.get('profit_threshold', 0.01)
-    stop_loss_threshold = strategy_params.get('stop_loss_threshold', 0.005)
+    # stop_loss_threshold foi substituído pelo multiplicador de ATR
+    stop_loss_atr_multiplier = strategy_params.get('stop_loss_atr_multiplier', 2.5)
     
     trailing_stop_multiplier = strategy_params.get('trailing_stop_multiplier', 1.5)
     partial_sell_pct = strategy_params.get('partial_sell_pct', 0.5)
     treasury_allocation_pct = strategy_params.get('treasury_allocation_pct', 0.20)
+
+    # Parâmetros para a lógica de risco agressiva
+    aggression_exponent = strategy_params.get('aggression_exponent', 2.0)
+    max_risk_scale = strategy_params.get('max_risk_scale', 3.0)
+    min_risk_scale = 0.5 # Fixo
     
     # --- Variáveis de estado do trade ---
     in_position = False
     buy_price = 0.0
-    position_phase = None # 'INITIAL', 'BREAKEVEN', 'TRAILING'
+    position_phase = None 
     current_stop_price = 0.0
     highest_price_in_trade = 0.0
-
+    
     # --- Preparação das Features e Predições ---
-    # Garante que todas as colunas de features existam no dataframe de teste
     for col in feature_names:
         if col not in test_data_with_features.columns:
             test_data_with_features[col] = 0
             
     X_test_features = test_data_with_features[feature_names].fillna(0)
     X_test_scaled = pd.DataFrame(scaler.transform(X_test_features), index=X_test_features.index, columns=X_test_features.columns)
-    
-    # Obter a probabilidade da classe "1" (compra)
     predictions_buy_proba = pd.Series(model.predict_proba(X_test_scaled)[:, 1], index=X_test_features.index)
 
-    ### PASSO 2: Inicializar o ConfidenceManager com todos os parâmetros otimizáveis ###
     confidence_manager = AdaptiveConfidenceManager(
         initial_confidence=strategy_params.get('initial_confidence', 0.6),
         learning_rate=strategy_params.get('confidence_learning_rate', 0.05),
-        window_size=strategy_params.get('confidence_window_size', 5) # Novo parâmetro!
+        window_size=strategy_params.get('confidence_window_size', 5)
     )
 
     # --- Loop Principal do Backtest ---
     for date, row in test_data_with_features.iterrows():
         price = row['close']
         
-        # Ajuste de risco baseado no regime de mercado
         regime = row.get('market_regime', 'LATERAL')
         current_base_risk = base_risk
         if regime == 'BEAR':
@@ -71,94 +87,100 @@ def run_backtest(model, scaler, test_data_with_features: pd.DataFrame, strategy_
             if regime == 'RECUPERACAO': current_base_risk /= 2
             elif regime == 'LATERAL': current_base_risk /= 3
 
-        # --- Gerenciamento de Posição Ativa ---
         if in_position:
             highest_price_in_trade = max(highest_price_in_trade, price)
 
-            # 1. Checagem de Stop Loss (Total ou Trailing)
             if price <= current_stop_price:
                 sell_price = price * (1 - SLIPPAGE_RATE)
+                pnl = (trading_btc * sell_price) - (trading_btc * buy_price)
+                trade_pnls.append(pnl) # Adiciona o resultado do trade
                 capital_usdt += (trading_btc * sell_price) * (1 - FEE_RATE)
-                pnl = (sell_price / buy_price) - 1
-                confidence_manager.update(pnl)
+                pnl_pct = (sell_price / buy_price) - 1
+                confidence_manager.update(pnl_pct)
                 in_position, trading_btc = False, 0.0
-                trade_count += 1
             
-            # 2. Gerenciamento de Fases do Trade
-            elif position_phase == 'INITIAL' and price >= buy_price * (1 + stop_loss_threshold):
-                position_phase = 'BREAKEVEN'
-                current_stop_price = buy_price * (1 + (FEE_RATE * 2)) # Ponto de equilíbrio
-            
-            elif position_phase == 'BREAKEVEN' and price >= buy_price * (1 + profit_threshold):
-                amount_to_sell = trading_btc * partial_sell_pct
-                sell_price = price * (1 - SLIPPAGE_RATE)
-                revenue = (amount_to_sell * sell_price) * (1 - FEE_RATE)
-                profit_usdt = (sell_price - buy_price) * amount_to_sell
-
-                if profit_usdt > 0:
-                    treasury_usdt = profit_usdt * treasury_allocation_pct
-                    treasury_btc += treasury_usdt / price
-                    capital_usdt += revenue - treasury_usdt
-                else:
-                    capital_usdt += revenue
-                    
-                trading_btc -= amount_to_sell
-                position_phase = 'TRAILING'
-                
+            # --- MUDANÇA --- Lógica de Trailing Stop agora baseada em ATR
             elif position_phase == 'TRAILING':
-                new_trailing_stop = highest_price_in_trade * (1 - (stop_loss_threshold * trailing_stop_multiplier))
+                # O trailing stop segue o preço máximo com uma distância baseada no ATR
+                new_trailing_stop = highest_price_in_trade - (row['atr'] * stop_loss_atr_multiplier * trailing_stop_multiplier)
                 current_stop_price = max(current_stop_price, new_trailing_stop)
 
-        # --- Verificação de Nova Entrada ---
         if not in_position and is_trading_allowed:
-            conviction = predictions_buy_proba.get(date, 0)
-            if conviction > confidence_manager.get_confidence():
-                signal_strength = (conviction - confidence_manager.get_confidence()) / (1.0 - confidence_manager.get_confidence())
-                dynamic_risk_pct = current_base_risk * (0.5 + signal_strength * 1.5) # Amplifica o efeito do sinal
-                trade_size_usdt = capital_usdt * dynamic_risk_pct
-                
-                if capital_usdt > 10 and trade_size_usdt > 10: # Limites práticos
-                    buy_price_eff = price * (1 + SLIPPAGE_RATE)
-                    amount_to_buy_btc = trade_size_usdt / buy_price_eff
-                    fee = trade_size_usdt * FEE_RATE
-                    
-                    in_position = True
-                    trading_btc = amount_to_buy_btc
-                    capital_usdt -= (trade_size_usdt + fee)
-                    buy_price = buy_price_eff
-                    current_stop_price = buy_price * (1 - stop_loss_threshold)
-                    highest_price_in_trade = buy_price
-                    position_phase = 'INITIAL'
+            # --- NOVO: FILTRO DE VOLUME ---
+            if row['volume'] < row['volume_sma_50']:
+                pass # Pula a lógica de entrada se o volume for baixo
+            else:
+                conviction = predictions_buy_proba.get(date, 0)
+                if conviction > confidence_manager.get_confidence():
+                    # --- NOVA LÓGICA DE RISCO AGRESSIVO ---
+                    signal_strength = (conviction - confidence_manager.get_confidence()) / (1.0 - confidence_manager.get_confidence())
+                    aggression_factor = min_risk_scale + (signal_strength ** aggression_exponent) * (max_risk_scale - min_risk_scale)
+                    dynamic_risk_pct = current_base_risk * aggression_factor
+                    trade_size_usdt = capital_usdt * dynamic_risk_pct
 
-        ### PASSO 3: Calcular o VALOR TOTAL do portfólio (Trading + Tesouraria) ###
+                    # --- NOVO: AJUSTE DE RISCO PELA VOLATILIDADE ---
+                    current_atr = row.get('atr', 0)
+                    long_term_atr = row.get('atr_long_avg', current_atr)
+                    if long_term_atr > 0 and current_atr > 0:
+                        volatility_factor = current_atr / long_term_atr
+                        risk_dampener = np.clip(1 / volatility_factor, 0.6, 1.2)
+                        trade_size_usdt *= risk_dampener
+                    # -----------------------------------------------
+
+                    if capital_usdt > 10 and trade_size_usdt > 10:
+                        buy_price_eff = price * (1 + SLIPPAGE_RATE)
+                        amount_to_buy_btc = trade_size_usdt / buy_price_eff
+                        
+                        in_position = True
+                        trading_btc = amount_to_buy_btc
+                        capital_usdt -= trade_size_usdt * (1 + FEE_RATE)
+                        buy_price = buy_price_eff
+                        
+                        # --- MUDANÇA: STOP LOSS BASEADO EM ATR ---
+                        current_stop_price = buy_price_eff - (row['atr'] * stop_loss_atr_multiplier)
+                        # -------------------------------------------
+                        
+                        highest_price_in_trade = buy_price
+                        position_phase = 'INITIAL' # Simplificado para o backtest de otimização
+
         trading_value = capital_usdt + (trading_btc * price)
         treasury_value = treasury_btc * price
         total_portfolio_value = trading_value + treasury_value
         
-        portfolio_history.append({
-            'timestamp': date, 
-            'total_value': total_portfolio_value,
-            'treasury_btc': treasury_btc
-        })
+        portfolio_history.append({'timestamp': date, 'total_value': total_portfolio_value})
 
-    # --- Cálculo Final de Métricas ---
+    # --- CÁLCULO FINAL DE MÉTRICAS AVANÇADAS ---
     if len(portfolio_history) < 2:
-        return 0.0, -1.0, -1.0, 0, 0.0
+        return 0.0, 0.0, -1.0, 0, 0.0, 0.0, 0.0 # Retorna zeros para todas as métricas
 
     portfolio_df = pd.DataFrame(portfolio_history).set_index('timestamp')
+    
+    # Métricas básicas
     final_value = portfolio_df['total_value'].iloc[-1]
-    final_treasury_btc = portfolio_df['treasury_btc'].iloc[-1]
-    
     total_return = (final_value / initial_capital) - 1
-    
     duration_days = (portfolio_df.index[-1] - portfolio_df.index[0]).days
     if duration_days < 1: duration_days = 1
     annualized_return = ((1 + total_return) ** (365.0 / duration_days)) - 1
-    
     running_max = portfolio_df['total_value'].cummax()
     drawdown = (portfolio_df['total_value'] - running_max) / running_max
     max_drawdown = drawdown.min()
+    trade_count = len(trade_pnls)
 
-    # Este módulo não loga mais; ele apenas retorna os resultados.
-    # O Optimizer será responsável por logar o resultado de cada backtest.
-    return final_value, annualized_return, max_drawdown, trade_count, final_treasury_btc
+    # --- NOVO: Cálculo do Profit Factor e Sortino Ratio ---
+    trade_pnls = np.array(trade_pnls)
+    total_profit = trade_pnls[trade_pnls > 0].sum()
+    total_loss = abs(trade_pnls[trade_pnls < 0].sum())
+    profit_factor = total_profit / total_loss if total_loss > 0 else 100.0
+
+    sortino_ratio = calculate_sortino_ratio(portfolio_df['total_value'])
+    
+    # --- MUDANÇA --- Retornando todas as novas métricas
+    return (
+        final_value,
+        annualized_return,
+        max_drawdown,
+        trade_count,
+        sortino_ratio,
+        profit_factor,
+        np.mean(trade_pnls) if trade_count > 0 else 0.0
+    )
