@@ -49,7 +49,7 @@ BOT_STATE_FILE = os.path.join(DATA_DIR, "bot_state.json")
 MODEL_METADATA_FILE = os.path.join(DATA_DIR, "model_metadata.json")
 
 # --- PARÂMETROS PARA A OTIMIZAÇÃO ---
-WFO_TRAIN_MINUTES = int(get_config_var("WFO_TRAIN_MINUTES", 788400)) # ~18 meses para ter dados de vários regimes
+WFO_TRAIN_MINUTES = int(get_config_var("WFO_TRAIN_MINUTES", 790000)) # ~18 meses para ter dados de vários regimes
 MODEL_VALIDITY_MONTHS = int(get_config_var("MODEL_VALIDITY_MONTHS", 3))
 QUICK_OPTIMIZE = get_config_var("QUICK_OPTIMIZE", "False").lower() == 'true'
 

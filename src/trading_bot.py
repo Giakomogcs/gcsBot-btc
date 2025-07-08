@@ -1,7 +1,5 @@
-# src/trading_bot.py (VERSÃO 6.0 - ROBUSTO E COM CIRCUIT BREAKERS)
+# src/trading_bot.py (VERSÃO 6.2 - CORRIGIDO E ROBUSTO)
 
-
-from multiprocessing.dummy import current_process
 import pandas as pd
 import numpy as np
 import joblib
@@ -13,6 +11,7 @@ import signal
 import sys
 from binance.client import Client
 from binance.exceptions import BinanceAPIException, BinanceRequestException
+from datetime import datetime, timezone 
 
 from src.logger import logger, log_table
 from src.config import (
@@ -25,8 +24,6 @@ from src.model_trainer import ModelTrainer
 from src.confidence_manager import AdaptiveConfidenceManager
 
 class PortfolioManager:
-    # Nenhuma mudança necessária neste arquivo. O código original é mantido.
-    # ... (código da classe PortfolioManager como no arquivo original) ...
     """Gerencia todo o capital, posições e a tesouraria de longo prazo."""
     def __init__(self, client):
         self.client = client
@@ -78,7 +75,6 @@ class PortfolioManager:
     def update_on_sell(self, sold_btc_amount, revenue_usdt, profit_usdt, price, params):
         self.trading_btc_balance -= sold_btc_amount
         
-        # A lógica da tesouraria permanece a mesma
         if profit_usdt > 0:
             treasury_allocation = params.get('treasury_allocation_pct', 0.20)
             treasury_usdt = profit_usdt * treasury_allocation
@@ -114,7 +110,8 @@ class PortfolioManager:
             ["Posição de Trading (BTC)", f"{self.trading_btc_balance:.8f}"],
             [" ├─ Valor da Posição", f"${(self.trading_btc_balance * current_btc_price):,.2f}"],
             ["Tesouro de Longo Prazo (BTC)", f"{self.long_term_btc_holdings:.8f}"],
-            [" └─ Valor do Tesouro", f"${(self.long_term_btc_holdings * current_process):,.2f}"]
+            # <<< CORREÇÃO APLICADA AQUI >>>
+            [" └─ Valor do Tesouro", f"${(self.long_term_btc_holdings * current_btc_price):,.2f}"]
         ]
         summary_data = [
             ["Valor Total do Portfólio", f"💎 ${total_value:,.2f}"],
@@ -142,54 +139,96 @@ class TradingBot:
         self.highest_price_in_trade = 0.0
         self.last_used_params = {}
         
-        # --- NOVO: Variáveis de estado para o Circuit Breaker ---
         self.session_peak_value = 0.0
         self.session_drawdown_stop_activated = False
-        self.SESSION_MAX_DRAWDOWN = -0.10 # Limite de 10% de perda na sessão
+        self.SESSION_MAX_DRAWDOWN = -0.10
 
         signal.signal(signal.SIGINT, self.graceful_shutdown)
         signal.signal(signal.SIGTERM, self.graceful_shutdown)
 
     def load_all_specialists(self):
-        # A lógica de carregamento permanece a mesma.
-        # ... (código do load_all_specialists como no arquivo original) ...
+        """
+        Carrega todos os artefatos de modelo, verifica a validade e fornece um 
+        diagnóstico claro se nenhum especialista válido for encontrado.
+        """
         try:
+            logger.info(f"Procurando metadados dos modelos em: {MODEL_METADATA_FILE}")
             with open(MODEL_METADATA_FILE, 'r') as f:
                 metadata = json.load(f)
+
+            valid_until_str = metadata.get('valid_until')
+            if not valid_until_str:
+                logger.error("ERRO CRÍTICO: Data de validade não encontrada nos metadados. Execute a otimização.")
+                return False
+
+            valid_until_dt = datetime.fromisoformat(valid_until_str)
+            now_utc = datetime.now(timezone.utc)
+
+            if now_utc > valid_until_dt:
+                logger.error("="*60)
+                logger.error("🚨 ALERTA: O CONJUNTO DE MODELOS ESTÁ EXPIRADO! 🚨")
+                logger.error(f"   Válido até: {valid_until_dt.strftime('%Y-%m-%d %H:%M')}")
+                logger.error(f"   Data atual:  {now_utc.strftime('%Y-%m-%d %H:%M')}")
+                logger.error("   Por segurança, o bot não iniciará. Execute o modo 'optimize'.")
+                logger.error("="*60)
+                return False
+            
+            logger.info(f"✅ Conjunto de modelos válido até {valid_until_dt.strftime('%Y-%m-%d')}. Verificação OK.")
+            
             self.model_feature_names = metadata.get('feature_names', [])
             summary = metadata.get('optimization_summary', {})
             
-            if not self.model_feature_names: raise ValueError("Lista de features não encontrada nos metadados.")
-            logger.info(f"✅ Metadados carregados. {len(self.model_feature_names)} features esperadas.")
+            if not self.model_feature_names:
+                logger.error("Metadados corrompidos: a lista de features está ausente.")
+                return False
+            
+            logger.info(f"Carregando {len(self.model_feature_names)} features esperadas pelo modelo...")
 
-            for regime, details in summary.items():
-                if details.get('status') == 'Optimized and Saved':
+            loaded_specialists_count = 0
+            for regime, result in summary.items():
+                if result.get('status') == 'Optimized and Saved':
                     try:
-                        model_path = os.path.join(DATA_DIR, details['model_file'])
-                        scaler_path = os.path.join(DATA_DIR, details['model_file'].replace('trading_model', 'scaler'))
-                        params_path = os.path.join(DATA_DIR, details['params_file'])
+                        model_path = os.path.join(DATA_DIR, result['model_file'])
+                        scaler_path = model_path.replace('trading_model', 'scaler')
+                        params_path = os.path.join(DATA_DIR, result['params_file'])
 
                         self.models[regime] = joblib.load(model_path)
                         self.scalers[regime] = joblib.load(scaler_path)
-                        with open(params_path, 'r') as f:
-                            params = json.load(f)
-                            self.strategy_params[regime] = params
+                        with open(params_path, 'r') as p:
+                            regime_params = json.load(p)
+                            self.strategy_params[regime] = regime_params
                         
                         self.confidence_managers[regime] = AdaptiveConfidenceManager(
-                            initial_confidence=params.get('initial_confidence', 0.6),
-                            learning_rate=params.get('confidence_learning_rate', 0.05),
-                            window_size=params.get('confidence_window_size', 5)
+                            initial_confidence=regime_params.get('initial_confidence', 0.7),
+                            learning_rate=regime_params.get('confidence_learning_rate', 0.05),
+                            window_size=regime_params.get('confidence_window_size', 10)
                         )
-                        logger.info(f"-> Especialista para o regime '{regime}' carregado com sucesso.")
+                        logger.info(f"🧠 Especialista para o regime '{regime}' carregado com sucesso.")
+                        loaded_specialists_count += 1
                     except Exception as e:
-                        logger.error(f"-> Falha ao carregar especialista para o regime '{regime}': {e}")
-                        
-            if not self.models:
-                logger.error("Nenhum modelo especialista foi carregado. O bot não pode operar.")
+                        logger.error(f"Falha ao carregar artefatos para o regime '{regime}': {e}")
+                        self.models.pop(regime, None)
+                        self.scalers.pop(regime, None)
+                        self.strategy_params.pop(regime, None)
+                        self.confidence_managers.pop(regime, None)
+
+            if loaded_specialists_count == 0:
+                logger.error("="*60)
+                logger.error("❌ ERRO CRÍTICO: Nenhum especialista de trading foi carregado.")
+                logger.error("   Analisando o resultado da última otimização...")
+                log_table("Resumo da Última Otimização", 
+                          [[r, d.get('status', 'N/A'), f"{(d.get('score') or 0):.4f}"] for r, d in summary.items()],
+                          headers=["Regime", "Status", "Melhor Score"])
+                logger.error("   MOTIVO: Nenhum regime produziu uma estratégia com score de qualidade suficiente.")
+                logger.error("   AÇÃO RECOMENDADA: Execute o modo 'optimize' novamente.")
+                logger.error("="*60)
                 return False
+
+            logger.info(f"✅ {loaded_specialists_count} especialista(s) carregado(s) e prontos para operar.")
             return True
+
         except FileNotFoundError:
-            logger.error(f"ERRO: Arquivo de metadados '{MODEL_METADATA_FILE}' não encontrado. Execute 'optimize' primeiro.")
+            logger.error(f"ERRO: Arquivo de metadados '{MODEL_METADATA_FILE}' não encontrado. Execute a otimização primeiro.")
             return False
         except Exception as e:
             logger.error(f"Erro inesperado ao carregar especialistas: {e}", exc_info=True)
@@ -214,7 +253,6 @@ class TradingBot:
 
         while True:
             try:
-                # --- MUDANÇA --- Passando o Trainer para obter as features de forma consistente
                 features_df = self.data_manager.update_and_load_data(SYMBOL, '1m')
                 processed_df, _ = self.trainer._prepare_features(features_df.copy())
                 if processed_df.empty or len(processed_df) < 1:
@@ -225,7 +263,6 @@ class TradingBot:
                 current_price = latest_data['close']
                 regime = latest_data['market_regime']
                 
-                # --- NOVO: LÓGICA DO CIRCUIT BREAKER DE DRAWDOWN ---
                 current_total_value = self.portfolio.get_total_portfolio_value_usdt(current_price)
                 self.session_peak_value = max(self.session_peak_value, current_total_value)
                 session_drawdown = (current_total_value - self.session_peak_value) / self.session_peak_value if self.session_peak_value > 0 else 0
@@ -238,9 +275,8 @@ class TradingBot:
 
                 if self.session_drawdown_stop_activated:
                     logger.warning("Circuit Breaker da sessão ATIVO. Novas operações suspensas até o próximo reinício.")
-                    time.sleep(300); continue # Verifica a cada 5 minutos
-                # ----------------------------------------------------
-
+                    time.sleep(300); continue
+                
                 if self.in_trade_position:
                     self._manage_active_position(latest_data)
                 else:
@@ -259,20 +295,27 @@ class TradingBot:
                 logger.error(f"Erro inesperado no loop principal: {e}", exc_info=True)
                 time.sleep(60)
 
-    # --- MUDANÇA --- Agora recebe a linha inteira de dados para usar o ATR
     def _manage_active_position(self, latest_data: pd.Series):
         price = latest_data['close']
         self.highest_price_in_trade = max(self.highest_price_in_trade, price)
-
-        # Mesma lógica de log de antes...
         
+        pnl_pct = (price / self.buy_price - 1) if self.buy_price > 0 else 0
+        pnl_usdt = (price - self.buy_price) * self.portfolio.trading_btc_balance
+        pnl_color = "🟢" if pnl_pct >= 0 else "🔴"
+        
+        log_table(f"💼 POSIÇÃO ATIVA (Regime de Entrada: {self.last_used_params.get('entry_regime', 'N/A')})", [
+            ["Preço de Compra", f"${self.buy_price:,.2f}"],
+            ["Preço Atual", f"${price:,.2f}"],
+            ["Resultado Atual", f"{pnl_color} {pnl_pct:+.2%} (${pnl_usdt:,.2f})"],
+            ["Preço de Stop", f"🔴 ${self.current_stop_price:,.2f}"],
+            ["Fase da Posição", self.position_phase],
+        ], headers=["Métrica", "Valor"])
+
         if price <= self.current_stop_price:
-            pnl_pct = (price / self.buy_price) - 1 if self.buy_price > 0 else 0
             logger.info(f"🔴 STOP LOSS ATINGIDO a ${price:,.2f} (Stop era ${self.current_stop_price:,.2f})")
             self._execute_sell(price, f"Stop Loss ({pnl_pct:.2%})")
             return
         
-        # --- MUDANÇA --- Trailing Stop agora usa ATR e os parâmetros otimizados
         params = self.last_used_params
         if self.position_phase == 'TRAILING':
             stop_loss_atr_multiplier = params.get('stop_loss_atr_multiplier', 2.5)
@@ -283,22 +326,26 @@ class TradingBot:
                 self.current_stop_price = new_trailing_stop
                 logger.info(f"📈 TRAILING STOP ATUALIZADO para ${self.current_stop_price:,.2f}")
         
-        # Lógica de fases (INITIAL, BREAKEVEN) permanece similar, pode ser ajustada se necessário.
+        elif self.position_phase == 'INITIAL' and price >= self.buy_price * (1 + params.get('profit_threshold', 0.01) / 2):
+            self.position_phase = 'TRAILING'
+            new_stop = self.buy_price * (1 + (FEE_RATE + SLIPPAGE_RATE)) # Ponto de Breakeven
+            self.current_stop_price = max(self.current_stop_price, new_stop)
+            logger.info(f"🚀 Posição atingiu metade do alvo. Fase mudou para 'TRAILING'. Stop ajustado para Breakeven em ${self.current_stop_price:,.2f}.")
 
-    # --- MUDANÇA --- Função de checagem de entrada completamente refeita para ser robusta
     def _check_for_entry_signal(self, latest_data: pd.Series):
         regime = latest_data['market_regime']
-        if regime == 'BEAR':
-            logger.info(f"🐻 Regime 'BEAR' detectado. Trades de compra estão bloqueados.")
-            return
+        
+        # <<< MUDANÇA: O bloqueio explícito do regime 'BEAR' foi removido >>>
+        # A lógica de risco agora é tratada pelos parâmetros otimizados para cada regime.
+        # Se um especialista 'BEAR' for criado, o bot poderá usá-lo, mas os parâmetros
+        # otimizados (como o risco base reduzido no backtest) garantirão que ele seja
+        # extremamente seletivo.
 
-        # --- NOVO: FILTRO DE PÂNICO VIX ---
-        VIX_PANIC_THRESHOLD = 0.10 # Aumento de 10% no VIX em 1h
+        VIX_PANIC_THRESHOLD = 0.10
         if latest_data.get('vix_close_change', 0) > VIX_PANIC_THRESHOLD:
             logger.warning(f"🚨 FILTRO DE PÂNICO VIX ATIVADO (VIX subiu {latest_data['vix_close_change']:.2%})! Compra bloqueada.")
             return
 
-        # --- NOVO: FILTRO DE VOLUME ---
         if latest_data['volume'] < latest_data['volume_sma_50']:
             logger.info(f"Sinal ignorado. Volume ({latest_data['volume']:.2f}) abaixo da média ({latest_data['volume_sma_50']:.2f}).")
             return
@@ -308,15 +355,21 @@ class TradingBot:
         params = self.strategy_params.get(regime)
         confidence_manager = self.confidence_managers.get(regime)
 
+        # O 'specialist_model' já foi verificado na função 'run', então aqui podemos
+        # assumir que model, scaler, params e confidence_manager existem.
+
         features_for_prediction = pd.DataFrame(latest_data[self.model_feature_names]).T
         scaled_features = scaler.transform(features_for_prediction)
         buy_confidence = model.predict_proba(scaled_features)[0][1]
         
         current_confidence_threshold = confidence_manager.get_confidence()
         if buy_confidence > current_confidence_threshold:
-            # --- LÓGICA DE RISCO AGRESSIVO E ROBUSTO ---
+            # A lógica de risco já considera os parâmetros otimizados para o regime específico
             base_risk = params.get('risk_per_trade_pct', 0.05)
-            if regime == 'RECUPERACAO': base_risk /= 2
+            
+            # <<< MUDANÇA: A redução de risco manual é movida para o backtest >>>
+            # O bot agora confia puramente nos parâmetros que foram otimizados.
+            # A lógica de risco no backtest já considerou o regime.
             
             signal_strength = (buy_confidence - current_confidence_threshold) / (1.0 - current_confidence_threshold)
             aggression_exponent = params.get('aggression_exponent', 2.0)
@@ -326,7 +379,6 @@ class TradingBot:
             
             trade_size_usdt = self.portfolio.trading_capital_usdt * dynamic_risk_pct
 
-            # AJUSTE PELA VOLATILIDADE
             current_atr = latest_data.get('atr', 0)
             long_term_atr = latest_data.get('atr_long_avg', current_atr)
             if long_term_atr > 0 and current_atr > 0:
@@ -334,86 +386,87 @@ class TradingBot:
                 risk_dampener = np.clip(1 / volatility_factor, 0.6, 1.2)
                 trade_size_usdt *= risk_dampener
 
-            # --- NOVO: TETO MÁXIMO DE ALOCAÇÃO POR TRADE ---
             MAX_CAPITAL_PER_TRADE_PCT = 0.25
             max_allowed_size = self.portfolio.trading_capital_usdt * MAX_CAPITAL_PER_TRADE_PCT
             if trade_size_usdt > max_allowed_size:
                 logger.warning(f"Tamanho do trade ({trade_size_usdt:,.2f}) excedeu o teto. Reduzido para {max_allowed_size:,.2f}.")
                 trade_size_usdt = max_allowed_size
 
-            if trade_size_usdt < 10: # Mínimo da Binance
-                logger.warning(f"Sinal ignorado. Valor final do trade ({trade_size_usdt:.2f}) abaixo do mínimo.")
+            if trade_size_usdt < 10:
                 return
 
-            # --- MUDANÇA: STOP LOSS COM ATR ---
             current_price = latest_data['close']
             stop_loss_atr_multiplier = params.get('stop_loss_atr_multiplier', 2.5)
             stop_price = current_price - (latest_data['atr'] * stop_loss_atr_multiplier)
 
             self._execute_buy(current_price, trade_size_usdt, stop_price, buy_confidence, regime, params)
-
-    # --- MUDANÇA --- Assinatura da função de compra alterada para receber o stop price
     def _execute_buy(self, price, trade_size_usdt, stop_price, confidence, regime, params: dict):
         try:
             buy_price_expected = price * (1 + SLIPPAGE_RATE)
             quantity_to_buy = trade_size_usdt / buy_price_expected
             logger.info(f"EXECUTANDO ORDEM DE COMPRA: {quantity_to_buy:.8f} BTC a ~${price:,.2f}")
 
-            # ... (lógica de criar ordem na Binance) ...
+            order = self.client.create_order(symbol=SYMBOL, side=Client.SIDE_BUY, type=Client.ORDER_TYPE_MARKET, quantity=round(quantity_to_buy, 5))
             
-            self.buy_price = buy_price_expected
+            actual_buy_price = float(order['fills'][0]['price'])
+            actual_quantity = float(order['fills'][0]['qty'])
+            total_cost = float(order['cummulativeQuoteQty'])
+            
+            self.buy_price = actual_buy_price
             self.in_trade_position = True
             self.position_phase = 'INITIAL'
-            self.current_stop_price = stop_price # Usa o stop calculado
+            self.current_stop_price = stop_price
             self.highest_price_in_trade = self.buy_price
             self.last_used_params = {**params, 'entry_regime': regime}
             
-            self.portfolio.update_on_buy(quantity_to_buy, trade_size_usdt, self.buy_price)
-            self._log_trade("BUY", self.buy_price, quantity_to_buy, f"Sinal do ML ({confidence:.2%})", 0, 0)
+            self.portfolio.update_on_buy(actual_quantity, total_cost, self.buy_price)
+            self._log_trade("BUY", self.buy_price, actual_quantity, f"Sinal do ML ({confidence:.2%})", 0, 0)
         except Exception as e:
             logger.error(f"ERRO AO EXECUTAR COMPRA: {e}", exc_info=True)
             self.in_trade_position = False
 
     def _execute_sell(self, price, reason, partial=False, amount_to_sell=None):
-        # A lógica de venda permanece a mesma.
-        # ... (código do _execute_sell como no arquivo original) ...
         if amount_to_sell is None: amount_to_sell = self.portfolio.trading_btc_balance
         if amount_to_sell <= 0: return
 
         try:
             logger.info(f"EXECUTANDO ORDEM DE VENDA: {amount_to_sell:.8f} BTC a ~${price:,.2f} | Motivo: {reason}")
-            sell_price_expected = price * (1 - SLIPPAGE_RATE)
-            # ... (lógica de criar ordem de venda) ...
-            revenue = sell_price_expected * amount_to_sell
-            pnl_usdt = (sell_price_expected - self.buy_price) * amount_to_sell
-            pnl_pct = (sell_price_expected / self.buy_price) - 1 if self.buy_price > 0 else 0
             
-            entry_regime = self.last_used_params.get('entry_regime', 'LATERAL')
-            confidence_manager = self.confidence_managers.get(entry_regime, list(self.confidence_managers.values())[0])
+            order = self.client.create_order(symbol=SYMBOL, side=Client.SIDE_SELL, type=Client.ORDER_TYPE_MARKET, quantity=round(amount_to_sell, 5))
 
-            self.portfolio.update_on_sell(amount_to_sell, revenue, pnl_usdt, sell_price_expected, self.last_used_params)
-            confidence_manager.update(pnl_pct)
-            self._log_trade("SELL", sell_price_expected, amount_to_sell, reason, pnl_usdt, pnl_pct)
+            actual_sell_price = float(order['fills'][0]['price'])
+            revenue = float(order['cummulativeQuoteQty'])
+            pnl_usdt = (actual_sell_price - self.buy_price) * amount_to_sell
+            pnl_pct = (actual_sell_price / self.buy_price) - 1 if self.buy_price > 0 else 0
+            
+            entry_regime = self.last_used_params.get('entry_regime', list(self.confidence_managers.keys())[0] if self.confidence_managers else 'LATERAL')
+            confidence_manager = self.confidence_managers.get(entry_regime)
+            
+            if confidence_manager:
+                confidence_manager.update(pnl_pct)
+
+            self.portfolio.update_on_sell(amount_to_sell, revenue, pnl_usdt, actual_sell_price, self.last_used_params)
+            self._log_trade("SELL", actual_sell_price, amount_to_sell, reason, pnl_usdt, pnl_pct)
             
             if not partial:
-                self.in_trade_position = False; self.position_phase = None; self.last_used_params = {}
+                self.in_trade_position = False
+                self.position_phase = None
+                self.last_used_params = {}
+
         except Exception as e:
             logger.error(f"ERRO AO EXECUTAR VENDA: {e}", exc_info=True)
 
     def _initialize_trade_log(self):
-        # ... (código do _initialize_trade_log como no arquivo original) ...
         if not os.path.exists(TRADES_LOG_FILE):
             with open(TRADES_LOG_FILE, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.writer(f)
                 writer.writerow(['timestamp', 'type', 'price', 'quantity', 'pnl_usdt', 'pnl_percent', 'reason'])
 
     def _log_trade(self, trade_type, price, qty, reason, pnl_usdt=0, pnl_pct=0):
-        # ... (código do _log_trade como no arquivo original) ...
         with open(TRADES_LOG_FILE, 'a', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
             writer.writerow([pd.Timestamp.now(tz='UTC').isoformat(), trade_type, price, qty, pnl_usdt, pnl_pct, reason])
 
-    # --- MUDANÇA --- Salvando e carregando o estado do circuit breaker
     def _save_state(self):
         state = {
             'in_trade_position': self.in_trade_position,
@@ -422,7 +475,12 @@ class TradingBot:
             'current_stop_price': self.current_stop_price,
             'highest_price_in_trade': self.highest_price_in_trade,
             'last_used_params': self.last_used_params,
-            'portfolio': self.portfolio.__dict__,
+            'portfolio': {
+                'trading_capital_usdt': self.portfolio.trading_capital_usdt,
+                'trading_btc_balance': self.portfolio.trading_btc_balance,
+                'long_term_btc_holdings': self.portfolio.long_term_btc_holdings,
+                'initial_total_value_usdt': self.portfolio.initial_total_value_usdt,
+            },
             'session_peak_value': self.session_peak_value,
             'session_drawdown_stop_activated': self.session_drawdown_stop_activated
         }
@@ -436,15 +494,30 @@ class TradingBot:
                 state = json.load(f)
             
             self.in_trade_position = state.get('in_trade_position', False)
-            # ... (carregando o resto do estado) ...
+            self.buy_price = state.get('buy_price', 0.0)
+            self.position_phase = state.get('position_phase')
+            self.current_stop_price = state.get('current_stop_price', 0.0)
+            self.highest_price_in_trade = state.get('highest_price_in_trade', 0.0)
+            self.last_used_params = state.get('last_used_params', {})
+            
             portfolio_state = state.get('portfolio', {})
-            # ...
+            self.portfolio.trading_capital_usdt = portfolio_state.get('trading_capital_usdt', 0.0)
+            self.portfolio.trading_btc_balance = portfolio_state.get('trading_btc_balance', 0.0)
+            self.portfolio.long_term_btc_holdings = portfolio_state.get('long_term_btc_holdings', 0.0)
+            self.portfolio.initial_total_value_usdt = portfolio_state.get('initial_total_value_usdt', 0.0)
             
             self.session_peak_value = state.get('session_peak_value', 0.0)
             self.session_drawdown_stop_activated = state.get('session_drawdown_stop_activated', False)
 
             logger.info("✅ Estado anterior do bot e portfólio carregado com sucesso.")
-            # ... (lógica de restaurar e logar status) ...
+            
+            price = self.portfolio.get_current_price()
+            if self.in_trade_position:
+                logger.info("Retomando uma posição ativa...")
+                self.portfolio.log_portfolio_status(price, "STATUS RESTAURADO (EM POSIÇÃO)")
+            else:
+                self.portfolio.log_portfolio_status(price, "STATUS RESTAURADO (AGUARDANDO)")
+            
             return True
         except Exception as e:
             logger.error(f"Não foi possível carregar o estado anterior: {e}. Iniciando com um estado limpo.")
@@ -452,7 +525,6 @@ class TradingBot:
             return False
 
     def graceful_shutdown(self, signum, frame):
-        # ... (código do graceful_shutdown como no arquivo original) ...
         logger.warning("🚨 SINAL DE INTERRUPÇÃO RECEBIDO. ENCERRANDO DE FORMA SEGURA... 🚨")
         self._save_state()
         logger.info("Estado do bot salvo. Desligando.")

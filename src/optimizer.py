@@ -1,4 +1,4 @@
-# src/optimizer.py (VERSÃO 5.0 - APRENDIZAGEM ROBUSTA)
+# src/optimizer.py (VERSÃO 6.6 - FINAL E CORRIGIDO)
 
 import optuna
 import pandas as pd
@@ -14,7 +14,7 @@ from dateutil.relativedelta import relativedelta
 from lightgbm import LGBMClassifier
 
 from src.model_trainer import ModelTrainer
-from src.backtest import run_backtest # A nossa nova função de backtest robusto
+from src.backtest import run_backtest
 from src.logger import logger, log_table
 from src.config import (
     WFO_TRAIN_MINUTES, MODEL_VALIDITY_MONTHS, QUICK_OPTIMIZE,
@@ -25,7 +25,7 @@ class WalkForwardOptimizer:
     def __init__(self, full_data):
         self.full_data = full_data
         self.trainer = ModelTrainer()
-        self.n_trials_for_cycle = 75 if QUICK_OPTIMIZE else 150 # Aumentado um pouco para os novos params
+        self.n_trials_for_cycle = 75 if QUICK_OPTIMIZE else 150
         self.shutdown_requested = False
         self.optimization_summary = {}
         signal.signal(signal.SIGINT, self.graceful_shutdown)
@@ -69,122 +69,130 @@ class WalkForwardOptimizer:
         if self.shutdown_requested:
             raise optuna.exceptions.TrialPruned("Shutdown solicitado.")
         
-        # --- MUDANÇA: OTIMIZANDO NOVOS HIPERPARÂMETROS ROBUSTOS ---
         params = {
-            # Parâmetros de Labeling e Estratégia
-            'future_periods': trial.suggest_int('future_periods', 20, 80),
-            'profit_mult': trial.suggest_float('profit_mult', 2.0, 5.0),
-            'stop_mult': trial.suggest_float('stop_mult', 1.5, 4.0),
-            'profit_threshold': trial.suggest_float('profit_threshold', 0.008, 0.025),
-            'stop_loss_atr_multiplier': trial.suggest_float('stop_loss_atr_multiplier', 2.0, 5.0),
-            'trailing_stop_multiplier': trial.suggest_float('trailing_stop_multiplier', 1.5, 3.5),
-            'risk_per_trade_pct': trial.suggest_float('risk_per_trade_pct', 0.03, 0.20),
-            
-            # Parâmetros de Agressividade
-            'aggression_exponent': trial.suggest_float('aggression_exponent', 1.5, 3.0),
-            'max_risk_scale': trial.suggest_float('max_risk_scale', 2.5, 5.0),
-
-            # Parâmetros do Confidence Manager
-            'initial_confidence': trial.suggest_float('initial_confidence', 0.60, 0.85),
-            'confidence_learning_rate': trial.suggest_float('confidence_learning_rate', 0.02, 0.10),
-            'confidence_window_size': trial.suggest_int('confidence_window_size', 5, 20),
-
-            # Parâmetros do Modelo LGBM
-            'n_estimators': trial.suggest_int('n_estimators', 150, 400),
-            'learning_rate': trial.suggest_float('learning_rate', 0.02, 0.1),
-            'num_leaves': trial.suggest_int('num_leaves', 20, 60),
-            'max_depth': trial.suggest_int('max_depth', 5, 15),
-            'min_child_samples': trial.suggest_int('min_child_samples', 30, 100),
+            'min_risk_scale': trial.suggest_float('min_risk_scale', 0.25, 0.75),
+            'future_periods': trial.suggest_int('future_periods', 15, 120),
+            'profit_mult': trial.suggest_float('profit_mult', 1.0, 5.0),
+            'stop_mult': trial.suggest_float('stop_mult', 1.0, 4.0),
+            'profit_threshold': trial.suggest_float('profit_threshold', 0.007, 0.03),
+            'stop_loss_atr_multiplier': trial.suggest_float('stop_loss_atr_multiplier', 1.5, 6.0),
+            'trailing_stop_multiplier': trial.suggest_float('trailing_stop_multiplier', 1.0, 4.0),
+            'risk_per_trade_pct': trial.suggest_float('risk_per_trade_pct', 0.02, 0.30),
+            'aggression_exponent': trial.suggest_float('aggression_exponent', 1.0, 3.5),
+            'max_risk_scale': trial.suggest_float('max_risk_scale', 2.0, 5.0),
+            'initial_confidence': trial.suggest_float('initial_confidence', 0.55, 0.90),
+            'confidence_learning_rate': trial.suggest_float('confidence_learning_rate', 0.01, 0.15),
+            'confidence_window_size': trial.suggest_int('confidence_window_size', 5, 25),
+            'n_estimators': trial.suggest_int('n_estimators', 100, 500),
+            'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.15),
+            'num_leaves': trial.suggest_int('num_leaves', 20, 70),
+            'max_depth': trial.suggest_int('max_depth', 5, 20),
+            'min_child_samples': trial.suggest_int('min_child_samples', 20, 100),
         }
         
         round_trip_cost = (FEE_RATE + SLIPPAGE_RATE) * 2
-        if params['profit_threshold'] <= round_trip_cost * 2:
+        if params['profit_threshold'] <= round_trip_cost * 1.5:
             raise optuna.exceptions.TrialPruned("Alvo de lucro muito baixo comparado aos custos.")
 
         model, scaler, feature_names = self.trainer.train(train_data.copy(), params)
-        if model is None: return -2.0
+        if model is None: 
+            raise optuna.exceptions.TrialPruned("Falha no treinamento do modelo (dados/labels insuficientes).")
 
-        # --- NOVO: LÓGICA DE VALIDAÇÃO E OVERFITTING ---
-        # 1. Backtest nos dados de VALIDAÇÃO (o teste real)
         val_metrics = run_backtest(
             model=model, scaler=scaler, test_data_with_features=validation_data.copy(), 
             strategy_params=params, feature_names=feature_names
         )
-        (_, val_annual_return, _, val_trade_count, val_sortino, val_profit_factor, _) = val_metrics
+        (val_final_value, val_annual_return, val_max_dd, val_trade_count, val_sortino, val_profit_factor, _) = val_metrics
 
-        # 2. Poda por performance ruim na validação
-        MIN_TRADES_SIGNIFICATIVOS = 30
-        if val_trade_count < MIN_TRADES_SIGNIFICATIVOS or val_profit_factor < 1.15 or val_annual_return < 0.1:
-            raise optuna.exceptions.TrialPruned("Performance na validação abaixo do mínimo aceitável.")
+        MIN_TRADES_SIGNIFICATIVOS = 10 
+        if val_trade_count < MIN_TRADES_SIGNIFICATIVOS:
+            raise optuna.exceptions.TrialPruned(f"Performance na validação com menos de {MIN_TRADES_SIGNIFICATIVOS} trades.")
 
-        # 3. Backtest nos dados de TREINO (para checar overfitting)
+        score_principal = (0.5 * val_sortino) + (0.3 * val_profit_factor) + (0.2 * val_annual_return)
+
         train_metrics = run_backtest(
             model=model, scaler=scaler, test_data_with_features=train_data.copy(),
             strategy_params=params, feature_names=feature_names
         )
         (_, _, _, _, train_sortino, train_profit_factor, _) = train_metrics
-
-        # 4. Detecção de Overfitting
-        # Se a performance no treino for muito superior à da validação, é um mau sinal.
-        if train_sortino > (val_sortino * 2.5) or train_profit_factor > (val_profit_factor * 2.0):
-             raise optuna.exceptions.TrialPruned("Overfitting detectado: performance no treino muito superior à validação.")
+        
+        overfitting_penalty = 0
+        if train_profit_factor > (val_profit_factor * 2.5) and val_profit_factor > 0:
+            overfitting_penalty += abs(score_principal * 0.2)
+        if train_sortino > (val_sortino * 2.5) and val_sortino > 0:
+            overfitting_penalty += abs(score_principal * 0.2)
+        
+        trade_penalty = 0
+        IDEAL_MAX_TRADES = 200
+        if val_trade_count > IDEAL_MAX_TRADES:
+            excess_trades = val_trade_count - IDEAL_MAX_TRADES
+            trade_penalty = (abs(score_principal) * 0.15) * (excess_trades / IDEAL_MAX_TRADES)
+        
+        final_score = score_principal - overfitting_penalty - trade_penalty
         
         del model, scaler
         gc.collect()
         
-        # --- NOVA FUNÇÃO OBJETIVO COMPOSTA ---
-        score_principal = (0.6 * val_sortino) + (0.4 * val_profit_factor)
+        if math.isnan(final_score) or math.isinf(final_score) or final_score < 0.1:
+            raise optuna.exceptions.TrialPruned("Score final abaixo do limiar de qualidade (0.1).")
+            
+        return final_score
 
-        # --- NOVA PENALIDADE POR HIPERATIVIDADE ---
-        IDEAL_MAX_TRADES = 150
-        trade_penalty = 0
-        if val_trade_count > IDEAL_MAX_TRADES:
-            excess_trades = val_trade_count - IDEAL_MAX_TRADES
-            trade_penalty = (score_principal * 0.1) * (excess_trades / IDEAL_MAX_TRADES)
-        
-        final_score = score_principal - trade_penalty
-        
-        return final_score if not (math.isnan(final_score) or math.isinf(final_score)) else -1.0
-
-    def run_optimization_for_regime(self, regime: str, regime_data: pd.DataFrame):
+    def run_optimization_for_regime(self, regime: str, all_recent_data: pd.DataFrame):
         logger.info("\n" + "#"*80 + f"\n# 💠 INICIANDO OTIMIZAÇÃO PARA O REGIME: {regime.upper()} 💠\n" + "#"*80)
 
-        # --- NOVO: ZONA DE QUARENTENA ---
-        QUARANTINE_MINUTES = 2880 # 2 dias de dados entre treino e validação
-        validation_pct = 0.25
-        
-        validation_size = int(len(regime_data) * validation_pct)
-        train_end_index = len(regime_data) - validation_size
-        
-        if (train_end_index - QUARANTINE_MINUTES) <= 500: # Checa se o treino ainda tem dados suficientes
-            logger.warning(f"Dados insuficientes para o regime '{regime}' após quarentena. Pulando.")
-            self.optimization_summary[regime] = {'status': 'Skipped - Insufficient Data', 'score': None}
+        # <<< CORREÇÃO: Linha duplicada removida daqui >>>
+        all_recent_data['block'] = (all_recent_data['market_regime'] != all_recent_data['market_regime'].shift()).cumsum()
+        regime_blocks = all_recent_data[all_recent_data['market_regime'] == regime]['block'].unique()
+
+        if len(regime_blocks) < 2:
+            logger.warning(f"❌ Apenas {len(regime_blocks)} bloco(s) de dados encontrado(s) para o regime '{regime}'. É necessário no mínimo 2 para a validação Walk-Forward. Pulando otimização.")
+            self.optimization_summary[regime] = {'status': 'Skipped - Not Enough Regime Blocks', 'score': None}
             return None
 
-        train_data = regime_data.iloc[:(train_end_index - QUARANTINE_MINUTES)]
-        validation_data = regime_data.iloc[train_end_index:]
+        validation_block_id = regime_blocks[-1]
+        train_block_ids = regime_blocks[:-1]
+
+        train_data = all_recent_data[all_recent_data['block'].isin(train_block_ids) & (all_recent_data['market_regime'] == regime)].copy()
+        validation_data = all_recent_data[all_recent_data['block'] == validation_block_id].copy()
+
+        MIN_TRAIN_CANDLES = 21500 #(15 dias)
+        MIN_VALIDATION_CANDLES = 8000 #(8 dias)
         
-        log_table(f"Plano de Otimização para {regime}", [
-            ["Período de Treino", f"{train_data.index.min():%Y-%m-%d} a {train_data.index.max():%Y-%m-%d}", f"{len(train_data)} velas"],
-            ["Zona de Quarentena", f"({QUARANTINE_MINUTES // 1440} dias)", f"{QUARANTINE_MINUTES} velas"],
-            ["Período de Validação", f"{validation_data.index.min():%Y-%m-%d} a {validation_data.index.max():%Y-%m-%d}", f"{len(validation_data)} velas"],
+        if len(train_data) < MIN_TRAIN_CANDLES:
+            logger.warning(f"❌ Dados de TREINO insuficientes nos blocos do regime '{regime}'. Encontrado: {len(train_data)}, Mínimo: {MIN_TRAIN_CANDLES}. Pulando otimização.")
+            self.optimization_summary[regime] = {'status': 'Skipped - Insufficient Train Data', 'score': None}
+            return None
+        
+        if len(validation_data) < MIN_VALIDATION_CANDLES:
+            logger.warning(f"❌ Dados de VALIDAÇÃO insuficientes no bloco final do regime '{regime}'. Encontrado: {len(validation_data)}, Mínimo: {MIN_VALIDATION_CANDLES}. Pulando otimização.")
+            self.optimization_summary[regime] = {'status': 'Skipped - Insufficient Validation Data', 'score': None}
+            return None
+            
+        log_table(f"Plano de Otimização para {regime} (Por Blocos)", [
+            ["Período de Treino", f"{train_data.index.min():%Y-%m-%d} a {train_data.index.max():%Y-%m-%d}", f"{len(train_data)} velas em {len(train_block_ids)} bloco(s)"],
+            ["Período de Validação", f"{validation_data.index.min():%Y-%m-%d} a {validation_data.index.max():%Y-%m-%d}", f"{len(validation_data)} velas no último bloco"],
             ["Total de Trials", self.n_trials_for_cycle, ""]
         ], headers=["Fase", "Período", "Tamanho"])
         
         study = optuna.create_study(direction='maximize')
         study.optimize(lambda trial: self._objective(trial, train_data, validation_data), n_trials=self.n_trials_for_cycle, n_jobs=-1, callbacks=[self._progress_callback])
         
-        best_trial = study.best_trial
-        best_score = best_trial.value if best_trial else -1
-
+        try:
+            best_trial = study.best_trial
+            best_score = best_trial.value
+        except ValueError:
+            logger.warning(f"❌ Nenhum trial concluído com sucesso para o regime '{regime}'. Todos foram podados. Pulando este regime.")
+            self.optimization_summary[regime] = {'status': 'Skipped - All Trials Pruned', 'score': None}
+            return None
+            
         logger.info(f"\n🏁 Otimização do regime '{regime}' concluída. Melhor Score (Composto): {best_score:.4f}")
         
-        # --- MUDANÇA --- Limiar de qualidade ajustado para a nova métrica de score
-        if best_score > 1.0: # Um bom Sortino/PF combinado deve ser > 1
-            logger.info(f"🏆 Resultado excelente! Salvando especialista para o regime '{regime}'...")
+        MINIMUM_QUALITY_SCORE = 0.5 
+        if best_score > MINIMUM_QUALITY_SCORE:
+            logger.info(f"🏆 Resultado excelente! Score ({best_score:.4f}) acima do limiar ({MINIMUM_QUALITY_SCORE}). Salvando especialista para o regime '{regime}'...")
             
-            # Retreinando o modelo final com todos os dados do regime (treino + validação)
-            final_model, final_scaler, final_feature_names = self.trainer.train(regime_data.copy(), best_trial.params)
+            final_model, final_scaler, final_feature_names = self.trainer.train(all_recent_data[all_recent_data['market_regime'] == regime].copy(), best_trial.params)
             
             model_filename = f'trading_model_{regime}.joblib'
             scaler_filename = model_filename.replace('trading_model', 'scaler')
@@ -193,7 +201,6 @@ class WalkForwardOptimizer:
             joblib.dump(final_model, os.path.join(DATA_DIR, model_filename))
             joblib.dump(final_scaler, os.path.join(DATA_DIR, scaler_filename))
 
-            # Separa os parâmetros do modelo e da estratégia para salvar
             model_param_keys = LGBMClassifier().get_params().keys()
             strategy_params_to_save = {k: v for k, v in best_trial.params.items() if k not in model_param_keys}
 
@@ -207,7 +214,7 @@ class WalkForwardOptimizer:
             log_table(f"Melhores Parâmetros para {regime}", {k: [v] for k, v in best_trial.params.items()}, headers="keys")
             return final_feature_names
         else:
-            logger.warning(f"❌ Melhor score ({best_score:.4f}) não atingiu o limiar de qualidade (1.0). Nenhum especialista será salvo para o regime '{regime}'.")
+            logger.warning(f"❌ Melhor score ({best_score:.4f}) não atingiu o limiar de qualidade ({MINIMUM_QUALITY_SCORE}). Nenhum especialista será salvo para o regime '{regime}'.")
             self.optimization_summary[regime] = {'status': 'Skipped - Low Score', 'score': best_score}
             return None
 
@@ -217,7 +224,8 @@ class WalkForwardOptimizer:
         optuna.logging.set_verbosity(optuna.logging.WARNING)
         self.full_data.sort_index(inplace=True)
         
-        recent_data = self.full_data.tail(WFO_TRAIN_MINUTES)
+        recent_data = self.full_data.tail(WFO_TRAIN_MINUTES).copy()
+        
         regimes = sorted(recent_data['market_regime'].unique())
         
         plan_data = [[regime, len(recent_data[recent_data['market_regime'] == regime])] for regime in regimes]
@@ -228,9 +236,9 @@ class WalkForwardOptimizer:
             if self.shutdown_requested:
                 logger.warning("Otimização interrompida pelo usuário.")
                 break
+
+            feature_names = self.run_optimization_for_regime(regime, recent_data)
             
-            regime_data = recent_data[recent_data['market_regime'] == regime].copy()
-            feature_names = self.run_optimization_for_regime(regime, regime_data)
             if feature_names:
                 master_feature_list.extend(feature_names)
 
@@ -238,7 +246,7 @@ class WalkForwardOptimizer:
             unique_features = sorted(list(set(master_feature_list)))
             self._save_final_metadata(unique_features)
         
-        final_summary = [[r, d.get('status', 'N/A'), f"{d.get('score', 0):.4f}"] for r, d in self.optimization_summary.items()]
+        final_summary = [[r, d.get('status', 'N/A'), f"{(d.get('score') or 0):.4f}"] for r, d in self.optimization_summary.items()]
         log_table("📋 RESUMO FINAL DA OTIMIZAÇÃO", final_summary, headers=["Regime", "Status", "Melhor Score"])
         
         logger.info("\n" + "="*80 + "\n--- ✅ PROCESSO DE OTIMIZAÇÃO CONCLUÍDO ✅ ---\n" + "="*80)

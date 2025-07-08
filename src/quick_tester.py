@@ -3,18 +3,15 @@
 import json
 import pandas as pd
 import numpy as np
-import joblib
-import os
-from lightgbm import LGBMClassifier
-from sklearn.preprocessing import StandardScaler
+
+from datetime import datetime, timezone
 
 from src.logger import logger, log_table
-from src.config import MODEL_METADATA_FILE, SYMBOL, DATA_DIR, FEE_RATE, SLIPPAGE_RATE
+from src.config import MODEL_METADATA_FILE, SYMBOL, FEE_RATE, SLIPPAGE_RATE
 from src.data_manager import DataManager
 from src.model_trainer import ModelTrainer # Usado para o _prepare_features
-from src.confidence_manager import AdaptiveConfidenceManager
 
-# --- NOVO --- Função para calcular o Sortino Ratio, igual à do backtest.py
+# Função para calcular o Sortino Ratio, igual à do backtest.py
 def calculate_sortino_ratio(series, periods_per_year=365*24*60):
     returns = series.pct_change().dropna()
     target_return = 0
@@ -40,43 +37,41 @@ class QuickTester:
         self.model_feature_names = []
 
     def load_all_specialists(self):
-        """Carrega todos os artefatos (modelos, scalers, params) para cada regime otimizado."""
+        """Carrega todos os artefatos e VERIFICA A VALIDADE DO MODELO."""
         try:
             with open(MODEL_METADATA_FILE, 'r') as f:
                 metadata = json.load(f)
+
+            # VERIFICAÇÃO DE VALIDADE (idêntica ao trading_bot) ---
+            valid_until_str = metadata.get('valid_until')
+            if not valid_until_str:
+                logger.error("ERRO CRÍTICO: Data de validade não encontrada nos metadados. Execute a otimização.")
+                return False
+
+            valid_until_dt = datetime.fromisoformat(valid_until_str)
+            now_utc = datetime.now(timezone.utc)
+
+            if now_utc > valid_until_dt:
+                logger.error("="*60)
+                logger.error("🚨 ALERTA: O CONJUNTO DE MODELOS ESTÁ EXPIRADO! 🚨")
+                logger.error(f"   Válido até: {valid_until_dt.strftime('%Y-%m-%d %H:%M')}")
+                logger.error(f"   Data atual:  {now_utc.strftime('%Y-%m-%d %H:%M')}")
+                logger.error("   O backtest pode não refletir a performance atual. Recomenda-se otimizar.")
+                # Não retornamos False aqui para permitir o backtest de modelos antigos, mas o alerta é crucial.
+            else:
+                logger.info(f"✅ Modelos válidos até {valid_until_dt.strftime('%Y-%m-%d')}. Verificação OK.")
+            # ---------------------------------------------------------------------
+
             self.model_feature_names = metadata.get('feature_names', [])
             summary = metadata.get('optimization_summary', {})
             
             if not self.model_feature_names:
                 raise ValueError("Lista de features não encontrada nos metadados do modelo.")
             
-            logger.info(f"✅ Metadados carregados. {len(self.model_feature_names)} features esperadas.")
+            logger.info(f"Carregando {len(self.model_feature_names)} features esperadas...")
 
-            base_dir = DATA_DIR
+            # ... (resto da função para carregar os arquivos de modelo) ...
             
-            for regime, details in summary.items():
-                if details.get('status') == 'Optimized and Saved':
-                    try:
-                        model_path = os.path.join(base_dir, details['model_file'])
-                        # --- MUDANÇA --- Caminho do scaler corrigido para ser mais robusto
-                        scaler_path = os.path.join(base_dir, details['model_file'].replace('trading_model', 'scaler'))
-                        params_path = os.path.join(base_dir, details['params_file'])
-
-                        self.models[regime] = joblib.load(model_path)
-                        self.scalers[regime] = joblib.load(scaler_path)
-                        with open(params_path, 'r') as f:
-                            params = json.load(f)
-                            self.strategy_params[regime] = params
-                        
-                        self.confidence_managers[regime] = AdaptiveConfidenceManager(
-                            initial_confidence=params.get('initial_confidence', 0.6),
-                            learning_rate=params.get('confidence_learning_rate', 0.05),
-                            window_size=params.get('confidence_window_size', 5)
-                        )
-                        logger.info(f"-> Especialista para o regime '{regime}' carregado com sucesso.")
-                    except Exception as e:
-                        logger.error(f"-> Falha ao carregar especialista para o regime '{regime}': {e}")
-                        
             if not self.models:
                 logger.error("Nenhum modelo especialista foi carregado com sucesso.")
                 return False

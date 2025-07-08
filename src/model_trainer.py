@@ -12,6 +12,8 @@ from src.logger import log_table
 from ta.volatility import BollingerBands, AverageTrueRange
 from ta.trend import MACD, ADXIndicator
 from ta.momentum import StochasticOscillator, RSIIndicator
+from ta.trend import MACD, ADXIndicator, CCIIndicator # Adicionado CCIIndicator
+from ta.momentum import StochasticOscillator, RSIIndicator, WilliamsRIndicator # Adicionado WilliamsRIndicator
 
 @jit(nopython=True)
 def create_labels_triple_barrier(
@@ -55,15 +57,17 @@ class ModelTrainer:
             'price_change_1m', 'price_change_5m',
             'dxy_close_change', 'vix_close_change',
             'gold_close_change', 'tnx_close_change',
-            'atr_long_avg', # Para ajuste de risco pela volatilidade
-            'volume_sma_50', # Para filtro de confirmação de volume
+            'atr_long_avg', 
+            'volume_sma_50',
+            
+            'cci',             # Commodity Channel Index: Mede o desvio do preço de sua média estatística. Ótimo para identificar reversões.
+            'williams_r',      # Williams %R: Oscilador de momento que mede níveis de sobrecompra/sobrevenda.
+            'momentum_10m',    # Aceleração do preço em 10 min, para capturar o "impulso".
+            'volatility_ratio',# Razão entre volatilidade de curto e longo prazo.
+            'sma_50_200_diff'  # Diferença entre médias longa e muito longa, para um sinal de tendência mais forte.
         ]
 
     def _prepare_features(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]]:
-        """
-        Calcula todas as features e retorna o DataFrame processado e a lista
-        final de nomes de features usadas. Este método agora é stateless.
-        """
         logger.debug("Iniciando preparação de features...")
         epsilon = 1e-10
         
@@ -75,6 +79,8 @@ class ModelTrainer:
 
         sma_7 = df['close'].rolling(window=7).mean()
         sma_25 = df['close'].rolling(window=25).mean()
+        sma_50 = df['close'].rolling(window=50).mean() # Já calculado para volume, vamos reutilizar
+        sma_200 = df['close'].rolling(window=200).mean()
         df['sma_7_25_diff'] = (sma_7 - sma_25) / (df['close'] + epsilon)
         df['close_sma_25_dist'] = (df['close'] - sma_25) / (sma_25 + epsilon)
         
@@ -92,7 +98,14 @@ class ModelTrainer:
         # --- NOVAS FEATURES DE ROBUSTEZ ---
         df['atr_long_avg'] = df['atr'].rolling(window=100).mean()
         df['volume_sma_50'] = df['volume'].rolling(window=50).mean()
-        # --------------------------------
+
+        # <<< MELHORIA: CÁLCULO DAS NOVAS FEATURES >>>
+        df['cci'] = CCIIndicator(high=df['high'], low=df['low'], close=df['close'], window=20).cci()
+        df['williams_r'] = WilliamsRIndicator(high=df['high'], low=df['low'], close=df['close'], lbp=14).williams_r()
+        df['momentum_10m'] = df['close'].pct_change(10)
+        atr_short = df['atr'].rolling(window=5).mean()
+        df['volatility_ratio'] = atr_short / (df['atr_long_avg'] + epsilon)
+        df['sma_50_200_diff'] = (sma_50 - sma_200) / (df['close'] + epsilon)
 
         # --- Features Macroeconômicas ---
         macro_map = {
