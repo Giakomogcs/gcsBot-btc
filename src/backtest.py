@@ -1,4 +1,4 @@
-# src/backtest.py (VERSÃO 5.1 - RISCO ADAPTATIVO POR REGIME)
+# src/backtest.py (VERSÃO 6.0 - AVALIADOR PURO)
 
 import numpy as np
 import pandas as pd
@@ -7,15 +7,21 @@ from src.config import FEE_RATE, SLIPPAGE_RATE
 from src.confidence_manager import AdaptiveConfidenceManager
 
 def calculate_sortino_ratio(series, periods_per_year=365*24*60):
+    if len(series) < 2:
+        return 0.0
     returns = series.pct_change().dropna()
+    if len(returns) < 2:
+        return 0.0
+        
     target_return = 0
     downside_returns = returns[returns < target_return]
     
     expected_return = returns.mean()
     downside_std = downside_returns.std()
     
-    if downside_std == 0 or pd.isna(downside_std):
-        return 0.0
+    if downside_std == 0 or pd.isna(downside_std) or downside_std < 1e-9:
+        # Se não há risco de queda, o Sortino pode ser infinito, retornamos um valor alto mas finito
+        return 100.0 if expected_return > 0 else 0.0
         
     sortino = (expected_return * periods_per_year) / (downside_std * np.sqrt(periods_per_year))
     return sortino if not pd.isna(sortino) else 0.0
@@ -25,11 +31,11 @@ def run_backtest(model, scaler, test_data_with_features: pd.DataFrame, strategy_
     initial_capital = 100.0
     capital_usdt = initial_capital
     trading_btc = 0.0
-    treasury_btc = 0.0 # Não usado no backtest, mas mantido para consistência
     
     portfolio_history = []
     trade_pnls = []
 
+    # Parâmetros são recebidos e usados diretamente, sem modificação interna
     base_risk = strategy_params.get('risk_per_trade_pct', 0.05)
     stop_loss_atr_multiplier = strategy_params.get('stop_loss_atr_multiplier', 2.5)
     trailing_stop_multiplier = strategy_params.get('trailing_stop_multiplier', 1.5)
@@ -57,21 +63,14 @@ def run_backtest(model, scaler, test_data_with_features: pd.DataFrame, strategy_
         window_size=strategy_params.get('confidence_window_size', 5)
     )
 
+    # --- Loop Principal do Backtest ---
     for date, row in test_data_with_features.iterrows():
         price = row['close']
         
-        # <<< MUDANÇA: Lógica de risco, não de proibição >>>
-        regime = row.get('market_regime', 'LATERAL')
-        current_base_risk = base_risk
-        # Em vez de proibir, ajustamos o risco base para cada regime.
-        # Isso permite que o otimizador encontre oportunidades mesmo em regimes difíceis,
-        # mas força a estratégia a ser muito mais seletiva e cautelosa.
-        if regime == 'BEAR':
-            current_base_risk /= 4  # Risco drasticamente reduzido
-        elif regime == 'RECUPERACAO':
-            current_base_risk /= 2  # Risco moderadamente reduzido
-        elif regime == 'LATERAL':
-            current_base_risk /= 3  # Risco reduzido
+        # <<< REMOÇÃO DA LÓGICA DE RISCO POR REGIME >>>
+        # O backtest agora é um "avaliador puro". Ele não deve ter sua própria
+        # lógica de estratégia. A responsabilidade de definir o risco para cada
+        # regime agora é 100% do otimizador, tornando a avaliação mais limpa.
 
         if in_position:
             highest_price_in_trade = max(highest_price_in_trade, price)
@@ -89,16 +88,18 @@ def run_backtest(model, scaler, test_data_with_features: pd.DataFrame, strategy_
                 new_trailing_stop = highest_price_in_trade - (row['atr'] * stop_loss_atr_multiplier * trailing_stop_multiplier)
                 current_stop_price = max(current_stop_price, new_trailing_stop)
 
-        # A verificação 'is_trading_allowed' foi removida para permitir a avaliação de todos os regimes
         if not in_position:
+            # Filtro de volume pode ser mantido, pois é um filtro de condição de entrada
             if row['volume'] < row['volume_sma_50']:
-                pass
+                pass 
             else:
                 conviction = predictions_buy_proba.get(date, 0)
                 if conviction > confidence_manager.get_confidence():
                     signal_strength = (conviction - confidence_manager.get_confidence()) / (1.0 - confidence_manager.get_confidence())
                     aggression_factor = min_risk_scale + (signal_strength ** aggression_exponent) * (max_risk_scale - min_risk_scale)
-                    dynamic_risk_pct = current_base_risk * aggression_factor
+                    
+                    # Usa o 'base_risk' diretamente dos parâmetros otimizados
+                    dynamic_risk_pct = base_risk * aggression_factor
                     trade_size_usdt = capital_usdt * dynamic_risk_pct
 
                     current_atr = row.get('atr', 0)
@@ -122,14 +123,15 @@ def run_backtest(model, scaler, test_data_with_features: pd.DataFrame, strategy_
                         highest_price_in_trade = buy_price
                         position_phase = 'INITIAL'
 
-        trading_value = capital_usdt + (trading_btc * price)
-        treasury_value = treasury_btc * price
-        total_portfolio_value = trading_value + treasury_value
-        
+        total_portfolio_value = capital_usdt + (trading_btc * price)
         portfolio_history.append({'timestamp': date, 'total_value': total_portfolio_value})
 
-    if len(portfolio_history) < 2:
-        return 0.0, 0.0, -1.0, 0, 0.0, 0.0, 0.0
+    # --- CÁLCULO DAS MÉTRICAS FINAIS ---
+
+    # <<< MELHORIA: SAÍDA SEGURA SE NENHUM TRADE FOR FEITO >>>
+    if len(trade_pnls) == 0:
+        # Retorna um resultado ruim para que o Optuna possa podar este trial
+        return 100.0, 0.0, -1.0, 0, 0.0, 0.0, 0.0
 
     portfolio_df = pd.DataFrame(portfolio_history).set_index('timestamp')
     
@@ -138,14 +140,15 @@ def run_backtest(model, scaler, test_data_with_features: pd.DataFrame, strategy_
     duration_days = (portfolio_df.index[-1] - portfolio_df.index[0]).days
     if duration_days < 1: duration_days = 1
     annualized_return = ((1 + total_return) ** (365.0 / duration_days)) - 1
+    
     running_max = portfolio_df['total_value'].cummax()
     drawdown = (portfolio_df['total_value'] - running_max) / running_max
     max_drawdown = drawdown.min()
+    
     trade_count = len(trade_pnls)
-
-    trade_pnls = np.array(trade_pnls)
-    total_profit = trade_pnls[trade_pnls > 0].sum()
-    total_loss = abs(trade_pnls[trade_pnls < 0].sum())
+    trade_pnls_np = np.array(trade_pnls)
+    total_profit = trade_pnls_np[trade_pnls_np > 0].sum()
+    total_loss = abs(trade_pnls_np[trade_pnls_np < 0].sum())
     profit_factor = total_profit / total_loss if total_loss > 0 else 100.0
 
     sortino_ratio = calculate_sortino_ratio(portfolio_df['total_value'])
@@ -157,5 +160,5 @@ def run_backtest(model, scaler, test_data_with_features: pd.DataFrame, strategy_
         trade_count,
         sortino_ratio,
         profit_factor,
-        np.mean(trade_pnls) if trade_count > 0 else 0.0
+        np.mean(trade_pnls_np) if trade_count > 0 else 0.0
     )

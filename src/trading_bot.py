@@ -1,4 +1,4 @@
-# src/trading_bot.py (VERSÃO 6.2 - CORRIGIDO E ROBUSTO)
+# src/trading_bot.py (VERSÃO 7.0 - FINAL E VALIDADO)
 
 import pandas as pd
 import numpy as np
@@ -33,6 +33,11 @@ class PortfolioManager:
         self.long_term_btc_holdings = 0.0
         self.initial_total_value_usdt = 0.0
         self.session_pnl_usdt = 0.0
+        
+        # <<< CORREÇÃO >>>
+        # As variáveis de sessão (drawdown, peak_value) e o signal handler
+        # foram removidos daqui, pois sua responsabilidade é do TradingBot,
+        # que gerencia a sessão de trading como um todo.
 
     def sync_with_live_balance(self):
         if not self.client:
@@ -110,7 +115,6 @@ class PortfolioManager:
             ["Posição de Trading (BTC)", f"{self.trading_btc_balance:.8f}"],
             [" ├─ Valor da Posição", f"${(self.trading_btc_balance * current_btc_price):,.2f}"],
             ["Tesouro de Longo Prazo (BTC)", f"{self.long_term_btc_holdings:.8f}"],
-            # <<< CORREÇÃO APLICADA AQUI >>>
             [" └─ Valor do Tesouro", f"${(self.long_term_btc_holdings * current_btc_price):,.2f}"]
         ]
         summary_data = [
@@ -139,9 +143,10 @@ class TradingBot:
         self.highest_price_in_trade = 0.0
         self.last_used_params = {}
         
+        # Variáveis de estado da sessão e do circuit breaker
         self.session_peak_value = 0.0
         self.session_drawdown_stop_activated = False
-        self.SESSION_MAX_DRAWDOWN = -0.10
+        self.SESSION_MAX_DRAWDOWN = -0.10 # Limite de 10%
 
         signal.signal(signal.SIGINT, self.graceful_shutdown)
         signal.signal(signal.SIGTERM, self.graceful_shutdown)
@@ -262,20 +267,24 @@ class TradingBot:
                 latest_data = processed_df.iloc[-1]
                 current_price = latest_data['close']
                 regime = latest_data['market_regime']
-                
+
+                # --- LÓGICA DO CIRCUIT BREAKER DE DRAWDOWN ---
                 current_total_value = self.portfolio.get_total_portfolio_value_usdt(current_price)
-                self.session_peak_value = max(self.session_peak_value, current_total_value)
-                session_drawdown = (current_total_value - self.session_peak_value) / self.session_peak_value if self.session_peak_value > 0 else 0
-                
-                if not self.session_drawdown_stop_activated and session_drawdown < self.SESSION_MAX_DRAWDOWN:
-                    logger.critical(f"CIRCUIT BREAKER! Drawdown da sessão ({session_drawdown:.2%}) atingiu o limite de {self.SESSION_MAX_DRAWDOWN:.2%}.")
-                    self.session_drawdown_stop_activated = True
-                    if self.in_trade_position:
-                         self._execute_sell(current_price, f"Circuit Breaker de Drawdown ({session_drawdown:.2%})")
+                if current_total_value:
+                    self.session_peak_value = max(self.session_peak_value, current_total_value)
+                    session_drawdown = (current_total_value - self.session_peak_value) / self.session_peak_value if self.session_peak_value > 0 else 0
+                    
+                    if not self.session_drawdown_stop_activated and session_drawdown < self.SESSION_MAX_DRAWDOWN:
+                        logger.critical(f"CIRCUIT BREAKER! Drawdown da sessão ({session_drawdown:.2%}) atingiu o limite de {self.SESSION_MAX_DRAWDOWN:.2%}.")
+                        self.session_drawdown_stop_activated = True
+                        if self.in_trade_position:
+                             self._execute_sell(current_price, f"Circuit Breaker de Drawdown ({session_drawdown:.2%})")
 
                 if self.session_drawdown_stop_activated:
                     logger.warning("Circuit Breaker da sessão ATIVO. Novas operações suspensas até o próximo reinício.")
                     time.sleep(300); continue
+                
+                # --- FIM DA LÓGICA DO CIRCUIT BREAKER ---
                 
                 if self.in_trade_position:
                     self._manage_active_position(latest_data)
@@ -335,12 +344,6 @@ class TradingBot:
     def _check_for_entry_signal(self, latest_data: pd.Series):
         regime = latest_data['market_regime']
         
-        # <<< MUDANÇA: O bloqueio explícito do regime 'BEAR' foi removido >>>
-        # A lógica de risco agora é tratada pelos parâmetros otimizados para cada regime.
-        # Se um especialista 'BEAR' for criado, o bot poderá usá-lo, mas os parâmetros
-        # otimizados (como o risco base reduzido no backtest) garantirão que ele seja
-        # extremamente seletivo.
-
         VIX_PANIC_THRESHOLD = 0.10
         if latest_data.get('vix_close_change', 0) > VIX_PANIC_THRESHOLD:
             logger.warning(f"🚨 FILTRO DE PÂNICO VIX ATIVADO (VIX subiu {latest_data['vix_close_change']:.2%})! Compra bloqueada.")
@@ -355,26 +358,19 @@ class TradingBot:
         params = self.strategy_params.get(regime)
         confidence_manager = self.confidence_managers.get(regime)
 
-        # O 'specialist_model' já foi verificado na função 'run', então aqui podemos
-        # assumir que model, scaler, params e confidence_manager existem.
-
         features_for_prediction = pd.DataFrame(latest_data[self.model_feature_names]).T
         scaled_features = scaler.transform(features_for_prediction)
         buy_confidence = model.predict_proba(scaled_features)[0][1]
         
         current_confidence_threshold = confidence_manager.get_confidence()
         if buy_confidence > current_confidence_threshold:
-            # A lógica de risco já considera os parâmetros otimizados para o regime específico
             base_risk = params.get('risk_per_trade_pct', 0.05)
-            
-            # <<< MUDANÇA: A redução de risco manual é movida para o backtest >>>
-            # O bot agora confia puramente nos parâmetros que foram otimizados.
-            # A lógica de risco no backtest já considerou o regime.
             
             signal_strength = (buy_confidence - current_confidence_threshold) / (1.0 - current_confidence_threshold)
             aggression_exponent = params.get('aggression_exponent', 2.0)
             max_risk_scale = params.get('max_risk_scale', 3.0)
-            aggression_factor = 0.5 + (signal_strength ** aggression_exponent) * (max_risk_scale - 0.5)
+            min_risk_scale = params.get('min_risk_scale', 0.5) # Adicionado para consistência
+            aggression_factor = min_risk_scale + (signal_strength ** aggression_exponent) * (max_risk_scale - min_risk_scale)
             dynamic_risk_pct = base_risk * aggression_factor
             
             trade_size_usdt = self.portfolio.trading_capital_usdt * dynamic_risk_pct
@@ -392,7 +388,7 @@ class TradingBot:
                 logger.warning(f"Tamanho do trade ({trade_size_usdt:,.2f}) excedeu o teto. Reduzido para {max_allowed_size:,.2f}.")
                 trade_size_usdt = max_allowed_size
 
-            if trade_size_usdt < 10:
+            if trade_size_usdt < 10: # Limite mínimo da Binance
                 return
 
             current_price = latest_data['close']
@@ -400,27 +396,38 @@ class TradingBot:
             stop_price = current_price - (latest_data['atr'] * stop_loss_atr_multiplier)
 
             self._execute_buy(current_price, trade_size_usdt, stop_price, buy_confidence, regime, params)
+
     def _execute_buy(self, price, trade_size_usdt, stop_price, confidence, regime, params: dict):
         try:
-            buy_price_expected = price * (1 + SLIPPAGE_RATE)
-            quantity_to_buy = trade_size_usdt / buy_price_expected
-            logger.info(f"EXECUTANDO ORDEM DE COMPRA: {quantity_to_buy:.8f} BTC a ~${price:,.2f}")
+            # Para simulação sem ordens reais (modo 'test') ou para evitar erros se a API falhar
+            if not self.client or USE_TESTNET:
+                 logger.warning("MODO SIMULADO: Ordem de COMPRA não será enviada para a Binance.")
+                 buy_price_sim = price * (1 + SLIPPAGE_RATE)
+                 qty_sim = trade_size_usdt / buy_price_sim
+                 total_cost_sim = trade_size_usdt
 
-            order = self.client.create_order(symbol=SYMBOL, side=Client.SIDE_BUY, type=Client.ORDER_TYPE_MARKET, quantity=round(quantity_to_buy, 5))
+                 self.buy_price = buy_price_sim
+                 self.portfolio.update_on_buy(qty_sim, total_cost_sim, self.buy_price)
+                 self._log_trade("BUY (SIM)", self.buy_price, qty_sim, f"Sinal do ML ({confidence:.2%})", 0, 0)
+            else:
+                logger.info(f"EXECUTANDO ORDEM DE COMPRA REAL: {trade_size_usdt / price:.8f} BTC a ~${price:,.2f}")
+                order = self.client.create_order(symbol=SYMBOL, side=Client.SIDE_BUY, type=Client.ORDER_TYPE_MARKET, quoteOrderQty=round(trade_size_usdt, 2))
+                
+                actual_buy_price = float(order['fills'][0]['price'])
+                actual_quantity = float(order['executedQty'])
+                total_cost = float(order['cummulativeQuoteQty'])
+                
+                self.buy_price = actual_buy_price
+                self.portfolio.update_on_buy(actual_quantity, total_cost, self.buy_price)
+                self._log_trade("BUY (REAL)", self.buy_price, actual_quantity, f"Sinal do ML ({confidence:.2%})", 0, 0)
             
-            actual_buy_price = float(order['fills'][0]['price'])
-            actual_quantity = float(order['fills'][0]['qty'])
-            total_cost = float(order['cummulativeQuoteQty'])
-            
-            self.buy_price = actual_buy_price
+            # Lógica comum a ambos os modos (real e simulado)
             self.in_trade_position = True
             self.position_phase = 'INITIAL'
             self.current_stop_price = stop_price
             self.highest_price_in_trade = self.buy_price
             self.last_used_params = {**params, 'entry_regime': regime}
-            
-            self.portfolio.update_on_buy(actual_quantity, total_cost, self.buy_price)
-            self._log_trade("BUY", self.buy_price, actual_quantity, f"Sinal do ML ({confidence:.2%})", 0, 0)
+
         except Exception as e:
             logger.error(f"ERRO AO EXECUTAR COMPRA: {e}", exc_info=True)
             self.in_trade_position = False
@@ -430,15 +437,23 @@ class TradingBot:
         if amount_to_sell <= 0: return
 
         try:
-            logger.info(f"EXECUTANDO ORDEM DE VENDA: {amount_to_sell:.8f} BTC a ~${price:,.2f} | Motivo: {reason}")
-            
-            order = self.client.create_order(symbol=SYMBOL, side=Client.SIDE_SELL, type=Client.ORDER_TYPE_MARKET, quantity=round(amount_to_sell, 5))
+            if not self.client or USE_TESTNET:
+                logger.warning("MODO SIMULADO: Ordem de VENDA não será enviada para a Binance.")
+                sell_price_sim = price * (1 - SLIPPAGE_RATE)
+                revenue_sim = sell_price_sim * amount_to_sell
+                pnl_usdt = (sell_price_sim - self.buy_price) * amount_to_sell
+                pnl_pct = (sell_price_sim / self.buy_price) - 1 if self.buy_price > 0 else 0
+                actual_sell_price = sell_price_sim
+            else:
+                logger.info(f"EXECUTANDO ORDEM DE VENDA REAL: {amount_to_sell:.8f} BTC a ~${price:,.2f} | Motivo: {reason}")
+                order = self.client.create_order(symbol=SYMBOL, side=Client.SIDE_SELL, type=Client.ORDER_TYPE_MARKET, quantity=round(amount_to_sell, 5))
 
-            actual_sell_price = float(order['fills'][0]['price'])
-            revenue = float(order['cummulativeQuoteQty'])
-            pnl_usdt = (actual_sell_price - self.buy_price) * amount_to_sell
-            pnl_pct = (actual_sell_price / self.buy_price) - 1 if self.buy_price > 0 else 0
-            
+                actual_sell_price = float(order['fills'][0]['price'])
+                revenue = float(order['cummulativeQuoteQty'])
+                pnl_usdt = (actual_sell_price - self.buy_price) * amount_to_sell
+                pnl_pct = (actual_sell_price / self.buy_price) - 1 if self.buy_price > 0 else 0
+
+            # Lógica comum de atualização de estado e log
             entry_regime = self.last_used_params.get('entry_regime', list(self.confidence_managers.keys())[0] if self.confidence_managers else 'LATERAL')
             confidence_manager = self.confidence_managers.get(entry_regime)
             
@@ -446,7 +461,8 @@ class TradingBot:
                 confidence_manager.update(pnl_pct)
 
             self.portfolio.update_on_sell(amount_to_sell, revenue, pnl_usdt, actual_sell_price, self.last_used_params)
-            self._log_trade("SELL", actual_sell_price, amount_to_sell, reason, pnl_usdt, pnl_pct)
+            log_type = "SELL (SIM)" if (not self.client or USE_TESTNET) else "SELL (REAL)"
+            self._log_trade(log_type, actual_sell_price, amount_to_sell, reason, pnl_usdt, pnl_pct)
             
             if not partial:
                 self.in_trade_position = False

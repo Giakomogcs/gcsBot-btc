@@ -1,4 +1,4 @@
-# src/model_trainer.py (VERSÃO 5.0 - FEATURES ROBUSTAS)
+# src/model_trainer.py (VERSÃO 6.0 - LIMPO E ALINHADO)
 
 import pandas as pd
 import numpy as np
@@ -7,13 +7,10 @@ from sklearn.preprocessing import StandardScaler
 from numba import jit
 from typing import Tuple, List, Any
 
-from src.logger import logger
-from src.logger import log_table 
+from src.logger import logger, log_table
 from ta.volatility import BollingerBands, AverageTrueRange
-from ta.trend import MACD, ADXIndicator
-from ta.momentum import StochasticOscillator, RSIIndicator
-from ta.trend import MACD, ADXIndicator, CCIIndicator # Adicionado CCIIndicator
-from ta.momentum import StochasticOscillator, RSIIndicator, WilliamsRIndicator # Adicionado WilliamsRIndicator
+from ta.trend import MACD, ADXIndicator, CCIIndicator
+from ta.momentum import StochasticOscillator, RSIIndicator, WilliamsRIndicator
 
 @jit(nopython=True)
 def create_labels_triple_barrier(
@@ -48,7 +45,6 @@ def create_labels_triple_barrier(
 
 class ModelTrainer:
     def __init__(self):
-        # --- NOVO --- Adicionamos as novas features à lista base
         self.base_feature_names = [
             'rsi', 'rsi_1h', 'rsi_4h', 'macd_diff', 'macd_diff_1h', 'stoch_osc',
             'adx', 'adx_power',
@@ -59,12 +55,11 @@ class ModelTrainer:
             'gold_close_change', 'tnx_close_change',
             'atr_long_avg', 
             'volume_sma_50',
-            
-            'cci',             # Commodity Channel Index: Mede o desvio do preço de sua média estatística. Ótimo para identificar reversões.
-            'williams_r',      # Williams %R: Oscilador de momento que mede níveis de sobrecompra/sobrevenda.
-            'momentum_10m',    # Aceleração do preço em 10 min, para capturar o "impulso".
-            'volatility_ratio',# Razão entre volatilidade de curto e longo prazo.
-            'sma_50_200_diff'  # Diferença entre médias longa e muito longa, para um sinal de tendência mais forte.
+            'cci',
+            'williams_r',
+            'momentum_10m',
+            'volatility_ratio',
+            'sma_50_200_diff'
         ]
 
     def _prepare_features(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, List[str]]:
@@ -79,7 +74,7 @@ class ModelTrainer:
 
         sma_7 = df['close'].rolling(window=7).mean()
         sma_25 = df['close'].rolling(window=25).mean()
-        sma_50 = df['close'].rolling(window=50).mean() # Já calculado para volume, vamos reutilizar
+        sma_50 = df['close'].rolling(window=50).mean()
         sma_200 = df['close'].rolling(window=200).mean()
         df['sma_7_25_diff'] = (sma_7 - sma_25) / (df['close'] + epsilon)
         df['close_sma_25_dist'] = (df['close'] - sma_25) / (sma_25 + epsilon)
@@ -95,11 +90,9 @@ class ModelTrainer:
         df['rsi'] = RSIIndicator(close=df['close'], window=14).rsi()
         df['stoch_osc'] = StochasticOscillator(high=df['high'], low=df['low'], close=df['close']).stoch()
         
-        # --- NOVAS FEATURES DE ROBUSTEZ ---
         df['atr_long_avg'] = df['atr'].rolling(window=100).mean()
         df['volume_sma_50'] = df['volume'].rolling(window=50).mean()
 
-        # <<< MELHORIA: CÁLCULO DAS NOVAS FEATURES >>>
         df['cci'] = CCIIndicator(high=df['high'], low=df['low'], close=df['close'], window=20).cci()
         df['williams_r'] = WilliamsRIndicator(high=df['high'], low=df['low'], close=df['close'], lbp=14).williams_r()
         df['momentum_10m'] = df['close'].pct_change(10)
@@ -107,7 +100,6 @@ class ModelTrainer:
         df['volatility_ratio'] = atr_short / (df['atr_long_avg'] + epsilon)
         df['sma_50_200_diff'] = (sma_50 - sma_200) / (df['close'] + epsilon)
 
-        # --- Features Macroeconômicas ---
         macro_map = {
             'dxy_close': 'dxy_close_change', 'vix_close': 'vix_close_change',
             'gold_close': 'gold_close_change', 'tnx_close': 'tnx_close_change'
@@ -115,7 +107,6 @@ class ModelTrainer:
         for col_in, col_out in macro_map.items():
             df[col_out] = df[col_in].pct_change(60).fillna(0) if col_in in df.columns else 0
 
-        # --- Features Multi-Timeframe (MTC) ---
         df_1h = df['close'].resample('h').last()
         df['rsi_1h'] = RSIIndicator(close=df_1h, window=14).rsi().reindex(df.index, method='ffill')
         df['macd_diff_1h'] = MACD(close=df_1h).macd_diff().reindex(df.index, method='ffill')
@@ -125,21 +116,16 @@ class ModelTrainer:
             df[col] = df[col].bfill().ffill()
 
         # --- Construção da lista final de features ---
-        final_feature_names = self.base_feature_names.copy()
+        final_feature_names = sorted(list(set(self.base_feature_names.copy())))
         
-        if 'market_regime' in df.columns:
-            logger.debug("Aplicando One-Hot Encoding para a feature 'market_regime'...")
-            regime_dummies = pd.get_dummies(df['market_regime'], prefix='regime', dtype=float)
-            df = pd.concat([df, regime_dummies], axis=1)
-            final_feature_names.extend(regime_dummies.columns)
-        
-        final_feature_names = sorted(list(set(final_feature_names)))
+        # <<< REMOÇÃO DA LÓGICA DE ONE-HOT ENCODING >>>
+        # Um especialista de regime já opera sob a condição daquele regime.
+        # Adicionar o regime como feature é redundante e pode confundir o modelo.
         
         for col in final_feature_names:
             if col not in df.columns:
                 df[col] = 0.0
 
-        # --- MUDANÇA --- Garantindo que o shift aconteça após todos os cálculos
         df_final = df.copy()
         df_final[final_feature_names] = df_final[final_feature_names].shift(1)
         df_final.replace([np.inf, -np.inf], np.nan, inplace=True)
@@ -177,7 +163,7 @@ class ModelTrainer:
         X = df_processed[final_feature_names]
 
         counts = y.value_counts()
-        if counts.get(1, 0) < 20 or counts.get(2, 0) < 20:
+        if counts.get(1, 0) < 15 or counts.get(2, 0) < 15:
             logger.warning(f"Não há exemplos suficientes de compra(1) ou venda(2). Counts: {counts.to_dict()}")
             return None, None, None
 

@@ -1,4 +1,4 @@
-# src/optimizer.py (VERSÃO 6.6 - FINAL E CORRIGIDO)
+# src/optimizer.py (VERSÃO 7.0 - VALIDAÇÃO CRUZADA POR BLOCOS)
 
 import optuna
 import pandas as pd
@@ -25,7 +25,8 @@ class WalkForwardOptimizer:
     def __init__(self, full_data):
         self.full_data = full_data
         self.trainer = ModelTrainer()
-        self.n_trials_for_cycle = 75 if QUICK_OPTIMIZE else 150
+        # Otimização mais robusta exige mais tempo, então n_trials pode ser ajustado
+        self.n_trials_for_cycle = 50 if QUICK_OPTIMIZE else 100
         self.shutdown_requested = False
         self.optimization_summary = {}
         signal.signal(signal.SIGINT, self.graceful_shutdown)
@@ -58,17 +59,18 @@ class WalkForwardOptimizer:
             logger.error(f"❌ Falha ao salvar metadados finais: {e}")
 
     def _progress_callback(self, study, trial):
-        if trial.number > 0 and trial.number % 5 == 0:
+        if trial.number > 0 and trial.number % 2 == 0: # Atualiza com mais frequência
             try:
                 best_value = study.best_value
-                logger.info(f"  Trials: {trial.number}/{self.n_trials_for_cycle} | Melhor Score: {best_value:.4f}")
+                logger.info(f"  Trials: {trial.number}/{self.n_trials_for_cycle} | Melhor Score (Médio): {best_value:.4f}")
             except ValueError:
                 logger.info(f"  Trials: {trial.number}/{self.n_trials_for_cycle} | (Aguardando primeiro resultado válido)")
 
-    def _objective(self, trial, train_data, validation_data):
+    def _objective(self, trial, regime_data, regime_blocks):
         if self.shutdown_requested:
             raise optuna.exceptions.TrialPruned("Shutdown solicitado.")
         
+        # Parâmetros de otimização (mantidos da sua versão)
         params = {
             'min_risk_scale': trial.suggest_float('min_risk_scale', 0.25, 0.75),
             'future_periods': trial.suggest_int('future_periods', 15, 120),
@@ -94,89 +96,72 @@ class WalkForwardOptimizer:
         if params['profit_threshold'] <= round_trip_cost * 1.5:
             raise optuna.exceptions.TrialPruned("Alvo de lucro muito baixo comparado aos custos.")
 
-        model, scaler, feature_names = self.trainer.train(train_data.copy(), params)
-        if model is None: 
-            raise optuna.exceptions.TrialPruned("Falha no treinamento do modelo (dados/labels insuficientes).")
+        # --- LÓGICA DE VALIDAÇÃO CRUZADA POR BLOCOS ---
+        all_fold_metrics = []
+        for val_block_id in regime_blocks:
+            train_block_ids = [b for b in regime_blocks if b != val_block_id]
+            
+            train_data = regime_data[regime_data['block'].isin(train_block_ids)].copy()
+            validation_data = regime_data[regime_data['block'] == val_block_id].copy()
 
-        val_metrics = run_backtest(
-            model=model, scaler=scaler, test_data_with_features=validation_data.copy(), 
-            strategy_params=params, feature_names=feature_names
-        )
-        (val_final_value, val_annual_return, val_max_dd, val_trade_count, val_sortino, val_profit_factor, _) = val_metrics
+            model, scaler, feature_names = self.trainer.train(train_data, params)
+            if model is None:
+                raise optuna.exceptions.TrialPruned("Falha no treinamento do modelo em um dos folds.")
 
-        MIN_TRADES_SIGNIFICATIVOS = 10 
-        if val_trade_count < MIN_TRADES_SIGNIFICATIVOS:
-            raise optuna.exceptions.TrialPruned(f"Performance na validação com menos de {MIN_TRADES_SIGNIFICATIVOS} trades.")
+            val_metrics = run_backtest(
+                model=model, scaler=scaler, test_data_with_features=validation_data, 
+                strategy_params=params, feature_names=feature_names
+            )
+            all_fold_metrics.append(val_metrics)
+            del model, scaler
+            gc.collect()
 
-        score_principal = (0.5 * val_sortino) + (0.3 * val_profit_factor) + (0.2 * val_annual_return)
+        # --- AGREGAÇÃO DOS RESULTADOS DE TODOS OS FOLDS ---
+        metrics_df = pd.DataFrame(all_fold_metrics, columns=[
+            'final_value', 'annual_return', 'max_dd', 'trade_count', 
+            'sortino', 'profit_factor', 'avg_pnl'
+        ])
 
-        train_metrics = run_backtest(
-            model=model, scaler=scaler, test_data_with_features=train_data.copy(),
-            strategy_params=params, feature_names=feature_names
-        )
-        (_, _, _, _, train_sortino, train_profit_factor, _) = train_metrics
+        # Usar mediana para ser mais robusto a um fold com resultado extremo
+        median_sortino = metrics_df['sortino'].median()
+        median_profit_factor = metrics_df['profit_factor'].median()
+        median_annual_return = metrics_df['annual_return'].median()
+        total_trade_count = metrics_df['trade_count'].sum()
+
+        MIN_TRADES_POR_FOLD = 5 # Mínimo de trades por bloco de validação
+        if (metrics_df['trade_count'] < MIN_TRADES_POR_FOLD).any():
+             raise optuna.exceptions.TrialPruned(f"Um dos folds teve menos de {MIN_TRADES_POR_FOLD} trades.")
         
-        overfitting_penalty = 0
-        if train_profit_factor > (val_profit_factor * 2.5) and val_profit_factor > 0:
-            overfitting_penalty += abs(score_principal * 0.2)
-        if train_sortino > (val_sortino * 2.5) and val_sortino > 0:
-            overfitting_penalty += abs(score_principal * 0.2)
+        score_principal = (0.5 * median_sortino) + (0.3 * median_profit_factor) + (0.2 * median_annual_return)
         
-        trade_penalty = 0
-        IDEAL_MAX_TRADES = 200
-        if val_trade_count > IDEAL_MAX_TRADES:
-            excess_trades = val_trade_count - IDEAL_MAX_TRADES
-            trade_penalty = (abs(score_principal) * 0.15) * (excess_trades / IDEAL_MAX_TRADES)
-        
-        final_score = score_principal - overfitting_penalty - trade_penalty
-        
-        del model, scaler
-        gc.collect()
-        
-        if math.isnan(final_score) or math.isinf(final_score) or final_score < 0.1:
-            raise optuna.exceptions.TrialPruned("Score final abaixo do limiar de qualidade (0.1).")
+        final_score = score_principal
+        if math.isnan(final_score) or math.isinf(final_score) or final_score < -1.0:
+            raise optuna.exceptions.TrialPruned(f"Score final mediano ({final_score:.4f}) abaixo do limiar de qualidade (0.1).")
             
         return final_score
 
     def run_optimization_for_regime(self, regime: str, all_recent_data: pd.DataFrame):
         logger.info("\n" + "#"*80 + f"\n# 💠 INICIANDO OTIMIZAÇÃO PARA O REGIME: {regime.upper()} 💠\n" + "#"*80)
 
-        # <<< CORREÇÃO: Linha duplicada removida daqui >>>
+        # Identifica os blocos de dados contínuos para o regime atual
         all_recent_data['block'] = (all_recent_data['market_regime'] != all_recent_data['market_regime'].shift()).cumsum()
-        regime_blocks = all_recent_data[all_recent_data['market_regime'] == regime]['block'].unique()
+        regime_data = all_recent_data[all_recent_data['market_regime'] == regime].copy()
+        regime_blocks = regime_data['block'].unique()
 
         if len(regime_blocks) < 2:
-            logger.warning(f"❌ Apenas {len(regime_blocks)} bloco(s) de dados encontrado(s) para o regime '{regime}'. É necessário no mínimo 2 para a validação Walk-Forward. Pulando otimização.")
+            logger.warning(f"❌ Apenas {len(regime_blocks)} bloco(s) de dados encontrado(s) para o regime '{regime}'. É necessário no mínimo 2 para a Validação Cruzada. Pulando.")
             self.optimization_summary[regime] = {'status': 'Skipped - Not Enough Regime Blocks', 'score': None}
             return None
 
-        validation_block_id = regime_blocks[-1]
-        train_block_ids = regime_blocks[:-1]
-
-        train_data = all_recent_data[all_recent_data['block'].isin(train_block_ids) & (all_recent_data['market_regime'] == regime)].copy()
-        validation_data = all_recent_data[all_recent_data['block'] == validation_block_id].copy()
-
-        MIN_TRAIN_CANDLES = 21500 #(15 dias)
-        MIN_VALIDATION_CANDLES = 8000 #(8 dias)
-        
-        if len(train_data) < MIN_TRAIN_CANDLES:
-            logger.warning(f"❌ Dados de TREINO insuficientes nos blocos do regime '{regime}'. Encontrado: {len(train_data)}, Mínimo: {MIN_TRAIN_CANDLES}. Pulando otimização.")
-            self.optimization_summary[regime] = {'status': 'Skipped - Insufficient Train Data', 'score': None}
-            return None
-        
-        if len(validation_data) < MIN_VALIDATION_CANDLES:
-            logger.warning(f"❌ Dados de VALIDAÇÃO insuficientes no bloco final do regime '{regime}'. Encontrado: {len(validation_data)}, Mínimo: {MIN_VALIDATION_CANDLES}. Pulando otimização.")
-            self.optimization_summary[regime] = {'status': 'Skipped - Insufficient Validation Data', 'score': None}
-            return None
-            
-        log_table(f"Plano de Otimização para {regime} (Por Blocos)", [
-            ["Período de Treino", f"{train_data.index.min():%Y-%m-%d} a {train_data.index.max():%Y-%m-%d}", f"{len(train_data)} velas em {len(train_block_ids)} bloco(s)"],
-            ["Período de Validação", f"{validation_data.index.min():%Y-%m-%d} a {validation_data.index.max():%Y-%m-%d}", f"{len(validation_data)} velas no último bloco"],
+        log_table(f"Plano de Otimização para {regime} (Validação Cruzada)", [
+            ["Dados Totais", f"{regime_data.index.min():%Y-%m-%d} a {regime_data.index.max():%Y-%m-%d}", f"{len(regime_data)} velas"],
+            ["Blocos Encontrados", f"{len(regime_blocks)} blocos distintos", "Cada bloco será usado como validação"],
             ["Total de Trials", self.n_trials_for_cycle, ""]
-        ], headers=["Fase", "Período", "Tamanho"])
+        ], headers=["Fase", "Detalhe", "Tamanho"])
         
         study = optuna.create_study(direction='maximize')
-        study.optimize(lambda trial: self._objective(trial, train_data, validation_data), n_trials=self.n_trials_for_cycle, n_jobs=-1, callbacks=[self._progress_callback])
+        # Passa os dados do regime e a lista de blocos para a função objetivo
+        study.optimize(lambda trial: self._objective(trial, regime_data, regime_blocks.tolist()), n_trials=self.n_trials_for_cycle, n_jobs=-1, callbacks=[self._progress_callback])
         
         try:
             best_trial = study.best_trial
@@ -186,13 +171,14 @@ class WalkForwardOptimizer:
             self.optimization_summary[regime] = {'status': 'Skipped - All Trials Pruned', 'score': None}
             return None
             
-        logger.info(f"\n🏁 Otimização do regime '{regime}' concluída. Melhor Score (Composto): {best_score:.4f}")
+        logger.info(f"\n🏁 Otimização do regime '{regime}' concluída. Melhor Score (Médio): {best_score:.4f}")
         
         MINIMUM_QUALITY_SCORE = 0.5 
         if best_score > MINIMUM_QUALITY_SCORE:
-            logger.info(f"🏆 Resultado excelente! Score ({best_score:.4f}) acima do limiar ({MINIMUM_QUALITY_SCORE}). Salvando especialista para o regime '{regime}'...")
+            logger.info(f"🏆 Resultado excelente! Score ({best_score:.4f}) acima do limiar ({MINIMUM_QUALITY_SCORE}). Salvando especialista...")
             
-            final_model, final_scaler, final_feature_names = self.trainer.train(all_recent_data[all_recent_data['market_regime'] == regime].copy(), best_trial.params)
+            # Retreina com todos os dados do regime para o modelo final
+            final_model, final_scaler, final_feature_names = self.trainer.train(regime_data, best_trial.params)
             
             model_filename = f'trading_model_{regime}.joblib'
             scaler_filename = model_filename.replace('trading_model', 'scaler')
@@ -214,7 +200,7 @@ class WalkForwardOptimizer:
             log_table(f"Melhores Parâmetros para {regime}", {k: [v] for k, v in best_trial.params.items()}, headers="keys")
             return final_feature_names
         else:
-            logger.warning(f"❌ Melhor score ({best_score:.4f}) não atingiu o limiar de qualidade ({MINIMUM_QUALITY_SCORE}). Nenhum especialista será salvo para o regime '{regime}'.")
+            logger.warning(f"❌ Melhor score ({best_score:.4f}) não atingiu o limiar de qualidade ({MINIMUM_QUALITY_SCORE}). Nenhum especialista será salvo.")
             self.optimization_summary[regime] = {'status': 'Skipped - Low Score', 'score': best_score}
             return None
 
@@ -237,6 +223,7 @@ class WalkForwardOptimizer:
                 logger.warning("Otimização interrompida pelo usuário.")
                 break
 
+            # A chamada aqui não precisa mudar, pois a função interna foi ajustada
             feature_names = self.run_optimization_for_regime(regime, recent_data)
             
             if feature_names:

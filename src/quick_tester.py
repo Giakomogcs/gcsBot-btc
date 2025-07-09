@@ -1,26 +1,31 @@
-# src/quick_tester.py (VERSÃO 5.0 - SIMULADOR ROBUSTO)
+# src/quick_tester.py (VERSÃO 6.0 - SIMULADOR FIEL)
 
 import json
 import pandas as pd
 import numpy as np
-
+import joblib
+import os
 from datetime import datetime, timezone
 
 from src.logger import logger, log_table
-from src.config import MODEL_METADATA_FILE, SYMBOL, FEE_RATE, SLIPPAGE_RATE
+from src.config import MODEL_METADATA_FILE, SYMBOL, FEE_RATE, SLIPPAGE_RATE, DATA_DIR
 from src.data_manager import DataManager
-from src.model_trainer import ModelTrainer # Usado para o _prepare_features
+from src.model_trainer import ModelTrainer
+from src.confidence_manager import AdaptiveConfidenceManager
 
-# Função para calcular o Sortino Ratio, igual à do backtest.py
 def calculate_sortino_ratio(series, periods_per_year=365*24*60):
+    if len(series) < 2: return 0.0
     returns = series.pct_change().dropna()
+    if len(returns) < 2: return 0.0
+        
     target_return = 0
     downside_returns = returns[returns < target_return]
     
     expected_return = returns.mean()
     downside_std = downside_returns.std()
     
-    if downside_std == 0 or pd.isna(downside_std): return 0.0
+    if downside_std == 0 or pd.isna(downside_std) or downside_std < 1e-9:
+        return 100.0 if expected_return > 0 else 0.0
         
     sortino = (expected_return * periods_per_year) / (downside_std * np.sqrt(periods_per_year))
     return sortino if not pd.isna(sortino) else 0.0
@@ -37,45 +42,62 @@ class QuickTester:
         self.model_feature_names = []
 
     def load_all_specialists(self):
-        """Carrega todos os artefatos e VERIFICA A VALIDADE DO MODELO."""
+        """Carrega todos os artefatos, verifica a validade e fornece um diagnóstico claro."""
         try:
             with open(MODEL_METADATA_FILE, 'r') as f:
                 metadata = json.load(f)
 
-            # VERIFICAÇÃO DE VALIDADE (idêntica ao trading_bot) ---
             valid_until_str = metadata.get('valid_until')
             if not valid_until_str:
-                logger.error("ERRO CRÍTICO: Data de validade não encontrada nos metadados. Execute a otimização.")
+                logger.error("ERRO CRÍTICO: Data de validade não encontrada. Execute a otimização.")
                 return False
 
             valid_until_dt = datetime.fromisoformat(valid_until_str)
-            now_utc = datetime.now(timezone.utc)
-
-            if now_utc > valid_until_dt:
-                logger.error("="*60)
-                logger.error("🚨 ALERTA: O CONJUNTO DE MODELOS ESTÁ EXPIRADO! 🚨")
-                logger.error(f"   Válido até: {valid_until_dt.strftime('%Y-%m-%d %H:%M')}")
-                logger.error(f"   Data atual:  {now_utc.strftime('%Y-%m-%d %H:%M')}")
-                logger.error("   O backtest pode não refletir a performance atual. Recomenda-se otimizar.")
-                # Não retornamos False aqui para permitir o backtest de modelos antigos, mas o alerta é crucial.
+            if datetime.now(timezone.utc) > valid_until_dt:
+                logger.warning("="*60)
+                logger.warning("🚨 ALERTA: O CONJUNTO DE MODELOS ESTÁ EXPIRADO! 🚨")
+                logger.warning(f"   Válido até: {valid_until_dt.strftime('%Y-%m-%d %H:%M')}")
+                logger.warning("   O backtest pode não refletir a performance real.")
             else:
                 logger.info(f"✅ Modelos válidos até {valid_until_dt.strftime('%Y-%m-%d')}. Verificação OK.")
-            # ---------------------------------------------------------------------
-
+            
             self.model_feature_names = metadata.get('feature_names', [])
             summary = metadata.get('optimization_summary', {})
             
             if not self.model_feature_names:
-                raise ValueError("Lista de features não encontrada nos metadados do modelo.")
+                raise ValueError("Lista de features não encontrada nos metadados.")
             
             logger.info(f"Carregando {len(self.model_feature_names)} features esperadas...")
 
-            # ... (resto da função para carregar os arquivos de modelo) ...
-            
-            if not self.models:
-                logger.error("Nenhum modelo especialista foi carregado com sucesso.")
+            # <<< CORREÇÃO: Lógica de carregamento completa adicionada >>>
+            loaded_specialists_count = 0
+            for regime, result in summary.items():
+                if result.get('status') == 'Optimized and Saved':
+                    try:
+                        model_path = os.path.join(DATA_DIR, result['model_file'])
+                        scaler_path = model_path.replace('trading_model', 'scaler')
+                        params_path = os.path.join(DATA_DIR, result['params_file'])
+
+                        self.models[regime] = joblib.load(model_path)
+                        self.scalers[regime] = joblib.load(scaler_path)
+                        with open(params_path, 'r') as p:
+                            regime_params = json.load(p)
+                            self.strategy_params[regime] = regime_params
+                        
+                        self.confidence_managers[regime] = AdaptiveConfidenceManager(
+                            initial_confidence=regime_params.get('initial_confidence', 0.7),
+                            learning_rate=regime_params.get('confidence_learning_rate', 0.05),
+                            window_size=regime_params.get('confidence_window_size', 10)
+                        )
+                        loaded_specialists_count += 1
+                    except Exception as e:
+                        logger.error(f"Falha ao carregar artefatos para o regime '{regime}': {e}")
+
+            if loaded_specialists_count == 0:
+                logger.error("Nenhum especialista de trading foi carregado. Execute a otimização.")
                 return False
 
+            logger.info(f"✅ {loaded_specialists_count} especialista(s) carregado(s).")
             return True
 
         except FileNotFoundError:
@@ -101,7 +123,6 @@ class QuickTester:
         drawdown = (df['total_value'] - running_max) / running_max
         max_drawdown = drawdown.min()
         
-        # --- NOVO --- Adicionando o Sortino Ratio ao relatório
         sortino_ratio = calculate_sortino_ratio(df['total_value'])
         calmar_ratio = annualized_return / abs(max_drawdown) if max_drawdown != 0 else 0
         total_trades = df['trade_executed'].sum()
@@ -115,10 +136,10 @@ class QuickTester:
             ["Resultado Total da Estratégia", f"📈 {total_return:+.2%}"],
             ["Retorno Anualizado", f"{annualized_return:+.2%}"],
             ["Máximo Drawdown", f"📉 {max_drawdown:.2%}"],
-            ["Calmar Ratio", f"{calmar_ratio:.2f}"],
-            ["Sortino Ratio", f"🍀 {sortino_ratio:.2f}"], # NOVO
+            ["Calmar Ratio (Retorno/Drawdown)", f"{calmar_ratio:.2f}"],
+            ["Sortino Ratio (Retorno/Risco Negativo)", f"🍀 {sortino_ratio:.2f}"],
             ["--- Benchmark ---", ""],
-            ["Retorno do Buy & Hold", f"벤치 {buy_and_hold_return:+.2%}"]
+            ["Retorno do Buy & Hold", f"📊 {buy_and_hold_return:+.2%}"]
         ]
         log_table("🏆 RESUMO GERAL DA PERFORMANCE (OUT-OF-SAMPLE)", summary_data, headers=["Métrica", "Valor"])
 
@@ -131,7 +152,6 @@ class QuickTester:
         if test_data.empty: 
             logger.error("Não há dados disponíveis para o período de teste."); return
         
-        # --- MUDANÇA --- Usando o _prepare_features do trainer para consistência
         test_features_df, _ = self.trainer._prepare_features(test_data.copy())
         
         buy_and_hold_return = (test_features_df['close'].iloc[-1] / test_features_df['close'].iloc[0]) - 1
@@ -147,91 +167,86 @@ class QuickTester:
             trade_executed_this_step = 0
             
             regime = row.get('market_regime', 'LATERAL')
-            params = last_used_params if in_position else self.strategy_params.get(regime)
+            # Seleciona o especialista correto
+            params = self.strategy_params.get(regime)
+            model, scaler = self.models.get(regime), self.scalers.get(regime)
+            confidence_manager = self.confidence_managers.get(regime)
 
-            if not params:
-                 if in_position: # Se entrar em um regime sem especialista, apenas gerencia a posição
-                    highest_price_in_trade = max(highest_price_in_trade, price)
-                    if price <= current_stop_price:
-                        sell_price = price * (1 - SLIPPAGE_RATE)
-                        capital_usdt += (trading_btc * sell_price) * (1 - FEE_RATE)
-                        in_position, trading_btc = False, 0.0; trade_executed_this_step = 1
-            else:
-                is_trading_allowed = (regime != 'BEAR')
-                
+            # Se a posição foi aberta em um regime e agora estamos em outro sem especialista, apenas gerencia a saída
+            if in_position and not model:
+                highest_price_in_trade = max(highest_price_in_trade, price)
+                if price <= current_stop_price:
+                    sell_price = price * (1 - SLIPPAGE_RATE)
+                    capital_usdt += (trading_btc * sell_price) * (1 - FEE_RATE)
+                    in_position, trading_btc = False, 0.0; trade_executed_this_step = 1
+            
+            # Se temos um especialista para o regime atual, aplicamos a lógica completa
+            elif model:
                 if in_position:
+                    # Usa os parâmetros do momento da ENTRADA para gerenciar a posição
+                    current_params = last_used_params
                     highest_price_in_trade = max(highest_price_in_trade, price)
-                    stop_loss_atr_multiplier = params.get('stop_loss_atr_multiplier', 2.5)
+                    stop_loss_atr_multiplier = current_params.get('stop_loss_atr_multiplier', 2.5)
 
                     if price <= current_stop_price:
                         sell_price = price * (1 - SLIPPAGE_RATE)
                         capital_usdt += (trading_btc * sell_price) * (1 - FEE_RATE)
                         pnl = (sell_price / buy_price) - 1 if buy_price > 0 else 0
-                        confidence_manager = self.confidence_managers.get(params.get('entry_regime'))
-                        if confidence_manager: confidence_manager.update(pnl)
-                        in_position, trading_btc, last_used_params = False, 0.0, {}
-                        trade_executed_this_step = 1
+                        # Atualiza o confidence manager do regime que originou o trade
+                        entry_confidence_manager = self.confidence_managers.get(current_params.get('entry_regime'))
+                        if entry_confidence_manager: entry_confidence_manager.update(pnl)
+                        in_position, trading_btc, last_used_params = False, 0.0, {}; trade_executed_this_step = 1
                     
-                    elif position_phase == 'INITIAL' and price >= buy_price * (1 + params.get('profit_threshold', 0.01) / 2):
-                        position_phase = 'BREAKEVEN'
-                        current_stop_price = buy_price * (1 + (FEE_RATE * 2))
+                    elif position_phase == 'INITIAL' and price >= buy_price * (1 + current_params.get('profit_threshold', 0.01) / 2):
+                        position_phase = 'TRAILING'
+                        current_stop_price = max(current_stop_price, buy_price * (1 + (FEE_RATE * 2)))
                     
-                    # --- MUDANÇA --- Trailing stop também usa ATR
                     elif position_phase == 'TRAILING':
-                        trailing_stop_multiplier = params.get('trailing_stop_multiplier', 1.5)
+                        trailing_stop_multiplier = current_params.get('trailing_stop_multiplier', 1.5)
                         new_trailing_stop = highest_price_in_trade - (row['atr'] * stop_loss_atr_multiplier * trailing_stop_multiplier)
                         current_stop_price = max(current_stop_price, new_trailing_stop)
 
-                if not in_position and is_trading_allowed:
-                    model, scaler = self.models.get(regime), self.scalers.get(regime)
-                    confidence_manager = self.confidence_managers.get(regime)
+                if not in_position:
+                    if row['volume'] < row['volume_sma_50']:
+                        continue 
+
+                    features_for_prediction = pd.DataFrame(row[self.model_feature_names]).T
+                    scaled_features = scaler.transform(features_for_prediction)
+                    buy_confidence = model.predict_proba(scaled_features)[0][1]
                     
-                    if model and scaler and confidence_manager:
-                        # --- NOVO: FILTRO DE VOLUME ---
-                        if row['volume'] < row['volume_sma_50']:
-                            continue # Pula para a próxima vela
-
-                        features_for_prediction = pd.DataFrame(row[self.model_feature_names]).T
-                        scaled_features = scaler.transform(features_for_prediction)
-                        buy_confidence = model.predict_proba(scaled_features)[0][1]
+                    if buy_confidence > confidence_manager.get_confidence():
+                        base_risk = params.get('risk_per_trade_pct', 0.05)
                         
-                        if buy_confidence > confidence_manager.get_confidence():
-                            # --- NOVA LÓGICA DE RISCO AGRESSIVO E ROBUSTO ---
-                            base_risk = params.get('risk_per_trade_pct', 0.05)
-                            if regime == 'RECUPERACAO': base_risk /= 2
-                            
-                            signal_strength = (buy_confidence - confidence_manager.get_confidence()) / (1.0 - confidence_manager.get_confidence())
-                            aggression_exponent = params.get('aggression_exponent', 2.0)
-                            max_risk_scale = params.get('max_risk_scale', 3.0)
-                            aggression_factor = 0.5 + (signal_strength ** aggression_exponent) * (max_risk_scale - 0.5)
-                            dynamic_risk_pct = base_risk * aggression_factor
-                            
-                            trade_size_usdt = capital_usdt * dynamic_risk_pct
+                        signal_strength = (buy_confidence - confidence_manager.get_confidence()) / (1.0 - confidence_manager.get_confidence())
+                        aggression_exponent = params.get('aggression_exponent', 2.0)
+                        max_risk_scale = params.get('max_risk_scale', 3.0)
+                        min_risk_scale = params.get('min_risk_scale', 0.5)
+                        aggression_factor = min_risk_scale + (signal_strength ** aggression_exponent) * (max_risk_scale - min_risk_scale)
+                        dynamic_risk_pct = base_risk * aggression_factor
+                        
+                        trade_size_usdt = capital_usdt * dynamic_risk_pct
 
-                            # AJUSTE PELA VOLATILIDADE
-                            current_atr = row.get('atr', 0)
-                            long_term_atr = row.get('atr_long_avg', current_atr)
-                            if long_term_atr > 0 and current_atr > 0:
-                                volatility_factor = current_atr / long_term_atr
-                                risk_dampener = np.clip(1 / volatility_factor, 0.6, 1.2)
-                                trade_size_usdt *= risk_dampener
-                            # -----------------------------------------------
+                        current_atr = row.get('atr', 0)
+                        long_term_atr = row.get('atr_long_avg', current_atr)
+                        if long_term_atr > 0 and current_atr > 0:
+                            volatility_factor = current_atr / long_term_atr
+                            risk_dampener = np.clip(1 / volatility_factor, 0.6, 1.2)
+                            trade_size_usdt *= risk_dampener
 
-                            if capital_usdt > 10 and trade_size_usdt > 10:
-                                buy_price_eff = price * (1 + SLIPPAGE_RATE)
-                                amount_to_buy_btc = trade_size_usdt / buy_price_eff
-                                
-                                in_position = True
-                                trading_btc = amount_to_buy_btc
-                                capital_usdt -= trade_size_usdt * (1 + FEE_RATE)
-                                buy_price = buy_price_eff
-                                # --- MUDANÇA: STOP LOSS COM ATR ---
-                                current_stop_price = buy_price_eff - (row['atr'] * params.get('stop_loss_atr_multiplier', 2.5))
-                                
-                                highest_price_in_trade = buy_price_eff
-                                position_phase = 'INITIAL'
-                                last_used_params = {**params, 'entry_regime': regime}
-                                trade_executed_this_step = 1
+                        if capital_usdt > 10 and trade_size_usdt > 10:
+                            buy_price_eff = price * (1 + SLIPPAGE_RATE)
+                            amount_to_buy_btc = trade_size_usdt / buy_price_eff
+                            
+                            in_position = True
+                            trading_btc = amount_to_buy_btc
+                            capital_usdt -= trade_size_usdt * (1 + FEE_RATE)
+                            buy_price = buy_price_eff
+                            current_stop_price = buy_price_eff - (row['atr'] * params.get('stop_loss_atr_multiplier', 2.5))
+                            
+                            highest_price_in_trade = buy_price_eff
+                            position_phase = 'INITIAL'
+                            last_used_params = {**params, 'entry_regime': regime}
+                            trade_executed_this_step = 1
 
             total_portfolio_value = capital_usdt + (trading_btc * price)
             portfolio_history.append({'timestamp': date, 'total_value': total_portfolio_value, 'trade_executed': trade_executed_this_step})
