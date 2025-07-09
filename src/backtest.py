@@ -1,4 +1,4 @@
-# src/backtest.py (VERSÃO 6.0 - AVALIADOR PURO)
+# src/backtest.py (VERSÃO 6.1 - Simulação de Tesouraria)
 
 import numpy as np
 import pandas as pd
@@ -20,7 +20,6 @@ def calculate_sortino_ratio(series, periods_per_year=365*24*60):
     downside_std = downside_returns.std()
     
     if downside_std == 0 or pd.isna(downside_std) or downside_std < 1e-9:
-        # Se não há risco de queda, o Sortino pode ser infinito, retornamos um valor alto mas finito
         return 100.0 if expected_return > 0 else 0.0
         
     sortino = (expected_return * periods_per_year) / (downside_std * np.sqrt(periods_per_year))
@@ -32,6 +31,10 @@ def run_backtest(model, scaler, test_data_with_features: pd.DataFrame, strategy_
     capital_usdt = initial_capital
     trading_btc = 0.0
     
+    # <<< MUDANÇA 1: ADICIONAR A TESOURARIA À SIMULAÇÃO >>>
+    # O valor total do portfólio agora deve considerar o BTC guardado.
+    long_term_btc_holdings = 0.0
+    
     portfolio_history = []
     trade_pnls = []
 
@@ -42,6 +45,8 @@ def run_backtest(model, scaler, test_data_with_features: pd.DataFrame, strategy_
     aggression_exponent = strategy_params.get('aggression_exponent', 2.0)
     max_risk_scale = strategy_params.get('max_risk_scale', 3.0)
     min_risk_scale = strategy_params.get('min_risk_scale', 0.5)
+    profit_threshold = strategy_params.get('profit_threshold', 0.015) # Adicionado para o trailing
+    treasury_allocation_pct = strategy_params.get('treasury_allocation_pct', 0.20) # Novo parâmetro
     
     in_position = False
     buy_price = 0.0
@@ -67,38 +72,47 @@ def run_backtest(model, scaler, test_data_with_features: pd.DataFrame, strategy_
     for date, row in test_data_with_features.iterrows():
         price = row['close']
         
-        # <<< REMOÇÃO DA LÓGICA DE RISCO POR REGIME >>>
-        # O backtest agora é um "avaliador puro". Ele não deve ter sua própria
-        # lógica de estratégia. A responsabilidade de definir o risco para cada
-        # regime agora é 100% do otimizador, tornando a avaliação mais limpa.
-
         if in_position:
             highest_price_in_trade = max(highest_price_in_trade, price)
 
             if price <= current_stop_price:
                 sell_price = price * (1 - SLIPPAGE_RATE)
-                pnl = (trading_btc * sell_price) - (trading_btc * buy_price)
-                trade_pnls.append(pnl)
-                capital_usdt += (trading_btc * sell_price) * (1 - FEE_RATE)
+                
+                # <<< MUDANÇA 2: SIMULAR A LÓGICA COMPLETA DE VENDA >>>
+                revenue_usdt = (trading_btc * sell_price) * (1 - FEE_RATE)
+                pnl_usdt = revenue_usdt - (trading_btc * buy_price)
+                trade_pnls.append(pnl_usdt)
                 pnl_pct = (sell_price / buy_price) - 1 if buy_price > 0 else 0
+                
+                reinvested_usdt = revenue_usdt
+                if pnl_usdt > 0:
+                    treasury_usdt = pnl_usdt * treasury_allocation_pct
+                    reinvested_usdt -= treasury_usdt
+                    long_term_btc_holdings += treasury_usdt / price if price > 0 else 0
+
+                capital_usdt += reinvested_usdt
                 confidence_manager.update(pnl_pct)
                 in_position, trading_btc = False, 0.0
             
+            # Movido para ser checado em cada step enquanto em posição
+            elif position_phase == 'INITIAL' and price >= buy_price * (1 + profit_threshold / 2):
+                position_phase = 'TRAILING'
+                current_stop_price = max(current_stop_price, buy_price * (1 + (FEE_RATE + SLIPPAGE_RATE)))
+
             elif position_phase == 'TRAILING':
-                new_trailing_stop = highest_price_in_trade - (row['atr'] * stop_loss_atr_multiplier * trailing_stop_multiplier)
+                new_trailing_stop = highest_price_in_trade * (1 - (row['atr']/price * stop_loss_atr_multiplier * trailing_stop_multiplier))
                 current_stop_price = max(current_stop_price, new_trailing_stop)
 
+
         if not in_position:
-            # Filtro de volume pode ser mantido, pois é um filtro de condição de entrada
             if row['volume'] < row['volume_sma_50']:
                 pass 
             else:
                 conviction = predictions_buy_proba.get(date, 0)
                 if conviction > confidence_manager.get_confidence():
-                    signal_strength = (conviction - confidence_manager.get_confidence()) / (1.0 - confidence_manager.get_confidence())
+                    signal_strength = (conviction - confidence_manager.get_confidence()) / (1.0 - confidence_manager.get_confidence()) if (1.0 - confidence_manager.get_confidence()) > 0 else 1.0
                     aggression_factor = min_risk_scale + (signal_strength ** aggression_exponent) * (max_risk_scale - min_risk_scale)
                     
-                    # Usa o 'base_risk' diretamente dos parâmetros otimizados
                     dynamic_risk_pct = base_risk * aggression_factor
                     trade_size_usdt = capital_usdt * dynamic_risk_pct
 
@@ -111,34 +125,34 @@ def run_backtest(model, scaler, test_data_with_features: pd.DataFrame, strategy_
 
                     if capital_usdt > 10 and trade_size_usdt > 10:
                         buy_price_eff = price * (1 + SLIPPAGE_RATE)
-                        amount_to_buy_btc = trade_size_usdt / buy_price_eff
-                        
-                        in_position = True
-                        trading_btc = amount_to_buy_btc
-                        capital_usdt -= trade_size_usdt * (1 + FEE_RATE)
-                        buy_price = buy_price_eff
-                        
-                        current_stop_price = buy_price_eff - (row['atr'] * stop_loss_atr_multiplier)
-                        
-                        highest_price_in_trade = buy_price
-                        position_phase = 'INITIAL'
+                        # O custo do trade (incluindo taxa) é deduzido do capital
+                        cost_of_trade = trade_size_usdt * (1 + FEE_RATE)
+                        if capital_usdt >= cost_of_trade:
+                            amount_to_buy_btc = trade_size_usdt / buy_price_eff
+                            
+                            in_position = True
+                            trading_btc = amount_to_buy_btc
+                            capital_usdt -= cost_of_trade
+                            buy_price = buy_price_eff
+                            
+                            current_stop_price = buy_price_eff - (row['atr'] * stop_loss_atr_multiplier)
+                            
+                            highest_price_in_trade = buy_price
+                            position_phase = 'INITIAL'
 
-        total_portfolio_value = capital_usdt + (trading_btc * price)
+        # <<< MUDANÇA 3: CÁLCULO CORRETO DO VALOR TOTAL DO PORTFÓLIO >>>
+        # O valor total agora inclui o capital, a posição aberta e a tesouraria.
+        total_portfolio_value = capital_usdt + (trading_btc * price) + (long_term_btc_holdings * price)
         portfolio_history.append({'timestamp': date, 'total_value': total_portfolio_value})
 
-    # --- CÁLCULO DAS MÉTRICAS FINAIS ---
-
-    # <<< MELHORIA: SAÍDA SEGURA SE NENHUM TRADE FOR FEITO >>>
     if len(trade_pnls) == 0:
-        # Retorna um resultado ruim para que o Optuna possa podar este trial
         return 100.0, 0.0, -1.0, 0, 0.0, 0.0, 0.0
 
     portfolio_df = pd.DataFrame(portfolio_history).set_index('timestamp')
     
     final_value = portfolio_df['total_value'].iloc[-1]
     total_return = (final_value / initial_capital) - 1
-    duration_days = (portfolio_df.index[-1] - portfolio_df.index[0]).days
-    if duration_days < 1: duration_days = 1
+    duration_days = max(1, (portfolio_df.index[-1] - portfolio_df.index[0]).days)
     annualized_return = ((1 + total_return) ** (365.0 / duration_days)) - 1
     
     running_max = portfolio_df['total_value'].cummax()

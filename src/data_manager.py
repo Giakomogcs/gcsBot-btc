@@ -18,7 +18,7 @@ from ta.momentum import StochasticOscillator, RSIIndicator, WilliamsRIndicator
 
 from src.logger import logger
 from src.config import (
-    API_KEY, API_SECRET, QUICK_OPTIMIZE, USE_TESTNET, HISTORICAL_DATA_FILE, KAGGLE_BOOTSTRAP_FILE,
+    API_KEY, API_SECRET, USE_TESTNET, HISTORICAL_DATA_FILE, KAGGLE_BOOTSTRAP_FILE,
     FORCE_OFFLINE_MODE, COMBINED_DATA_CACHE_FILE
 )
 
@@ -60,7 +60,6 @@ class DataManager:
         else:
             logger.info("MODO OFFLINE FORÇADO está ativo.")
     
-    # ▼▼▼ LÓGICA DE FEATURES MOVIDA PARA CÁ ▼▼▼
     def _prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
         logger.debug("Iniciando preparação de features e indicadores técnicos...")
         epsilon = 1e-10
@@ -235,7 +234,7 @@ class DataManager:
         # ... (código inalterado)
         all_dfs = []
         total_days = max(1, (end_date_dt - start_date_dt).days)
-        progress_bar = tqdm(total=total_days, desc=f"Baixando dados de {symbol}", unit="d", leave=False, disable=QUICK_OPTIMIZE)
+        progress_bar = tqdm(total=total_days, desc=f"Baixando dados de {symbol}", unit="d", leave=False, disable=False)
         cursor = start_date_dt
         while cursor < end_date_dt:
             chunk_size_days = 30

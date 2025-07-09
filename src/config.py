@@ -51,7 +51,6 @@ MODEL_METADATA_FILE = os.path.join(DATA_DIR, "model_metadata.json")
 # --- PARÂMETROS PARA A OTIMIZAÇÃO ---
 WFO_TRAIN_MINUTES = int(get_config_var("WFO_TRAIN_MINUTES", 790000)) # ~18 meses para ter dados de vários regimes
 MODEL_VALIDITY_MONTHS = int(get_config_var("MODEL_VALIDITY_MONTHS", 3))
-QUICK_OPTIMIZE = get_config_var("QUICK_OPTIMIZE", "False").lower() == 'true'
 
 # --- PARÂMETROS PARA O MODO DE BACKTEST RÁPIDO ---
 BACKTEST_START_DATE = get_config_var("BACKTEST_START_DATE", "2024-01-01")
@@ -64,3 +63,8 @@ if MODE in ['test', 'trade'] and not FORCE_OFFLINE_MODE and (not API_KEY or not 
 
 if FORCE_OFFLINE_MODE and MODE in ['test', 'trade']:
     sys.exit(f"ERRO DE CONFIGURAÇÃO: O bot não pode rodar em modo '{MODE.upper()}' com 'FORCE_OFFLINE_MODE=True'.")
+
+# --- PARÂMETROS PARA A ESTRATÉGIA DE ACUMULAÇÃO (DCA) ---
+DCA_IN_BEAR_MARKET_ENABLED = get_config_var("DCA_IN_BEAR_MARKET_ENABLED", "True").lower() == 'true'
+DCA_DAILY_AMOUNT_USDT = float(get_config_var("DCA_DAILY_AMOUNT_USDT", 5.0)) # Valor em USDT para comprar a cada 24h
+DCA_MIN_CAPITAL_USDT = float(get_config_var("DCA_MIN_CAPITAL_USDT", 50.0)) # Capital mínimo para iniciar o DCA
