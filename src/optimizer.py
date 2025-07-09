@@ -1,4 +1,4 @@
-# src/optimizer.py (VERSÃO 7.5 - Com Lock para n_jobs=-1)
+# src/optimizer.py (VERSÃO 7.6 - Otimização Calibrada)
 
 import optuna
 import pandas as pd
@@ -25,7 +25,6 @@ from src.config import (
 )
 
 OPTIMIZER_STATUS_FILE = os.path.join(DATA_DIR, 'optimizer_status.json')
-# <<< NOVO >>> Define um arquivo para o lock, garantindo acesso seguro
 OPTIMIZER_STATUS_LOCK_FILE = os.path.join(DATA_DIR, 'optimizer_status.json.lock')
 
 
@@ -69,7 +68,6 @@ class WalkForwardOptimizer:
         except Exception as e:
             logger.error(f"❌ Falha ao salvar metadados finais: {e}")
 
-    # <<< ALTERADO >>> Função agora usa um lock para ser segura em paralelo
     def _progress_callback(self, study, trial):
         """Escreve o status da otimização de forma segura para processos paralelos."""
         lock = FileLock(OPTIMIZER_STATUS_LOCK_FILE, timeout=10)
@@ -99,7 +97,6 @@ class WalkForwardOptimizer:
             except Exception as e:
                 logger.warning(f"Não foi possível escrever o arquivo de status: {e}")
 
-        # Log de texto simples para o arquivo de log, a cada 10 trials
         if trial.number > 0 and trial.number % 10 == 0:
             try:
                 best_value = study.best_value
@@ -108,16 +105,15 @@ class WalkForwardOptimizer:
                 logger.info(f"Progresso: Trial {trial.number}/{self.n_trials_for_cycle}, Aguardando resultado válido...")
 
     def _objective(self, trial, regime_data, regime_blocks):
-        # ... (NENHUMA MUDANÇA NESTE MÉTODO)
         if self.shutdown_requested:
             raise optuna.exceptions.TrialPruned("Shutdown solicitado.")
-        
-        stop_mult = trial.suggest_float('stop_mult', 1.0, 3.5)
-        min_profit_mult = stop_mult * 1.5
-        profit_mult = trial.suggest_float('profit_mult', min_profit_mult, min_profit_mult + 4.0)
+
+        stop_mult = trial.suggest_float('stop_mult', 2.0, 5.0)
+        min_profit_mult = stop_mult * 1.3
+        profit_mult = trial.suggest_float('profit_mult', min_profit_mult, min_profit_mult + 6.0)
 
         params = {
-            'future_periods': trial.suggest_int('future_periods', 20, 180),
+            'future_periods': trial.suggest_int('future_periods', 40, 240),
             'profit_mult': profit_mult, 'stop_mult': stop_mult,
             'stop_loss_atr_multiplier': trial.suggest_float('stop_loss_atr_multiplier', 1.5, 5.0),
             'trailing_stop_multiplier': trial.suggest_float('trailing_stop_multiplier', 1.0, 4.0),
@@ -126,7 +122,8 @@ class WalkForwardOptimizer:
             'aggression_exponent': trial.suggest_float('aggression_exponent', 2.0, 5.0),
             'min_risk_scale': trial.suggest_float('min_risk_scale', 0.2, 0.6),
             'max_risk_scale': trial.suggest_float('max_risk_scale', 3.0, 8.0),
-            'initial_confidence': trial.suggest_float('initial_confidence', 0.60, 0.90),
+            # <<< ALTERADO 3 >>> Permite testar confianças iniciais um pouco mais baixas.
+            'initial_confidence': trial.suggest_float('initial_confidence', 0.55, 0.85),
             'confidence_learning_rate': trial.suggest_float('confidence_learning_rate', 0.01, 0.10),
             'confidence_window_size': trial.suggest_int('confidence_window_size', 5, 30),
             'confidence_pnl_clamp': trial.suggest_float('confidence_pnl_clamp', 0.01, 0.05),
@@ -137,7 +134,7 @@ class WalkForwardOptimizer:
             'max_depth': trial.suggest_int('max_depth', 5, 25),
             'min_child_samples': trial.suggest_int('min_child_samples', 20, 100),
         }
-        
+
         round_trip_cost = (FEE_RATE + SLIPPAGE_RATE) * 2
         if params['profit_threshold'] <= round_trip_cost * 1.5:
             raise optuna.exceptions.TrialPruned("Alvo de lucro muito baixo comparado aos custos.")
@@ -164,17 +161,16 @@ class WalkForwardOptimizer:
         median_profit_factor = metrics_df['profit_factor'].median()
         median_annual_return = metrics_df['annual_return'].median()
 
-        if (metrics_df['trade_count'] < 3).any():
-             raise optuna.exceptions.TrialPruned(f"Um dos folds teve menos de 3 trades.")
-        
+        if (metrics_df['trade_count'] < 2).any():
+             raise optuna.exceptions.TrialPruned(f"Um dos folds teve menos de 2 trades.")
+
         score_principal = (0.5 * median_sortino) + (0.4 * median_profit_factor) + (0.1 * median_annual_return)
         score_principal *= np.log1p(metrics_df['trade_count'].sum()) / 5.0
 
-        if math.isnan(score_principal) or math.isinf(score_principal) or score_principal < 0.25:
+        if math.isnan(score_principal) or math.isinf(score_principal) or score_principal < 0.1:
             raise optuna.exceptions.TrialPruned(f"Score final ({score_principal:.4f}) abaixo do limiar de qualidade.")
-            
-        return score_principal
 
+        return score_principal
 
     def run_optimization_for_regime(self, regime: str, all_recent_data: pd.DataFrame):
         self.current_regime = regime
@@ -195,7 +191,6 @@ class WalkForwardOptimizer:
             return None
 
         study = optuna.create_study(direction='maximize')
-        # <<< ALTERADO >>> Voltando para n_jobs=-1 para usar todos os cores da CPU
         study.optimize(lambda trial: self._objective(trial, regime_data, regime_blocks), n_trials=self.n_trials_for_cycle, n_jobs=-1, callbacks=[self._progress_callback])
 
         try:
@@ -229,7 +224,6 @@ class WalkForwardOptimizer:
             return None
 
     def run(self):
-        # ... (NENHUMA MUDANÇA NESTE MÉTODO)
         logger.info("\n" + "="*80 + "\n--- 🚀 INICIANDO PROCESSO DE OTIMIZAÇÃO POR ESPECIALISTAS 🚀 ---\n" + "="*80)
         optuna.logging.set_verbosity(optuna.logging.WARNING)
 
@@ -272,6 +266,5 @@ class WalkForwardOptimizer:
         finally:
             if os.path.exists(OPTIMIZER_STATUS_FILE):
                 os.remove(OPTIMIZER_STATUS_FILE)
-            # <<< NOVO >>> Garante que o arquivo de lock também seja removido
             if os.path.exists(OPTIMIZER_STATUS_LOCK_FILE):
                 os.remove(OPTIMIZER_STATUS_LOCK_FILE)
