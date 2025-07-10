@@ -1,4 +1,4 @@
-# src/data_manager.py (VERSÃO 5.0 - COM FEATURE ENGINEERING INTEGRADO)
+# src/data_manager.py (VERSÃO 6.0 - FONTE ÚNICA DA VERDADE)
 
 import os
 import datetime
@@ -11,7 +11,6 @@ from binance.exceptions import BinanceAPIException, BinanceRequestException
 from tqdm import tqdm
 from typing import Tuple, List
 
-# Importações de indicadores técnicos movidas para cá
 from ta.volatility import BollingerBands, AverageTrueRange
 from ta.trend import MACD, ADXIndicator, CCIIndicator
 from ta.momentum import StochasticOscillator, RSIIndicator, WilliamsRIndicator
@@ -23,7 +22,6 @@ from src.config import (
 )
 
 def _optimize_memory_usage(df: pd.DataFrame) -> pd.DataFrame:
-    # ... (esta função continua exatamente igual)
     logger.debug("Otimizando uso de memória do DataFrame...")
     if 'market_regime' in df.columns:
         df['market_regime'] = df['market_regime'].astype('category')
@@ -44,7 +42,6 @@ def _optimize_memory_usage(df: pd.DataFrame) -> pd.DataFrame:
 
 class DataManager:
     def __init__(self):
-        # ... (a função __init__ continua exatamente igual)
         self.client = None
         self.is_online = False
         if not FORCE_OFFLINE_MODE:
@@ -59,40 +56,45 @@ class DataManager:
                 self.is_online = False
         else:
             logger.info("MODO OFFLINE FORÇADO está ativo.")
-    
-    def _prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        logger.debug("Iniciando preparação de features e indicadores técnicos...")
+            
+        # Lista de todas as features que serão geradas
+        self.feature_names = [
+            'rsi', 'rsi_1h', 'rsi_4h', 'macd_diff', 'macd_diff_1h', 'stoch_osc', 'adx', 'adx_power',
+            'atr', 'bb_width', 'bb_pband', 'sma_7_25_diff', 'close_sma_25_dist',
+            'price_change_1m', 'price_change_5m', 'dxy_close_change', 'vix_close_change',
+            'gold_close_change', 'tnx_close_change', 'atr_long_avg', 'volume_sma_50',
+            'cci', 'williams_r', 'momentum_10m', 'volatility_ratio', 'sma_50_200_diff'
+        ]
+
+    def _prepare_all_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Calcula todos os indicadores técnicos e features de uma vez.
+        Esta função agora é a ÚNICA fonte de engenharia de features.
+        """
+        logger.info("Iniciando preparação de todas as features e indicadores técnicos...")
         epsilon = 1e-10
         
-        # --- Cálculo de Indicadores Técnicos ---
-        # A coluna 'atr' é a primeira a ser criada, pois é necessária para os regimes
+        # --- Indicadores Técnicos ---
         df['atr'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=14).average_true_range()
-        
         bb = BollingerBands(close=df['close'], window=20, window_dev=2)
         df['bb_width'] = (bb.bollinger_hband() - bb.bollinger_lband()) / (bb.bollinger_mavg() + epsilon)
         df['bb_pband'] = bb.bollinger_pband()
-
         sma_7 = df['close'].rolling(window=7).mean()
         sma_25 = df['close'].rolling(window=25).mean()
         sma_50 = df['close'].rolling(window=50).mean()
         sma_200 = df['close'].rolling(window=200).mean()
         df['sma_7_25_diff'] = (sma_7 - sma_25) / (df['close'] + epsilon)
         df['close_sma_25_dist'] = (df['close'] - sma_25) / (sma_25 + epsilon)
-        
         df['macd_diff'] = MACD(close=df['close']).macd_diff()
-        
         adx_indicator = ADXIndicator(high=df['high'], low=df['low'], close=df['close'], window=14)
         df['adx'] = adx_indicator.adx()
         df['adx_power'] = (adx_indicator.adx_pos() - adx_indicator.adx_neg())
-
         df['price_change_1m'] = df['close'].pct_change(1)
         df['price_change_5m'] = df['close'].pct_change(5)
         df['rsi'] = RSIIndicator(close=df['close'], window=14).rsi()
         df['stoch_osc'] = StochasticOscillator(high=df['high'], low=df['low'], close=df['close']).stoch()
-        
         df['atr_long_avg'] = df['atr'].rolling(window=100).mean()
         df['volume_sma_50'] = df['volume'].rolling(window=50).mean()
-
         df['cci'] = CCIIndicator(high=df['high'], low=df['low'], close=df['close'], window=20).cci()
         df['williams_r'] = WilliamsRIndicator(high=df['high'], low=df['low'], close=df['close'], lbp=14).williams_r()
         df['momentum_10m'] = df['close'].pct_change(10)
@@ -100,13 +102,12 @@ class DataManager:
         df['volatility_ratio'] = atr_short / (df['atr_long_avg'] + epsilon)
         df['sma_50_200_diff'] = (sma_50 - sma_200) / (df['close'] + epsilon)
 
-        macro_map = {
-            'dxy_close': 'dxy_close_change', 'vix_close': 'vix_close_change',
-            'gold_close': 'gold_close_change', 'tnx_close': 'tnx_close_change'
-        }
+        # --- Features Macro ---
+        macro_map = {'dxy_close': 'dxy_close_change', 'vix_close': 'vix_close_change', 'gold_close': 'gold_close_change', 'tnx_close': 'tnx_close_change'}
         for col_in, col_out in macro_map.items():
             df[col_out] = df[col_in].pct_change(60).fillna(0) if col_in in df.columns else 0
 
+        # --- Features Multi-Timeframe ---
         df_1h = df['close'].resample('h').last()
         df['rsi_1h'] = RSIIndicator(close=df_1h, window=14).rsi().reindex(df.index, method='ffill')
         df['macd_diff_1h'] = MACD(close=df_1h).macd_diff().reindex(df.index, method='ffill')
@@ -115,12 +116,11 @@ class DataManager:
         for col in ['rsi_1h', 'macd_diff_1h', 'rsi_4h']:
             df[col] = df[col].bfill().ffill()
 
-        logger.debug("Preparação de features concluída.")
+        logger.debug("Cálculo bruto das features concluído.")
         return df
 
     def _add_market_regime(self, df: pd.DataFrame) -> pd.DataFrame:
         logger.info("Calculando regimes de mercado (Camada 2: Tendência + Volatilidade)...")
-        # A verificação de 'atr' agora vai passar, pois _prepare_features foi chamado antes
         if df.empty or 'close' not in df.columns or 'atr' not in df.columns:
             logger.warning("DataFrame vazio ou sem colunas 'close'/'atr'. Não é possível calcular regimes.")
             df['market_regime'] = 'INDETERMINADO'
@@ -129,32 +129,21 @@ class DataManager:
         df_daily = df['close'].resample('D').last()
         sma_50d = df_daily.rolling(window=50).mean()
         sma_200d = df_daily.rolling(window=200).mean()
-        trend_conditions = [
-            (df_daily > sma_50d) & (sma_50d > sma_200d),
-            (df_daily > sma_200d) & (df_daily < sma_50d),
-            (df_daily < sma_200d)
-        ]
+        trend_conditions = [(df_daily > sma_50d) & (sma_50d > sma_200d), (df_daily > sma_200d) & (df_daily < sma_50d), (df_daily < sma_200d)]
         trend_outcomes = ['BULL_FORTE', 'RECUPERACAO', 'BEAR']
         regime_trend = np.select(trend_conditions, trend_outcomes, default='LATERAL')
         regime_trend = pd.Series(regime_trend, index=df_daily.index)
-
         atr_daily = df['atr'].resample('D').mean()
         atr_sma_50 = atr_daily.rolling(window=50).mean()
         volatility_regime = np.where(atr_daily > atr_sma_50, '_VOLATIL', '_CALMO')
         volatility_regime = pd.Series(volatility_regime, index=atr_daily.index)
-
         combined_regime = regime_trend + volatility_regime
-        
         df['market_regime'] = combined_regime.reindex(df.index, method='ffill')
         df['market_regime'] = df['market_regime'].bfill()
-
         logger.debug("Regimes de mercado calculados.")
         return df
 
-    # ... (as funções _fetch_and_update_macro_data, get_historical_data_by_batch, 
-    #      _fetch_and_manage_btc_data, e _preprocess_kaggle_data continuam exatamente iguais) ...
     def _fetch_and_update_macro_data(self, caminho_dados: str = 'data/macro'):
-        # ... (código inalterado)
         if not self.is_online:
             logger.debug("Modo offline. Pulando atualização de dados macro.")
             return
@@ -203,7 +192,6 @@ class DataManager:
         logger.debug("Verificação de dados macro concluída.")
 
     def _load_and_unify_local_macro_data(self, caminho_dados: str = 'data/macro') -> pd.DataFrame:
-        # ... (código inalterado)
         logger.debug("Padronizando e unificando dados macro locais...")
         nomes_ativos = ['dxy', 'gold', 'tnx', 'vix']
         lista_dataframes = []
@@ -231,7 +219,6 @@ class DataManager:
         return df_final
     
     def get_historical_data_by_batch(self, symbol, interval, start_date_dt, end_date_dt):
-        # ... (código inalterado)
         all_dfs = []
         total_days = max(1, (end_date_dt - start_date_dt).days)
         progress_bar = tqdm(total=total_days, desc=f"Baixando dados de {symbol}", unit="d", leave=False, disable=False)
@@ -255,7 +242,6 @@ class DataManager:
         return pd.concat(all_dfs) if all_dfs else pd.DataFrame()
 
     def _fetch_and_manage_btc_data(self, symbol, interval='1m'):
-        # ... (código inalterado)
         end_utc = datetime.datetime.now(datetime.timezone.utc).replace(second=0, microsecond=0)
         
         if os.path.exists(HISTORICAL_DATA_FILE):
@@ -299,7 +285,6 @@ class DataManager:
         return pd.DataFrame()
         
     def _preprocess_kaggle_data(self, df_kaggle: pd.DataFrame) -> pd.DataFrame:
-        # ... (código inalterado)
         logger.debug("Pré-processando dados do Kaggle...")
         column_mapping = {'Timestamp': 'timestamp', 'Open': 'open', 'High': 'high', 'Low': 'low', 'Close': 'close'}
         possible_volume_names = ['Volume_(BTC)', 'Volume', 'Volume (BTC)', 'Volume (Currency)', 'Volume USD']
@@ -317,30 +302,29 @@ class DataManager:
         logger.debug(f"Processamento do Kaggle concluído. {len(df)} registros válidos carregados.")
         return df
 
-    def update_and_load_data(self, symbol, interval='1m'):
+    def update_and_load_data(self, symbol, interval='1m') -> pd.DataFrame:
         """
         Orquestra todo o processo de carregamento, unificação e preparação de dados,
-        incluindo a engenharia de features.
+        incluindo a engenharia de features e o shift para evitar lookahead bias.
         """
+        # --- Lógica de Cache (Melhorada) ---
         if os.path.exists(COMBINED_DATA_CACHE_FILE):
             logger.debug(f"Arquivo de cache encontrado em '{COMBINED_DATA_CACHE_FILE}'.")
             df_cache = pd.read_csv(COMBINED_DATA_CACHE_FILE, index_col=0, parse_dates=True, dtype={'market_regime': 'category'})
             df_cache.index = pd.to_datetime(df_cache.index, utc=True)
-
             if not self.is_online:
                 logger.info("✅ Modo offline. Carregando dados diretamente do cache existente.")
                 return _optimize_memory_usage(df_cache)
-
             last_cache_time = df_cache.index.max().to_pydatetime()
             now_utc_minute = datetime.datetime.now(datetime.timezone.utc).replace(second=0, microsecond=0)
-            
             if (now_utc_minute - last_cache_time) < datetime.timedelta(minutes=5):
                 logger.info("✅ Cache está atualizado! Carregando dados unificados diretamente do cache.")
                 return _optimize_memory_usage(df_cache)
             else:
                 logger.info("Cache está desatualizado. Reconstruindo...")
         
-        logger.info("Iniciando processo de unificação de dados (cache não disponível, obsoleto ou modo online).")
+        # --- Processo Completo de Reconstrução de Dados ---
+        logger.info("Iniciando processo de unificação de dados (cache não disponível ou obsoleto).")
         
         self._fetch_and_update_macro_data()
         df_btc = self._fetch_and_manage_btc_data(symbol, interval)
@@ -355,20 +339,29 @@ class DataManager:
         else:
             df_combined = df_btc
 
-        # <<< NOVA ORDEM CORRETA >>>
-        # 1. Primeiro, preparamos todas as features, incluindo o 'atr'.
-        df_with_features = self._prepare_features(df_combined)
+        # 1. Preparamos todas as features.
+        df_with_features = self._prepare_all_features(df_combined)
         
-        # 2. Agora, com o 'atr' presente, podemos calcular os regimes.
+        # 2. Com as features prontas, calculamos os regimes.
         df_with_regimes = self._add_market_regime(df_with_features)
 
-        logger.info("Filtrando os dados para manter apenas registros de 2017 em diante...")
+        logger.info("Filtrando dados de 2017 em diante e tratando valores ausentes/infinitos...")
         df_filtered = df_with_regimes[df_with_regimes.index >= '2017-01-01'].copy()
+        
+        # <<< CORREÇÃO CRÍTICA >>>
+        # 3. Aplicamos o SHIFT(1) para evitar lookahead bias ANTES de salvar no cache.
+        # Isso garante que os dados usados para treino e operação real sejam idênticos.
+        logger.info("Aplicando shift(1) nas features para evitar lookahead bias...")
+        df_filtered[self.feature_names] = df_filtered[self.feature_names].shift(1)
+        
+        # 4. Removemos quaisquer linhas que ficaram com NaNs após o shift e o join.
+        df_filtered.replace([np.inf, -np.inf], np.nan, inplace=True)
+        df_filtered.dropna(inplace=True)
         
         df_final = _optimize_memory_usage(df_filtered)
         
-        logger.info(f"Salvando dados unificados e com features no arquivo de cache: '{COMBINED_DATA_CACHE_FILE}'")
+        logger.info(f"Salvando dados unificados e prontos para treino no cache: '{COMBINED_DATA_CACHE_FILE}'")
         df_final.to_csv(COMBINED_DATA_CACHE_FILE)
         
-        logger.info("Processo de coleta e combinação de dados concluído.")
+        logger.info("Processo de coleta e preparação de dados concluído com sucesso.")
         return df_final

@@ -28,6 +28,7 @@ API_SECRET = get_config_var("BINANCE_TESTNET_API_SECRET") if USE_TESTNET else ge
 MAX_USDT_ALLOCATION = float(get_config_var("MAX_USDT_ALLOCATION", 1000.0))
 FEE_RATE = float(get_config_var("FEE_RATE", 0.001))
 SLIPPAGE_RATE = float(get_config_var("SLIPPAGE_RATE", 0.0005))
+IOF_RATE = float(get_config_var("IOF_RATE", 0.0038)) # IOF de 0.38%
 
 # --- CONFIGURAÇÕES DE DIRETÓRIOS E ARQUIVOS ---
 DATA_DIR = "data"
