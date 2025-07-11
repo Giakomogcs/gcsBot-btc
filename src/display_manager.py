@@ -1,4 +1,4 @@
-# src/display_manager.py (VERSÃO 2.0 - Desacoplado do Optuna)
+# src/display_manager.py (VERSÃO 4.2 - Final e Refinada)
 
 import os
 import sys
@@ -8,74 +8,94 @@ from tabulate import tabulate
 import time
 
 def clear_screen():
-    """Limpa a tela do terminal."""
     os.system('cls' if os.name == 'nt' else 'clear')
 
-# Função de barra de progresso para a otimização (sem alterações)
 def get_progress_bar(progress, total, length=40):
-    if total == 0: percent = 0
-    else: percent = length * (progress / total)
+    if total == 0:
+        percent = 0
+    else:
+        percent = length * (progress / total)
     filled = int(percent)
     bar = '█' * filled + '-' * (length - filled)
     return f"|{bar}| {progress}/{total}"
 
 def display_optimization_dashboard(status_data: dict):
-    """Exibe o painel de controle para o modo de otimização a partir de um dicionário de status."""
+    """Exibe o painel de controle completo com resumo e análise de poda."""
     clear_screen()
-    title = "🚀 OTIMIZANDO ESTRATÉGIAS DE TRADING 🚀"
-    print(f"{'='*60}\n{title:^60}\n{'='*60}")
-    
-    # Extrai os dados do dicionário
-    regime_atual = status_data.get('regime_atual', 'N/A')
-    n_trials = status_data.get('n_trials', 0)
-    total_trials = status_data.get('total_trials', 0)
-    start_time = status_data.get('start_time', time.time())
-    n_complete = status_data.get('n_complete', 0)
-    n_pruned = status_data.get('n_pruned', 0)
-    n_running = status_data.get('n_running', 0)
-    
-    elapsed_time = time.time() - start_time
-    progress_bar = get_progress_bar(n_trials, total_trials)
-    
-    print(f"\nRegime Atual: [ {regime_atual.upper()} ]")
-    print(f"Progresso:    {progress_bar}")
-    print(f"Status:       Completos: {n_complete}, Podados: {n_pruned}, Em Execução: {n_running}")
-    print(f"Tempo Decorrido: {time.strftime('%H:%M:%S', time.gmtime(elapsed_time))}")
+    title = "🏭 FÁBRICA DE ESPECIALISTAS GCS-BOT 🏭"
+    print(f"{'='*80}\n{title:^80}\n{'='*80}")
 
-    print("\n--- 🏆 Melhores Resultados Até Agora ---")
-    
-    best_value = status_data.get('best_value')
-    best_params = status_data.get('best_params')
-
-    if best_value is not None and best_params is not None:
-        print(f"Melhor Score: {best_value:.4f}")
-        
-        # Para evitar tabelas muito grandes
-        if len(best_params) > 10:
-             params_to_show = dict(list(best_params.items())[:10])
-             params_to_show['...'] = '...'
+    # --- Seção 1: Resumo dos Especialistas Já Concluídos ---
+    completed = status_data.get('completed_specialists', {})
+    if completed:
+        print("\n--- ✅ ESPECIALISTAS CONCLUÍDOS ---")
+        summary_data = []
+        headers = ["Especialista", "Status", "Melhor Score", "Modelo Salvo"]
+        for name, results in completed.items():
+            if results.get('status') in ['Optimized and Saved', 'Skipped - Low Score', 'Skipped - All Trials Pruned']:
+                summary_data.append([
+                    name,
+                    results.get('status'),
+                    f"{results.get('score', 0):.4f}",
+                    results.get('model_file', 'N/A')
+                ])
+        if summary_data:
+            print(tabulate(summary_data, headers=headers, tablefmt="heavy_grid"))
         else:
-            params_to_show = best_params
+            print("Nenhum especialista concluiu seu ciclo de otimização ainda...")
 
-        params_df = pd.DataFrame(list(params_to_show.items()), columns=['Parâmetro', 'Valor'])
-        print(tabulate(params_df, headers="keys", tablefmt="heavy_grid", showindex=False))
+    # --- Seção 2: Otimização em Andamento ---
+    print("\n--- 🔄 OTIMIZAÇÃO ATUAL ---")
+    regime_atual = status_data.get('regime_atual', 'Aguardando...')
+    progresso_str = f"Progresso: {get_progress_bar(status_data.get('n_trials', 0), status_data.get('total_trials', 0))}"
+    status_str = f"Status: Completos: {status_data.get('n_complete', 0)}, Podados: {status_data.get('n_pruned', 0)}, Em Execução: {status_data.get('n_running', 0)}"
+    tempo_str = f"Tempo Decorrido: {time.strftime('%H:%M:%S', time.gmtime(time.time() - status_data.get('start_time', time.time())))}"
+    print(f"Especialista: [ {regime_atual.upper()} ]\n{progresso_str}\n{status_str}\n{tempo_str}")
+
+    print("\n--- 📊 PLACAR GERAL DE PODAS (ACUMULADO) ---")
+    reason_summary = status_data.get('pruning_reason_summary', {})
+    if reason_summary:
+        summary_data = [[reason, count] for reason, count in reason_summary.items()]
+        print(tabulate(summary_data, headers=["Motivo da Poda", "Contagem Total"], tablefmt="heavy_grid"))
     else:
-        print("Ainda aguardando o primeiro trial ser concluído com sucesso...")
+        print("Nenhum trial foi podado ainda.")
+
+    # --- Seção 3: Detalhes do Melhor Resultado Encontrado ---
+    print("\n--- 🏆 MELHORES RESULTADOS (ESPECIALISTA ATUAL) ---")
+    best_trial_data = status_data.get('best_trial_data')
+    if best_trial_data:
+        user_attrs = best_trial_data.get('user_attrs', {})
+        details_data = [
+            ["Melhor Score", f"{best_trial_data.get('value', 0.0):.4f}"],
+            ["Total de Trades (simulado)", user_attrs.get("total_trades", "N/A")],
+            ["Sortino Ratio (mediana)", f"{user_attrs.get('median_sortino', 0):.2f}"],
+            ["Profit Factor (mediana)", f"{user_attrs.get('median_profit_factor', 0):.2f}"]
+        ]
+        print(tabulate(details_data, tablefmt="plain"))
+    else:
+        print("Aguardando o primeiro trial ser concluído com sucesso...")
+
+    # --- Seção 4: Análise de Trials Podados ---
+    print("\n--- 🕵️ ANÁLISE DE PODAS RECENTES (ÚLTIMOS 5) ---")
+    pruned_history = status_data.get('pruned_trials_history', [])
+    if pruned_history:
+        pruned_data = [[item['number'], item['reason']] for item in reversed(pruned_history)]
+        print(tabulate(pruned_data, headers=["Trial #", "Motivo da Poda"], tablefmt="heavy_grid"))
+    else:
+        print("Nenhum trial foi podado ainda nesta sessão.")
         
     print(f"\nÚltima atualização: {datetime.now().strftime('%H:%M:%S')}")
     sys.stdout.flush()
 
-
 def display_trading_dashboard(status_data: dict):
     """Exibe o painel de controle para o modo de trading a partir de um dicionário de status."""
     if not sys.stdout.isatty():
-        return # Não tenta limpar a tela se não for um terminal interativo
+        return
     
     clear_screen()
     title = "🤖 GCS-BOT EM OPERAÇÃO 🤖"
     print(f"{'='*70}\n{title:^70}\n{'='*70}")
 
-    # --- Seção 1: Portfólio ---
     portfolio = status_data.get('portfolio', {})
     current_price = portfolio.get('current_price', 0)
     total_value = portfolio.get('total_value_usdt', 0)
@@ -92,7 +112,6 @@ def display_trading_dashboard(status_data: dict):
         ["Valor Total (USDT)", f"💎 ${total_value:,.2f}"],
     ]
     
-    # --- Seção 2: Performance da Sessão ---
     session_stats = status_data.get('session_stats', {})
     trades = session_stats.get('trades', 0)
     wins = session_stats.get('wins', 0)
@@ -108,19 +127,14 @@ def display_trading_dashboard(status_data: dict):
         ["Crescimento na Sessão", growth_display],
     ]
     
-    # --- Seção 3: Status do Cérebro do Bot ---
     bot_status = status_data.get('bot_status', {})
-    active_specialist = bot_status.get('active_specialist', 'N/A')
-    confidence_threshold = bot_status.get('confidence_threshold', 0)
-    
     status_info = [
         ["Regime de Mercado Atual", bot_status.get('market_regime', 'N/A')],
-        ["Especialista Ativo", active_specialist],
-        ["Confiança Mínima (Alvo)", f"{confidence_threshold:.2%}"],
+        ["Especialista Ativo", bot_status.get('active_specialist', 'N/A')],
+        ["Confiança Mínima (Alvo)", f"{bot_status.get('confidence_threshold', 0):.2%}"],
         ["Último Evento", bot_status.get('last_event_message', '')[:65]],
     ]
     
-    # --- Seção 4: Último Especialista que Operou ---
     last_op = status_data.get('last_operation', {})
     op_color = "🟢" if last_op.get('pnl_pct', 0) >= 0 else "🔴"
     
