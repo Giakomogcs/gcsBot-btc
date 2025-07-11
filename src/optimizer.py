@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 # src/optimizer.py (VERSÃO 8.7 - Final com Placar Geral Acumulativo)
-=======
-# src/optimizer.py (VERSÃO 8.6 - Com Contagem Agregada de Podas)
->>>>>>> 95e35a27dc4d04ede3632d6004071bcd0923a05d
 
 import optuna
 import pandas as pd
@@ -80,7 +76,6 @@ class WalkForwardOptimizer:
     def _progress_callback(self, study, trial):
         lock = FileLock(OPTIMIZER_STATUS_LOCK_FILE, timeout=10)
         with lock:
-<<<<<<< HEAD
             current_pruning_counts = defaultdict(int)
             pruned_trials_current_study = []
             for t in study.trials:
@@ -100,34 +95,11 @@ class WalkForwardOptimizer:
                 "total_trials": self.n_trials_for_cycle, "start_time": self.start_time,
                 "n_complete": len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]),
                 "n_pruned": len(pruned_trials_current_study),
-=======
-            pruning_reason_counts = defaultdict(int)
-            pruned_trials = []
-            for t in study.trials:
-                if t.state == optuna.trial.TrialState.PRUNED:
-                    reason = t.user_attrs.get("pruned_reason", "Desconhecido")
-                    pruning_reason_counts[reason] += 1
-                    pruned_trials.append(t)
-            
-            pruned_history = [{"number": t.number, "reason": t.user_attrs.get("pruned_reason", "N/A")} for t in pruned_trials]
-
-            status_data = {
-                "regime_atual": self.current_regime,
-                "n_trials": len(study.trials),
-                "total_trials": self.n_trials_for_cycle,
-                "start_time": self.start_time,
-                "n_complete": len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]),
-                "n_pruned": len(pruned_trials),
->>>>>>> 95e35a27dc4d04ede3632d6004071bcd0923a05d
                 "n_running": len([t for t in study.trials if t.state == optuna.trial.TrialState.RUNNING]),
                 "best_trial_data": None,
                 "completed_specialists": self.optimization_summary,
                 "pruned_trials_history": pruned_history[-5:],
-<<<<<<< HEAD
                 "pruning_reason_summary": dict(total_pruning_counts)
-=======
-                "pruning_reason_summary": dict(pruning_reason_counts)
->>>>>>> 95e35a27dc4d04ede3632d6004071bcd0923a05d
             }
             try:
                 best_trial = study.best_trial
@@ -275,11 +247,7 @@ class WalkForwardOptimizer:
             self.optimization_summary[name] = {'status': 'Skipped - Low Score', 'score': best_score}
 
     def run(self):
-<<<<<<< HEAD
         logger.info("\n" + "="*80 + "\n--- 🚀 INICIANDO PROCESSO DE OTIMIZAÇÃO (V8.7) 🚀 ---\n" + "="*80)
-=======
-        logger.info("\n" + "="*80 + "\n--- 🚀 INICIANDO PROCESSO DE OTIMIZAÇÃO (V8.6) 🚀 ---\n" + "="*80)
->>>>>>> 95e35a27dc4d04ede3632d6004071bcd0923a05d
         optuna.logging.set_verbosity(optuna.logging.WARNING)
 
         recent_data = self.full_data.tail(WFO_TRAIN_MINUTES).copy()
