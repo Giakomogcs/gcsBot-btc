@@ -32,13 +32,16 @@ def display_optimization_dashboard(status_data: dict):
         summary_data = []
         headers = ["Especialista", "Status", "Melhor Score", "Modelo Salvo"]
         for name, results in completed.items():
-            if results.get('status') in ['Optimized and Saved', 'Skipped - Low Score', 'Skipped - All Trials Pruned']:
-                summary_data.append([
-                    name,
-                    results.get('status'),
-                    f"{results.get('score', 0):.4f}",
-                    results.get('model_file', 'N/A')
-                ])
+            # Acessando 'score' com um valor padrão para evitar erros se a chave não existir
+            score_value = results.get('score')
+            score_str = f"{score_value:.4f}" if score_value is not None else "N/A"
+            
+            summary_data.append([
+                name,
+                results.get('status', 'N/A'),
+                score_str,
+                results.get('model_file', 'N/A')
+            ])
         if summary_data:
             print(tabulate(summary_data, headers=headers, tablefmt="heavy_grid"))
         else:
@@ -52,17 +55,12 @@ def display_optimization_dashboard(status_data: dict):
     tempo_str = f"Tempo Decorrido: {time.strftime('%H:%M:%S', time.gmtime(time.time() - status_data.get('start_time', time.time())))}"
     print(f"Especialista: [ {regime_atual.upper()} ]\n{progresso_str}\n{status_str}\n{tempo_str}")
 
-    print("\n--- 📊 PLACAR GERAL DE PODAS (ACUMULADO) ---")
-    reason_summary = status_data.get('pruning_reason_summary', {})
-    if reason_summary:
-        summary_data = [[reason, count] for reason, count in reason_summary.items()]
-        print(tabulate(summary_data, headers=["Motivo da Poda", "Contagem Total"], tablefmt="heavy_grid"))
-    else:
-        print("Nenhum trial foi podado ainda.")
-
     # --- Seção 3: Detalhes do Melhor Resultado Encontrado ---
     print("\n--- 🏆 MELHORES RESULTADOS (ESPECIALISTA ATUAL) ---")
     best_trial_data = status_data.get('best_trial_data')
+    
+    # <<< CORREÇÃO APLICADA AQUI >>>
+    # Verifica se 'best_trial_data' não é nulo antes de tentar acessar seus detalhes.
     if best_trial_data:
         user_attrs = best_trial_data.get('user_attrs', {})
         details_data = [
@@ -72,18 +70,22 @@ def display_optimization_dashboard(status_data: dict):
             ["Profit Factor (mediana)", f"{user_attrs.get('median_profit_factor', 0):.2f}"]
         ]
         print(tabulate(details_data, tablefmt="plain"))
+
+        # Adicionando a exibição dos melhores parâmetros
+        best_params = best_trial_data.get('params')
+        if best_params:
+            print("\nMelhores Parâmetros:")
+            # Limita a exibição para não poluir a tela
+            params_to_show = dict(list(best_params.items())[:8])
+            if len(best_params) > 8:
+                params_to_show['...'] = '...'
+            
+            params_df = pd.DataFrame(list(params_to_show.items()), columns=['Parâmetro', 'Valor'])
+            print(tabulate(params_df, headers="keys", tablefmt="heavy_grid", showindex=False))
+
     else:
         print("Aguardando o primeiro trial ser concluído com sucesso...")
 
-    # --- Seção 4: Análise de Trials Podados ---
-    print("\n--- 🕵️ ANÁLISE DE PODAS RECENTES (ÚLTIMOS 5) ---")
-    pruned_history = status_data.get('pruned_trials_history', [])
-    if pruned_history:
-        pruned_data = [[item['number'], item['reason']] for item in reversed(pruned_history)]
-        print(tabulate(pruned_data, headers=["Trial #", "Motivo da Poda"], tablefmt="heavy_grid"))
-    else:
-        print("Nenhum trial foi podado ainda nesta sessão.")
-        
     print(f"\nÚltima atualização: {datetime.now().strftime('%H:%M:%S')}")
     sys.stdout.flush()
 
