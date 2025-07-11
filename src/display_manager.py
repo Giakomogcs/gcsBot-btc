@@ -32,6 +32,10 @@ def display_optimization_dashboard(status_data: dict):
         summary_data = []
         headers = ["Especialista", "Status", "Melhor Score", "Modelo Salvo"]
         for name, results in completed.items():
+<<<<<<< HEAD
+=======
+            # Apenas mostra o resultado final de um ciclo de otimização, não os fallbacks
+>>>>>>> 95e35a27dc4d04ede3632d6004071bcd0923a05d
             if results.get('status') in ['Optimized and Saved', 'Skipped - Low Score', 'Skipped - All Trials Pruned']:
                 summary_data.append([
                     name,
@@ -52,7 +56,11 @@ def display_optimization_dashboard(status_data: dict):
     tempo_str = f"Tempo Decorrido: {time.strftime('%H:%M:%S', time.gmtime(time.time() - status_data.get('start_time', time.time())))}"
     print(f"Especialista: [ {regime_atual.upper()} ]\n{progresso_str}\n{status_str}\n{tempo_str}")
 
+<<<<<<< HEAD
     print("\n--- 📊 PLACAR GERAL DE PODAS (ACUMULADO) ---")
+=======
+    print("\n--- 📊 PLACAR GERAL DE PODAS (TODOS OS ESPECIALISTAS) ---")
+>>>>>>> 95e35a27dc4d04ede3632d6004071bcd0923a05d
     reason_summary = status_data.get('pruning_reason_summary', {})
     if reason_summary:
         summary_data = [[reason, count] for reason, count in reason_summary.items()]
@@ -61,7 +69,11 @@ def display_optimization_dashboard(status_data: dict):
         print("Nenhum trial foi podado ainda.")
 
     # --- Seção 3: Detalhes do Melhor Resultado Encontrado ---
+<<<<<<< HEAD
     print("\n--- 🏆 MELHORES RESULTADOS (ESPECIALISTA ATUAL) ---")
+=======
+    print("\n--- 🏆 MELHORES RESULTADOS (ATÉ AGORA) ---")
+>>>>>>> 95e35a27dc4d04ede3632d6004071bcd0923a05d
     best_trial_data = status_data.get('best_trial_data')
     if best_trial_data:
         user_attrs = best_trial_data.get('user_attrs', {})
@@ -76,7 +88,11 @@ def display_optimization_dashboard(status_data: dict):
         print("Aguardando o primeiro trial ser concluído com sucesso...")
 
     # --- Seção 4: Análise de Trials Podados ---
+<<<<<<< HEAD
     print("\n--- 🕵️ ANÁLISE DE PODAS RECENTES (ÚLTIMOS 5) ---")
+=======
+    print("\n--- 🕵️ ANÁLISE DE TRIALS PODADOS (ÚLTIMOS 5) ---")
+>>>>>>> 95e35a27dc4d04ede3632d6004071bcd0923a05d
     pruned_history = status_data.get('pruned_trials_history', [])
     if pruned_history:
         pruned_data = [[item['number'], item['reason']] for item in reversed(pruned_history)]
