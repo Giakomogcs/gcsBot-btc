@@ -1,4 +1,4 @@
-# src/data_manager.py (VERSÃO 6.0 - FONTE ÚNICA DA VERDADE)
+# src/data_manager.py (VERSÃO 6.3 - SINAL MACRO E CORREÇÃO DE WARNING)
 
 import os
 import datetime
@@ -57,20 +57,17 @@ class DataManager:
         else:
             logger.info("MODO OFFLINE FORÇADO está ativo.")
             
-        # Lista de todas as features que serão geradas
         self.feature_names = [
             'rsi', 'rsi_1h', 'rsi_4h', 'macd_diff', 'macd_diff_1h', 'stoch_osc', 'adx', 'adx_power',
             'atr', 'bb_width', 'bb_pband', 'sma_7_25_diff', 'close_sma_25_dist',
             'price_change_1m', 'price_change_5m', 'dxy_close_change', 'vix_close_change',
             'gold_close_change', 'tnx_close_change', 'atr_long_avg', 'volume_sma_50',
-            'cci', 'williams_r', 'momentum_10m', 'volatility_ratio', 'sma_50_200_diff'
+            'cci', 'williams_r', 'momentum_10m', 'volatility_ratio', 'sma_50_200_diff',
+            'btc_dxy_corr_30d', 'btc_vix_corr_30d',
+            'dxy_change_X_bull', 'dxy_change_X_bear', 'dxy_change_X_lateral'
         ]
 
     def _prepare_all_features(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Calcula todos os indicadores técnicos e features de uma vez.
-        Esta função agora é a ÚNICA fonte de engenharia de features.
-        """
         logger.info("Iniciando preparação de todas as features e indicadores técnicos...")
         epsilon = 1e-10
         
@@ -105,7 +102,26 @@ class DataManager:
         # --- Features Macro ---
         macro_map = {'dxy_close': 'dxy_close_change', 'vix_close': 'vix_close_change', 'gold_close': 'gold_close_change', 'tnx_close': 'tnx_close_change'}
         for col_in, col_out in macro_map.items():
-            df[col_out] = df[col_in].pct_change(60).fillna(0) if col_in in df.columns else 0
+            df[col_out] = df[col_in].pct_change(1440).fillna(0) if col_in in df.columns else 0.0
+
+        # --- Suíte de Features de Correlação Macro ---
+        logger.debug("Calculando suíte de correlações macro (BTC vs DXY, BTC vs VIX)...")
+        macro_corr_assets = {'dxy': 'dxy_close', 'vix': 'vix_close'}
+        for asset_name, asset_col in macro_corr_assets.items():
+            feature_name = f'btc_{asset_name}_corr_30d'
+            if asset_col in df.columns:
+                df_daily_btc = df['close'].resample('D').last()
+                df_daily_asset = df[asset_col].resample('D').last()
+                btc_returns = df_daily_btc.pct_change()
+                asset_returns = df_daily_asset.pct_change()
+                rolling_corr = btc_returns.rolling(window=30).corr(asset_returns)
+                df[feature_name] = rolling_corr.reindex(df.index, method='ffill')
+                
+                # === CORREÇÃO DO FUTUREWARNING ===
+                # Substituímos .bfill(inplace=True) pela forma recomendada
+                df[feature_name] = df[feature_name].bfill()
+            else:
+                df[feature_name] = 0.0
 
         # --- Features Multi-Timeframe ---
         df_1h = df['close'].resample('h').last()
@@ -118,7 +134,7 @@ class DataManager:
 
         logger.debug("Cálculo bruto das features concluído.")
         return df
-
+        
     def _add_market_regime(self, df: pd.DataFrame) -> pd.DataFrame:
         logger.info("Calculando regimes de mercado (Camada 2: Tendência + Volatilidade)...")
         if df.empty or 'close' not in df.columns or 'atr' not in df.columns:
@@ -139,10 +155,12 @@ class DataManager:
         volatility_regime = pd.Series(volatility_regime, index=atr_daily.index)
         combined_regime = regime_trend + volatility_regime
         df['market_regime'] = combined_regime.reindex(df.index, method='ffill')
+        # === CORREÇÃO DO FUTUREWARNING ===
         df['market_regime'] = df['market_regime'].bfill()
         logger.debug("Regimes de mercado calculados.")
         return df
-
+    
+    # ... (O restante do arquivo permanece idêntico) ...
     def _fetch_and_update_macro_data(self, caminho_dados: str = 'data/macro'):
         if not self.is_online:
             logger.debug("Modo offline. Pulando atualização de dados macro.")
@@ -303,11 +321,6 @@ class DataManager:
         return df
 
     def update_and_load_data(self, symbol, interval='1m') -> pd.DataFrame:
-        """
-        Orquestra todo o processo de carregamento, unificação e preparação de dados,
-        incluindo a engenharia de features e o shift para evitar lookahead bias.
-        """
-        # --- Lógica de Cache (Melhorada) ---
         if os.path.exists(COMBINED_DATA_CACHE_FILE):
             logger.debug(f"Arquivo de cache encontrado em '{COMBINED_DATA_CACHE_FILE}'.")
             df_cache = pd.read_csv(COMBINED_DATA_CACHE_FILE, index_col=0, parse_dates=True, dtype={'market_regime': 'category'})
@@ -323,7 +336,6 @@ class DataManager:
             else:
                 logger.info("Cache está desatualizado. Reconstruindo...")
         
-        # --- Processo Completo de Reconstrução de Dados ---
         logger.info("Iniciando processo de unificação de dados (cache não disponível ou obsoleto).")
         
         self._fetch_and_update_macro_data()
@@ -339,22 +351,25 @@ class DataManager:
         else:
             df_combined = df_btc
 
-        # 1. Preparamos todas as features.
         df_with_features = self._prepare_all_features(df_combined)
-        
-        # 2. Com as features prontas, calculamos os regimes.
         df_with_regimes = self._add_market_regime(df_with_features)
+
+        logger.info("Calculando features de interação (Camada 3: Tática Avançada)...")
+        if 'dxy_close_change' in df_with_regimes.columns:
+            df_with_regimes['dxy_change_X_bull'] = df_with_regimes['dxy_close_change'] * df_with_regimes['market_regime'].str.contains('BULL').astype(int)
+            df_with_regimes['dxy_change_X_bear'] = df_with_regimes['dxy_close_change'] * df_with_regimes['market_regime'].str.contains('BEAR').astype(int)
+            df_with_regimes['dxy_change_X_lateral'] = df_with_regimes['dxy_close_change'] * df_with_regimes['market_regime'].str.contains('LATERAL').astype(int)
+        else:
+            df_with_regimes['dxy_change_X_bull'] = 0.0
+            df_with_regimes['dxy_change_X_bear'] = 0.0
+            df_with_regimes['dxy_change_X_lateral'] = 0.0
 
         logger.info("Filtrando dados de 2017 em diante e tratando valores ausentes/infinitos...")
         df_filtered = df_with_regimes[df_with_regimes.index >= '2017-01-01'].copy()
         
-        # <<< CORREÇÃO CRÍTICA >>>
-        # 3. Aplicamos o SHIFT(1) para evitar lookahead bias ANTES de salvar no cache.
-        # Isso garante que os dados usados para treino e operação real sejam idênticos.
         logger.info("Aplicando shift(1) nas features para evitar lookahead bias...")
         df_filtered[self.feature_names] = df_filtered[self.feature_names].shift(1)
         
-        # 4. Removemos quaisquer linhas que ficaram com NaNs após o shift e o join.
         df_filtered.replace([np.inf, -np.inf], np.nan, inplace=True)
         df_filtered.dropna(inplace=True)
         

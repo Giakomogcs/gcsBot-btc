@@ -1,4 +1,4 @@
-# src/display_manager.py (VERSÃO 4.4 - Final à Prova de Erros)
+# src/display_manager.py (VERSÃO 5.0 - DASHBOARD ENXUTO E INTELIGENTE)
 
 import os
 import sys
@@ -6,6 +6,7 @@ from datetime import datetime
 import pandas as pd
 from tabulate import tabulate
 import time
+from collections import Counter
 
 def clear_screen():
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -20,18 +21,16 @@ def get_progress_bar(progress, total, length=40):
     return f"|{bar}| {progress}/{total}"
 
 def display_optimization_dashboard(status_data: dict):
-    """Exibe o painel de controle completo com resumo e análise de poda."""
+    """Exibe o painel de controle focado com as informações mais relevantes."""
     clear_screen()
     title = "🏭 FÁBRICA DE ESPECIALISTAS GCS-BOT 🏭"
     print(f"{'='*80}\n{title:^80}\n{'='*80}")
 
     # --- Seção 1: Resumo dos Especialistas Já Concluídos ---
-    # <<< CORREÇÃO: Garante que 'completed' seja sempre um dicionário >>>
     completed = status_data.get('completed_specialists') or {}
     print("\n--- ✅ ESPECIALISTAS CONCLUÍDOS ---")
     summary_data = []
     headers = ["Especialista", "Status", "Melhor Score", "Modelo Salvo"]
-    # Itera sobre os items do dicionário 'completed' que foi previamente validado
     for name, results in completed.items():
         if results.get('status') in ['Optimized and Saved', 'Skipped - Low Score', 'Skipped - All Trials Pruned']:
             score_value = results.get('score')
@@ -52,38 +51,35 @@ def display_optimization_dashboard(status_data: dict):
     tempo_str = f"Tempo Decorrido: {time.strftime('%H:%M:%S', time.gmtime(time.time() - status_data.get('start_time', time.time())))}"
     print(f"Especialista: [ {regime_atual.upper()} ]\n{progresso_str}\n{status_str}\n{tempo_str}")
 
-    # --- Seção 3: Placar Geral de Podas ---
-    print("\n--- 📊 PLACAR GERAL DE PODAS (ACUMULADO) ---")
-    reason_summary = status_data.get('pruning_reason_summary') or {}
-    if reason_summary:
-        summary_data = [[reason, count] for reason, count in reason_summary.items()]
-        print(tabulate(summary_data, headers=["Motivo da Poda", "Contagem Total"], tablefmt="heavy_grid"))
+    # === MUDANÇA PRINCIPAL: PLACAR DE PODAS FOCADO ===
+    # Agora esta seção mostra apenas os motivos de poda para o especialista atual,
+    # tornando o feedback mais imediato e relevante.
+    print("\n--- 📊 PLACAR DE PODAS (ESPECIALISTA ATUAL) ---")
+    pruned_history_current = status_data.get('pruned_trials_history') or []
+    if pruned_history_current:
+        # Contamos os motivos de poda apenas do histórico da sessão atual
+        reason_counts = Counter(item['reason'] for item in pruned_history_current)
+        # Mostramos os 5 principais motivos, para manter o display enxuto
+        top_5_reasons = sorted(reason_counts.items(), key=lambda item: item[1], reverse=True)[:5]
+        summary_data = [[reason, count] for reason, count in top_5_reasons]
+        print(tabulate(summary_data, headers=["Motivo da Poda (Sessão)", "Contagem"], tablefmt="heavy_grid"))
     else:
-        print("Nenhum trial foi podado ainda.")
-
+        print("Nenhum trial foi podado ainda para este especialista.")
+        
     # --- Seção 4: Detalhes do Melhor Resultado Encontrado ---
-    print("\n--- 🏆 MELHORES RESULTADOS (ESPECIALISTA ATUAL) ---")
+    print("\n--- 🏆 MELHOR RESULTADO (ESPECIALISTA ATUAL) ---")
     best_trial_data = status_data.get('best_trial_data')
     if best_trial_data:
         user_attrs = best_trial_data.get('user_attrs', {})
         details_data = [
             ["Melhor Score", f"{best_trial_data.get('value', 0.0):.4f}"],
-            ["Total de Trades (simulado)", user_attrs.get("total_trades", "N/A")],
-            ["Sortino Ratio (mediana)", f"{user_attrs.get('median_sortino', 0):.2f}"],
-            ["Profit Factor (mediana)", f"{user_attrs.get('median_profit_factor', 0):.2f}"]
+            ["Total de Trades", user_attrs.get("total_trades", "N/A")],
+            ["Sortino Ratio", f"{user_attrs.get('median_sortino', 0):.2f}"],
+            ["Profit Factor", f"{user_attrs.get('median_profit_factor', 0):.2f}"]
         ]
         print(tabulate(details_data, tablefmt="plain"))
     else:
         print("Aguardando o primeiro trial ser concluído com sucesso...")
-
-    # --- Seção 5: Análise de Trials Podados Recentes ---
-    print("\n--- 🕵️ ANÁLISE DE PODAS RECENTES (ÚLTIMOS 5) ---")
-    pruned_history = status_data.get('pruned_trials_history') or []
-    if pruned_history:
-        pruned_data = [[item['number'], item['reason']] for item in reversed(pruned_history)]
-        print(tabulate(pruned_data, headers=["Trial #", "Motivo da Poda"], tablefmt="heavy_grid"))
-    else:
-        print("Nenhum trial foi podado ainda nesta sessão.")
         
     print(f"\nÚltima atualização: {datetime.now().strftime('%H:%M:%S')}")
     sys.stdout.flush()

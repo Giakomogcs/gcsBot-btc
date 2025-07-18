@@ -1,4 +1,4 @@
-# src/optimizer.py (VERSÃO 8.7 - Final com Placar Geral Acumulativo)
+# src/optimizer.py (VERSÃO 9.0 - FÁBRICA DE ESPECIALISTAS COMPLETA)
 
 import optuna
 import pandas as pd
@@ -129,24 +129,29 @@ class WalkForwardOptimizer:
 
         stop_mult = trial.suggest_float('stop_mult', 2.0, 5.0)
         params = {
-            'future_periods': trial.suggest_int('future_periods', 40, 240),
+            'future_periods': trial.suggest_int('future_periods', 30, 360),
             'profit_mult': trial.suggest_float('profit_mult', stop_mult * 1.3, stop_mult + 6.0),
             'stop_mult': stop_mult,
-            'stop_loss_atr_multiplier': trial.suggest_float('stop_loss_atr_multiplier', 1.5, 5.0),
+            'stop_loss_atr_multiplier': trial.suggest_float('stop_loss_atr_multiplier', 1.0, 4.0),
             'trailing_stop_multiplier': trial.suggest_float('trailing_stop_multiplier', 1.0, 4.0),
             'profit_threshold': trial.suggest_float('profit_threshold', 0.01, 0.04),
             'risk_per_trade_pct': trial.suggest_float('risk_per_trade_pct', 0.01, 0.15),
             'aggression_exponent': trial.suggest_float('aggression_exponent', 2.0, 5.0),
             'min_risk_scale': trial.suggest_float('min_risk_scale', 0.2, 0.6),
             'max_risk_scale': trial.suggest_float('max_risk_scale', 3.0, 8.0),
-            'initial_confidence': trial.suggest_float('initial_confidence', 0.55, 0.85),
-            'confidence_learning_rate': trial.suggest_float('confidence_learning_rate', 0.01, 0.10),
+            'initial_confidence': trial.suggest_float('initial_confidence', 0.505, 0.75),
+            'confidence_learning_rate': trial.suggest_float('confidence_learning_rate', 0.01, 0.20),
             'confidence_window_size': trial.suggest_int('confidence_window_size', 5, 30),
             'confidence_pnl_clamp': trial.suggest_float('confidence_pnl_clamp', 0.01, 0.05),
-            'treasury_allocation_pct': trial.suggest_float('treasury_allocation_pct', 0.05, 0.40),
-            'n_estimators': trial.suggest_int('n_estimators', 150, 600),
+            'treasury_allocation_pct': trial.suggest_float('treasury_allocation_pct', 0.10, 0.50),
+            
+            # === MUDANÇA FINAL: OTIMIZAÇÃO DO "TEMPERAMENTO" DO BOT ===
+            'reactivity_multiplier': trial.suggest_float('reactivity_multiplier', 2.0, 15.0),
+            
+            # Parâmetros do Modelo
+            'n_estimators': trial.suggest_int('n_estimators', 100, 800),
             'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.1),
-            'num_leaves': trial.suggest_int('num_leaves', 20, 80),
+            'num_leaves': trial.suggest_int('num_leaves', 15, 100),
             'max_depth': trial.suggest_int('max_depth', 5, 25),
             'min_child_samples': trial.suggest_int('min_child_samples', 20, 100),
         }
@@ -176,17 +181,21 @@ class WalkForwardOptimizer:
         
         median_sortino = metrics_df['sortino'].median()
         median_profit_factor = metrics_df['profit_factor'].median()
-        median_annual_return = metrics_df['annual_return'].median()
         total_trades = int(metrics_df['trade_count'].sum())
 
         if total_trades < 10:
             trial.set_user_attr("pruned_reason", f"Total de trades ({total_trades}) baixo demais.")
             raise optuna.exceptions.TrialPruned()
 
-        score_principal = (0.5 * median_sortino) + (0.4 * median_profit_factor) + (0.1 * median_annual_return)
-        score_principal *= np.log1p(total_trades) / np.log1p(50)
+        if median_profit_factor <= 1 or median_sortino <= 0:
+            score_principal = 0.0
+        else:
+            score_principal = (median_profit_factor - 1) * 10
+            score_principal += median_sortino * 0.5 
+        
+        score_principal *= np.log1p(total_trades) / np.log1p(25)
 
-        if math.isnan(score_principal) or score_principal < 0.1:
+        if math.isnan(score_principal) or score_principal < 0.01:
             trial.set_user_attr("pruned_reason", f"Score final ({score_principal:.4f}) abaixo do limiar.")
             raise optuna.exceptions.TrialPruned()
         
@@ -219,6 +228,7 @@ class WalkForwardOptimizer:
 
         logger.info(f"\n🏁 Otimização de '{name}' concluída. Melhor Score: {best_score:.4f}")
 
+        # Limiar de qualidade para salvar o modelo
         if best_score > 0.33:
             logger.info(f"🏆 Resultado excelente! Salvando especialista para '{name}'...")
             final_model, final_scaler = self.trainer.train(data, best_trial.params, self.feature_names)
@@ -230,7 +240,10 @@ class WalkForwardOptimizer:
             joblib.dump(final_model, os.path.join(DATA_DIR, model_filename))
             joblib.dump(final_scaler, os.path.join(DATA_DIR, scaler_filename))
 
-            strategy_params = {k: v for k, v in best_trial.params.items() if k not in LGBMClassifier().get_params()}
+            # Separa os parâmetros do modelo e da estratégia para salvar no JSON
+            model_keys = LGBMClassifier().get_params().keys()
+            strategy_params = {k: v for k, v in best_trial.params.items() if k not in model_keys}
+            
             with open(os.path.join(DATA_DIR, params_filename), 'w') as f:
                 json.dump(strategy_params, f, indent=4)
 
@@ -247,7 +260,7 @@ class WalkForwardOptimizer:
             self.optimization_summary[name] = {'status': 'Skipped - Low Score', 'score': best_score}
 
     def run(self):
-        logger.info("\n" + "="*80 + "\n--- 🚀 INICIANDO PROCESSO DE OTIMIZAÇÃO (V8.7) 🚀 ---\n" + "="*80)
+        logger.info("\n" + "="*80 + "\n--- 🚀 INICIANDO PROCESSO DE OTIMIZAÇÃO (V9.0) 🚀 ---\n" + "="*80)
         optuna.logging.set_verbosity(optuna.logging.WARNING)
 
         recent_data = self.full_data.tail(WFO_TRAIN_MINUTES).copy()

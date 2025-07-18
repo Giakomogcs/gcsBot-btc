@@ -1,4 +1,4 @@
-# src/trading_bot.py (VERSÃO 8.4 - Final, Completa e Corrigida)
+# src/trading_bot.py (VERSÃO 9.0 - FINAL, SINCRONIZADO E CONFIGURÁVEL)
 
 import pandas as pd
 import numpy as np
@@ -16,7 +16,7 @@ from datetime import datetime, timezone, timedelta
 from src.logger import logger
 from src.config import (
     API_KEY, API_SECRET, USE_TESTNET, SYMBOL, DATA_DIR, TRADES_LOG_FILE, BOT_STATE_FILE,
-    MAX_USDT_ALLOCATION, FEE_RATE, SLIPPAGE_RATE, IOF_RATE,
+    MAX_USDT_ALLOCATION, FEE_RATE, SLIPPAGE_RATE, IOF_RATE, SESSION_MAX_DRAWDOWN, # <-- MUDANÇA 1: Importar
     MODEL_METADATA_FILE, DCA_IN_BEAR_MARKET_ENABLED, DCA_DAILY_AMOUNT_USDT, DCA_MIN_CAPITAL_USDT
 )
 from src.data_manager import DataManager
@@ -99,7 +99,10 @@ class TradingBot:
         self.session_peak_value = 0.0
         self.session_trades, self.session_wins, self.session_total_pnl_usdt = 0, 0, 0.0
         self.session_drawdown_stop_activated = False
-        self.SESSION_MAX_DRAWDOWN = -0.15
+        
+        # === MUDANÇA 1: Usar o parâmetro de segurança do config ===
+        self.SESSION_MAX_DRAWDOWN = SESSION_MAX_DRAWDOWN 
+        
         self.last_dca_time = None
         self.last_event_message = "Inicializando o bot..."
         self.specialist_stats = {}
@@ -150,17 +153,17 @@ class TradingBot:
     def _get_active_specialist(self, regime: str):
         specialist_name = self.regime_map.get(regime)
         if not specialist_name: return None, None, None, None
+        
         model = self.models.get(specialist_name)
         scaler = self.scalers.get(specialist_name)
         params = self.strategy_params.get(specialist_name)
+        
         if specialist_name not in self.confidence_managers:
-            confidence_params = {
-                'initial_confidence': params.get('initial_confidence', 0.7),
-                'learning_rate': params.get('confidence_learning_rate', 0.05),
-                'window_size': params.get('confidence_window_size', 10),
-                'pnl_clamp_value': params.get('confidence_pnl_clamp', 0.02)
-            }
-            self.confidence_managers[specialist_name] = AdaptiveConfidenceManager(**confidence_params)
+            # === MUDANÇA 2: Sincronização total com os parâmetros otimizados ===
+            # Garante que o bot use o "temperamento" (reactivity_multiplier) exato
+            # que foi otimizado para este especialista.
+            self.confidence_managers[specialist_name] = AdaptiveConfidenceManager(**params)
+
         confidence_manager = self.confidence_managers.get(specialist_name)
         return model, scaler, params, confidence_manager
 
@@ -207,6 +210,7 @@ class TradingBot:
                 self.session_drawdown_stop_activated = True
                 if self.in_trade_position: self._execute_sell(current_price, "Circuit Breaker")
 
+    # ... (O restante do arquivo permanece idêntico) ...
     def _manage_active_position(self, latest_data: pd.Series):
         price = latest_data['close']
         self.highest_price_in_trade = max(self.highest_price_in_trade, price)
@@ -310,7 +314,6 @@ class TradingBot:
             
             self.in_trade_position, self.position_phase = True, 'INITIAL'
             self.current_stop_price, self.highest_price_in_trade = stop_price, self.buy_price
-            # <<< MUDANÇA: Armazena o NOME do especialista que entrou no trade >>>
             self.last_used_params = {**params, 'entry_regime': regime, 'entry_specialist': self.regime_map.get(regime)}
         except Exception as e:
             logger.error(f"ERRO AO EXECUTAR COMPRA: {e}", exc_info=True)
@@ -347,7 +350,6 @@ class TradingBot:
             specialist_name = self.last_used_params.get('entry_specialist')
             if specialist_name and specialist_name in self.confidence_managers:
                 confidence_manager = self.confidence_managers[specialist_name]
-                # <<< CORREÇÃO: Captura os valores ANTES e DEPOIS do update >>>
                 confidence_before = confidence_manager.get_confidence()
                 confidence_manager.update(pnl_pct)
                 confidence_after = confidence_manager.get_confidence()
@@ -363,7 +365,6 @@ class TradingBot:
 
             self.portfolio.update_on_sell(amount_to_sell, revenue, pnl_usdt, actual_sell_price, self.last_used_params)
             self.in_trade_position, self.position_phase = False, None
-            # Mantemos o last_used_params para o display, ele será sobrescrito na próxima compra
         except Exception as e: logger.error(f"ERRO AO EXECUTAR VENDA: {e}", exc_info=True)
 
     def _initialize_trade_log(self):
@@ -409,7 +410,7 @@ class TradingBot:
             'session_drawdown_stop_activated': self.session_drawdown_stop_activated, 'session_trades': self.session_trades,
             'session_wins': self.session_wins, 'session_total_pnl_usdt': self.session_total_pnl_usdt,
             'last_dca_time': self.last_dca_time.isoformat() if self.last_dca_time else None,
-            'specialist_stats': self.specialist_stats, # Salva as estatísticas
+            'specialist_stats': self.specialist_stats, 
             'portfolio': { 'trading_capital_usdt': self.portfolio.trading_capital_usdt, 'trading_btc_balance': self.portfolio.trading_btc_balance, 'long_term_btc_holdings': self.portfolio.long_term_btc_holdings, 'initial_total_value_usdt': self.portfolio.initial_total_value_usdt,},
         }
         with open(BOT_STATE_FILE, 'w') as f: json.dump(state, f, indent=4)
@@ -426,7 +427,7 @@ class TradingBot:
             self.session_trades, self.session_wins, self.session_total_pnl_usdt = state.get('session_trades', 0), state.get('session_wins', 0), state.get('session_total_pnl_usdt', 0.0)
             last_dca_time_str = state.get('last_dca_time')
             self.last_dca_time = datetime.fromisoformat(last_dca_time_str) if last_dca_time_str else None
-            self.specialist_stats = state.get('specialist_stats', {}) # Carrega as estatísticas
+            self.specialist_stats = state.get('specialist_stats', {}) 
             portfolio_state = state.get('portfolio', {})
             self.portfolio.trading_capital_usdt, self.portfolio.trading_btc_balance, self.portfolio.long_term_btc_holdings, self.portfolio.initial_total_value_usdt = portfolio_state.get('trading_capital_usdt', 0.0), portfolio_state.get('trading_btc_balance', 0.0), portfolio_state.get('long_term_btc_holdings', 0.0), portfolio_state.get('initial_total_value_usdt', 1.0)
             logger.info("✅ Estado anterior do bot e portfólio carregado com sucesso.")

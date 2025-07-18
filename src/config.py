@@ -1,4 +1,4 @@
-# src/config.py (VERSÃO 5.0 - ARQUITETURA DE ESPECIALISTAS)
+# src/config.py (VERSÃO 5.1 - PARÂMETROS CENTRALIZADOS E ROBUSTEZ AUMENTADA)
 
 from dotenv import load_dotenv
 import os
@@ -30,11 +30,17 @@ FEE_RATE = float(get_config_var("FEE_RATE", 0.001))
 SLIPPAGE_RATE = float(get_config_var("SLIPPAGE_RATE", 0.0005))
 IOF_RATE = float(get_config_var("IOF_RATE", 0.0038)) # IOF de 0.38%
 
+# === MUDANÇA 1: PARÂMETRO DE RISCO CENTRALIZADO ===
+# Adiciona o Circuit Breaker do bot aqui, para fácil ajuste
+SESSION_MAX_DRAWDOWN = float(get_config_var("SESSION_MAX_DRAWDOWN", -0.15)) # Drawdown máximo de -15% na sessão
+
 # --- CONFIGURAÇÕES DE DIRETÓRIOS E ARQUIVOS ---
 DATA_DIR = "data"
 LOGS_DIR = "logs"
+MACRO_DATA_DIR = os.path.join(DATA_DIR, "macro") # <-- MUDANÇA 3: Organização
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(LOGS_DIR, exist_ok=True)
+os.makedirs(MACRO_DATA_DIR, exist_ok=True)
 
 # Arquivos de dados brutos e de estado
 KAGGLE_BOOTSTRAP_FILE = os.path.join(DATA_DIR, "kaggle_btc_1m_bootstrap.csv")
@@ -42,30 +48,26 @@ HISTORICAL_DATA_FILE = os.path.join(DATA_DIR, f"full_historical_{SYMBOL}.csv")
 COMBINED_DATA_CACHE_FILE = os.path.join(DATA_DIR, "combined_data_cache.csv")
 TRADES_LOG_FILE = os.path.join(DATA_DIR, "trades_log.csv")
 BOT_STATE_FILE = os.path.join(DATA_DIR, "bot_state.json")
-
-### PASSO 2: Remover variáveis obsoletas e centralizar a verdade nos metadados ###
-# As variáveis MODEL_FILE, SCALER_FILE e STRATEGY_PARAMS_FILE foram removidas.
-# O sistema agora usa múltiplos especialistas, e o arquivo de metadados
-# atua como um "manifesto" para localizar todos os artefatos necessários.
 MODEL_METADATA_FILE = os.path.join(DATA_DIR, "model_metadata.json")
 
 # --- PARÂMETROS PARA A OTIMIZAÇÃO ---
-WFO_TRAIN_MINUTES = int(get_config_var("WFO_TRAIN_MINUTES", 790000)) # ~18 meses para ter dados de vários regimes
+# === MUDANÇA 2: JANELA DE TREINO AMPLIADA ===
+# Aumentado para ~30 meses para capturar mais ciclos de mercado (alta, baixa, recuperação)
+WFO_TRAIN_MINUTES = int(get_config_var("WFO_TRAIN_MINUTES", 1314000)) 
 MODEL_VALIDITY_MONTHS = int(get_config_var("MODEL_VALIDITY_MONTHS", 3))
 
 # --- PARÂMETROS PARA O MODO DE BACKTEST RÁPIDO ---
 BACKTEST_START_DATE = get_config_var("BACKTEST_START_DATE", "2024-01-01")
 BACKTEST_END_DATE = get_config_var("BACKTEST_END_DATE", "2025-03-31")
 
+# --- PARÂMETROS PARA A ESTRATÉGIA DE ACUMULAÇÃO (DCA) ---
+DCA_IN_BEAR_MARKET_ENABLED = get_config_var("DCA_IN_BEAR_MARKET_ENABLED", "True").lower() == 'true'
+DCA_DAILY_AMOUNT_USDT = float(get_config_var("DCA_DAILY_AMOUNT_USDT", 5.0))
+DCA_MIN_CAPITAL_USDT = float(get_config_var("DCA_MIN_CAPITAL_USDT", 50.0))
+
 # --- VALIDAÇÕES FINAIS DE SANIDADE ---
 if MODE in ['test', 'trade'] and not FORCE_OFFLINE_MODE and (not API_KEY or not API_SECRET):
-    # O logger pode não estar pronto, então usamos print/exit para garantir a mensagem.
     sys.exit(f"ERRO DE CONFIGURAÇÃO: Para MODE='{MODE}', as chaves da API da Binance devem ser configuradas no arquivo .env")
 
 if FORCE_OFFLINE_MODE and MODE in ['test', 'trade']:
     sys.exit(f"ERRO DE CONFIGURAÇÃO: O bot não pode rodar em modo '{MODE.upper()}' com 'FORCE_OFFLINE_MODE=True'.")
-
-# --- PARÂMETROS PARA A ESTRATÉGIA DE ACUMULAÇÃO (DCA) ---
-DCA_IN_BEAR_MARKET_ENABLED = get_config_var("DCA_IN_BEAR_MARKET_ENABLED", "True").lower() == 'true'
-DCA_DAILY_AMOUNT_USDT = float(get_config_var("DCA_DAILY_AMOUNT_USDT", 5.0)) # Valor em USDT para comprar a cada 24h
-DCA_MIN_CAPITAL_USDT = float(get_config_var("DCA_MIN_CAPITAL_USDT", 50.0)) # Capital mínimo para iniciar o DCA

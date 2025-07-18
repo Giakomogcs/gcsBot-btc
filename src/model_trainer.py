@@ -1,4 +1,4 @@
-# src/model_trainer.py (VERSÃO 7.0 - FOCADO APENAS EM TREINO)
+# src/model_trainer.py (VERSÃO 7.1 - FOCADO EM CLASSIFICAÇÃO BINÁRIA)
 
 import pandas as pd
 import numpy as np
@@ -15,10 +15,9 @@ def create_labels_triple_barrier(
     future_periods: int, profit_multiplier: float, stop_multiplier: float
 ) -> np.ndarray:
     """
-    Implementação da Barreira Tripla com 3 classes de rótulos:
-    - 1: Compra (barreira de lucro atingida)
-    - 2: Venda (barreira de stop atingida)
-    - 0: Neutro (tempo esgotado sem tocar nas barreiras)
+    Implementação da Barreira Tripla com 2 classes de rótulos (Binário):
+    - 1: Boa Oportunidade de Entrada (barreira de lucro atingida primeiro)
+    - 0: Má Oportunidade de Entrada (barreira de stop atingida ou tempo esgotado)
     """
     n = len(closes)
     labels = np.zeros(n, dtype=np.int64)
@@ -32,10 +31,11 @@ def create_labels_triple_barrier(
             future_high, future_low = highs[i + j], lows[i + j]
             
             if future_high >= profit_barrier:
-                labels[i] = 1 # Lucro
+                labels[i] = 1 # Sinal de COMPRA
                 break
+            # === MUDANÇA 1: Simplificação para Classificação Binária ===
             if future_low <= stop_barrier:
-                labels[i] = 2 # Prejuízo
+                labels[i] = 0 # Prejuízo é uma má oportunidade, logo 0.
                 break
                 
     return labels
@@ -52,14 +52,12 @@ class ModelTrainer:
 
         logger.debug("Iniciando o processo de treino do modelo...")
         
-        # Os dados já vêm com features e shift aplicado do DataManager
         df_processed = data.copy()
 
         future_periods = all_params.get('future_periods', 30)
         profit_mult = all_params.get('profit_mult', 2.0)
         stop_mult = all_params.get('stop_mult', 2.0)
 
-        # A coluna 'atr' já existe e está correta
         labels_np = create_labels_triple_barrier(
             closes=df_processed['close'].to_numpy(), highs=df_processed['high'].to_numpy(),
             lows=df_processed['low'].to_numpy(), atr=df_processed['atr'].to_numpy(),
@@ -69,10 +67,11 @@ class ModelTrainer:
         
         X = df_processed[feature_names]
 
-        # Checagem de sanidade para garantir que temos sinais de compra e venda
+        # === MUDANÇA 2: Atualização da Checagem de Sanidade ===
         counts = y.value_counts()
-        if counts.get(1, 0) < 15 or counts.get(2, 0) < 15:
-            logger.warning(f"Não há exemplos suficientes de compra(1) ou venda(2) para um treino confiável. Counts: {counts.to_dict()}")
+        # Agora só precisamos checar se há exemplos de compra (label 1)
+        if counts.get(1, 0) < 15:
+            logger.warning(f"Não há exemplos suficientes de compra (label 1) para um treino confiável. Counts: {counts.to_dict()}")
             return None, None
 
         logger.info(f"Treinando modelo com {len(feature_names)} features.")
@@ -81,7 +80,6 @@ class ModelTrainer:
         scaler = StandardScaler()
         X_scaled = pd.DataFrame(scaler.fit_transform(X), index=X.index, columns=X.columns)
         
-        # Filtra apenas os parâmetros que o LGBMClassifier aceita
         model_params = {k: v for k, v in all_params.items() if k in LGBMClassifier().get_params().keys()}
         
         model = LGBMClassifier(**model_params, random_state=42, n_jobs=-1, class_weight='balanced', verbosity=-1)

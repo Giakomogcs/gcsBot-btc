@@ -1,9 +1,8 @@
-# src/backtest.py (VERSÃO 6.2 - COM IOF E CONSISTENTE COM OTIMIZADOR V8)
+# src/backtest.py (VERSÃO 6.3 - CONSISTENTE COM OTIMIZADOR V9)
 
 import numpy as np
 import pandas as pd
 
-# <<< MUDANÇA 1: Importar IOF_RATE do config >>>
 from src.config import FEE_RATE, SLIPPAGE_RATE, IOF_RATE
 from src.confidence_manager import AdaptiveConfidenceManager
 
@@ -44,11 +43,15 @@ def run_backtest(model, scaler, test_data_with_features: pd.DataFrame, strategy_
     X_test_scaled = pd.DataFrame(scaler.transform(X_test_features), index=X_test_features.index, columns=X_test_features.columns)
     predictions_buy_proba = pd.Series(model.predict_proba(X_test_scaled)[:, 1], index=X_test_features.index)
 
+    # === MUDANÇA CRÍTICA: SINCRONIZAÇÃO COM O NOVO CONFIDENCE MANAGER ===
+    # O backtest agora precisa usar o novo parâmetro 'reactivity_multiplier'
+    # que o otimizador está testando, para garantir que a simulação seja válida.
     confidence_manager = AdaptiveConfidenceManager(
         initial_confidence=strategy_params.get('initial_confidence', 0.6),
         learning_rate=strategy_params.get('confidence_learning_rate', 0.05),
         window_size=strategy_params.get('confidence_window_size', 5),
-        pnl_clamp_value=strategy_params.get('confidence_pnl_clamp', 0.02)
+        pnl_clamp_value=strategy_params.get('confidence_pnl_clamp', 0.02),
+        reactivity_multiplier=strategy_params.get('reactivity_multiplier', 5.0) # <-- PARÂMETRO ADICIONADO
     )
 
     for date, row in test_data_with_features.iterrows():
@@ -59,7 +62,6 @@ def run_backtest(model, scaler, test_data_with_features: pd.DataFrame, strategy_
             if price <= current_stop_price:
                 sell_price = price * (1 - SLIPPAGE_RATE)
                 revenue_usdt = (trading_btc * sell_price) * (1 - FEE_RATE)
-                # <<< MUDANÇA 2: Custo original agora inclui IOF para cálculo de PnL >>>
                 pnl_usdt = revenue_usdt - (trading_btc * buy_price * (1 + FEE_RATE + IOF_RATE))
                 trade_pnls.append(pnl_usdt)
                 pnl_pct = (sell_price / buy_price) - 1 if buy_price > 0 else 0
@@ -88,7 +90,6 @@ def run_backtest(model, scaler, test_data_with_features: pd.DataFrame, strategy_
                 trade_size_usdt = capital_usdt * dynamic_risk_pct
                 if capital_usdt > 10 and trade_size_usdt > 10:
                     buy_price_eff = price * (1 + SLIPPAGE_RATE)
-                    # <<< MUDANÇA 3: Custo do trade agora inclui a taxa IOF >>>
                     cost_of_trade = trade_size_usdt * (1 + FEE_RATE + IOF_RATE)
                     if capital_usdt >= cost_of_trade:
                         amount_to_buy_btc = trade_size_usdt / buy_price_eff
