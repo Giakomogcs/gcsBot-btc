@@ -1,4 +1,4 @@
-# src/optimizer.py (VERSÃO FINAL COM INTELIGÊNCIA COMPLETA)
+# src/optimizer.py (VERSÃO 9.0 - FÁBRICA DE ESPECIALISTAS COMPLETA)
 
 import optuna
 import pandas as pd
@@ -8,207 +8,300 @@ import signal
 import os
 import math
 import gc
+import joblib
+import sys
+import time
+from datetime import datetime, timezone
+from dateutil.relativedelta import relativedelta
+from lightgbm import LGBMClassifier
+from filelock import FileLock
+from collections import defaultdict
 
 from src.model_trainer import ModelTrainer
 from src.backtest import run_backtest
-from src.logger import logger
+from src.logger import logger, log_table
 from src.config import (
-    WFO_TRAIN_MINUTES, WFO_TEST_MINUTES, WFO_STEP_MINUTES, WFO_STATE_FILE,
-    STRATEGY_PARAMS_FILE, MODEL_FILE, SCALER_FILE
+    WFO_TRAIN_MINUTES, MODEL_VALIDITY_MONTHS,
+    FEE_RATE, SLIPPAGE_RATE, MODEL_METADATA_FILE, DATA_DIR
 )
-# A importação do RISK_PER_TRADE_PCT do config não é mais necessária, pois ele será otimizado
-from src.confidence_manager import AdaptiveConfidenceManager
+
+OPTIMIZER_STATUS_FILE = os.path.join(DATA_DIR, 'optimizer_status.json')
+OPTIMIZER_STATUS_LOCK_FILE = os.path.join(DATA_DIR, 'optimizer_status.json.lock')
 
 class WalkForwardOptimizer:
-    def __init__(self, full_data):
+    def __init__(self, full_data, feature_names):
         self.full_data = full_data
+        self.feature_names = feature_names
         self.trainer = ModelTrainer()
-        self.n_trials_for_cycle = 0
+        self.n_trials_for_cycle = 150
         self.shutdown_requested = False
+        self.optimization_summary = {}
+        self.current_regime = "N/A"
+        self.start_time = time.time()
+        self.cumulative_pruning_stats = defaultdict(int)
         signal.signal(signal.SIGINT, self.graceful_shutdown)
         signal.signal(signal.SIGTERM, self.graceful_shutdown)
 
-    # --- Funções de controle (graceful_shutdown, _save_wfo_state, etc.) ---
-    # Nenhuma alteração necessária aqui, elas já estão corretas.
     def graceful_shutdown(self, signum, frame):
         if not self.shutdown_requested:
-            logger.warning("\n" + "="*50)
-            logger.warning("PARADA SOLICITADA! Finalizando o trial atual...")
-            logger.warning("="*50)
+            logger.warning("\n" + "="*50 + "\n🚨 PARADA SOLICITADA! Finalizando o trial atual...\n" + "="*50)
             self.shutdown_requested = True
-            
-    def _save_wfo_state(self, cycle, start_index, all_results, cumulative_capital):
-        state = {
-            'last_completed_cycle': cycle - 1,
-            'next_start_index': start_index,
-            'results_so_far': all_results,
-            'cumulative_capital': cumulative_capital
-        }
-        with open(WFO_STATE_FILE, 'w') as f:
-            json.dump(state, f, indent=4)
-        logger.info(f"Estado da WFO salvo. Ciclo #{cycle - 1} completo.")
+            if os.path.exists(OPTIMIZER_STATUS_FILE): os.remove(OPTIMIZER_STATUS_FILE)
 
-    def _load_wfo_state(self):
-        if os.path.exists(WFO_STATE_FILE):
-            try:
-                with open(WFO_STATE_FILE, 'r') as f:
-                    state = json.load(f)
-                    last_cycle = state.get('last_completed_cycle', 0)
-                    cumulative_capital = state.get('cumulative_capital', 100.0)
-                    logger.info("="*50)
-                    logger.info(f"Estado de otimização anterior encontrado! Retomando do ciclo #{last_cycle + 1}.")
-                    logger.info(f"Capital acumulado até o momento: ${cumulative_capital:,.2f}")
-                    logger.info("="*50)
-                    return state.get('next_start_index', 0), last_cycle + 1, state.get('results_so_far', []), cumulative_capital
-            except Exception as e:
-                logger.error(f"Erro ao carregar estado da WFO: {e}. Começando do zero.")
-        return 0, 1, [], 100.0
+    def _save_final_metadata(self):
+        try:
+            logger.info("💾 Salvando metadados finais e data de validade do conjunto de modelos...")
+            now_utc = datetime.now(timezone.utc)
+            valid_until = now_utc + relativedelta(months=MODEL_VALIDITY_MONTHS)
+
+            for regime, result in list(self.optimization_summary.items()):
+                if result.get('status') == 'Fallback to Generalist':
+                    fallback_model_name = result.get('fallback_model')
+                    if fallback_model_name in self.optimization_summary:
+                        self.optimization_summary[regime] = self.optimization_summary[fallback_model_name]
+
+            metadata = {
+                'last_optimization_date': now_utc.isoformat(),
+                'valid_until': valid_until.isoformat(),
+                'model_validity_months': MODEL_VALIDITY_MONTHS,
+                'feature_names': self.feature_names,
+                'optimization_summary': self.optimization_summary
+            }
+            with open(MODEL_METADATA_FILE, 'w') as f:
+                json.dump(metadata, f, indent=4)
+            logger.info(f"✅ Metadados salvos. Conjunto de modelos válido até {valid_until.strftime('%Y-%m-%d')}.")
+        except Exception as e:
+            logger.error(f"❌ Falha ao salvar metadados finais: {e}")
 
     def _progress_callback(self, study, trial):
-        n_trials = self.n_trials_for_cycle
-        best_value = 0.0 if study.best_value is None else study.best_value
-        print(f"\r    - [Progresso Optuna] Trial {trial.number + 1}/{n_trials} concluído... Melhor Sharpe (Validação): {best_value:.4f}", end="", flush=True)
+        lock = FileLock(OPTIMIZER_STATUS_LOCK_FILE, timeout=10)
+        with lock:
+            current_pruning_counts = defaultdict(int)
+            pruned_trials_current_study = []
+            for t in study.trials:
+                if t.state == optuna.trial.TrialState.PRUNED:
+                    reason = t.user_attrs.get("pruned_reason", "Desconhecido")
+                    current_pruning_counts[reason] += 1
+                    pruned_trials_current_study.append(t)
+            
+            total_pruning_counts = self.cumulative_pruning_stats.copy()
+            for reason, count in current_pruning_counts.items():
+                total_pruning_counts[reason] += count
 
-    # --- A MENTE DO OTIMIZADOR ---
-    def _objective(self, trial, train_data, validation_data):
-        if self.shutdown_requested: raise optuna.exceptions.TrialPruned()
-        
-        all_params = {
-            # === PARÂMETROS DO MODELO DE MACHINE LEARNING (PREENCHIDOS) ===
-            'n_estimators': trial.suggest_int('n_estimators', 200, 800),
-            'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.2),
-            'num_leaves': trial.suggest_int('num_leaves', 30, 100),
-            'max_depth': trial.suggest_int('max_depth', 7, 25),
-            'min_child_samples': trial.suggest_int('min_child_samples', 20, 70),
-            'feature_fraction': trial.suggest_float('feature_fraction', 0.5, 1.0),
-            'bagging_fraction': trial.suggest_float('bagging_fraction', 0.5, 1.0),
-            'bagging_freq': trial.suggest_int('bagging_freq', 1, 7),
-            'lambda_l1': trial.suggest_float('lambda_l1', 1e-8, 10.0, log=True),
-            'lambda_l2': trial.suggest_float('lambda_l2', 1e-8, 10.0, log=True),
+            pruned_history = [{"number": t.number, "reason": t.user_attrs.get("pruned_reason", "N/A")} for t in pruned_trials_current_study]
+
+            status_data = {
+                "regime_atual": self.current_regime, "n_trials": len(study.trials),
+                "total_trials": self.n_trials_for_cycle, "start_time": self.start_time,
+                "n_complete": len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]),
+                "n_pruned": len(pruned_trials_current_study),
+                "n_running": len([t for t in study.trials if t.state == optuna.trial.TrialState.RUNNING]),
+                "best_trial_data": None,
+                "completed_specialists": self.optimization_summary,
+                "pruned_trials_history": pruned_history[-5:],
+                "pruning_reason_summary": dict(total_pruning_counts)
+            }
+            try:
+                best_trial = study.best_trial
+                status_data["best_trial_data"] = {
+                    "value": best_trial.value,
+                    "params": {k: v for k, v in best_trial.params.items() if 'child' not in k},
+                    "user_attrs": best_trial.user_attrs
+                }
+            except ValueError:
+                pass
+            try:
+                with open(OPTIMIZER_STATUS_FILE, 'w') as f:
+                    json.dump(status_data, f)
+            except Exception as e:
+                logger.warning(f"Não foi possível escrever o arquivo de status: {e}")
+
+        if trial.number > 0 and trial.number % 10 == 0:
+            try:
+                logger.info(f"Progresso: Trial {trial.number}/{self.n_trials_for_cycle}, Melhor Score: {study.best_value:.4f}")
+            except ValueError:
+                logger.info(f"Progresso: Trial {trial.number}/{self.n_trials_for_cycle}, Aguardando resultado válido...")
+
+    def _objective(self, trial, data_for_objective):
+        if self.shutdown_requested:
+            trial.set_user_attr("pruned_reason", "Shutdown solicitado.")
+            raise optuna.exceptions.TrialPruned()
+
+        stop_mult = trial.suggest_float('stop_mult', 2.0, 5.0)
+        params = {
+            'future_periods': trial.suggest_int('future_periods', 30, 360),
+            'profit_mult': trial.suggest_float('profit_mult', stop_mult * 1.3, stop_mult + 6.0),
+            'stop_mult': stop_mult,
+            'stop_loss_atr_multiplier': trial.suggest_float('stop_loss_atr_multiplier', 1.0, 4.0),
+            'trailing_stop_multiplier': trial.suggest_float('trailing_stop_multiplier', 1.0, 4.0),
+            'profit_threshold': trial.suggest_float('profit_threshold', 0.01, 0.04),
+            'risk_per_trade_pct': trial.suggest_float('risk_per_trade_pct', 0.01, 0.15),
+            'aggression_exponent': trial.suggest_float('aggression_exponent', 2.0, 5.0),
+            'min_risk_scale': trial.suggest_float('min_risk_scale', 0.2, 0.6),
+            'max_risk_scale': trial.suggest_float('max_risk_scale', 3.0, 8.0),
+            'initial_confidence': trial.suggest_float('initial_confidence', 0.505, 0.75),
+            'confidence_learning_rate': trial.suggest_float('confidence_learning_rate', 0.01, 0.20),
+            'confidence_window_size': trial.suggest_int('confidence_window_size', 5, 30),
+            'confidence_pnl_clamp': trial.suggest_float('confidence_pnl_clamp', 0.01, 0.05),
+            'treasury_allocation_pct': trial.suggest_float('treasury_allocation_pct', 0.10, 0.50),
             
-            # === PARÂMETROS DA CRIAÇÃO DE LABELS (O QUE O BOT DEVE APRENDER A PROCURAR) ===
-            'future_periods': trial.suggest_int('future_periods', 5, 120),
-            'profit_mult': trial.suggest_float('profit_mult', 0.5, 5.0),
-            'stop_mult': trial.suggest_float('stop_mult', 0.5, 5.0),
+            # === MUDANÇA FINAL: OTIMIZAÇÃO DO "TEMPERAMENTO" DO BOT ===
+            'reactivity_multiplier': trial.suggest_float('reactivity_multiplier', 2.0, 15.0),
             
-            # === PARÂMETROS DA ESTRATÉGIA DE TRADING (COMO O BOT DEVE AGIR) ===
-            'profit_threshold': trial.suggest_float('profit_threshold', 0.003, 0.05),
-            'stop_loss_threshold': trial.suggest_float('stop_loss_threshold', 0.003, 0.05),
-            'initial_confidence': trial.suggest_float('initial_confidence', 0.51, 0.75),
-            
-            ### NOVO: OTIMIZAÇÃO DOS PARÂMETROS DE INTELIGÊNCIA ADAPTATIVA ###
-            # O bot vai aprender qual o melhor risco para o período
-            'risk_per_trade_pct': trial.suggest_float('risk_per_trade_pct', 0.01, 0.10), # De 1% a 10% de risco
-            # O bot vai aprender quão rápido ele deve ajustar sua própria confiança
-            'confidence_learning_rate': trial.suggest_float('confidence_learning_rate', 0.01, 0.20)
+            # Parâmetros do Modelo
+            'n_estimators': trial.suggest_int('n_estimators', 100, 800),
+            'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.1),
+            'num_leaves': trial.suggest_int('num_leaves', 15, 100),
+            'max_depth': trial.suggest_int('max_depth', 5, 25),
+            'min_child_samples': trial.suggest_int('min_child_samples', 20, 100),
         }
+
+        data_for_objective['block'] = (data_for_objective['market_regime'] != data_for_objective['market_regime'].shift()).cumsum()
+        regime_blocks = sorted(data_for_objective['block'].unique())
         
-        model, scaler = self.trainer.train(train_data.copy(), all_params)
-        if model is None: return -2.0
-
-        validation_features = self.trainer._prepare_features(validation_data.copy())
-        if validation_features.empty: return -2.0
-        
-        # Passa todos os parâmetros relevantes para a simulação de backtest
-        strategy_params = {
-            'profit_threshold': all_params['profit_threshold'],
-            'stop_loss_threshold': all_params['stop_loss_threshold'],
-            'initial_confidence': all_params['initial_confidence'],
-            'risk_per_trade_pct': all_params['risk_per_trade_pct'],
-            'confidence_learning_rate': all_params['confidence_learning_rate']
-        }
-        
-        capital, sharpe_ratio = run_backtest(
-            model=model, scaler=scaler,
-            test_data_with_features=validation_features,
-            strategy_params=strategy_params,
-            feature_names=self.trainer.feature_names
-        )
-        return sharpe_ratio
-
-    # --- O LOOP PRINCIPAL WALK-FORWARD ---
-    def run(self):
-        logger.info("="*80)
-        logger.info("--- INICIANDO OTIMIZAÇÃO WALK-FORWARD COM INTELIGÊNCIA COMPLETA ---")
-        
-        optuna.logging.set_verbosity(optuna.logging.WARNING)
-        self.full_data.sort_index(inplace=True)
-        n_total = len(self.full_data)
-        train_val_size, test_size, step_size = WFO_TRAIN_MINUTES, WFO_TEST_MINUTES, WFO_STEP_MINUTES
-        if n_total < train_val_size + test_size:
-            return logger.error(f"Dados insuficientes. Necessário: {train_val_size + test_size}, Disponível: {n_total}")
-
-        total_cycles = math.floor((n_total - train_val_size - test_size) / step_size) + 1
-        start_index, cycle, all_results, cumulative_capital = self._load_wfo_state()
-
-        while start_index + train_val_size + test_size <= n_total:
-            if self.shutdown_requested: break
-
-            validation_pct = 0.20
-            train_val_data = self.full_data.iloc[start_index : start_index + train_val_size]
-            test_data = self.full_data.iloc[start_index + train_val_size : start_index + train_val_size + test_size]
-            validation_size = int(len(train_val_data) * validation_pct)
-            train_data = train_val_data.iloc[:-validation_size]
-            validation_data = train_val_data.iloc[-validation_size:]
-            
-            logger.info("\n" + "-"*80)
-            logger.info(f"INICIANDO CICLO DE WFO #{cycle} / {total_cycles}")
-            logger.info(f"  - Período de Treino:      {train_data.index.min():%Y-%m-%d} a {train_data.index.max():%Y-%m-%d}")
-            logger.info(f"  - Período de Validação:   {validation_data.index.min():%Y-%m-%d} a {validation_data.index.max():%Y-%m-%d}")
-            logger.info(f"  - Período de Teste Final: {test_data.index.min():%Y-%m-%d} a {test_data.index.max():%Y-%m-%d}")
-
-            self.n_trials_for_cycle = 100
-            study = optuna.create_study(direction='maximize')
-            study.optimize(lambda trial: self._objective(trial, train_data, validation_data), n_trials=self.n_trials_for_cycle, n_jobs=-1, callbacks=[self._progress_callback])
-            if self.shutdown_requested: break
-            
-            best_trial = study.best_trial
-            logger.info(f"\n  - Otimização do ciclo concluída. Melhor Sharpe na VALIDAÇÃO: {best_trial.value:.4f}")
-
-            if best_trial.value > 0.1:
-                logger.info("  - Treinando modelo final do ciclo com os melhores parâmetros...")
-                # No treino final, usamos todos os parâmetros encontrados, incluindo os do ML
-                final_model, final_scaler = self.trainer.train(train_val_data.copy(), best_trial.params)
-                
-                if final_model:
-                    # Salva apenas os parâmetros da ESTRATÉGIA para o bot de trading usar
-                    strategy_params = {
-                        'profit_threshold': best_trial.params['profit_threshold'],
-                        'stop_loss_threshold': best_trial.params['stop_loss_threshold'],
-                        'initial_confidence': best_trial.params['initial_confidence'],
-                        'risk_per_trade_pct': best_trial.params['risk_per_trade_pct'],
-                        'confidence_learning_rate': best_trial.params['confidence_learning_rate']
-                    }
-                    self.trainer.save_model(final_model, final_scaler)
-                    with open(STRATEGY_PARAMS_FILE, 'w') as f: json.dump(strategy_params, f, indent=4)
-                    
-                    logger.info("  - Executando backtest final no período de TESTE...")
-                    test_features_final = self.trainer._prepare_features(test_data.copy())
-                    
-                    capital, sharpe = run_backtest(
-                        model=final_model, scaler=final_scaler, 
-                        test_data_with_features=test_features_final, 
-                        strategy_params=strategy_params, 
-                        feature_names=self.trainer.feature_names
-                    )
-                    
-                    result_pct = (capital - 100) / 100 if capital > 0 else 0
-                    all_results.append({'period': f"{test_data.index.min():%Y-%m-%d}_a_{test_data.index.max():%Y-%m-%d}", 'capital': capital, 'sharpe': sharpe})
-                    
-                    new_cumulative_capital = cumulative_capital * (1 + result_pct)
-                    logger.info("-" * 25 + f" RESULTADO REAL DO CICLO {cycle} " + "-" * 26)
-                    logger.info(f"  - Resultado do Período de Teste: {result_pct:+.2%}")
-                    logger.info(f"  - Capital Simulado Acumulado: ${cumulative_capital:,.2f} -> ${new_cumulative_capital:,.2f}")
-                    logger.info(f"  - Sharpe Ratio (Anualizado): {sharpe:.2f}")
-                    cumulative_capital = new_cumulative_capital
-                else:
-                    logger.error("  - Falha ao treinar o modelo final do ciclo. Pulando.")
-            else:
-                logger.warning(f"  - Melhor resultado na validação não foi positivo o suficiente. Pulando para o próximo ciclo.")
-            
-            start_index += step_size
-            cycle += 1
-            self._save_wfo_state(cycle, start_index, all_results, cumulative_capital)
+        all_fold_metrics = []
+        for i in range(1, len(regime_blocks)):
+            train_data = data_for_objective[data_for_objective['block'].isin(regime_blocks[:i])].copy()
+            validation_data = data_for_objective[data_for_objective['block'] == regime_blocks[i]].copy()
+            if len(train_data) < 500 or len(validation_data) < 100:
+                continue
+            model, scaler = self.trainer.train(train_data, params, self.feature_names)
+            if model is None:
+                continue
+            val_metrics = run_backtest(model, scaler, validation_data, params, self.feature_names)
+            all_fold_metrics.append(val_metrics)
+            del model, scaler
             gc.collect()
 
-        logger.info("\n\n" + "="*80 + "\n--- OTIMIZAÇÃO WALK-FORWARD CONCLUÍDA ---")
+        if not all_fold_metrics:
+            trial.set_user_attr("pruned_reason", "Nenhum fold de validação produziu resultados.")
+            raise optuna.exceptions.TrialPruned()
+
+        metrics_df = pd.DataFrame(all_fold_metrics, columns=['final_value', 'annual_return', 'max_dd', 'trade_count', 'sortino', 'profit_factor', 'avg_pnl'])
+        
+        median_sortino = metrics_df['sortino'].median()
+        median_profit_factor = metrics_df['profit_factor'].median()
+        total_trades = int(metrics_df['trade_count'].sum())
+
+        if total_trades < 10:
+            trial.set_user_attr("pruned_reason", f"Total de trades ({total_trades}) baixo demais.")
+            raise optuna.exceptions.TrialPruned()
+
+        if median_profit_factor <= 1 or median_sortino <= 0:
+            score_principal = 0.0
+        else:
+            score_principal = (median_profit_factor - 1) * 10
+            score_principal += median_sortino * 0.5 
+        
+        score_principal *= np.log1p(total_trades) / np.log1p(25)
+
+        if math.isnan(score_principal) or score_principal < 0.01:
+            trial.set_user_attr("pruned_reason", f"Score final ({score_principal:.4f}) abaixo do limiar.")
+            raise optuna.exceptions.TrialPruned()
+        
+        trial.set_user_attr("total_trades", total_trades)
+        trial.set_user_attr("median_sortino", median_sortino)
+        trial.set_user_attr("median_profit_factor", median_profit_factor)
+
+        logger.debug(f"Trial {trial.number} concluído. Score: {score_principal:.4f}, Trades: {total_trades}")
+        return score_principal
+
+    def run_optimization_for_specialist(self, name: str, data: pd.DataFrame):
+        self.current_regime = name
+        self.start_time = time.time()
+        logger.info(f"\n{'='*20} Iniciando otimização para: {name.upper()} ({len(data)} velas) {'='*20}")
+
+        study = optuna.create_study(direction='maximize')
+        study.optimize(lambda trial: self._objective(trial, data), n_trials=self.n_trials_for_cycle, n_jobs=-1, callbacks=[self._progress_callback])
+        
+        for t in study.get_trials(deepcopy=False, states=[optuna.trial.TrialState.PRUNED]):
+            reason = t.user_attrs.get("pruned_reason", "Desconhecido")
+            self.cumulative_pruning_stats[reason] += 1
+
+        try:
+            best_trial = study.best_trial
+            best_score = best_trial.value
+        except ValueError:
+            logger.warning(f"❌ Nenhum trial concluído com sucesso para '{name}'.")
+            self.optimization_summary[name] = {'status': 'Skipped - All Trials Pruned', 'score': None}
+            return
+
+        logger.info(f"\n🏁 Otimização de '{name}' concluída. Melhor Score: {best_score:.4f}")
+
+        # Limiar de qualidade para salvar o modelo
+        if best_score > 0.33:
+            logger.info(f"🏆 Resultado excelente! Salvando especialista para '{name}'...")
+            final_model, final_scaler = self.trainer.train(data, best_trial.params, self.feature_names)
+            
+            model_filename = f'model_{name}.joblib'
+            scaler_filename = f'scaler_{name}.joblib'
+            params_filename = f'params_{name}.json'
+            
+            joblib.dump(final_model, os.path.join(DATA_DIR, model_filename))
+            joblib.dump(final_scaler, os.path.join(DATA_DIR, scaler_filename))
+
+            # Separa os parâmetros do modelo e da estratégia para salvar no JSON
+            model_keys = LGBMClassifier().get_params().keys()
+            strategy_params = {k: v for k, v in best_trial.params.items() if k not in model_keys}
+            
+            with open(os.path.join(DATA_DIR, params_filename), 'w') as f:
+                json.dump(strategy_params, f, indent=4)
+
+            self.optimization_summary[name] = {
+                'status': 'Optimized and Saved', 
+                'score': best_score, 
+                'model_file': model_filename, 
+                'params_file': params_filename, 
+                'scaler_file': scaler_filename
+            }
+            log_table(f"Melhores Parâmetros para {name}", {k: [v] for k, v in best_trial.params.items()}, headers="keys")
+        else:
+            logger.warning(f"❌ Score de '{name}' ({best_score:.4f}) não atingiu o limiar de qualidade (0.33).")
+            self.optimization_summary[name] = {'status': 'Skipped - Low Score', 'score': best_score}
+
+    def run(self):
+        logger.info("\n" + "="*80 + "\n--- 🚀 INICIANDO PROCESSO DE OTIMIZAÇÃO (V9.0) 🚀 ---\n" + "="*80)
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+        recent_data = self.full_data.tail(WFO_TRAIN_MINUTES).copy()
+        
+        regime_groups = defaultdict(list)
+        MIN_DATA_FOR_SPECIALIST = 5000
+
+        for r in sorted(recent_data['market_regime'].unique()):
+            base_regime = r.split('_')[0]
+            regime_groups[base_regime].append(r)
+
+        tasks_to_run = {}
+        for base, sub_regimes in regime_groups.items():
+            is_single_regime = len(sub_regimes) == 1
+            data_for_single_regime = recent_data[recent_data['market_regime'] == sub_regimes[0]] if is_single_regime else pd.DataFrame()
+            
+            if is_single_regime and len(data_for_single_regime) >= MIN_DATA_FOR_SPECIALIST:
+                tasks_to_run[sub_regimes[0]] = data_for_single_regime
+            else:
+                generalist_name = f"GENERAL_{base}"
+                logger.info(f"Dados insuficientes para especialista(s) '{', '.join(sub_regimes)}'. Agrupando em '{generalist_name}'.")
+                grouped_data = recent_data[recent_data['market_regime'].isin(sub_regimes)]
+                tasks_to_run[generalist_name] = grouped_data
+                for r in sub_regimes:
+                    self.optimization_summary[r] = {'status': 'Fallback to Generalist', 'fallback_model': generalist_name}
+        
+        log_table("Plano Mestre de Otimização", [[name, len(data)] for name, data in tasks_to_run.items()], headers=["Especialista a Treinar", "Qtd. Velas"])
+
+        for name, data in tasks_to_run.items():
+            if self.shutdown_requested:
+                logger.warning("Otimização interrompida.")
+                break
+            self.run_optimization_for_specialist(name, data)
+
+        if not self.shutdown_requested:
+            self._save_final_metadata()
+        
+        log_table("📋 RESUMO FINAL DA OTIMIZAÇÃO", [[r, d.get('status'), f"{(d.get('score') or 0):.4f}", d.get('fallback_model','N/A')] for r, d in self.optimization_summary.items()], headers=["Regime", "Status", "Score", "Fallback"])
+        logger.info("\n" + "="*80 + "\n--- ✅ PROCESSO DE OTIMIZAÇÃO CONCLUÍDO ✅ ---\n" + "="*80)
+        
+        if os.path.exists(OPTIMIZER_STATUS_FILE):
+            os.remove(OPTIMIZER_STATUS_FILE)
+        if os.path.exists(OPTIMIZER_STATUS_LOCK_FILE):
+            os.remove(OPTIMIZER_STATUS_LOCK_FILE)

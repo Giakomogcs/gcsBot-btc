@@ -1,165 +1,232 @@
-# src/quick_tester.py (VERSÃO FINAL COM INTELIGÊNCIA ADAPTATIVA)
+# src/quick_tester.py (VERSÃO 7.1 - Final e Corrigido)
 
 import json
 import pandas as pd
 import numpy as np
 import joblib
-from tabulate import tabulate
+import os
+from datetime import datetime, timezone, timedelta
 
-from src.logger import logger
-from src.config import MODEL_FILE, SCALER_FILE, STRATEGY_PARAMS_FILE, SYMBOL
+from src.logger import logger, log_table
+from src.config import (
+    MODEL_METADATA_FILE, SYMBOL, FEE_RATE, SLIPPAGE_RATE, IOF_RATE, DATA_DIR,
+    DCA_IN_BEAR_MARKET_ENABLED, DCA_DAILY_AMOUNT_USDT, DCA_MIN_CAPITAL_USDT
+)
 from src.data_manager import DataManager
-from src.model_trainer import ModelTrainer
-# <<< PASSO 1: Importar o cérebro adaptativo >>>
 from src.confidence_manager import AdaptiveConfidenceManager
-
-# Constantes de custo para a simulação
-FEE_RATE = 0.001
-SLIPPAGE_RATE = 0.0005
+from src.backtest import calculate_sortino_ratio
 
 class QuickTester:
-    """
-    Realiza um backtest de validação (out-of-sample) de um modelo treinado,
-    simulando a gestão de confiança adaptativa e risco dinâmico para gerar
-    um relatório de performance completo.
-    """
     def __init__(self):
         self.data_manager = DataManager()
-        self.trainer = ModelTrainer()
-        self.model = None
-        self.scaler = None
+        self.models = {}
+        self.scalers = {}
         self.strategy_params = {}
+        self.confidence_managers = {}
+        self.model_feature_names = []
+        self.regime_map = {} # Mapeia um regime para o especialista que ele deve usar
 
-    def load_model_and_params(self):
-        """Carrega o modelo, normalizador e TODOS os parâmetros otimizados."""
+    def _load_all_specialists(self):
+        """
+        Carrega todos os artefatos de modelo (especialistas e generalistas)
+        com base no arquivo de metadados.
+        """
         try:
-            self.model = joblib.load(MODEL_FILE)
-            self.scaler = joblib.load(SCALER_FILE)
-            with open(STRATEGY_PARAMS_FILE, 'r') as f:
-                self.strategy_params = json.load(f)
-            logger.info("✅ Modelo, normalizador e parâmetros da estratégia carregados com sucesso.")
-            return True
-        except FileNotFoundError as e:
-            logger.error(f"ERRO: Arquivo '{e.filename}' não encontrado. Execute o modo 'optimize' para gerar um modelo primeiro.")
-            return False
+            with open(MODEL_METADATA_FILE, 'r') as f:
+                metadata = json.load(f)
 
-    def generate_report(self, portfolio_history):
-        """Gera e imprime um relatório de performance mensal e geral."""
+            logger.info(f"✅ Metadados carregados. Verificando validade do modelo...")
+            valid_until_dt = datetime.fromisoformat(metadata['valid_until'])
+            if datetime.now(timezone.utc) > valid_until_dt:
+                logger.warning(f"🚨 ALERTA: O CONJUNTO DE MODELOS EXPIROU EM {valid_until_dt.strftime('%Y-%m-%d')}! 🚨")
+            
+            self.model_feature_names = metadata['feature_names']
+            summary = metadata.get('optimization_summary', {})
+            
+            loaded_specialists_count = 0
+            for regime, result in summary.items():
+                specialist_to_load = regime
+                # Se o regime usa um fallback, aponta para o modelo generalista correto
+                if result.get('status') == 'Fallback to Generalist':
+                    specialist_to_load = result['fallback_model']
+                
+                self.regime_map[regime] = specialist_to_load
+                
+                # Carrega o especialista apenas se ele ainda não foi carregado
+                if specialist_to_load and specialist_to_load not in self.models:
+                    try:
+                        final_spec_info = summary.get(specialist_to_load, {})
+                        if final_spec_info.get('status') == 'Optimized and Saved':
+                            model_path = os.path.join(DATA_DIR, final_spec_info['model_file'])
+                            scaler_path = os.path.join(DATA_DIR, final_spec_info['scaler_file'])
+                            params_path = os.path.join(DATA_DIR, final_spec_info['params_file'])
+
+                            self.models[specialist_to_load] = joblib.load(model_path)
+                            self.scalers[specialist_to_load] = joblib.load(scaler_path)
+                            with open(params_path, 'r') as p:
+                                self.strategy_params[specialist_to_load] = json.load(p)
+                            
+                            loaded_specialists_count += 1
+                    except Exception as e:
+                        logger.error(f"Falha ao carregar artefatos para o especialista '{specialist_to_load}': {e}")
+
+            if not self.models:
+                logger.error("Nenhum especialista de trading foi carregado. Execute a otimização.")
+                return False
+
+            logger.info(f"✅ {loaded_specialists_count} especialista(s) únicos carregado(s). O mapeamento de regimes está pronto.")
+            return True
+
+        except Exception as e:
+            logger.error(f"ERRO CRÍTICO ao carregar especialistas: {e}", exc_info=True)
+            return False
+    
+    def generate_report(self, portfolio_history: list, test_period_days: int, buy_and_hold_return: float, final_treasury_btc: float):
         if not portfolio_history:
-            logger.warning("Histórico de portfólio vazio. Não é possível gerar relatório.")
-            return
+            logger.warning("Histórico de portfólio vazio. Não é possível gerar relatório."); return
 
         df = pd.DataFrame(portfolio_history).set_index('timestamp')
-        df['pnl'] = df['value'].diff()
         
-        monthly_report = df.resample('M').agg(
-            start_capital=pd.NamedAgg(column='value', aggfunc='first'),
-            end_capital=pd.NamedAgg(column='value', aggfunc='last'),
-            total_pnl=pd.NamedAgg(column='pnl', aggfunc='sum'),
-            trades=pd.NamedAgg(column='trade_executed', aggfunc='sum')
-        )
-        monthly_report['pnl_pct'] = (monthly_report['end_capital'] / monthly_report['start_capital'] - 1) * 100
+        initial_capital = df['total_value'].iloc[0]
+        final_capital = df['total_value'].iloc[-1]
         
-        monthly_report.index = monthly_report.index.strftime('%Y-%m')
-        report_data = monthly_report.reset_index()
-        report_data.rename(columns={'index': 'Mês'}, inplace=True)
+        total_return = (final_capital / initial_capital) - 1
+        annualized_return = ((1 + total_return) ** (365.0 / test_period_days)) - 1 if test_period_days > 0 else 0
         
-        for col in ['start_capital', 'end_capital', 'total_pnl']:
-            report_data[col] = report_data[col].apply(lambda x: f"${x:,.2f}")
-        report_data['pnl_pct'] = report_data['pnl_pct'].apply(lambda x: f"{x:,.2f}%")
+        running_max = df['total_value'].cummax()
+        drawdown = (df['total_value'] - running_max) / running_max
+        max_drawdown = drawdown.min()
+        
+        sortino_ratio = calculate_sortino_ratio(df['total_value'])
+        calmar_ratio = annualized_return / abs(max_drawdown) if max_drawdown != 0 else 0.0
+        
+        trades_df = df[df['trade_executed'] > 0]
+        total_trades = len(trades_df[trades_df['trade_type'] == 'TRADE'])
+        total_dca = len(trades_df[trades_df['trade_type'] == 'DCA'])
 
-        logger.info("\n\n" + "="*80)
-        logger.info("--- RELATÓRIO DE PERFORMANCE DO BACKTEST (OUT-OF-SAMPLE) ---")
-        print(tabulate(report_data, headers='keys', tablefmt='pipe', showindex=False))
-        
-        initial = df['value'].iloc[0]
-        final = df['value'].iloc[-1]
-        total_pnl = final - initial
-        total_pnl_pct = (final / initial - 1) * 100 if initial > 0 else 0
-        total_trades = df['trade_executed'].sum()
-        
-        logger.info("\n--- RESUMO GERAL ---")
-        logger.info(f"Período Testado: {df.index.min():%Y-%m-%d} a {df.index.max():%Y-%m-%d}")
-        logger.info(f"Capital Inicial: ${initial:,.2f}")
-        logger.info(f"Capital Final: ${final:,.2f}")
-        logger.info(f"Lucro/Prejuízo Total: ${total_pnl:,.2f} ({total_pnl_pct:+.2f}%)")
-        logger.info(f"Total de Trades Executados: {int(total_trades)}")
-        logger.info("="*80)
+        finance_summary = [
+            ["Período Testado", f"{df.index.min():%Y-%m-%d} a {df.index.max():%Y-%m-%d} ({test_period_days} dias)"],
+            ["Capital Inicial", f"${initial_capital:,.2f}"],
+            ["Capital Final", f"💎 ${final_capital:,.2f}"],
+            ["Resultado Total da Estratégia", f"📈 {total_return:+.2%}"],
+            ["Retorno do Buy & Hold no Período", f"📊 {buy_and_hold_return:+.2%}"],
+        ]
+        performance_metrics = [
+            ["Retorno Anualizado", f"{annualized_return:+.2%}"],
+            ["Máximo Drawdown", f"📉 {max_drawdown:.2%}"],
+            ["Sortino Ratio (Retorno/Risco)", f"🍀 {sortino_ratio:.2f}"],
+            ["Calmar Ratio (Retorno/Drawdown)", f"{calmar_ratio:.2f}"],
+        ]
+        activity_summary = [
+            ["Total de Trades de Lucro", f"{int(total_trades)}"],
+            ["Total de Compras de Acumulação (DCA)", f"{int(total_dca)}"],
+            ["Tesouraria Final (BTC Acumulado)", f"🏦 {final_treasury_btc:.8f} BTC"],
+        ]
 
-    def run(self, start_date_str: str, end_date_str: str, initial_capital: float = 1000.0):
-        """Executa a simulação de backtest."""
-        if not self.load_model_and_params():
-            return
+        log_table("🏆 RESUMO GERAL DA PERFORMANCE (OUT-OF-SAMPLE)", finance_summary, headers=["Métrica", "Valor"])
+        log_table("Métricas de Performance", performance_metrics, headers=["Métrica", "Valor"])
+        log_table("Atividade do Bot", activity_summary, headers=["Métrica", "Valor"])
 
-        logger.info(f"Carregando e preparando dados para o período de {start_date_str} a {end_date_str}...")
+    def run(self, start_date_str: str, end_date_str: str, initial_capital: float = 100.0):
+        if not self._load_all_specialists(): return
+
+        logger.info(f"Carregando e preparando dados para o período de teste: {start_date_str} a {end_date_str}...")
         full_data = self.data_manager.update_and_load_data(SYMBOL, '1m')
         
-        test_data = full_data.loc[start_date_str:end_date_str]
-        if test_data.empty:
-            logger.error(f"Não há dados disponíveis para o período de teste solicitado. Verifique as datas.")
-            return
-
-        test_features = self.trainer._prepare_features(test_data.copy())
+        # <<< CORREÇÃO CRÍTICA: USA OS DADOS DIRETAMENTE DO DATAMANAGER >>>
+        test_data = full_data.loc[start_date_str:end_date_str].copy()
         
-        X_test_scaled_np = self.scaler.transform(test_features[self.trainer.feature_names])
-        X_test_scaled_df = pd.DataFrame(X_test_scaled_np, index=test_features.index, columns=self.trainer.feature_names)
-        predictions_proba = self.model.predict_proba(X_test_scaled_df)
-        predictions_buy_proba = pd.Series(predictions_proba[:, 1], index=test_features.index)
-
-        capital = initial_capital
-        btc_amount = 0.0
-        in_position = False
-        buy_price = 0.0
-        portfolio_history = []
+        if test_data.empty: 
+            logger.error("Não há dados disponíveis para o período de teste."); return
         
-        # <<< PASSO 2: Carregar os parâmetros otimizados corretos >>>
-        base_risk_per_trade = self.strategy_params.get('risk_per_trade_pct')
-        initial_conf = self.strategy_params.get('initial_confidence')
-        learning_rate = self.strategy_params.get('confidence_learning_rate')
+        buy_and_hold_return = (test_data['close'].iloc[-1] / test_data['close'].iloc[0]) - 1
         
-        # <<< PASSO 3: Instanciar o cérebro adaptativo >>>
-        confidence_manager = AdaptiveConfidenceManager(initial_confidence=initial_conf, learning_rate=learning_rate)
+        capital_usdt, trading_btc, long_term_btc_holdings, last_dca_time = initial_capital, 0.0, 0.0, None
+        in_position, buy_price, position_phase, current_stop_price, highest_price_in_trade = False, 0.0, None, 0.0, 0.0
+        portfolio_history, last_used_params = [], {}
         
-        logger.info("Iniciando simulação de trading no período de teste...")
-        for date, row in test_features.iterrows():
+        logger.info("🚀 Iniciando simulação de trading (backtest) com especialistas...")
+        for date, row in test_data.iterrows():
             price = row['close']
-            trade_executed_this_step = 0
-
+            trade_executed_this_step, trade_type_this_step = 0, None
+            
+            current_regime = row.get('market_regime', 'LATERAL_CALMO')
+            specialist_name = self.regime_map.get(current_regime)
+            
+            if not specialist_name: # Pula a iteração se não houver especialista mapeado
+                total_portfolio_value = capital_usdt + (trading_btc * price) + (long_term_btc_holdings * price)
+                portfolio_history.append({'timestamp': date, 'total_value': total_portfolio_value, 'trade_executed': 0, 'trade_type': None})
+                continue
+            
+            model = self.models.get(specialist_name)
+            scaler = self.scalers.get(specialist_name)
+            params = self.strategy_params.get(specialist_name)
+            
+            if specialist_name not in self.confidence_managers:
+                self.confidence_managers[specialist_name] = AdaptiveConfidenceManager(**params)
+            confidence_manager = self.confidence_managers.get(specialist_name)
+            
+            trade_signal_found = False
             if in_position:
-                pnl_pct = (price / buy_price) - 1 if buy_price > 0 else 0
-                if (pnl_pct >= self.strategy_params['profit_threshold'] or 
-                    pnl_pct <= -self.strategy_params['stop_loss_threshold']):
-                    
+                highest_price_in_trade = max(highest_price_in_trade, price)
+                if price <= current_stop_price:
                     sell_price = price * (1 - SLIPPAGE_RATE)
-                    revenue = btc_amount * sell_price
-                    capital += revenue * (1 - FEE_RATE)
-                    
-                    # <<< PASSO 4: Atualizar o cérebro após cada trade >>>
-                    pnl_do_trade = (sell_price / buy_price) - 1
-                    confidence_manager.update(pnl_do_trade)
+                    revenue = trading_btc * sell_price
+                    pnl_usdt = (revenue * (1-FEE_RATE)) - (buy_price * trading_btc * (1 + FEE_RATE + IOF_RATE))
+                    pnl_pct = (sell_price / buy_price) - 1
+                    if pnl_usdt > 0:
+                        treasury_usdt = pnl_usdt * last_used_params.get('treasury_allocation_pct', 0.20)
+                        revenue -= treasury_usdt
+                        long_term_btc_holdings += treasury_usdt / price
+                    capital_usdt += revenue
+                    self.confidence_managers[last_used_params['entry_specialist']].update(pnl_pct)
+                    in_position, trading_btc, last_used_params = False, 0.0, {}
+                    trade_executed_this_step, trade_type_this_step = 1, 'TRADE'
+                elif position_phase == 'INITIAL' and price >= buy_price * (1 + last_used_params.get('profit_threshold', 0.01) / 2):
+                    position_phase = 'TRAILING'
+                    current_stop_price = max(current_stop_price, buy_price * (1 + (FEE_RATE * 2)))
+                elif position_phase == 'TRAILING':
+                    new_trailing_stop = highest_price_in_trade - (row['atr'] * last_used_params.get('trailing_stop_multiplier', 1.5))
+                    current_stop_price = max(current_stop_price, new_trailing_stop)
 
-                    btc_amount, in_position, trade_executed_this_step = 0.0, False, 1
-            
-            else:
-                # <<< PASSO 5: Usar a confiança dinâmica para tomar a decisão >>>
-                current_confidence_threshold = confidence_manager.get_confidence()
-                conviction = predictions_buy_proba.get(date, 0)
-
-                if conviction > current_confidence_threshold:
-                    signal_strength = (conviction - current_confidence_threshold) / (1.0 - current_confidence_threshold)
-                    dynamic_risk_pct = base_risk_per_trade * (0.5 + signal_strength)
-                    trade_size_usdt = capital * dynamic_risk_pct
+            if not in_position:
+                if model and row['volume'] >= row['volume_sma_50']:
+                    features_for_prediction = pd.DataFrame([row[self.model_feature_names]])
+                    scaled_features = scaler.transform(features_for_prediction)
+                    buy_confidence = model.predict_proba(scaled_features)[0][1]
                     
-                    if capital > 10 and trade_size_usdt > 10:
-                        buy_price_eff = price * (1 + SLIPPAGE_RATE)
-                        amount_to_buy_btc = trade_size_usdt / buy_price_eff
-                        fee = trade_size_usdt * FEE_RATE
+                    if buy_confidence > confidence_manager.get_confidence():
+                        base_risk = params.get('risk_per_trade_pct', 0.05)
+                        signal_strength = (buy_confidence - confidence_manager.get_confidence()) / (1.0 - confidence_manager.get_confidence())
+                        aggression_factor = params.get('min_risk_scale', 0.5) + (signal_strength ** params.get('aggression_exponent', 2.0)) * (params.get('max_risk_scale', 3.0) - params.get('min_risk_scale', 0.5))
+                        trade_size_usdt = capital_usdt * (base_risk * aggression_factor)
                         
-                        btc_amount = amount_to_buy_btc
-                        capital -= (trade_size_usdt + fee)
-                        buy_price, in_position, trade_executed_this_step = buy_price_eff, True, 1
-            
-            current_value = capital + (btc_amount * price)
-            portfolio_history.append({'timestamp': date, 'value': current_value, 'trade_executed': trade_executed_this_step})
+                        if capital_usdt > 10 and trade_size_usdt > 10:
+                            buy_price_eff = price * (1 + SLIPPAGE_RATE)
+                            cost_of_trade = trade_size_usdt * (1 + FEE_RATE + IOF_RATE)
+                            if capital_usdt >= cost_of_trade:
+                                amount_to_buy_btc = trade_size_usdt / buy_price_eff
+                                in_position, trade_signal_found = True, True
+                                trading_btc, capital_usdt = amount_to_buy_btc, capital_usdt - cost_of_trade
+                                buy_price, highest_price_in_trade = buy_price_eff, buy_price_eff
+                                current_stop_price = buy_price_eff - (row['atr'] * params.get('stop_loss_atr_multiplier', 2.5))
+                                position_phase = 'INITIAL'
+                                last_used_params = {**params, 'entry_specialist': specialist_name}
+                                trade_executed_this_step, trade_type_this_step = 1, 'TRADE'
+                
+                if not trade_signal_found and DCA_IN_BEAR_MARKET_ENABLED and 'BEAR' in current_regime:
+                    if last_dca_time is None or (date - last_dca_time) >= timedelta(hours=24):
+                        if capital_usdt >= DCA_MIN_CAPITAL_USDT:
+                            cost_of_dca = DCA_DAILY_AMOUNT_USDT * (1 + FEE_RATE)
+                            if capital_usdt >= cost_of_dca:
+                                qty_bought = DCA_DAILY_AMOUNT_USDT / (price * (1 + SLIPPAGE_RATE))
+                                capital_usdt -= cost_of_dca
+                                long_term_btc_holdings += qty_bought
+                                last_dca_time = date
+                                trade_executed_this_step, trade_type_this_step = 1, 'DCA'
 
-        self.generate_report(portfolio_history)
+            total_portfolio_value = capital_usdt + (trading_btc * price) + (long_term_btc_holdings * price)
+            portfolio_history.append({'timestamp': date, 'total_value': total_portfolio_value, 'trade_executed': trade_executed_this_step, 'trade_type': trade_type_this_step})
+
+        test_period_days = max(1, (test_data.index[-1] - test_data.index[0]).days)
+        self.generate_report(portfolio_history, test_period_days, buy_and_hold_return, long_term_btc_holdings)

@@ -1,50 +1,66 @@
-# src/confidence_manager.py
+# src/confidence_manager.py (VERSÃO 2.3 - REATIVIDADE DINÂMICA)
 
 import numpy as np
 from src.logger import logger
+from collections import deque
 
 class AdaptiveConfidenceManager:
     """
     Gerencia dinamicamente o limiar de confiança para entrada em trades
-    com base na performance recente.
+    com base na performance de uma janela de trades recentes.
+    Agora com reatividade dinâmica baseada na magnitude do PnL.
     """
-    def __init__(self, initial_confidence: float, learning_rate: float = 0.05, min_confidence: float = 0.505, max_confidence: float = 0.85):
-        """
-        Args:
-            initial_confidence (float): O limiar de confiança inicial, otimizado pelo Optuna.
-            learning_rate (float): Quão agressivamente a confiança se ajusta. Valores maiores = ajustes mais rápidos.
-            min_confidence (float): O valor mínimo que a confiança pode atingir.
-            max_confidence (float): O valor máximo que a confiança pode atingir.
-        """
+    # === MUDANÇA 1: Adicionar novo parâmetro de reatividade ===
+    def __init__(self, initial_confidence: float, confidence_learning_rate: float = 0.05,
+                 min_confidence: float = 0.505, max_confidence: float = 0.85,
+                 confidence_window_size: int = 5, confidence_pnl_clamp: float = 0.02,
+                 reactivity_multiplier: float = 5.0, **kwargs):
         self.initial_confidence = initial_confidence
         self.current_confidence = initial_confidence
-        self.learning_rate = learning_rate
+        self.learning_rate = confidence_learning_rate
         self.min_confidence = min_confidence
         self.max_confidence = max_confidence
         self.trade_count = 0
-        
-        logger.debug(f"AdaptiveConfidenceManager inicializado com confiança inicial de {initial_confidence:.3f}")
+        self.pnl_history = deque(maxlen=confidence_window_size)
+        self.pnl_clamp_value = abs(confidence_pnl_clamp)
+        self.reactivity_multiplier = reactivity_multiplier
+
+        logger.debug(
+            f"AdaptiveConfidenceManager inicializado: Confiança Inicial={initial_confidence:.3f}, "
+            f"Janela={confidence_window_size}, Taxa Aprendizado={self.learning_rate:.3f}, "
+            f"Clamp PnL=±{self.pnl_clamp_value:.2%}, Reatividade={self.reactivity_multiplier}"
+        )
 
     def update(self, pnl_percent: float):
         """
-        Atualiza o limiar de confiança com base no resultado do último trade.
-        - Se o trade foi lucrativo (pnl_percent > 0), a confiança diminui (fica mais "ousado").
-        - Se o trade deu prejuízo (pnl_percent <= 0), a confiança aumenta (fica mais "cauteloso").
+        Atualiza o limiar de confiança. O ajuste agora é amplificado pela
+        magnitude da média de PnL recente.
         """
         self.trade_count += 1
+        self.pnl_history.append(pnl_percent)
         
-        # O ajuste é proporcional ao PnL, mas com um limite para evitar mudanças bruscas
-        # Um lucro de 2% (0.02) ou uma perda de 2% (-0.02) são considerados o "máximo" para o ajuste.
-        clamped_pnl = np.clip(pnl_percent, -0.02, 0.02)
+        mean_pnl = np.mean(self.pnl_history)
         
-        # A fórmula central: subtrai o PnL ponderado. Se PnL é positivo, confiança cai. Se PnL é negativo, confiança sobe.
-        adjustment = self.learning_rate * clamped_pnl
+        clamped_pnl = np.clip(mean_pnl, -self.pnl_clamp_value, self.pnl_clamp_value)
+        
+        # === MUDANÇA 2: Lógica de ajuste dinâmico ===
+        # O fator de reatividade amplifica o ajuste com base na magnitude do PnL médio.
+        # Resultados fortes (positivos ou negativos) causam uma reação mais forte.
+        reactivity_factor = 1.0 + (abs(clamped_pnl) * self.reactivity_multiplier)
+        
+        adjustment = self.learning_rate * clamped_pnl * reactivity_factor
+        
         new_confidence = self.current_confidence - adjustment
         
-        # Garante que a nova confiança permaneça dentro dos limites definidos
         self.current_confidence = np.clip(new_confidence, self.min_confidence, self.max_confidence)
         
-        logger.debug(f"Trade #{self.trade_count}: PnL={pnl_percent:+.2%}. Confiança ajustada de {self.current_confidence + adjustment:.3f} para {self.current_confidence:.3f}")
+        log_message = (
+            f"🧠 Cérebro Tático (Trade #{self.trade_count}): "
+            f"PnL Médio (últimos {len(self.pnl_history)})={mean_pnl:+.2%}. "
+            f"Ajuste={-adjustment:.4f} (Reatividade: {reactivity_factor:.2f}x). " # Log da reatividade
+            f"Confiança alterada para {self.current_confidence:.3f}"
+        )
+        logger.debug(log_message)
 
     def get_confidence(self) -> float:
         """Retorna o limiar de confiança atual."""
