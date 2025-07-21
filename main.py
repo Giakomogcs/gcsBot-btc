@@ -18,8 +18,8 @@ def main():
         logger.info("--- MODO: OTIMIZAÇÃO WALK-FORWARD ---")
         logger.info("Iniciando o processo de otimização para encontrar os melhores parâmetros...")
 
-        from src.data_manager import DataManager
-        from src.optimizer import WalkForwardOptimizer
+        from src.core.data_manager import DataManager
+        from src.core.optimizer import WalkForwardOptimizer
 
         # O DataManager é responsável por carregar, processar e fazer o cache dos dados
         dm = DataManager()
@@ -41,7 +41,7 @@ def main():
 
     elif MODE == 'backtest':
         logger.info(f"--- MODO: BACKTEST RÁPIDO ---")
-        from src.quick_tester import QuickTester
+        from src.core.quick_tester import QuickTester
         
         tester = QuickTester()
         tester.run(start_date_str=BACKTEST_START_DATE, end_date_str=BACKTEST_END_DATE)
@@ -58,7 +58,7 @@ def main():
             logger.warning(">>> ATENÇÃO: OPERANDO NA BINANCE REAL (CARTEIRA REAL) <<<")
             logger.warning("************************************************************")
 
-        from src.trading_bot import TradingBot
+        from src.core.trading_bot import TradingBot
         
         bot = TradingBot()
         bot.run()

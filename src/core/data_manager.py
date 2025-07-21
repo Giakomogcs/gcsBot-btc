@@ -20,6 +20,7 @@ from src.config import (
     API_KEY, API_SECRET, USE_TESTNET, HISTORICAL_DATA_FILE, KAGGLE_BOOTSTRAP_FILE,
     FORCE_OFFLINE_MODE, COMBINED_DATA_CACHE_FILE
 )
+from src.core.situational_awareness import SituationalAwareness
 
 def _optimize_memory_usage(df: pd.DataFrame) -> pd.DataFrame:
     logger.debug("Otimizando uso de memória do DataFrame...")
@@ -57,6 +58,7 @@ class DataManager:
         else:
             logger.info("MODO OFFLINE FORÇADO está ativo.")
             
+        self.situational_awareness = SituationalAwareness()
         self.feature_names = [
             'rsi', 'rsi_1h', 'rsi_4h', 'macd_diff', 'macd_diff_1h', 'stoch_osc', 'adx', 'adx_power',
             'atr', 'bb_width', 'bb_pband', 'sma_7_25_diff', 'close_sma_25_dist',
@@ -64,7 +66,8 @@ class DataManager:
             'gold_close_change', 'tnx_close_change', 'atr_long_avg', 'volume_sma_50',
             'cci', 'williams_r', 'momentum_10m', 'volatility_ratio', 'sma_50_200_diff',
             'btc_dxy_corr_30d', 'btc_vix_corr_30d',
-            'dxy_change_X_bull', 'dxy_change_X_bear', 'dxy_change_X_lateral'
+            'dxy_change_X_bull', 'dxy_change_X_bear', 'dxy_change_X_lateral',
+            'market_situation'
         ]
 
     def _prepare_all_features(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -353,19 +356,20 @@ class DataManager:
 
         df_with_features = self._prepare_all_features(df_combined)
         df_with_regimes = self._add_market_regime(df_with_features)
+        df_with_situations = self.situational_awareness.cluster_data(df_with_regimes)
 
         logger.info("Calculando features de interação (Camada 3: Tática Avançada)...")
-        if 'dxy_close_change' in df_with_regimes.columns:
-            df_with_regimes['dxy_change_X_bull'] = df_with_regimes['dxy_close_change'] * df_with_regimes['market_regime'].str.contains('BULL').astype(int)
-            df_with_regimes['dxy_change_X_bear'] = df_with_regimes['dxy_close_change'] * df_with_regimes['market_regime'].str.contains('BEAR').astype(int)
-            df_with_regimes['dxy_change_X_lateral'] = df_with_regimes['dxy_close_change'] * df_with_regimes['market_regime'].str.contains('LATERAL').astype(int)
+        if 'dxy_close_change' in df_with_situations.columns:
+            df_with_situations['dxy_change_X_bull'] = df_with_situations['dxy_close_change'] * df_with_situations['market_regime'].str.contains('BULL').astype(int)
+            df_with_situations['dxy_change_X_bear'] = df_with_situations['dxy_close_change'] * df_with_situations['market_regime'].str.contains('BEAR').astype(int)
+            df_with_situations['dxy_change_X_lateral'] = df_with_situations['dxy_close_change'] * df_with_situations['market_regime'].str.contains('LATERAL').astype(int)
         else:
-            df_with_regimes['dxy_change_X_bull'] = 0.0
-            df_with_regimes['dxy_change_X_bear'] = 0.0
-            df_with_regimes['dxy_change_X_lateral'] = 0.0
+            df_with_situations['dxy_change_X_bull'] = 0.0
+            df_with_situations['dxy_change_X_bear'] = 0.0
+            df_with_situations['dxy_change_X_lateral'] = 0.0
 
         logger.info("Filtrando dados de 2017 em diante e tratando valores ausentes/infinitos...")
-        df_filtered = df_with_regimes[df_with_regimes.index >= '2017-01-01'].copy()
+        df_filtered = df_with_situations[df_with_situations.index >= '2017-01-01'].copy()
         
         logger.info("Aplicando shift(1) nas features para evitar lookahead bias...")
         df_filtered[self.feature_names] = df_filtered[self.feature_names].shift(1)

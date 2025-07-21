@@ -17,8 +17,8 @@ from lightgbm import LGBMClassifier
 from filelock import FileLock
 from collections import defaultdict
 
-from src.model_trainer import ModelTrainer
-from src.backtest import run_backtest
+from src.core.model_trainer import ModelTrainer
+from src.core.backtest import run_backtest
 from src.logger import logger, log_table
 from src.config import (
     WFO_TRAIN_MINUTES, MODEL_VALIDITY_MONTHS,
@@ -54,12 +54,6 @@ class WalkForwardOptimizer:
             now_utc = datetime.now(timezone.utc)
             valid_until = now_utc + relativedelta(months=MODEL_VALIDITY_MONTHS)
 
-            for regime, result in list(self.optimization_summary.items()):
-                if result.get('status') == 'Fallback to Generalist':
-                    fallback_model_name = result.get('fallback_model')
-                    if fallback_model_name in self.optimization_summary:
-                        self.optimization_summary[regime] = self.optimization_summary[fallback_model_name]
-
             metadata = {
                 'last_optimization_date': now_utc.isoformat(),
                 'valid_until': valid_until.isoformat(),
@@ -91,13 +85,13 @@ class WalkForwardOptimizer:
             pruned_history = [{"number": t.number, "reason": t.user_attrs.get("pruned_reason", "N/A")} for t in pruned_trials_current_study]
 
             status_data = {
-                "regime_atual": self.current_regime, "n_trials": len(study.trials),
+                "situation_atual": self.current_regime, "n_trials": len(study.trials),
                 "total_trials": self.n_trials_for_cycle, "start_time": self.start_time,
                 "n_complete": len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]),
                 "n_pruned": len(pruned_trials_current_study),
                 "n_running": len([t for t in study.trials if t.state == optuna.trial.TrialState.RUNNING]),
                 "best_trial_data": None,
-                "completed_specialists": self.optimization_summary,
+                "completed_situations": self.optimization_summary,
                 "pruned_trials_history": pruned_history[-5:],
                 "pruning_reason_summary": dict(total_pruning_counts)
             }
@@ -206,7 +200,7 @@ class WalkForwardOptimizer:
         logger.debug(f"Trial {trial.number} concluído. Score: {score_principal:.4f}, Trades: {total_trades}")
         return score_principal
 
-    def run_optimization_for_specialist(self, name: str, data: pd.DataFrame):
+    def run_optimization_for_situation(self, name: str, data: pd.DataFrame):
         self.current_regime = name
         self.start_time = time.time()
         logger.info(f"\n{'='*20} Iniciando otimização para: {name.upper()} ({len(data)} velas) {'='*20}")
@@ -265,35 +259,22 @@ class WalkForwardOptimizer:
 
         recent_data = self.full_data.tail(WFO_TRAIN_MINUTES).copy()
         
-        regime_groups = defaultdict(list)
-        MIN_DATA_FOR_SPECIALIST = 5000
-
-        for r in sorted(recent_data['market_regime'].unique()):
-            base_regime = r.split('_')[0]
-            regime_groups[base_regime].append(r)
+        situation_groups = recent_data.groupby('market_situation')
 
         tasks_to_run = {}
-        for base, sub_regimes in regime_groups.items():
-            is_single_regime = len(sub_regimes) == 1
-            data_for_single_regime = recent_data[recent_data['market_regime'] == sub_regimes[0]] if is_single_regime else pd.DataFrame()
-            
-            if is_single_regime and len(data_for_single_regime) >= MIN_DATA_FOR_SPECIALIST:
-                tasks_to_run[sub_regimes[0]] = data_for_single_regime
+        for situation, data in situation_groups:
+            if len(data) >= 5000:
+                tasks_to_run[f"SITUATION_{situation}"] = data
             else:
-                generalist_name = f"GENERAL_{base}"
-                logger.info(f"Dados insuficientes para especialista(s) '{', '.join(sub_regimes)}'. Agrupando em '{generalist_name}'.")
-                grouped_data = recent_data[recent_data['market_regime'].isin(sub_regimes)]
-                tasks_to_run[generalist_name] = grouped_data
-                for r in sub_regimes:
-                    self.optimization_summary[r] = {'status': 'Fallback to Generalist', 'fallback_model': generalist_name}
-        
-        log_table("Plano Mestre de Otimização", [[name, len(data)] for name, data in tasks_to_run.items()], headers=["Especialista a Treinar", "Qtd. Velas"])
+                logger.info(f"Dados insuficientes para a situação {situation}. Pulando.")
+
+        log_table("Plano Mestre de Otimização", [[name, len(data)] for name, data in tasks_to_run.items()], headers=["Situação a Treinar", "Qtd. Velas"])
 
         for name, data in tasks_to_run.items():
             if self.shutdown_requested:
                 logger.warning("Otimização interrompida.")
                 break
-            self.run_optimization_for_specialist(name, data)
+            self.run_optimization_for_situation(name, data)
 
         if not self.shutdown_requested:
             self._save_final_metadata()

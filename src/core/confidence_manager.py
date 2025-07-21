@@ -11,23 +11,23 @@ class AdaptiveConfidenceManager:
     Agora com reatividade dinâmica baseada na magnitude do PnL.
     """
     # === MUDANÇA 1: Adicionar novo parâmetro de reatividade ===
-    def __init__(self, initial_confidence: float, learning_rate: float = 0.05, 
-                 min_confidence: float = 0.505, max_confidence: float = 0.85, 
-                 window_size: int = 5, pnl_clamp_value: float = 0.02,
-                 reactivity_multiplier: float = 5.0):
+    def __init__(self, initial_confidence: float, confidence_learning_rate: float = 0.05,
+                 min_confidence: float = 0.505, max_confidence: float = 0.85,
+                 confidence_window_size: int = 5, confidence_pnl_clamp: float = 0.02,
+                 reactivity_multiplier: float = 5.0, **kwargs):
         self.initial_confidence = initial_confidence
         self.current_confidence = initial_confidence
-        self.learning_rate = learning_rate
+        self.learning_rate = confidence_learning_rate
         self.min_confidence = min_confidence
         self.max_confidence = max_confidence
         self.trade_count = 0
-        self.pnl_history = deque(maxlen=window_size)
-        self.pnl_clamp_value = abs(pnl_clamp_value)
-        self.reactivity_multiplier = reactivity_multiplier # Armazena o novo parâmetro
+        self.pnl_history = deque(maxlen=confidence_window_size)
+        self.pnl_clamp_value = abs(confidence_pnl_clamp)
+        self.reactivity_multiplier = reactivity_multiplier
 
         logger.debug(
             f"AdaptiveConfidenceManager inicializado: Confiança Inicial={initial_confidence:.3f}, "
-            f"Janela={window_size}, Taxa Aprendizado={learning_rate:.3f}, "
+            f"Janela={confidence_window_size}, Taxa Aprendizado={self.learning_rate:.3f}, "
             f"Clamp PnL=±{self.pnl_clamp_value:.2%}, Reatividade={self.reactivity_multiplier}"
         )
 

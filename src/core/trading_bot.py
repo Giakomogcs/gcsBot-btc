@@ -19,9 +19,11 @@ from src.config import (
     MAX_USDT_ALLOCATION, FEE_RATE, SLIPPAGE_RATE, IOF_RATE, SESSION_MAX_DRAWDOWN, # <-- MUDANÇA 1: Importar
     MODEL_METADATA_FILE, DCA_IN_BEAR_MARKET_ENABLED, DCA_DAILY_AMOUNT_USDT, DCA_MIN_CAPITAL_USDT
 )
-from src.data_manager import DataManager
-from src.confidence_manager import AdaptiveConfidenceManager
-from src.display_manager import display_trading_dashboard
+from src.core.data_manager import DataManager
+from src.core.confidence_manager import AdaptiveConfidenceManager
+from src.core.display_manager import display_trading_dashboard
+from src.core.rl_agent import BetSizingAgent
+from src.core.treasury_manager import TreasuryManager
 
 class PortfolioManager:
     """Gerencia todo o capital, posições e a tesouraria de longo prazo."""
@@ -106,10 +108,12 @@ class TradingBot:
         self.last_dca_time = None
         self.last_event_message = "Inicializando o bot..."
         self.specialist_stats = {}
+        self.rl_agent = BetSizingAgent(n_situations=10)
+        self.treasury_manager = TreasuryManager()
         signal.signal(signal.SIGINT, self.graceful_shutdown)
         signal.signal(signal.SIGTERM, self.graceful_shutdown)
 
-    def _load_all_specialists(self):
+    def _load_all_models(self):
         try:
             with open(MODEL_METADATA_FILE, 'r') as f: metadata = json.load(f)
             logger.info("✅ Metadados carregados. Verificando validade do modelo...")
@@ -121,54 +125,44 @@ class TradingBot:
             self.model_feature_names = metadata['feature_names']
             summary = metadata.get('optimization_summary', {})
             
-            loaded_specialists_count = 0
-            for regime, result in summary.items():
-                specialist_to_load = regime
-                if result.get('status') == 'Fallback to Generalist':
-                    specialist_to_load = result['fallback_model']
-                
-                self.regime_map[regime] = specialist_to_load
-                
-                if specialist_to_load and specialist_to_load not in self.models:
+            loaded_models_count = 0
+            for situation, result in summary.items():
+                if result.get('status') == 'Optimized and Saved':
                     try:
-                        final_spec_info = summary.get(specialist_to_load, {})
-                        if final_spec_info.get('status') == 'Optimized and Saved':
-                            self.models[specialist_to_load] = joblib.load(os.path.join(DATA_DIR, final_spec_info['model_file']))
-                            self.scalers[specialist_to_load] = joblib.load(os.path.join(DATA_DIR, final_spec_info['scaler_file']))
-                            with open(os.path.join(DATA_DIR, final_spec_info['params_file']), 'r') as p:
-                                self.strategy_params[specialist_to_load] = json.load(p)
-                            loaded_specialists_count += 1
+                        self.models[situation] = joblib.load(os.path.join(DATA_DIR, result['model_file']))
+                        self.scalers[situation] = joblib.load(os.path.join(DATA_DIR, result['scaler_file']))
+                        with open(os.path.join(DATA_DIR, result['params_file']), 'r') as p:
+                            self.strategy_params[situation] = json.load(p)
+                        loaded_models_count += 1
                     except Exception as e:
-                        logger.error(f"Falha ao carregar artefatos para '{specialist_to_load}': {e}")
+                        logger.error(f"Falha ao carregar artefatos para '{situation}': {e}")
             
             if not self.models:
-                logger.error("ERRO CRÍTICO: Nenhum especialista foi carregado. Execute a otimização.")
+                logger.error("ERRO CRÍTICO: Nenhum modelo foi carregado. Execute a otimização.")
                 return False
-            logger.info(f"✅ {loaded_specialists_count} especialista(s) únicos carregados e prontos para operar.")
+            logger.info(f"✅ {loaded_models_count} modelo(s) únicos carregados e prontos para operar.")
             return True
         except Exception as e:
-            logger.error(f"Erro fatal ao carregar especialistas: {e}", exc_info=True)
+            logger.error(f"Erro fatal ao carregar modelos: {e}", exc_info=True)
             return False
 
-    def _get_active_specialist(self, regime: str):
-        specialist_name = self.regime_map.get(regime)
-        if not specialist_name: return None, None, None, None
+    def _get_active_model(self, situation: int):
+        situation_name = f"SITUATION_{situation}"
+        if situation_name not in self.models:
+            return None, None, None, None
         
-        model = self.models.get(specialist_name)
-        scaler = self.scalers.get(specialist_name)
-        params = self.strategy_params.get(specialist_name)
+        model = self.models.get(situation_name)
+        scaler = self.scalers.get(situation_name)
+        params = self.strategy_params.get(situation_name)
         
-        if specialist_name not in self.confidence_managers:
-            # === MUDANÇA 2: Sincronização total com os parâmetros otimizados ===
-            # Garante que o bot use o "temperamento" (reactivity_multiplier) exato
-            # que foi otimizado para este especialista.
-            self.confidence_managers[specialist_name] = AdaptiveConfidenceManager(**params)
+        if situation_name not in self.confidence_managers:
+            self.confidence_managers[situation_name] = AdaptiveConfidenceManager(**params)
 
-        confidence_manager = self.confidence_managers.get(specialist_name)
+        confidence_manager = self.confidence_managers.get(situation_name)
         return model, scaler, params, confidence_manager
 
     def run(self):
-        if not self._load_all_specialists(): return
+        if not self._load_all_models(): return
         self._initialize_trade_log()
         if not self._load_state():
             if not self.portfolio.sync_with_live_balance():
@@ -190,6 +184,7 @@ class TradingBot:
                     trade_signal_found = self._check_for_entry_signal(latest_data)
                     if not trade_signal_found: self._handle_dca_opportunity(latest_data)
 
+                self.treasury_manager.track_progress(self.portfolio.long_term_btc_holdings)
                 status_data = self._build_status_data(latest_data)
                 display_trading_dashboard(status_data)
                 self._save_state()
@@ -208,7 +203,7 @@ class TradingBot:
                 self.last_event_message = f"CIRCUIT BREAKER! Drawdown de {session_drawdown:.2%}"
                 logger.critical(self.last_event_message)
                 self.session_drawdown_stop_activated = True
-                if self.in_trade_position: self._execute_sell(current_price, "Circuit Breaker")
+                if self.in_trade_position: self._execute_sell(current_price, "Circuit Breaker", latest_data)
 
     # ... (O restante do arquivo permanece idêntico) ...
     def _manage_active_position(self, latest_data: pd.Series):
@@ -219,7 +214,7 @@ class TradingBot:
         self.last_event_message = f"Em trade. P&L: {pnl_pct:+.2%} (${pnl_usdt:,.2f})"
 
         if price <= self.current_stop_price:
-            self._execute_sell(price, f"Stop Loss ({pnl_pct:.2%})"); return
+            self._execute_sell(price, f"Stop Loss ({pnl_pct:.2%})", latest_data); return
         
         params = self.last_used_params
         if self.position_phase == 'INITIAL' and price >= self.buy_price * (1 + params.get('profit_threshold', 0.01) / 2):
@@ -236,11 +231,11 @@ class TradingBot:
                 logger.info(self.last_event_message)
 
     def _check_for_entry_signal(self, latest_data: pd.Series) -> bool:
-        regime = latest_data['market_regime']
-        model, scaler, params, confidence_manager = self._get_active_specialist(regime)
+        situation = latest_data['market_situation']
+        model, scaler, params, confidence_manager = self._get_active_model(situation)
 
         if not all([model, scaler, params, confidence_manager]):
-            self.last_event_message = f"Aguardando (sem especialista para {regime})."; return False
+            self.last_event_message = f"Aguardando (sem modelo para situação {situation})."; return False
         
         if latest_data.get('volume', 0) < latest_data.get('volume_sma_50', 0):
             self.last_event_message = "Aguardando (volume baixo)."; return False
@@ -249,34 +244,47 @@ class TradingBot:
         scaled_features = scaler.transform(features_for_prediction)
         buy_confidence = model.predict_proba(scaled_features)[0][1]
         
-        current_confidence_threshold = confidence_manager.get_confidence()
-        self.last_event_message = f"Aguardando... Confiança: {buy_confidence:.2%} (Alvo: {current_confidence_threshold:.2%})"
+        base_threshold = 0.55
 
-        if buy_confidence > current_confidence_threshold:
-            base_risk = params.get('risk_per_trade_pct', 0.05)
-            signal_strength = (buy_confidence - current_confidence_threshold) / (1.0 - current_confidence_threshold) if (1.0 - current_confidence_threshold) > 0 else 1.0
-            aggression_factor = params.get('min_risk_scale', 0.5) + (signal_strength ** params.get('aggression_exponent', 2.0)) * (params.get('max_risk_scale', 3.0) - params.get('min_risk_scale', 0.5))
-            trade_size_usdt = self.portfolio.trading_capital_usdt * (base_risk * aggression_factor)
+        # Profit-seeking escalation
+        if self.session_wins > 0 and self.session_trades > 0 and self.session_wins == self.session_trades:
+            profit_seeking_escalation = 1 - (self.session_wins * 0.01)
+            base_threshold *= profit_seeking_escalation
+
+        # Loss-aversion escalation
+        if self.session_trades > 0 and self.session_wins < self.session_trades:
+            loss_aversion_escalation = 1 + ((self.session_trades - self.session_wins) * 0.02)
+            base_threshold *= loss_aversion_escalation
+
+        # Volatility modifier
+        volatility_modifier = 1 + (latest_data['volatility_ratio'] * 0.1)
+        final_threshold = base_threshold * volatility_modifier
+
+        self.last_event_message = f"Aguardando... Confiança: {buy_confidence:.2%} (Alvo: {final_threshold:.2%})"
+
+        if buy_confidence > final_threshold:
+            state = self.rl_agent.get_state(situation, buy_confidence)
+            action = self.rl_agent.get_action(state)
+            bet_size = self.rl_agent.get_bet_size(action)
+            trade_size_usdt = self.portfolio.trading_capital_usdt * bet_size
 
             if trade_size_usdt < 10: return False
             
             stop_price = latest_data['close'] - (latest_data['atr'] * params.get('stop_loss_atr_multiplier', 2.5))
-            self._execute_buy(latest_data['close'], trade_size_usdt, stop_price, buy_confidence, regime, params)
+            self._execute_buy(latest_data['close'], trade_size_usdt, stop_price, buy_confidence, situation, params, latest_data, action)
             return True
         return False
 
     def _handle_dca_opportunity(self, latest_data: pd.Series):
-        if not DCA_IN_BEAR_MARKET_ENABLED or 'BEAR' not in latest_data['market_regime']: return
+        amount_to_buy_usdt = self.treasury_manager.smart_accumulation(latest_data, self.portfolio.trading_capital_usdt)
+        if amount_to_buy_usdt == 0:
+            return
 
-        now = datetime.now(timezone.utc)
-        if self.last_dca_time and (now - self.last_dca_time) < timedelta(hours=24): return
-        if self.portfolio.trading_capital_usdt < DCA_MIN_CAPITAL_USDT: return
-        
         try:
-            self.last_event_message = f"Executando DCA de ${DCA_DAILY_AMOUNT_USDT:,.2f}..."
+            self.last_event_message = f"Executando Acumulação Inteligente de ${amount_to_buy_usdt:,.2f}..."
             logger.info(self.last_event_message)
             
-            cost = DCA_DAILY_AMOUNT_USDT
+            cost = amount_to_buy_usdt
             if not self.client or USE_TESTNET:
                 buy_price_eff = latest_data['close'] * (1 + SLIPPAGE_RATE)
                 qty_bought = cost / buy_price_eff
@@ -289,12 +297,12 @@ class TradingBot:
                 self._log_trade("DCA (REAL)", buy_price_eff, qty_bought, "Acumulação em baixa")
             
             self.portfolio.update_on_dca(qty_bought, cost_with_fees)
-            self.last_dca_time = now
+            self.last_dca_time = datetime.now(timezone.utc)
         except Exception as e:
             self.last_event_message = "Falha na compra de DCA."
             logger.error(f"ERRO AO EXECUTAR COMPRA DE DCA: {e}", exc_info=True)
 
-    def _execute_buy(self, price, trade_size_usdt, stop_price, confidence, regime, params: dict):
+    def _execute_buy(self, price, trade_size_usdt, stop_price, confidence, regime, params: dict, latest_data: pd.Series, action: int):
         try:
             self.last_event_message = f"COMPRANDO ${trade_size_usdt:,.2f} (Conf. {confidence:.1%})"
             logger.info(self.last_event_message)
@@ -314,12 +322,17 @@ class TradingBot:
             
             self.in_trade_position, self.position_phase = True, 'INITIAL'
             self.current_stop_price, self.highest_price_in_trade = stop_price, self.buy_price
-            self.last_used_params = {**params, 'entry_regime': regime, 'entry_specialist': self.regime_map.get(regime)}
+            self.last_used_params = {
+                **params,
+                'entry_situation': latest_data['market_situation'],
+                'buy_confidence': confidence,
+                'rl_action': action,
+            }
         except Exception as e:
             logger.error(f"ERRO AO EXECUTAR COMPRA: {e}", exc_info=True)
             self.in_trade_position = False
 
-    def _execute_sell(self, price, reason):
+    def _execute_sell(self, price, reason, latest_data: pd.Series):
         amount_to_sell = self.portfolio.trading_btc_balance
         if amount_to_sell <= 0: return
         try:
@@ -347,21 +360,32 @@ class TradingBot:
             self.session_total_pnl_usdt += pnl_usdt
             self.last_used_params['last_pnl_pct'] = pnl_pct
 
-            specialist_name = self.last_used_params.get('entry_specialist')
-            if specialist_name and specialist_name in self.confidence_managers:
-                confidence_manager = self.confidence_managers[specialist_name]
+            situation_name = f"SITUATION_{self.last_used_params.get('entry_situation')}"
+            if situation_name and situation_name in self.confidence_managers:
+                confidence_manager = self.confidence_managers[situation_name]
                 confidence_before = confidence_manager.get_confidence()
                 confidence_manager.update(pnl_pct)
                 confidence_after = confidence_manager.get_confidence()
                 
                 log_payload = {
-                    'event_type': 'TRADE_CLOSE', 'specialist': specialist_name, 'pnl_usd': pnl_usdt,
+                    'event_type': 'TRADE_CLOSE', 'situation': situation_name, 'pnl_usd': pnl_usdt,
                     'pnl_pct': pnl_pct, 'reason': reason, 'buy_price': self.buy_price,
                     'sell_price': actual_sell_price, 'quantity_btc': amount_to_sell,
                     'confidence_threshold_before': confidence_before, 'confidence_threshold_after': confidence_after,
                 }
                 logger.performance("Trade fechado", extra_data=log_payload)
-                self._update_specialist_stats(specialist_name, pnl_usdt)
+                self._update_specialist_stats(situation_name, pnl_usdt)
+
+                # Update RL agent
+                reward = pnl_usdt
+                state = self.rl_agent.get_state(self.last_used_params.get('entry_situation'), self.last_used_params.get('buy_confidence'))
+                action = self.last_used_params.get('rl_action')
+                next_state = self.rl_agent.get_state(latest_data['market_situation'], 0) # No confidence in next state
+                self.rl_agent.update_q_table(state, action, reward, next_state)
+
+                # Learning from errors
+                if pnl_usdt < 0:
+                    self.rl_agent.update_q_table(state, action, -1, next_state)
 
             self.portfolio.update_on_sell(amount_to_sell, revenue, pnl_usdt, actual_sell_price, self.last_used_params)
             self.in_trade_position, self.position_phase = False, None
@@ -390,16 +414,17 @@ class TradingBot:
         current_price = latest_data['close']
         total_value = self.portfolio.get_total_portfolio_value_usdt(current_price)
         growth_pct = (total_value / self.portfolio.initial_total_value_usdt - 1) * 100 if self.portfolio.initial_total_value_usdt > 0 else 0
-        regime = latest_data['market_regime']
-        active_specialist_name = self.regime_map.get(regime)
-        confidence_manager = self.confidence_managers.get(active_specialist_name)
-        last_op_specialist_name = self.last_used_params.get('entry_specialist', 'N/A')
+        situation = latest_data['market_situation']
+        situation_name = f"SITUATION_{situation}"
+        confidence_manager = self.confidence_managers.get(situation_name)
+        last_op_situation_name = f"SITUATION_{self.last_used_params.get('entry_situation', 'N/A')}"
+        recommendation = self.treasury_manager.is_it_worth_it(latest_data)
 
         return {
             "portfolio": { "current_price": current_price, "total_value_usdt": total_value, "session_growth_pct": growth_pct, "trading_capital_usdt": self.portfolio.trading_capital_usdt, "trading_btc_balance": self.portfolio.trading_btc_balance, "trading_btc_value_usdt": self.portfolio.trading_btc_balance * current_price, "long_term_btc_holdings": self.portfolio.long_term_btc_holdings, "long_term_value_usdt": self.portfolio.long_term_btc_holdings * current_price, },
             "session_stats": { "trades": self.session_trades, "wins": self.session_wins, "total_pnl_usdt": self.session_total_pnl_usdt, },
-            "bot_status": { "market_regime": regime, "active_specialist": active_specialist_name, "confidence_threshold": confidence_manager.get_confidence() if confidence_manager else 0, "last_event_message": self.last_event_message, },
-            "last_operation": { "specialist_name": last_op_specialist_name, "pnl_pct": self.last_used_params.get('last_pnl_pct', 0.0), **self.specialist_stats.get(last_op_specialist_name, {}) }
+            "bot_status": { "market_situation": situation, "active_model": situation_name, "confidence_threshold": confidence_manager.get_confidence() if confidence_manager else 0, "last_event_message": self.last_event_message, "recommendation": recommendation },
+            "last_operation": { "situation_name": last_op_situation_name, "pnl_pct": self.last_used_params.get('last_pnl_pct', 0.0), **self.specialist_stats.get(last_op_situation_name, {}) }
         }
 
     def _save_state(self):
