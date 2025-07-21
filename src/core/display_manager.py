@@ -1,153 +1,97 @@
-# src/display_manager.py (VERSÃO 5.0 - DASHBOARD ENXUTO E INTELIGENTE)
+# src/display_manager.py
 
 import os
 import sys
 from datetime import datetime
-import pandas as pd
-from tabulate import tabulate
-import time
-from collections import Counter
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from rich.live import Live
+from rich.layout import Layout
+from rich.text import Text
 
-def clear_screen():
-    os.system('cls' if os.name == 'nt' else 'clear')
-
-def get_progress_bar(progress, total, length=40):
-    if total == 0:
-        percent = 0
-    else:
-        percent = length * (progress / total)
-    filled = int(percent)
-    bar = '█' * filled + '-' * (length - filled)
-    return f"|{bar}| {progress}/{total}"
-
-def display_optimization_dashboard(status_data: dict):
-    """Exibe o painel de controle focado com as informações mais relevantes."""
-    clear_screen()
-    title = "🏭 FÁBRICA DE ESPECIALISTAS GCS-BOT 🏭"
-    print(f"{'='*80}\n{title:^80}\n{'='*80}")
-
-    # --- Seção 1: Resumo dos Especialistas Já Concluídos ---
-    completed = status_data.get('completed_specialists') or {}
-    print("\n--- ✅ ESPECIALISTAS CONCLUÍDOS ---")
-    summary_data = []
-    headers = ["Especialista", "Status", "Melhor Score", "Modelo Salvo"]
-    for name, results in completed.items():
-        if results.get('status') in ['Optimized and Saved', 'Skipped - Low Score', 'Skipped - All Trials Pruned']:
-            score_value = results.get('score')
-            score_str = f"{score_value:.4f}" if score_value is not None else "N/A"
-            summary_data.append([
-                name, results.get('status', 'N/A'), score_str, results.get('model_file', 'N/A')
-            ])
-    if summary_data:
-        print(tabulate(summary_data, headers=headers, tablefmt="heavy_grid"))
-    else:
-        print("Nenhum especialista concluiu seu ciclo de otimização ainda...")
-
-    # --- Seção 2: Otimização em Andamento ---
-    print("\n--- 🔄 OTIMIZAÇÃO ATUAL ---")
-    regime_atual = status_data.get('regime_atual', 'Aguardando...')
-    progresso_str = f"Progresso: {get_progress_bar(status_data.get('n_trials', 0), status_data.get('total_trials', 0))}"
-    status_str = f"Status: Completos: {status_data.get('n_complete', 0)}, Podados: {status_data.get('n_pruned', 0)}, Em Execução: {status_data.get('n_running', 0)}"
-    tempo_str = f"Tempo Decorrido: {time.strftime('%H:%M:%S', time.gmtime(time.time() - status_data.get('start_time', time.time())))}"
-    print(f"Especialista: [ {regime_atual.upper()} ]\n{progresso_str}\n{status_str}\n{tempo_str}")
-
-    # === MUDANÇA PRINCIPAL: PLACAR DE PODAS FOCADO ===
-    # Agora esta seção mostra apenas os motivos de poda para o especialista atual,
-    # tornando o feedback mais imediato e relevante.
-    print("\n--- 📊 PLACAR DE PODAS (ESPECIALISTA ATUAL) ---")
-    pruned_history_current = status_data.get('pruned_trials_history') or []
-    if pruned_history_current:
-        # Contamos os motivos de poda apenas do histórico da sessão atual
-        reason_counts = Counter(item['reason'] for item in pruned_history_current)
-        # Mostramos os 5 principais motivos, para manter o display enxuto
-        top_5_reasons = sorted(reason_counts.items(), key=lambda item: item[1], reverse=True)[:5]
-        summary_data = [[reason, count] for reason, count in top_5_reasons]
-        print(tabulate(summary_data, headers=["Motivo da Poda (Sessão)", "Contagem"], tablefmt="heavy_grid"))
-    else:
-        print("Nenhum trial foi podado ainda para este especialista.")
-        
-    # --- Seção 4: Detalhes do Melhor Resultado Encontrado ---
-    print("\n--- 🏆 MELHOR RESULTADO (ESPECIALISTA ATUAL) ---")
-    best_trial_data = status_data.get('best_trial_data')
-    if best_trial_data:
-        user_attrs = best_trial_data.get('user_attrs', {})
-        details_data = [
-            ["Melhor Score", f"{best_trial_data.get('value', 0.0):.4f}"],
-            ["Total de Trades", user_attrs.get("total_trades", "N/A")],
-            ["Sortino Ratio", f"{user_attrs.get('median_sortino', 0):.2f}"],
-            ["Profit Factor", f"{user_attrs.get('median_profit_factor', 0):.2f}"]
-        ]
-        print(tabulate(details_data, tablefmt="plain"))
-    else:
-        print("Aguardando o primeiro trial ser concluído com sucesso...")
-        
-    print(f"\nÚltima atualização: {datetime.now().strftime('%H:%M:%S')}")
-    sys.stdout.flush()
-
+console = Console()
 
 def display_trading_dashboard(status_data: dict):
     """Exibe o painel de controle para o modo de trading a partir de um dicionário de status."""
     if not sys.stdout.isatty():
         return
-    
-    clear_screen()
-    title = "🤖 GCS-BOT EM OPERAÇÃO 🤖"
-    print(f"{'='*70}\n{title:^70}\n{'='*70}")
+
+    layout = Layout()
+
+    layout.split(
+        Layout(name="header", size=3),
+        Layout(ratio=1, name="main"),
+        Layout(size=3, name="footer"),
+    )
+
+    layout["main"].split_row(Layout(name="left"), Layout(name="right"))
+    layout["left"].split_column(
+        Layout(name="portfolio"),
+        Layout(name="session_stats"),
+    )
+    layout["right"].split_column(
+        Layout(name="bot_status"),
+        Layout(name="last_operation"),
+    )
+
+    header = Panel(Text("🤖 GCS-BOT EM OPERAÇÃO 🤖", justify="center", style="bold white on blue"))
+    layout["header"].update(header)
 
     portfolio = status_data.get('portfolio', {})
-    current_price = portfolio.get('current_price', 0)
-    total_value = portfolio.get('total_value_usdt', 0)
-    growth_pct = portfolio.get('session_growth_pct', 0)
-    pnl_color = "🟢" if growth_pct >= 0 else "🔴"
-    growth_display = f"{pnl_color} {growth_pct:+.2%}"
+    portfolio_table = Table(title="📊 PORTFÓLIO")
+    portfolio_table.add_column("Ativo", style="cyan")
+    portfolio_table.add_column("Valor", style="magenta")
+    portfolio_table.add_row("Capital de Trading (USDT)", f"💵 ${portfolio.get('trading_capital_usdt', 0):,.2f}")
+    portfolio_table.add_row("Posição Aberta (BTC)", f"📈 {portfolio.get('trading_btc_balance', 0):.8f} BTC")
+    portfolio_table.add_row("  └─ Valor Posição (USDT)", f"   ${portfolio.get('trading_btc_value_usdt', 0):,.2f}")
+    portfolio_table.add_row("Tesouraria Longo Prazo (BTC)", f"🏦 {portfolio.get('long_term_btc_holdings', 0):.8f} BTC")
+    portfolio_table.add_row("  └─ Valor Tesouraria (USDT)", f"   ${portfolio.get('long_term_value_usdt', 0):,.2f}")
+    portfolio_table.add_row("Valor Total (USDT)", f"💎 ${portfolio.get('total_value_usdt', 0):,.2f}")
+    layout["portfolio"].update(Panel(portfolio_table))
 
-    portfolio_data = [
-        ["Capital de Trading (USDT)", f"💵 ${portfolio.get('trading_capital_usdt', 0):,.2f}"],
-        ["Posição Aberta (BTC)", f"📈 {portfolio.get('trading_btc_balance', 0):.8f} BTC"],
-        ["  └─ Valor Posição (USDT)", f"   ${portfolio.get('trading_btc_value_usdt', 0):,.2f}"],
-        ["Tesouraria Longo Prazo (BTC)", f"🏦 {portfolio.get('long_term_btc_holdings', 0):.8f} BTC"],
-        ["  └─ Valor Tesouraria (USDT)", f"   ${portfolio.get('long_term_value_usdt', 0):,.2f}"],
-        ["Valor Total (USDT)", f"💎 ${total_value:,.2f}"],
-    ]
-    
     session_stats = status_data.get('session_stats', {})
+    session_stats_table = Table(title="📈 PERFORMANCE DA SESSÃO")
+    session_stats_table.add_column("Métrica", style="cyan")
+    session_stats_table.add_column("Valor", style="magenta")
     trades = session_stats.get('trades', 0)
     wins = session_stats.get('wins', 0)
     losses = trades - wins
-    total_pnl = session_stats.get('total_pnl_usdt', 0.0)
     win_rate = (wins / trades * 100) if trades > 0 else 0
-    pnl_color_realized = "🟢" if total_pnl >= 0 else "🔴"
+    total_pnl = session_stats.get('total_pnl_usdt', 0.0)
+    pnl_color_realized = "green" if total_pnl >= 0 else "red"
+    session_stats_table.add_row("Trades na Sessão", f"{trades} ({wins}V / {losses}D)")
+    session_stats_table.add_row("Taxa de Acerto", f"{win_rate:.2f}%")
+    session_stats_table.add_row("P&L Realizado (USDT)", Text(f"${total_pnl:,.2f}", style=pnl_color_realized))
+    growth_pct = portfolio.get('session_growth_pct', 0)
+    pnl_color = "green" if growth_pct >= 0 else "red"
+    session_stats_table.add_row("Crescimento na Sessão", Text(f"{growth_pct:+.2%}", style=pnl_color))
+    layout["session_stats"].update(Panel(session_stats_table))
 
-    stats_data = [
-        ["Trades na Sessão", f"{trades} ({wins}V / {losses}D)"],
-        ["Taxa de Acerto", f"{win_rate:.2f}%"],
-        ["P&L Realizado (USDT)", f"{pnl_color_realized} ${total_pnl:,.2f}"],
-        ["Crescimento na Sessão", growth_display],
-    ]
-    
     bot_status = status_data.get('bot_status', {})
-    status_info = [
-        ["Regime de Mercado Atual", bot_status.get('market_regime', 'N/A')],
-        ["Especialista Ativo", bot_status.get('active_specialist', 'N/A')],
-        ["Confiança Mínima (Alvo)", f"{bot_status.get('confidence_threshold', 0):.2%}"],
-        ["Último Evento", bot_status.get('last_event_message', '')[:65]],
-    ]
-    
+    bot_status_table = Table(title="🧠 STATUS DO BOT")
+    bot_status_table.add_column("Parâmetro", style="cyan")
+    bot_status_table.add_column("Valor", style="magenta")
+    bot_status_table.add_row("Situação de Mercado Atual", str(bot_status.get('market_situation', 'N/A')))
+    bot_status_table.add_row("Modelo Ativo", bot_status.get('active_model', 'N/A'))
+    bot_status_table.add_row("Confiança Mínima (Alvo)", f"{bot_status.get('confidence_threshold', 0):.2%}")
+    bot_status_table.add_row("Último Evento", bot_status.get('last_event_message', '')[:65])
+    bot_status_table.add_row("Recomendação", bot_status.get('recommendation', 'N/A'))
+    layout["bot_status"].update(Panel(bot_status_table))
+
     last_op = status_data.get('last_operation', {})
-    op_color = "🟢" if last_op.get('pnl_pct', 0) >= 0 else "🔴"
-    
-    last_op_data = [
-        ["Especialista", last_op.get('specialist_name', 'N/A')],
-        ["Resultado do Último Trade", f"{op_color} {last_op.get('pnl_pct', 0):+.2%}"],
-        ["Trades / Vitórias", f"{last_op.get('total_trades', 0)} / {last_op.get('wins', 0)}"],
-        ["P&L Total do Especialista", f"${last_op.get('total_pnl', 0):,.2f}"],
-    ]
+    last_op_table = Table(title="🎯 ÚLTIMA OPERAÇÃO")
+    last_op_table.add_column("Métrica", style="cyan")
+    last_op_table.add_column("Valor", style="magenta")
+    op_color = "green" if last_op.get('pnl_pct', 0) >= 0 else "red"
+    last_op_table.add_row("Situação", last_op.get('situation_name', 'N/A'))
+    last_op_table.add_row("Resultado do Último Trade", Text(f"{last_op.get('pnl_pct', 0):+.2%}", style=op_color))
+    last_op_table.add_row("Trades / Vitórias", f"{last_op.get('total_trades', 0)} / {last_op.get('wins', 0)}")
+    last_op_table.add_row("P&L Total da Situação", f"${last_op.get('total_pnl', 0):,.2f}")
+    layout["last_operation"].update(Panel(last_op_table))
 
-    print("\n--- 📊 PORTFÓLIO ---"); print(tabulate(portfolio_data, tablefmt="heavy_grid", numalign="right"))
-    print("\n--- 📈 PERFORMANCE DA SESSÃO ---"); print(tabulate(stats_data, tablefmt="heavy_grid"))
-    print("\n--- 🧠 STATUS DO BOT ---"); print(tabulate(status_info, tablefmt="heavy_grid"))
-    print("\n--- 🎯 ÚLTIMA OPERAÇÃO ---"); print(tabulate(last_op_data, tablefmt="heavy_grid"))
+    footer = Panel(Text(f"Preço Atual BTC: ${portfolio.get('current_price', 0):,.2f} | Última atualização: {datetime.now().strftime('%H:%M:%S')}", justify="center"))
+    layout["footer"].update(footer)
 
-    print(f"\n{'='*70}")
-    print(f"Preço Atual BTC: ${current_price:,.2f} | Última atualização: {datetime.now().strftime('%H:%M:%S')}")
-    sys.stdout.flush()
+    with Live(layout, console=console, screen=True, transient=True):
+        pass

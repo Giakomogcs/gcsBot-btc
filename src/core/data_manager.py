@@ -17,7 +17,7 @@ from ta.momentum import StochasticOscillator, RSIIndicator, WilliamsRIndicator
 
 from src.logger import logger
 from src.config import (
-    API_KEY, API_SECRET, USE_TESTNET, HISTORICAL_DATA_FILE, KAGGLE_BOOTSTRAP_FILE,
+    API_KEY, API_SECRET, TESTNET_API_KEY, TESTNET_API_SECRET, USE_TESTNET, HISTORICAL_DATA_FILE, KAGGLE_BOOTSTRAP_FILE,
     FORCE_OFFLINE_MODE, COMBINED_DATA_CACHE_FILE
 )
 from src.core.situational_awareness import SituationalAwareness
@@ -47,10 +47,20 @@ class DataManager:
         self.is_online = False
         if not FORCE_OFFLINE_MODE:
             try:
-                self.client = Client(API_KEY, API_SECRET, tld='com', testnet=USE_TESTNET, requests_params={"timeout": 20})
+                api_key_to_use = TESTNET_API_KEY if USE_TESTNET else API_KEY
+                api_secret_to_use = TESTNET_API_SECRET if USE_TESTNET else API_SECRET
+
+                if not api_key_to_use or not api_secret_to_use:
+                    logger.warning("API Key ou Secret não encontradas para o modo selecionado. Operando em modo OFFLINE-FALLBACK.")
+                    self.client = None
+                    self.is_online = False
+                    return
+
+                self.client = Client(api_key_to_use, api_secret_to_use, tld='com', testnet=USE_TESTNET, requests_params={"timeout": 20})
                 self.client.ping()
                 self.is_online = True
-                logger.info("Cliente Binance inicializado e conexão com a API confirmada. Modo ONLINE ativo.")
+                log_message = f"Cliente Binance inicializado em modo {'TESTNET' if USE_TESTNET else 'REAL'}. Conexão com a API confirmada."
+                logger.info(log_message)
             except (BinanceAPIException, BinanceRequestException, Exception) as e:
                 logger.warning(f"FALHA NA CONEXÃO: {e}. O bot operará em modo OFFLINE-FALLBACK.")
                 self.client = None

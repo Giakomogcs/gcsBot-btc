@@ -12,6 +12,7 @@ import sys
 from binance.client import Client
 from binance.exceptions import BinanceAPIException, BinanceRequestException
 from datetime import datetime, timezone, timedelta
+from collections import deque
 
 from src.logger import logger
 from src.config import (
@@ -24,6 +25,8 @@ from src.core.confidence_manager import AdaptiveConfidenceManager
 from src.core.display_manager import display_trading_dashboard
 from src.core.rl_agent import BetSizingAgent
 from src.core.treasury_manager import TreasuryManager
+from src.core.anomaly_detector import AnomalyDetector
+from src.core.optimizer import WalkForwardOptimizer
 
 class PortfolioManager:
     """Gerencia todo o capital, posições e a tesouraria de longo prazo."""
@@ -110,6 +113,8 @@ class TradingBot:
         self.specialist_stats = {}
         self.rl_agent = BetSizingAgent(n_situations=10)
         self.treasury_manager = TreasuryManager()
+        self.anomaly_detector = AnomalyDetector()
+        self.performance_history = {}
         signal.signal(signal.SIGINT, self.graceful_shutdown)
         signal.signal(signal.SIGTERM, self.graceful_shutdown)
 
@@ -163,6 +168,7 @@ class TradingBot:
 
     def run(self):
         if not self._load_all_models(): return
+        self.anomaly_detector.train(self.data_manager.update_and_load_data(SYMBOL, '1m'), self.model_feature_names)
         self._initialize_trade_log()
         if not self._load_state():
             if not self.portfolio.sync_with_live_balance():
@@ -185,6 +191,7 @@ class TradingBot:
                     if not trade_signal_found: self._handle_dca_opportunity(latest_data)
 
                 self.treasury_manager.track_progress(self.portfolio.long_term_btc_holdings)
+                self._check_model_performance()
                 status_data = self._build_status_data(latest_data)
                 display_trading_dashboard(status_data)
                 self._save_state()
@@ -237,6 +244,11 @@ class TradingBot:
         if not all([model, scaler, params, confidence_manager]):
             self.last_event_message = f"Aguardando (sem modelo para situação {situation})."; return False
         
+        # Anomaly detection
+        is_anomaly = self.anomaly_detector.predict(pd.DataFrame([latest_data]), self.model_feature_names)[0] == -1
+        if is_anomaly:
+            self.last_event_message = "Anomalia detectada. Nenhuma ação será tomada."; return False
+
         if latest_data.get('volume', 0) < latest_data.get('volume_sma_50', 0):
             self.last_event_message = "Aguardando (volume baixo)."; return False
 
@@ -387,6 +399,11 @@ class TradingBot:
                 if pnl_usdt < 0:
                     self.rl_agent.update_q_table(state, action, -1, next_state)
 
+                # Update performance history
+                if situation_name not in self.performance_history:
+                    self.performance_history[situation_name] = deque(maxlen=100)
+                self.performance_history[situation_name].append(pnl_usdt)
+
             self.portfolio.update_on_sell(amount_to_sell, revenue, pnl_usdt, actual_sell_price, self.last_used_params)
             self.in_trade_position, self.position_phase = False, None
         except Exception as e: logger.error(f"ERRO AO EXECUTAR VENDA: {e}", exc_info=True)
@@ -409,6 +426,18 @@ class TradingBot:
         stats['total_trades'] += 1
         stats['total_pnl'] += pnl_usdt
         if pnl_usdt > 0: stats['wins'] += 1
+
+    def _check_model_performance(self):
+        for situation_name, history in self.performance_history.items():
+            if len(history) == 100:
+                average_pnl = np.mean(history)
+                if average_pnl < 0:
+                    logger.warning(f"A performance do modelo para a situação {situation_name} está degradando. Acionando re-otimização...")
+                    optimizer = WalkForwardOptimizer(self.data_manager.update_and_load_data(SYMBOL, '1m'), self.model_feature_names)
+                    situation_data = self.data_manager.update_and_load_data(SYMBOL, '1m')
+                    situation_data = situation_data[situation_data['market_situation'] == int(situation_name.split('_')[-1])]
+                    optimizer.run_optimization_for_situation(situation_name, situation_data)
+                    self.performance_history[situation_name].clear()
 
     def _build_status_data(self, latest_data: pd.Series) -> dict:
         current_price = latest_data['close']

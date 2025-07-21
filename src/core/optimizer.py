@@ -14,6 +14,7 @@ import time
 from datetime import datetime, timezone
 from dateutil.relativedelta import relativedelta
 from lightgbm import LGBMClassifier
+import lightgbm as lgb
 from filelock import FileLock
 from collections import defaultdict
 
@@ -121,33 +122,11 @@ class WalkForwardOptimizer:
             trial.set_user_attr("pruned_reason", "Shutdown solicitado.")
             raise optuna.exceptions.TrialPruned()
 
-        stop_mult = trial.suggest_float('stop_mult', 2.0, 5.0)
         params = {
-            'future_periods': trial.suggest_int('future_periods', 30, 360),
-            'profit_mult': trial.suggest_float('profit_mult', stop_mult * 1.3, stop_mult + 6.0),
-            'stop_mult': stop_mult,
-            'stop_loss_atr_multiplier': trial.suggest_float('stop_loss_atr_multiplier', 1.0, 4.0),
-            'trailing_stop_multiplier': trial.suggest_float('trailing_stop_multiplier', 1.0, 4.0),
-            'profit_threshold': trial.suggest_float('profit_threshold', 0.01, 0.04),
-            'risk_per_trade_pct': trial.suggest_float('risk_per_trade_pct', 0.01, 0.15),
-            'aggression_exponent': trial.suggest_float('aggression_exponent', 2.0, 5.0),
-            'min_risk_scale': trial.suggest_float('min_risk_scale', 0.2, 0.6),
-            'max_risk_scale': trial.suggest_float('max_risk_scale', 3.0, 8.0),
-            'initial_confidence': trial.suggest_float('initial_confidence', 0.505, 0.75),
-            'confidence_learning_rate': trial.suggest_float('confidence_learning_rate', 0.01, 0.20),
-            'confidence_window_size': trial.suggest_int('confidence_window_size', 5, 30),
-            'confidence_pnl_clamp': trial.suggest_float('confidence_pnl_clamp', 0.01, 0.05),
-            'treasury_allocation_pct': trial.suggest_float('treasury_allocation_pct', 0.10, 0.50),
-            
-            # === MUDANÇA FINAL: OTIMIZAÇÃO DO "TEMPERAMENTO" DO BOT ===
-            'reactivity_multiplier': trial.suggest_float('reactivity_multiplier', 2.0, 15.0),
-            
-            # Parâmetros do Modelo
-            'n_estimators': trial.suggest_int('n_estimators', 100, 800),
-            'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.1),
-            'num_leaves': trial.suggest_int('num_leaves', 15, 100),
-            'max_depth': trial.suggest_int('max_depth', 5, 25),
-            'min_child_samples': trial.suggest_int('min_child_samples', 20, 100),
+            'objective': 'binary',
+            'metric': 'binary_logloss',
+            'verbosity': -1,
+            'boosting_type': 'gbdt',
         }
 
         data_for_objective['block'] = (data_for_objective['market_regime'] != data_for_objective['market_regime'].shift()).cumsum()
@@ -159,7 +138,7 @@ class WalkForwardOptimizer:
             validation_data = data_for_objective[data_for_objective['block'] == regime_blocks[i]].copy()
             if len(train_data) < 500 or len(validation_data) < 100:
                 continue
-            model, scaler = self.trainer.train(train_data, params, self.feature_names)
+            model, scaler = self.trainer.train(train_data, params, self.feature_names, base_model=self.base_model)
             if model is None:
                 continue
             val_metrics = run_backtest(model, scaler, validation_data, params, self.feature_names)
@@ -205,10 +184,17 @@ class WalkForwardOptimizer:
         self.start_time = time.time()
         logger.info(f"\n{'='*20} Iniciando otimização para: {name.upper()} ({len(data)} velas) {'='*20}")
 
-        study = optuna.create_study(direction='maximize')
-        study.optimize(lambda trial: self._objective(trial, data), n_trials=self.n_trials_for_cycle, n_jobs=-1, callbacks=[self._progress_callback])
+        tuner = optuna.integration.LightGBMTuner(
+            self._objective,
+            study_name=name,
+            n_trials=self.n_trials_for_cycle,
+            n_jobs=-1,
+            callbacks=[self._progress_callback],
+            model_dir=f"data/models/{name}",
+        )
+        tuner.run()
         
-        for t in study.get_trials(deepcopy=False, states=[optuna.trial.TrialState.PRUNED]):
+        for t in tuner.study.get_trials(deepcopy=False, states=[optuna.trial.TrialState.PRUNED]):
             reason = t.user_attrs.get("pruned_reason", "Desconhecido")
             self.cumulative_pruning_stats[reason] += 1
 
@@ -225,7 +211,7 @@ class WalkForwardOptimizer:
         # Limiar de qualidade para salvar o modelo
         if best_score > 0.33:
             logger.info(f"🏆 Resultado excelente! Salvando especialista para '{name}'...")
-            final_model, final_scaler = self.trainer.train(data, best_trial.params, self.feature_names)
+            final_model, final_scaler = self.trainer.train(data, best_trial.params, self.feature_names, base_model=self.base_model)
             
             model_filename = f'model_{name}.joblib'
             scaler_filename = f'scaler_{name}.joblib'
@@ -256,6 +242,15 @@ class WalkForwardOptimizer:
     def run(self):
         logger.info("\n" + "="*80 + "\n--- 🚀 INICIANDO PROCESSO DE OTIMIZAÇÃO (V9.0) 🚀 ---\n" + "="*80)
         optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+        base_model_params = {
+            'n_estimators': 500,
+            'learning_rate': 0.05,
+            'num_leaves': 50,
+            'max_depth': 15,
+            'min_child_samples': 50,
+        }
+        self.base_model = self.trainer.train_base_model(self.full_data, base_model_params, self.feature_names)
 
         recent_data = self.full_data.tail(WFO_TRAIN_MINUTES).copy()
         
