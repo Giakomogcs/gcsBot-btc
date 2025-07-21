@@ -3,10 +3,20 @@
 import numpy as np
 import pandas as pd
 
-from src.config import FEE_RATE, SLIPPAGE_RATE, IOF_RATE
+from src.config import settings
 from src.core.confidence_manager import AdaptiveConfidenceManager
 
-def calculate_sortino_ratio(series, periods_per_year=365*24*60):
+def calculate_sortino_ratio(series: pd.Series, periods_per_year: int = 365 * 24 * 60) -> float:
+    """
+    Calculates the Sortino ratio of a pandas Series.
+
+    Args:
+        series: A pandas Series with the portfolio values.
+        periods_per_year: The number of periods per year.
+
+    Returns:
+        The Sortino ratio.
+    """
     if len(series) < 2: return 0.0
     returns = series.pct_change().dropna()
     if len(returns) < 2: return 0.0
@@ -19,7 +29,22 @@ def calculate_sortino_ratio(series, periods_per_year=365*24*60):
     sortino = (expected_return * periods_per_year) / (downside_std * np.sqrt(periods_per_year))
     return sortino if not pd.isna(sortino) else 0.0
 
-def run_backtest(model, scaler, test_data_with_features: pd.DataFrame, strategy_params: dict, feature_names: list):
+from typing import List, Dict, Any, Tuple
+
+def run_backtest(model: Any, scaler: Any, test_data_with_features: pd.DataFrame, strategy_params: Dict[str, Any], feature_names: List[str]) -> Tuple[float, float, float, int, float, float, float]:
+    """
+    Runs a backtest of the trading strategy.
+
+    Args:
+        model: The trained model.
+        scaler: The scaler used to scale the features.
+        test_data_with_features: The test data with the features.
+        strategy_params: The parameters of the strategy.
+        feature_names: The names of the features to use.
+
+    Returns:
+        A tuple with the backtest results.
+    """
     initial_capital = 100.0
     capital_usdt = initial_capital
     trading_btc = 0.0
@@ -60,9 +85,9 @@ def run_backtest(model, scaler, test_data_with_features: pd.DataFrame, strategy_
         if in_position:
             highest_price_in_trade = max(highest_price_in_trade, price)
             if price <= current_stop_price:
-                sell_price = price * (1 - SLIPPAGE_RATE)
-                revenue_usdt = (trading_btc * sell_price) * (1 - FEE_RATE)
-                pnl_usdt = revenue_usdt - (trading_btc * buy_price * (1 + FEE_RATE + IOF_RATE))
+                sell_price = price * (1 - settings.SLIPPAGE_RATE)
+                revenue_usdt = (trading_btc * sell_price) * (1 - settings.FEE_RATE)
+                pnl_usdt = revenue_usdt - (trading_btc * buy_price * (1 + settings.FEE_RATE + settings.IOF_RATE))
                 trade_pnls.append(pnl_usdt)
                 pnl_pct = (sell_price / buy_price) - 1 if buy_price > 0 else 0
                 reinvested_usdt = revenue_usdt
@@ -75,7 +100,7 @@ def run_backtest(model, scaler, test_data_with_features: pd.DataFrame, strategy_
                 in_position, trading_btc = False, 0.0
             elif position_phase == 'INITIAL' and price >= buy_price * (1 + profit_threshold / 2):
                 position_phase = 'TRAILING'
-                current_stop_price = max(current_stop_price, buy_price * (1 + (FEE_RATE * 2)))
+                current_stop_price = max(current_stop_price, buy_price * (1 + (settings.FEE_RATE * 2)))
             elif position_phase == 'TRAILING':
                 new_trailing_stop = highest_price_in_trade - (row['atr'] * trailing_stop_multiplier)
                 current_stop_price = max(current_stop_price, new_trailing_stop)
@@ -89,8 +114,8 @@ def run_backtest(model, scaler, test_data_with_features: pd.DataFrame, strategy_
                 dynamic_risk_pct = base_risk * aggression_factor
                 trade_size_usdt = capital_usdt * dynamic_risk_pct
                 if capital_usdt > 10 and trade_size_usdt > 10:
-                    buy_price_eff = price * (1 + SLIPPAGE_RATE)
-                    cost_of_trade = trade_size_usdt * (1 + FEE_RATE + IOF_RATE)
+                    buy_price_eff = price * (1 + settings.SLIPPAGE_RATE)
+                    cost_of_trade = trade_size_usdt * (1 + settings.FEE_RATE + settings.IOF_RATE)
                     if capital_usdt >= cost_of_trade:
                         amount_to_buy_btc = trade_size_usdt / buy_price_eff
                         in_position, trading_btc, capital_usdt, buy_price = True, amount_to_buy_btc, capital_usdt - cost_of_trade, buy_price_eff

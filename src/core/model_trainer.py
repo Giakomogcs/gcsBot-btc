@@ -1,11 +1,12 @@
 # src/model_trainer.py (VERSÃO 7.1 - FOCADO EM CLASSIFICAÇÃO BINÁRIA)
 
+from datetime import datetime, timezone
 import pandas as pd
 import numpy as np
 from lightgbm import LGBMClassifier
 from sklearn.preprocessing import StandardScaler
 from numba import jit
-from typing import Tuple, List, Any
+from typing import Tuple, List, Any, Dict
 
 from src.logger import logger, log_table
 from src.core.feature_selector import FeatureSelector
@@ -16,9 +17,19 @@ def create_labels_triple_barrier(
     future_periods: int, profit_multiplier: float, stop_multiplier: float
 ) -> np.ndarray:
     """
-    Implementação da Barreira Tripla com 2 classes de rótulos (Binário):
-    - 1: Boa Oportunidade de Entrada (barreira de lucro atingida primeiro)
-    - 0: Má Oportunidade de Entrada (barreira de stop atingida ou tempo esgotado)
+    Creates labels for the triple barrier method.
+
+    Args:
+        closes: A numpy array with the close prices.
+        highs: A numpy array with the high prices.
+        lows: A numpy array with the low prices.
+        atr: A numpy array with the ATR values.
+        future_periods: The number of future periods to consider.
+        profit_multiplier: The profit multiplier.
+        stop_multiplier: The stop loss multiplier.
+
+    Returns:
+        A numpy array with the labels.
     """
     n = len(closes)
     labels = np.zeros(n, dtype=np.int64)
@@ -42,13 +53,24 @@ def create_labels_triple_barrier(
     return labels
 
 class ModelTrainer:
-    def __init__(self):
+    """A class to train the model."""
+
+    def __init__(self) -> None:
+        """Initializes the ModelTrainer class."""
         self.feature_selector = FeatureSelector()
 
-    def train(self, data: pd.DataFrame, all_params: dict, feature_names: List[str], base_model: LGBMClassifier = None) -> Tuple[LGBMClassifier | None, StandardScaler | None]:
+    def train(self, data: pd.DataFrame, all_params: Dict[str, Any], feature_names: List[str], base_model: Optional[LGBMClassifier] = None) -> Tuple[Optional[LGBMClassifier], Optional[StandardScaler]]:
         """
-        Recebe os dados JÁ PROCESSADOS, treina o modelo e retorna os artefatos.
-        A engenharia de features foi removida e centralizada no DataManager.
+        Trains the model.
+
+        Args:
+            data: The data to train the model on.
+            all_params: The parameters for the model.
+            feature_names: The names of the features to use.
+            base_model: The base model to use for training.
+
+        Returns:
+            A tuple with the trained model and the scaler.
         """
         if len(data) < 500:
             logger.warning(f"Dados insuficientes para treino ({len(data)} registros). Pulando.")
@@ -98,11 +120,29 @@ class ModelTrainer:
 
         logger.debug("Treinamento do modelo concluído com sucesso.")
 
+        from src.core.model_evaluator import ModelEvaluator
+        evaluator = ModelEvaluator(model, scaler, df_processed, selected_features, y)
+        metrics, _ = evaluator.evaluate()
+
+        # Log metrics to database
+        metrics_df = pd.DataFrame([metrics])
+        metrics_df['timestamp'] = datetime.now(timezone.utc)
+        metrics_df['model_name'] = all_params.get('model_name', 'default')
+        self.feature_selector.db.insert_dataframe(metrics_df, 'model_metrics')
+
         return model, scaler
 
-    def train_base_model(self, data: pd.DataFrame, all_params: dict, feature_names: List[str]) -> LGBMClassifier:
+    def train_base_model(self, data: pd.DataFrame, all_params: Dict[str, Any], feature_names: List[str]) -> Optional[LGBMClassifier]:
         """
         Trains a base model on the entire dataset.
+
+        Args:
+            data: The data to train the model on.
+            all_params: The parameters for the model.
+            feature_names: The names of the features to use.
+
+        Returns:
+            The trained base model.
         """
         if len(data) < 500:
             logger.warning(f"Dados insuficientes para treino ({len(data)} registros). Pulando.")

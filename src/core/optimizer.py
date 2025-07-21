@@ -21,16 +21,24 @@ from collections import defaultdict
 from src.core.model_trainer import ModelTrainer
 from src.core.backtest import run_backtest
 from src.logger import logger, log_table
-from src.config import (
-    WFO_TRAIN_MINUTES, MODEL_VALIDITY_MONTHS,
-    FEE_RATE, SLIPPAGE_RATE, MODEL_METADATA_FILE, DATA_DIR
-)
+from src.config import settings
 
-OPTIMIZER_STATUS_FILE = os.path.join(DATA_DIR, 'optimizer_status.json')
-OPTIMIZER_STATUS_LOCK_FILE = os.path.join(DATA_DIR, 'optimizer_status.json.lock')
+OPTIMIZER_STATUS_FILE = os.path.join(settings.DATA_DIR, 'optimizer_status.json')
+OPTIMIZER_STATUS_LOCK_FILE = os.path.join(settings.DATA_DIR, 'optimizer_status.json.lock')
+
+from typing import List, Dict, Any
 
 class WalkForwardOptimizer:
-    def __init__(self, full_data, feature_names):
+    """A class to perform walk-forward optimization."""
+
+    def __init__(self, full_data: pd.DataFrame, feature_names: List[str]) -> None:
+        """
+        Initializes the WalkForwardOptimizer class.
+
+        Args:
+            full_data: The full dataset.
+            feature_names: The names of the features to use.
+        """
         self.full_data = full_data
         self.feature_names = feature_names
         self.trainer = ModelTrainer()
@@ -43,32 +51,41 @@ class WalkForwardOptimizer:
         signal.signal(signal.SIGINT, self.graceful_shutdown)
         signal.signal(signal.SIGTERM, self.graceful_shutdown)
 
-    def graceful_shutdown(self, signum, frame):
+    def graceful_shutdown(self, signum: int, frame: Any) -> None:
+        """Gracefully shuts down the optimizer."""
         if not self.shutdown_requested:
             logger.warning("\n" + "="*50 + "\n🚨 PARADA SOLICITADA! Finalizando o trial atual...\n" + "="*50)
             self.shutdown_requested = True
             if os.path.exists(OPTIMIZER_STATUS_FILE): os.remove(OPTIMIZER_STATUS_FILE)
 
-    def _save_final_metadata(self):
+    def _save_final_metadata(self) -> None:
+        """Saves the final metadata."""
         try:
             logger.info("💾 Salvando metadados finais e data de validade do conjunto de modelos...")
             now_utc = datetime.now(timezone.utc)
-            valid_until = now_utc + relativedelta(months=MODEL_VALIDITY_MONTHS)
+            valid_until = now_utc + relativedelta(months=settings.MODEL_VALIDITY_MONTHS)
 
             metadata = {
                 'last_optimization_date': now_utc.isoformat(),
                 'valid_until': valid_until.isoformat(),
-                'model_validity_months': MODEL_VALIDITY_MONTHS,
+                'model_validity_months': settings.MODEL_VALIDITY_MONTHS,
                 'feature_names': self.feature_names,
                 'optimization_summary': self.optimization_summary
             }
-            with open(MODEL_METADATA_FILE, 'w') as f:
+            with open(settings.MODEL_METADATA_FILE, 'w') as f:
                 json.dump(metadata, f, indent=4)
             logger.info(f"✅ Metadados salvos. Conjunto de modelos válido até {valid_until.strftime('%Y-%m-%d')}.")
         except Exception as e:
             logger.error(f"❌ Falha ao salvar metadados finais: {e}")
 
-    def _progress_callback(self, study, trial):
+    def _progress_callback(self, study: optuna.study.Study, trial: optuna.trial.Trial) -> None:
+        """
+        A callback function to report the progress of the optimization.
+
+        Args:
+            study: The study object.
+            trial: The trial object.
+        """
         lock = FileLock(OPTIMIZER_STATUS_LOCK_FILE, timeout=10)
         with lock:
             current_pruning_counts = defaultdict(int)
@@ -117,7 +134,17 @@ class WalkForwardOptimizer:
             except ValueError:
                 logger.info(f"Progresso: Trial {trial.number}/{self.n_trials_for_cycle}, Aguardando resultado válido...")
 
-    def _objective(self, trial, data_for_objective):
+    def _objective(self, trial: optuna.trial.Trial, data_for_objective: pd.DataFrame) -> float:
+        """
+        The objective function to be optimized.
+
+        Args:
+            trial: The trial object.
+            data_for_objective: The data to use for the objective function.
+
+        Returns:
+            The score of the objective function.
+        """
         if self.shutdown_requested:
             trial.set_user_attr("pruned_reason", "Shutdown solicitado.")
             raise optuna.exceptions.TrialPruned()
@@ -179,7 +206,14 @@ class WalkForwardOptimizer:
         logger.debug(f"Trial {trial.number} concluído. Score: {score_principal:.4f}, Trades: {total_trades}")
         return score_principal
 
-    def run_optimization_for_situation(self, name: str, data: pd.DataFrame):
+    def run_optimization_for_situation(self, name: str, data: pd.DataFrame) -> None:
+        """
+        Runs the optimization for a given situation.
+
+        Args:
+            name: The name of the situation.
+            data: The data for the situation.
+        """
         self.current_regime = name
         self.start_time = time.time()
         logger.info(f"\n{'='*20} Iniciando otimização para: {name.upper()} ({len(data)} velas) {'='*20}")
@@ -220,14 +254,14 @@ class WalkForwardOptimizer:
             scaler_filename = f'scaler_{name}.joblib'
             params_filename = f'params_{name}.json'
             
-            joblib.dump(final_model, os.path.join(DATA_DIR, model_filename))
-            joblib.dump(final_scaler, os.path.join(DATA_DIR, scaler_filename))
+            joblib.dump(final_model, os.path.join(settings.DATA_DIR, model_filename))
+            joblib.dump(final_scaler, os.path.join(settings.DATA_DIR, scaler_filename))
 
             # Separa os parâmetros do modelo e da estratégia para salvar no JSON
             model_keys = LGBMClassifier().get_params().keys()
             strategy_params = {k: v for k, v in best_trial.params.items() if k not in model_keys}
             
-            with open(os.path.join(DATA_DIR, params_filename), 'w') as f:
+            with open(os.path.join(settings.DATA_DIR, params_filename), 'w') as f:
                 json.dump(strategy_params, f, indent=4)
 
             self.optimization_summary[name] = {
@@ -242,7 +276,8 @@ class WalkForwardOptimizer:
             logger.warning(f"❌ Score de '{name}' ({best_score:.4f}) não atingiu o limiar de qualidade (0.33).")
             self.optimization_summary[name] = {'status': 'Skipped - Low Score', 'score': best_score}
 
-    def run(self):
+    def run(self) -> None:
+        """Runs the walk-forward optimization."""
         logger.info("\n" + "="*80 + "\n--- 🚀 INICIANDO PROCESSO DE OTIMIZAÇÃO (V9.0) 🚀 ---\n" + "="*80)
         optuna.logging.set_verbosity(optuna.logging.WARNING)
 
@@ -255,7 +290,7 @@ class WalkForwardOptimizer:
         }
         self.base_model = self.trainer.train_base_model(self.full_data, base_model_params, self.feature_names)
 
-        recent_data = self.full_data.tail(WFO_TRAIN_MINUTES).copy()
+        recent_data = self.full_data.tail(settings.WFO_TRAIN_MINUTES).copy()
         
         situation_groups = recent_data.groupby('market_situation')
         

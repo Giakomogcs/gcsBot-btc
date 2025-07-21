@@ -1,39 +1,9 @@
-import json
-import os
-from dotenv import load_dotenv
+from dynaconf import Dynaconf
 
-load_dotenv()
+settings = Dynaconf(
+    envvar_prefix="DYNACONF",
+    settings_files=['settings.toml', '.secrets.toml'],
+)
 
-with open('config.json', 'r') as f:
-    config = json.load(f)
-
-# --- CHAVES DA CONTA REAL ---
-API_KEY = os.getenv("BINANCE_API_KEY", config.get("API_KEY"))
-API_SECRET = os.getenv("BINANCE_API_SECRET", config.get("API_SECRET"))
-
-# --- CHAVES DA CONTA DE TESTE (TESTNET) ---
-TESTNET_API_KEY = os.getenv("BINANCE_TESTNET_API_KEY")
-TESTNET_API_SECRET = os.getenv("BINANCE_TESTNET_API_SECRET")
-
-USE_TESTNET = config.get("USE_TESTNET")
-SYMBOL = config.get("SYMBOL")
-HISTORICAL_DATA_FILE = config.get("HISTORICAL_DATA_FILE")
-KAGGLE_BOOTSTRAP_FILE = config.get("KAGGLE_BOOTSTRAP_FILE")
-TRADES_LOG_FILE = config.get("TRADES_LOG_FILE")
-BOT_STATE_FILE = config.get("BOT_STATE_FILE")
-MODEL_METADATA_FILE = config.get("MODEL_METADATA_FILE")
-COMBINED_DATA_CACHE_FILE = config.get("COMBINED_DATA_CACHE_FILE")
-FORCE_OFFLINE_MODE = config.get("FORCE_OFFLINE_MODE")
-MAX_USDT_ALLOCATION = config.get("MAX_USDT_ALLOCATION")
-FEE_RATE = config.get("FEE_RATE")
-SLIPPAGE_RATE = config.get("SLIPPAGE_RATE")
-IOF_RATE = config.get("IOF_RATE")
-SESSION_MAX_DRAWDOWN = config.get("SESSION_MAX_DRAWDOWN")
-WFO_TRAIN_MINUTES = config.get("WFO_TRAIN_MINUTES")
-MODEL_VALIDITY_MONTHS = config.get("MODEL_VALIDITY_MONTHS")
-DCA_IN_BEAR_MARKET_ENABLED = config.get("DCA_IN_BEAR_MARKET_ENABLED")
-DCA_DAILY_AMOUNT_USDT = config.get("DCA_DAILY_AMOUNT_USDT")
-DCA_MIN_CAPITAL_USDT = config.get("DCA_MIN_CAPITAL_USDT")
-BACKTEST_START_DATE = config.get("BACKTEST_START_DATE")
-BACKTEST_END_DATE = config.get("BACKTEST_END_DATE")
-MODE = os.getenv("MODE", "trade")
+# `envvar_prefix` = export envvars with `export DYNACONF_FOO=bar`.
+# `settings_files` = Load these files in order.

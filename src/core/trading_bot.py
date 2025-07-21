@@ -15,11 +15,7 @@ from datetime import datetime, timezone, timedelta
 from collections import deque
 
 from src.logger import logger
-from src.config import (
-    API_KEY, API_SECRET, USE_TESTNET, SYMBOL, DATA_DIR, TRADES_LOG_FILE, BOT_STATE_FILE,
-    MAX_USDT_ALLOCATION, FEE_RATE, SLIPPAGE_RATE, IOF_RATE, SESSION_MAX_DRAWDOWN, # <-- MUDANÇA 1: Importar
-    MODEL_METADATA_FILE, DCA_IN_BEAR_MARKET_ENABLED, DCA_DAILY_AMOUNT_USDT, DCA_MIN_CAPITAL_USDT
-)
+from src.config import settings
 from src.core.data_manager import DataManager
 from src.core.confidence_manager import AdaptiveConfidenceManager
 from src.core.display_manager import display_trading_dashboard
@@ -28,11 +24,20 @@ from src.core.treasury_manager import TreasuryManager
 from src.core.anomaly_detector import AnomalyDetector
 from src.core.optimizer import WalkForwardOptimizer
 
+from typing import Any
+
 class PortfolioManager:
-    """Gerencia todo o capital, posições e a tesouraria de longo prazo."""
-    def __init__(self, client):
+    """A class to manage the portfolio."""
+
+    def __init__(self, client: Any) -> None:
+        """
+        Initializes the PortfolioManager class.
+
+        Args:
+            client: The Binance client.
+        """
         self.client = client
-        self.max_usdt_allocation = MAX_USDT_ALLOCATION
+        self.max_usdt_allocation = settings.MAX_USDT_ALLOCATION
         self.trading_capital_usdt = 0.0
         self.trading_btc_balance = 0.0
         self.long_term_btc_holdings = 0.0
@@ -59,9 +64,9 @@ class PortfolioManager:
 
     def get_current_price(self):
         try:
-            return float(self.client.get_symbol_ticker(symbol=SYMBOL)['price'])
+            return float(self.client.get_symbol_ticker(symbol=settings.SYMBOL)['price'])
         except (BinanceAPIException, BinanceRequestException, Exception) as e:
-            logger.error(f"Não foi possível obter o preço atual de {SYMBOL}: {e}")
+            logger.error(f"Não foi possível obter o preço atual de {settings.SYMBOL}: {e}")
             return None
 
     def update_on_buy(self, bought_btc_amount, cost_usdt):
@@ -86,9 +91,19 @@ class PortfolioManager:
         if not current_btc_price or current_btc_price <= 0: return self.trading_capital_usdt
         return self.trading_capital_usdt + (self.trading_btc_balance * current_btc_price) + (self.long_term_btc_holdings * current_btc_price)
 
+from typing import Optional
+
 class TradingBot:
-    def __init__(self):
-        self.data_manager = DataManager()
+    """The main class for the trading bot."""
+
+    def __init__(self, db_url: Optional[str] = None) -> None:
+        """
+        Initializes the TradingBot class.
+
+        Args:
+            db_url: The database URL. If not provided, it will be read from the DATABASE_URL environment variable.
+        """
+        self.data_manager = DataManager(db_url)
         self.client = self.data_manager.client
         self.portfolio = PortfolioManager(self.client)
         self.models, self.scalers, self.strategy_params = {}, {}, {}
@@ -106,7 +121,7 @@ class TradingBot:
         self.session_drawdown_stop_activated = False
         
         # === MUDANÇA 1: Usar o parâmetro de segurança do config ===
-        self.SESSION_MAX_DRAWDOWN = SESSION_MAX_DRAWDOWN 
+        self.SESSION_MAX_DRAWDOWN = settings.SESSION_MAX_DRAWDOWN
         
         self.last_dca_time = None
         self.last_event_message = "Inicializando o bot..."
@@ -118,15 +133,39 @@ class TradingBot:
         signal.signal(signal.SIGINT, self.graceful_shutdown)
         signal.signal(signal.SIGTERM, self.graceful_shutdown)
 
-    def _load_all_models(self):
+    def _check_model_validity(self) -> bool:
+        """
+        Checks if the model is valid.
+
+        Returns:
+            True if the model is valid, False otherwise.
+        """
+        if not os.path.exists(settings.MODEL_METADATA_FILE):
+            logger.error("Nenhum modelo encontrado. Rode 'python run.py optimize' primeiro.")
+            return False
         try:
-            with open(MODEL_METADATA_FILE, 'r') as f: metadata = json.load(f)
-            logger.info("✅ Metadados carregados. Verificando validade do modelo...")
-            valid_until_dt = datetime.fromisoformat(metadata['valid_until'])
-            if datetime.now(timezone.utc) > valid_until_dt:
-                logger.error(f"🚨 ERRO CRÍTICO: O CONJUNTO DE MODELOS EXPIROU EM {valid_until_dt.strftime('%Y-%m-%d')}! 🚨")
+            with open(settings.MODEL_METADATA_FILE, 'r') as f:
+                metadata = json.load(f)
+            valid_until = isoparse(metadata.get("valid_until"))
+            if datetime.now(timezone.utc) > valid_until:
+                logger.error(f"O modelo atual expirou. Rode 'python run.py optimize' para criar um novo.")
                 return False
-            
+            else:
+                logger.info(f"✅ Modelo está válido. Expira em: {(valid_until - datetime.now(timezone.utc)).days} dias.")
+                return True
+        except Exception as e:
+            logger.error(f"Erro ao ler metadados do modelo: {e}. Rode 'optimize' por segurança.")
+            return False
+
+    def _load_all_models(self) -> bool:
+        """
+        Loads all the models.
+
+        Returns:
+            True if the models were loaded successfully, False otherwise.
+        """
+        try:
+            with open(settings.MODEL_METADATA_FILE, 'r') as f: metadata = json.load(f)
             self.model_feature_names = metadata['feature_names']
             summary = metadata.get('optimization_summary', {})
             
@@ -134,9 +173,9 @@ class TradingBot:
             for situation, result in summary.items():
                 if result.get('status') == 'Optimized and Saved':
                     try:
-                        self.models[situation] = joblib.load(os.path.join(DATA_DIR, result['model_file']))
-                        self.scalers[situation] = joblib.load(os.path.join(DATA_DIR, result['scaler_file']))
-                        with open(os.path.join(DATA_DIR, result['params_file']), 'r') as p:
+                        self.models[situation] = joblib.load(os.path.join(settings.DATA_DIR, result['model_file']))
+                        self.scalers[situation] = joblib.load(os.path.join(settings.DATA_DIR, result['scaler_file']))
+                        with open(os.path.join(settings.DATA_DIR, result['params_file']), 'r') as p:
                             self.strategy_params[situation] = json.load(p)
                         loaded_models_count += 1
                     except Exception as e:
@@ -151,7 +190,18 @@ class TradingBot:
             logger.error(f"Erro fatal ao carregar modelos: {e}", exc_info=True)
             return False
 
-    def _get_active_model(self, situation: int):
+from typing import Tuple, Any
+
+    def _get_active_model(self, situation: int) -> Tuple[Any, Any, Any, Any]:
+        """
+        Gets the active model for a given situation.
+
+        Args:
+            situation: The current market situation.
+
+        Returns:
+            A tuple with the model, the scaler, the parameters, and the confidence manager.
+        """
         situation_name = f"SITUATION_{situation}"
         if situation_name not in self.models:
             return None, None, None, None
@@ -166,10 +216,33 @@ class TradingBot:
         confidence_manager = self.confidence_managers.get(situation_name)
         return model, scaler, params, confidence_manager
 
-    def run(self):
+    def run(self) -> None:
+        """Runs the trading bot."""
+        if not self._check_model_validity(): return
         if not self._load_all_models(): return
-        self.anomaly_detector.train(self.data_manager.update_and_load_data(SYMBOL, '1m'), self.model_feature_names)
-        self._initialize_trade_log()
+        self.anomaly_detector.train(self.data_manager.update_and_load_data(settings.SYMBOL, '1m'), self.model_feature_names)
+        self.data_manager.db.create_table('trades', [
+            'timestamp TIMESTAMP',
+            'type VARCHAR(10)',
+            'price FLOAT',
+            'quantity FLOAT',
+            'pnl_usdt FLOAT',
+            'pnl_percent FLOAT',
+            'reason VARCHAR(255)'
+        ])
+        self.data_manager.db.create_table('bot_state', [
+            'state_key VARCHAR(255) PRIMARY KEY',
+            'state_value JSON'
+        ])
+        self.data_manager.db.create_table('model_metrics', [
+            'timestamp TIMESTAMP',
+            'model_name VARCHAR(255)',
+            'accuracy FLOAT',
+            'precision FLOAT',
+            'recall FLOAT',
+            'f1_score FLOAT',
+            'roc_auc FLOAT'
+        ])
         if not self._load_state():
             if not self.portfolio.sync_with_live_balance():
                 logger.critical("Falha fatal ao inicializar portfólio. Encerrando."); return
@@ -199,7 +272,13 @@ class TradingBot:
             except KeyboardInterrupt: self.graceful_shutdown(None, None)
             except Exception as e: logger.error(f"Erro inesperado no loop: {e}", exc_info=True); time.sleep(60)
 
-    def _check_and_manage_drawdown(self, latest_data):
+    def _check_and_manage_drawdown(self, latest_data: pd.Series) -> None:
+        """
+        Checks and manages the drawdown.
+
+        Args:
+            latest_data: The latest data.
+        """
         current_price = latest_data['close']
         current_total_value = self.portfolio.get_total_portfolio_value_usdt(current_price)
         if current_total_value:
@@ -213,7 +292,13 @@ class TradingBot:
                 if self.in_trade_position: self._execute_sell(current_price, "Circuit Breaker", latest_data)
 
     # ... (O restante do arquivo permanece idêntico) ...
-    def _manage_active_position(self, latest_data: pd.Series):
+    def _manage_active_position(self, latest_data: pd.Series) -> None:
+        """
+        Manages the active position.
+
+        Args:
+            latest_data: The latest data.
+        """
         price = latest_data['close']
         self.highest_price_in_trade = max(self.highest_price_in_trade, price)
         pnl_pct = (price / self.buy_price - 1) if self.buy_price > 0 else 0
@@ -238,6 +323,15 @@ class TradingBot:
                 logger.info(self.last_event_message)
 
     def _check_for_entry_signal(self, latest_data: pd.Series) -> bool:
+        """
+        Checks for an entry signal.
+
+        Args:
+            latest_data: The latest data.
+
+        Returns:
+            True if an entry signal is found, False otherwise.
+        """
         situation = latest_data['market_situation']
         model, scaler, params, confidence_manager = self._get_active_model(situation)
 
@@ -287,7 +381,13 @@ class TradingBot:
             return True
         return False
 
-    def _handle_dca_opportunity(self, latest_data: pd.Series):
+    def _handle_dca_opportunity(self, latest_data: pd.Series) -> None:
+        """
+        Handles the dollar-cost averaging opportunity.
+
+        Args:
+            latest_data: The latest data.
+        """
         amount_to_buy_usdt = self.treasury_manager.smart_accumulation(latest_data, self.portfolio.trading_capital_usdt)
         if amount_to_buy_usdt == 0:
             return
@@ -297,13 +397,13 @@ class TradingBot:
             logger.info(self.last_event_message)
             
             cost = amount_to_buy_usdt
-            if not self.client or USE_TESTNET:
-                buy_price_eff = latest_data['close'] * (1 + SLIPPAGE_RATE)
+            if not self.client or settings.USE_TESTNET:
+                buy_price_eff = latest_data['close'] * (1 + settings.SLIPPAGE_RATE)
                 qty_bought = cost / buy_price_eff
-                cost_with_fees = cost * (1 + FEE_RATE)
+                cost_with_fees = cost * (1 + settings.FEE_RATE)
                 self._log_trade("DCA (SIM)", buy_price_eff, qty_bought, "Acumulação em baixa")
             else:
-                order = self.client.create_order(symbol=SYMBOL, side=Client.SIDE_BUY, type=Client.ORDER_TYPE_MARKET, quoteOrderQty=round(cost, 2))
+                order = self.client.create_order(symbol=settings.SYMBOL, side=Client.SIDE_BUY, type=Client.ORDER_TYPE_MARKET, quoteOrderQty=round(cost, 2))
                 qty_bought, cost_with_fees = float(order['executedQty']), float(order['cummulativeQuoteQty'])
                 buy_price_eff = cost_with_fees / qty_bought if qty_bought > 0 else latest_data['close']
                 self._log_trade("DCA (REAL)", buy_price_eff, qty_bought, "Acumulação em baixa")
@@ -314,19 +414,45 @@ class TradingBot:
             self.last_event_message = "Falha na compra de DCA."
             logger.error(f"ERRO AO EXECUTAR COMPRA DE DCA: {e}", exc_info=True)
 
-    def _execute_buy(self, price, trade_size_usdt, stop_price, confidence, regime, params: dict, latest_data: pd.Series, action: int):
+    def _log_trade(self, trade_type, price, qty, reason, pnl_usdt=0, pnl_pct=0):
+        trade_data = {
+            'timestamp': datetime.now(timezone.utc),
+            'type': trade_type,
+            'price': price,
+            'quantity': qty,
+            'pnl_usdt': pnl_usdt,
+            'pnl_percent': pnl_pct,
+            'reason': reason
+        }
+        df = pd.DataFrame([trade_data])
+        self.data_manager.db.insert_dataframe(df, 'trades')
+
+    def _execute_buy(self, price: float, trade_size_usdt: float, stop_price: float, confidence: float, regime: int, params: Dict[str, Any], latest_data: pd.Series, action: int) -> None:
+        """
+        Executes a buy order.
+
+        Args:
+            price: The current price.
+            trade_size_usdt: The size of the trade in USDT.
+            stop_price: The stop price.
+            confidence: The model's confidence.
+            regime: The current market regime.
+            params: The strategy parameters.
+            latest_data: The latest data.
+            action: The action to take.
+        """
         try:
             self.last_event_message = f"COMPRANDO ${trade_size_usdt:,.2f} (Conf. {confidence:.1%})"
             logger.info(self.last_event_message)
             
-            if not self.client or USE_TESTNET:
-                self.buy_price = price * (1 + SLIPPAGE_RATE)
+            if not self.client or settings.USE_TESTNET:
+                self.buy_price = price * (1 + settings.SLIPPAGE_RATE)
                 qty = trade_size_usdt / self.buy_price
-                cost = trade_size_usdt * (1 + FEE_RATE + IOF_RATE)
+                cost = trade_size_usdt * (1 + settings.FEE_RATE + settings.IOF_RATE)
                 self.portfolio.update_on_buy(qty, cost)
                 self._log_trade("BUY (SIM)", self.buy_price, qty, f"Sinal ML ({confidence:.2%})")
             else:
-                order = self.client.create_order(symbol=SYMBOL, side=Client.SIDE_BUY, type=Client.ORDER_TYPE_MARKET, quoteOrderQty=round(trade_size_usdt, 2))
+                order = self.client.create_order(symbol=settings.SYMBOL, side=Client.SIDE_BUY, type=Client.ORDER_TYPE_MARKET, quoteOrderQty=round(trade_size_usdt, 2))
                 self.buy_price = float(order['fills'][0]['price']) if order['fills'] else price
                 qty, cost = float(order['executedQty']), float(order['cummulativeQuoteQty'])
                 self.portfolio.update_on_buy(qty, cost)
@@ -344,7 +470,15 @@ class TradingBot:
             logger.error(f"ERRO AO EXECUTAR COMPRA: {e}", exc_info=True)
             self.in_trade_position = False
 
-    def _execute_sell(self, price, reason, latest_data: pd.Series):
+    def _execute_sell(self, price: float, reason: str, latest_data: pd.Series) -> None:
+        """
+        Executes a sell order.
+
+        Args:
+            price: The current price.
+            reason: The reason for selling.
+            latest_data: The latest data.
+        """
         amount_to_sell = self.portfolio.trading_btc_balance
         if amount_to_sell <= 0: return
         try:
@@ -352,15 +486,15 @@ class TradingBot:
             logger.info(self.last_event_message)
             
             pnl_usdt, pnl_pct, actual_sell_price = 0, 0, price
-            if not self.client or USE_TESTNET:
-                actual_sell_price = price * (1 - SLIPPAGE_RATE)
+            if not self.client or settings.USE_TESTNET:
+                actual_sell_price = price * (1 - settings.SLIPPAGE_RATE)
                 revenue = actual_sell_price * amount_to_sell
                 buy_cost = self.buy_price * amount_to_sell
-                pnl_usdt = (revenue * (1 - FEE_RATE)) - (buy_cost * (1 + FEE_RATE + IOF_RATE))
+                pnl_usdt = (revenue * (1 - settings.FEE_RATE)) - (buy_cost * (1 + settings.FEE_RATE + settings.IOF_RATE))
                 pnl_pct = (actual_sell_price / self.buy_price - 1) if self.buy_price > 0 else 0
                 self._log_trade("SELL (SIM)", actual_sell_price, amount_to_sell, reason, pnl_usdt, pnl_pct)
             else:
-                order = self.client.create_order(symbol=SYMBOL, side=Client.SIDE_SELL, type=Client.ORDER_TYPE_MARKET, quantity=round(amount_to_sell, 5))
+                order = self.client.create_order(symbol=settings.SYMBOL, side=Client.SIDE_SELL, type=Client.ORDER_TYPE_MARKET, quantity=round(amount_to_sell, 5))
                 actual_sell_price = float(order['fills'][0]['price']) if order['fills'] else price
                 revenue = float(order['cummulativeQuoteQty'])
                 pnl_usdt = revenue - (self.buy_price * amount_to_sell)
@@ -408,16 +542,15 @@ class TradingBot:
             self.in_trade_position, self.position_phase = False, None
         except Exception as e: logger.error(f"ERRO AO EXECUTAR VENDA: {e}", exc_info=True)
 
-    def _initialize_trade_log(self):
-        if not os.path.exists(TRADES_LOG_FILE):
-            with open(TRADES_LOG_FILE, 'w', newline='', encoding='utf-8') as f:
-                csv.writer(f).writerow(['timestamp', 'type', 'price', 'quantity', 'pnl_usdt', 'pnl_percent', 'reason'])
 
-    def _log_trade(self, trade_type, price, qty, reason, pnl_usdt=0, pnl_pct=0):
-        with open(TRADES_LOG_FILE, 'a', newline='', encoding='utf-8') as f:
-            csv.writer(f).writerow([datetime.now(timezone.utc).isoformat(), trade_type, f"{price:.2f}", f"{qty:.8f}", f"{pnl_usdt:.4f}", f"{pnl_pct:.4%}", reason])
+    def _update_specialist_stats(self, specialist_name: str, pnl_usdt: float) -> None:
+        """
+        Updates the specialist stats.
 
-    def _update_specialist_stats(self, specialist_name, pnl_usdt):
+        Args:
+            specialist_name: The name of the specialist.
+            pnl_usdt: The PNL of the trade in USDT.
+        """
         if not specialist_name: return
         if specialist_name not in self.specialist_stats:
             self.specialist_stats[specialist_name] = {'total_trades': 0, 'wins': 0, 'total_pnl': 0.0}
@@ -427,7 +560,8 @@ class TradingBot:
         stats['total_pnl'] += pnl_usdt
         if pnl_usdt > 0: stats['wins'] += 1
 
-    def _check_model_performance(self):
+    def _check_model_performance(self) -> None:
+        """Checks the model performance and triggers re-optimization if needed."""
         for situation_name, history in self.performance_history.items():
             if len(history) == 100:
                 average_pnl = np.mean(history)
@@ -439,7 +573,13 @@ class TradingBot:
                     optimizer.run_optimization_for_situation(situation_name, situation_data)
                     self.performance_history[situation_name].clear()
 
-    def _build_status_data(self, latest_data: pd.Series) -> dict:
+    def _check_and_manage_drawdown(self, latest_data: pd.Series) -> None:
+        """
+        Checks and manages the drawdown.
+
+        Args:
+            latest_data: The latest data.
+        """
         current_price = latest_data['close']
         total_value = self.portfolio.get_total_portfolio_value_usdt(current_price)
         growth_pct = (total_value / self.portfolio.initial_total_value_usdt - 1) * 100 if self.portfolio.initial_total_value_usdt > 0 else 0
@@ -456,6 +596,7 @@ class TradingBot:
             "last_operation": { "situation_name": last_op_situation_name, "pnl_pct": self.last_used_params.get('last_pnl_pct', 0.0), **self.specialist_stats.get(last_op_situation_name, {}) }
         }
 
+
     def _save_state(self):
         state = {
             'in_trade_position': self.in_trade_position, 'buy_price': self.buy_price, 'position_phase': self.position_phase,
@@ -467,12 +608,16 @@ class TradingBot:
             'specialist_stats': self.specialist_stats, 
             'portfolio': { 'trading_capital_usdt': self.portfolio.trading_capital_usdt, 'trading_btc_balance': self.portfolio.trading_btc_balance, 'long_term_btc_holdings': self.portfolio.long_term_btc_holdings, 'initial_total_value_usdt': self.portfolio.initial_total_value_usdt,},
         }
-        with open(BOT_STATE_FILE, 'w') as f: json.dump(state, f, indent=4)
+        df = pd.DataFrame([{'state_key': 'bot_state', 'state_value': json.dumps(state)}])
+        self.data_manager.db.insert_dataframe(df, 'bot_state', if_exists='replace')
 
     def _load_state(self):
-        if not os.path.exists(BOT_STATE_FILE): return False
         try:
-            with open(BOT_STATE_FILE, 'r') as f: state = json.load(f)
+            query = "SELECT state_value FROM bot_state WHERE state_key = 'bot_state'"
+            state_df = self.data_manager.db.fetch_data(query)
+            if state_df.empty:
+                return False
+            state = json.loads(state_df['state_value'][0])
             self.in_trade_position = state.get('in_trade_position', False)
             self.buy_price, self.position_phase = state.get('buy_price', 0.0), state.get('position_phase')
             self.current_stop_price, self.highest_price_in_trade = state.get('current_stop_price', 0.0), state.get('highest_price_in_trade', 0.0)
@@ -488,7 +633,6 @@ class TradingBot:
             return True
         except Exception as e:
             logger.error(f"Não foi possível carregar o estado anterior: {e}. Iniciando com um estado limpo.")
-            if os.path.exists(BOT_STATE_FILE): os.remove(BOT_STATE_FILE)
             return False
 
     def graceful_shutdown(self, signum, frame):

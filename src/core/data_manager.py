@@ -16,10 +16,7 @@ from ta.trend import MACD, ADXIndicator, CCIIndicator
 from ta.momentum import StochasticOscillator, RSIIndicator, WilliamsRIndicator
 
 from src.logger import logger
-from src.config import (
-    API_KEY, API_SECRET, TESTNET_API_KEY, TESTNET_API_SECRET, USE_TESTNET, HISTORICAL_DATA_FILE, KAGGLE_BOOTSTRAP_FILE,
-    FORCE_OFFLINE_MODE, COMBINED_DATA_CACHE_FILE
-)
+from src.config import settings
 from src.core.situational_awareness import SituationalAwareness
 
 def _optimize_memory_usage(df: pd.DataFrame) -> pd.DataFrame:
@@ -41,30 +38,39 @@ def _optimize_memory_usage(df: pd.DataFrame) -> pd.DataFrame:
     logger.debug("Otimização de memória concluída.")
     return df
 
+from src.database import Database
+
+from typing import Optional
+
 class DataManager:
-    def __init__(self):
+    """A class to manage the data for the trading bot."""
+
+    def __init__(self, db_url: Optional[str] = None) -> None:
+        """
+        Initializes the DataManager class.
+
+        Args:
+            db_url: The database URL. If not provided, it will be read from the DATABASE_URL environment variable.
+        """
+        self.db = Database(db_url)
         self.client = None
-        self.is_online = False
-        if not FORCE_OFFLINE_MODE:
+        if not settings.FORCE_OFFLINE_MODE:
             try:
-                api_key_to_use = TESTNET_API_KEY if USE_TESTNET else API_KEY
-                api_secret_to_use = TESTNET_API_SECRET if USE_TESTNET else API_SECRET
+                api_key_to_use = settings.BINANCE_TESTNET_API_KEY if settings.USE_TESTNET else settings.BINANCE_API_KEY
+                api_secret_to_use = settings.BINANCE_TESTNET_API_SECRET if settings.USE_TESTNET else settings.BINANCE_API_SECRET
 
                 if not api_key_to_use or not api_secret_to_use:
                     logger.warning("API Key ou Secret não encontradas para o modo selecionado. Operando em modo OFFLINE-FALLBACK.")
                     self.client = None
-                    self.is_online = False
                     return
 
-                self.client = Client(api_key_to_use, api_secret_to_use, tld='com', testnet=USE_TESTNET, requests_params={"timeout": 20})
+                self.client = Client(api_key_to_use, api_secret_to_use, tld='com', testnet=settings.USE_TESTNET, requests_params={"timeout": 20})
                 self.client.ping()
-                self.is_online = True
-                log_message = f"Cliente Binance inicializado em modo {'TESTNET' if USE_TESTNET else 'REAL'}. Conexão com a API confirmada."
+                log_message = f"Cliente Binance inicializado em modo {'TESTNET' if settings.USE_TESTNET else 'REAL'}. Conexão com a API confirmada."
                 logger.info(log_message)
             except (BinanceAPIException, BinanceRequestException, Exception) as e:
                 logger.warning(f"FALHA NA CONEXÃO: {e}. O bot operará em modo OFFLINE-FALLBACK.")
                 self.client = None
-                self.is_online = False
         else:
             logger.info("MODO OFFLINE FORÇADO está ativo.")
             
@@ -174,29 +180,32 @@ class DataManager:
         return df
     
     # ... (O restante do arquivo permanece idêntico) ...
-    def _fetch_and_update_macro_data(self, caminho_dados: str = 'data/macro'):
-        if not self.is_online:
+    def _fetch_and_update_macro_data(self) -> None:
+        """Fetches and updates the macro data from Yahoo Finance."""
+        if not self.client:
             logger.debug("Modo offline. Pulando atualização de dados macro.")
             return
 
         logger.info("Iniciando verificação e atualização dos dados macro...")
         ticker_map = {'dxy': 'DX-Y.NYB', 'gold': 'GC=F', 'tnx': '^TNX', 'vix': '^VIX'}
-        os.makedirs(caminho_dados, exist_ok=True)
 
         for nome_ativo, ticker in ticker_map.items():
-            caminho_arquivo = os.path.join(caminho_dados, f'{nome_ativo}.csv')
+            table_name = f"macro_{nome_ativo}"
             try:
+                self.db.create_table(table_name, [
+                    "Date TIMESTAMP",
+                    "Open FLOAT",
+                    "High FLOAT",
+                    "Low FLOAT",
+                    "Close FLOAT",
+                    "Volume FLOAT"
+                ])
+
+                last_date_query = f"SELECT MAX(Date) FROM {table_name}"
+                last_date_result = self.db.execute_query(last_date_query).scalar()
                 start_fetch_date = '2017-01-01'
-                existing_df = None
-                if os.path.exists(caminho_arquivo):
-                    try:
-                        existing_df = pd.read_csv(caminho_arquivo, index_col='Date', parse_dates=True)
-                        if not existing_df.empty:
-                            last_date = existing_df.index.max()
-                            start_fetch_date = last_date + datetime.timedelta(days=1)
-                    except Exception as e:
-                        logger.warning(f"Não foi possível ler o arquivo existente para '{nome_ativo}': {e}. Ele será recriado.")
-                        existing_df = None
+                if last_date_result:
+                    start_fetch_date = last_date_result + datetime.timedelta(days=1)
 
                 end_fetch_date = datetime.datetime.now(datetime.timezone.utc)
                 if isinstance(start_fetch_date, (datetime.datetime, pd.Timestamp)) and start_fetch_date.date() >= end_fetch_date.date():
@@ -213,43 +222,53 @@ class DataManager:
                 clean_df = df_downloaded[['Open', 'High', 'Low', 'Close', 'Volume']].copy()
                 clean_df.index.name = 'Date'
                 
-                if existing_df is not None:
-                    clean_df.to_csv(caminho_arquivo, mode='a', header=False)
-                else:
-                    clean_df.to_csv(caminho_arquivo)
+                self.db.insert_dataframe(clean_df.reset_index(), table_name, if_exists='append')
                 time.sleep(1) 
             except Exception as e:
                 logger.error(f"Falha ao buscar ou salvar dados para o ativo '{nome_ativo}': {e}", exc_info=True)
         logger.debug("Verificação de dados macro concluída.")
 
-    def _load_and_unify_local_macro_data(self, caminho_dados: str = 'data/macro') -> pd.DataFrame:
-        logger.debug("Padronizando e unificando dados macro locais...")
+    def _load_and_unify_local_macro_data(self) -> pd.DataFrame:
+        """Loads and unifies the local macro data from the database."""
+        logger.debug("Padronizando e unificando dados macro do banco de dados...")
         nomes_ativos = ['dxy', 'gold', 'tnx', 'vix']
         lista_dataframes = []
         for nome_ativo in nomes_ativos:
-            caminho_arquivo = os.path.join(caminho_dados, f'{nome_ativo}.csv')
-            if not os.path.exists(caminho_arquivo):
-                logger.warning(f"AVISO: Arquivo macro '{caminho_arquivo}' não encontrado. Pulando.")
-                continue
+            table_name = f"macro_{nome_ativo}"
             try:
-                df = pd.read_csv(caminho_arquivo, index_col='Date', parse_dates=True)
+                query = f"SELECT Date, Close FROM {table_name}"
+                df = self.db.fetch_data(query)
+                if df.empty:
+                    logger.warning(f"AVISO: Nenhum dado encontrado na tabela '{table_name}'. Pulando.")
+                    continue
+                df.set_index('Date', inplace=True)
                 if df.index.tz is None: df.index = df.index.tz_localize('UTC')
                 else: df.index = df.index.tz_convert('UTC')
-                if 'Close' in df.columns:
-                    df = df[['Close']].copy()
-                    df.rename(columns={'Close': f'{nome_ativo}_close'}, inplace=True)
-                    lista_dataframes.append(df)
+                df.rename(columns={'Close': f'{nome_ativo}_close'}, inplace=True)
+                lista_dataframes.append(df)
             except Exception as e:
-                logger.error(f"ERRO ao processar o arquivo macro '{caminho_arquivo}': {e}", exc_info=True)
+                logger.error(f"ERRO ao processar a tabela macro '{table_name}': {e}", exc_info=True)
         if not lista_dataframes:
             logger.warning("Nenhum dado macro foi processado.")
             return pd.DataFrame()
         df_final = pd.concat(lista_dataframes, axis=1, join='outer')
         df_final.sort_index(inplace=True); df_final.ffill(inplace=True); df_final.dropna(how='all', inplace=True)
-        logger.debug("Dados macro locais unificados com sucesso.")
+        logger.debug("Dados macro do banco de dados unificados com sucesso.")
         return df_final
     
-    def get_historical_data_by_batch(self, symbol, interval, start_date_dt, end_date_dt):
+    def get_historical_data_by_batch(self, symbol: str, interval: str, start_date_dt: datetime.datetime, end_date_dt: datetime.datetime) -> pd.DataFrame:
+        """
+        Fetches historical data from Binance in batches.
+
+        Args:
+            symbol: The symbol to fetch the data for.
+            interval: The interval of the data.
+            start_date_dt: The start date of the data.
+            end_date_dt: The end date of the data.
+
+        Returns:
+            A pandas DataFrame with the historical data.
+        """
         all_dfs = []
         total_days = max(1, (end_date_dt - start_date_dt).days)
         progress_bar = tqdm(total=total_days, desc=f"Baixando dados de {symbol}", unit="d", leave=False, disable=False)
@@ -272,50 +291,77 @@ class DataManager:
         progress_bar.close()
         return pd.concat(all_dfs) if all_dfs else pd.DataFrame()
 
-    def _fetch_and_manage_btc_data(self, symbol, interval='1m'):
+    def _fetch_and_manage_btc_data(self, symbol: str, interval: str = '1m') -> pd.DataFrame:
+        """
+        Fetches and manages the BTC data.
+
+        Args:
+            symbol: The symbol to fetch the data for.
+            interval: The interval of the data.
+
+        Returns:
+            A pandas DataFrame with the BTC data.
+        """
+        table_name = f"btc_{symbol.lower()}_{interval}"
+        self.db.create_table(table_name, [
+            "timestamp TIMESTAMP",
+            "open FLOAT",
+            "high FLOAT",
+            "low FLOAT",
+            "close FLOAT",
+            "volume FLOAT"
+        ])
+
         end_utc = datetime.datetime.now(datetime.timezone.utc).replace(second=0, microsecond=0)
         
-        if os.path.exists(HISTORICAL_DATA_FILE):
-            logger.debug(f"Arquivo de dados local do BTC encontrado em '{HISTORICAL_DATA_FILE}'. Carregando...")
-            df = pd.read_csv(HISTORICAL_DATA_FILE, index_col=0, parse_dates=True); df.index = pd.to_datetime(df.index, utc=True)
+        last_timestamp_query = f"SELECT MAX(timestamp) FROM {table_name}"
+        last_timestamp_result = self.db.execute_query(last_timestamp_query).scalar()
+
+        if last_timestamp_result:
+            df = self.db.fetch_data(f"SELECT * FROM {table_name}")
+            df.set_index('timestamp', inplace=True)
+            df.index = pd.to_datetime(df.index, utc=True)
             
-            if self.is_online:
+            if self.client:
                 last_timestamp = df.index.max().to_pydatetime()
                 if last_timestamp < end_utc:
-                    logger.info("Dados locais do BTC estão desatualizados. Buscando novos dados da Binance...")
+                    logger.info("Dados do BTC no banco de dados estão desatualizados. Buscando novos dados da Binance...")
                     try:
                         df_new = self.get_historical_data_by_batch(symbol, interval, last_timestamp + datetime.timedelta(minutes=1), end_utc)
                         if not df_new.empty:
+                            self.db.insert_dataframe(df_new.reset_index(), table_name, if_exists='append')
                             df = pd.concat([df, df_new]); df = df.loc[~df.index.duplicated(keep='last')]; df.sort_index(inplace=True)
-                            df.to_csv(HISTORICAL_DATA_FILE); logger.info(f"SUCESSO: Arquivo de dados do BTC atualizado com {len(df_new)} novas velas.")
-                    except Exception as e: logger.warning(f"FALHA NA ATUALIZAÇÃO DO BTC: {e}. Continuando com dados locais.")
+                            logger.info(f"SUCESSO: Banco de dados do BTC atualizado com {len(df_new)} novas velas.")
+                    except Exception as e: logger.warning(f"FALHA NA ATUALIZAÇÃO DO BTC: {e}. Continuando com dados do banco de dados.")
             return df
 
-        if os.path.exists(KAGGLE_BOOTSTRAP_FILE):
-            logger.info(f"Arquivo mestre do BTC não encontrado. Iniciando a partir do arquivo Kaggle: '{KAGGLE_BOOTSTRAP_FILE}'")
-            df_kaggle = pd.read_csv(KAGGLE_BOOTSTRAP_FILE, low_memory=False, on_bad_lines='skip')
+        if os.path.exists(settings.KAGGLE_BOOTSTRAP_FILE):
+            logger.info(f"Nenhum dado no banco de dados. Iniciando a partir do arquivo Kaggle: '{settings.KAGGLE_BOOTSTRAP_FILE}'")
+            df_kaggle = pd.read_csv(settings.KAGGLE_BOOTSTRAP_FILE, low_memory=False, on_bad_lines='skip')
             df = self._preprocess_kaggle_data(df_kaggle)
-            last_timestamp = df.index.max().to_pydatetime()
-            if self.is_online and last_timestamp < end_utc:
-                logger.info("Atualizando dados do Kaggle com os dados mais recentes da Binance...")
-                try:
-                    df_new = self.get_historical_data_by_batch(symbol, interval, last_timestamp + datetime.timedelta(minutes=1), end_utc)
-                    if not df_new.empty:
-                        df = pd.concat([df, df_new]); df = df.loc[~df.index.duplicated(keep='last')]; df.sort_index(inplace=True)
-                except Exception as e: logger.warning(f"FALHA NA ATUALIZAÇÃO DO BTC: {e}. Continuando com dados do Kaggle.")
-            logger.info(f"Salvando o novo arquivo de dados mestre do BTC em '{HISTORICAL_DATA_FILE}'."); df.to_csv(HISTORICAL_DATA_FILE)
+            self.db.insert_dataframe(df.reset_index(), table_name, if_exists='replace')
             return df
 
-        if self.is_online:
+        if self.client:
             logger.warning("Nenhum arquivo local do BTC encontrado. Baixando o último ano da Binance como fallback.")
             start_utc = end_utc - datetime.timedelta(days=365); df = self.get_historical_data_by_batch(symbol, interval, start_utc, end_utc)
-            if not df.empty: df.to_csv(HISTORICAL_DATA_FILE)
+            if not df.empty:
+                self.db.insert_dataframe(df.reset_index(), table_name, if_exists='replace')
             return df
 
         logger.error("Nenhum arquivo de dados local do BTC encontrado e o bot está em modo offline. Não é possível continuar.")
         return pd.DataFrame()
         
     def _preprocess_kaggle_data(self, df_kaggle: pd.DataFrame) -> pd.DataFrame:
+        """
+        Preprocesses the Kaggle data.
+
+        Args:
+            df_kaggle: The Kaggle DataFrame to preprocess.
+
+        Returns:
+            A preprocessed pandas DataFrame.
+        """
         logger.debug("Pré-processando dados do Kaggle...")
         column_mapping = {'Timestamp': 'timestamp', 'Open': 'open', 'High': 'high', 'Low': 'low', 'Close': 'close'}
         possible_volume_names = ['Volume_(BTC)', 'Volume', 'Volume (BTC)', 'Volume (Currency)', 'Volume USD']
@@ -333,23 +379,18 @@ class DataManager:
         logger.debug(f"Processamento do Kaggle concluído. {len(df)} registros válidos carregados.")
         return df
 
-    def update_and_load_data(self, symbol, interval='1m') -> pd.DataFrame:
-        if os.path.exists(COMBINED_DATA_CACHE_FILE):
-            logger.debug(f"Arquivo de cache encontrado em '{COMBINED_DATA_CACHE_FILE}'.")
-            df_cache = pd.read_csv(COMBINED_DATA_CACHE_FILE, index_col=0, parse_dates=True, dtype={'market_regime': 'category'})
-            df_cache.index = pd.to_datetime(df_cache.index, utc=True)
-            if not self.is_online:
-                logger.info("✅ Modo offline. Carregando dados diretamente do cache existente.")
-                return _optimize_memory_usage(df_cache)
-            last_cache_time = df_cache.index.max().to_pydatetime()
-            now_utc_minute = datetime.datetime.now(datetime.timezone.utc).replace(second=0, microsecond=0)
-            if (now_utc_minute - last_cache_time) < datetime.timedelta(minutes=5):
-                logger.info("✅ Cache está atualizado! Carregando dados unificados diretamente do cache.")
-                return _optimize_memory_usage(df_cache)
-            else:
-                logger.info("Cache está desatualizado. Reconstruindo...")
-        
-        logger.info("Iniciando processo de unificação de dados (cache não disponível ou obsoleto).")
+    def update_and_load_data(self, symbol: str, interval: str = '1m') -> pd.DataFrame:
+        """
+        Updates and loads the data.
+
+        Args:
+            symbol: The symbol to fetch the data for.
+            interval: The interval of the data.
+
+        Returns:
+            A pandas DataFrame with the updated and loaded data.
+        """
+        logger.info("Iniciando processo de unificação de dados.")
         
         self._fetch_and_update_macro_data()
         df_btc = self._fetch_and_manage_btc_data(symbol, interval)
@@ -388,9 +429,6 @@ class DataManager:
         df_filtered.dropna(inplace=True)
         
         df_final = _optimize_memory_usage(df_filtered)
-        
-        logger.info(f"Salvando dados unificados e prontos para treino no cache: '{COMBINED_DATA_CACHE_FILE}'")
-        df_final.to_csv(COMBINED_DATA_CACHE_FILE)
         
         logger.info("Processo de coleta e preparação de dados concluído com sucesso.")
         return df_final

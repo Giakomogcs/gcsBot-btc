@@ -16,3 +16,7 @@ yfinance
 python-dateutil
 filelock
 rich
+pytest
+psycopg2-binary
+SQLAlchemy
+dynaconf
