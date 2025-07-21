@@ -611,7 +611,13 @@ from typing import Tuple, Any
         df = pd.DataFrame([{'state_key': 'bot_state', 'state_value': json.dumps(state)}])
         self.data_manager.db.insert_dataframe(df, 'bot_state', if_exists='replace')
 
-    def _load_state(self):
+    def _load_state(self) -> bool:
+        """
+        Loads the bot's state from the database.
+
+        Returns:
+            True if the state was loaded successfully, False otherwise.
+        """
         try:
             query = "SELECT state_value FROM bot_state WHERE state_key = 'bot_state'"
             state_df = self.data_manager.db.fetch_data(query)
@@ -635,7 +641,14 @@ from typing import Tuple, Any
             logger.error(f"Não foi possível carregar o estado anterior: {e}. Iniciando com um estado limpo.")
             return False
 
-    def graceful_shutdown(self, signum, frame):
+    def graceful_shutdown(self, signum: int, frame: Any) -> None:
+        """
+        Gracefully shuts down the bot.
+
+        Args:
+            signum: The signal number.
+            frame: The current stack frame.
+        """
         logger.warning("🚨 SINAL DE INTERRUPÇÃO RECEBIDO. ENCERRANDO DE FORMA SEGURA... 🚨")
         self._save_state()
         logger.info("Estado do bot salvo. Desligando.")

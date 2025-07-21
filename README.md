@@ -1,154 +1,138 @@
-# 📈 gcsBot - Framework de Trading Quantitativo para BTC/USDT
+# gcsBot - A Quantitative Trading Framework
 
-![Python](https://img.shields.io/badge/Python-3.11+-blue.svg) ![Docker](https://img.shields.io/badge/Docker-Ready-blue?logo=docker) ![License](https://img.shields.io/badge/License-MIT-green.svg)
+[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue?logo=docker)](https://www.docker.com/products/docker-desktop/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
-Um framework de ponta para pesquisa, validação e execução de estratégias de trading algorítmico no par BTC/USDT. Este projeto vai além de um simples bot, oferecendo um pipeline completo de Machine Learning, desde a otimização de estratégias com dados históricos até a operação autônoma e adaptativa na Binance.
+**gcsBot** is a state-of-the-art framework for algorithmic trading on the BTC/USDT pair. This project provides a complete Machine Learning pipeline, from strategy optimization with historical data to autonomous and adaptive operation on Binance.
 
----
+## Table of Contents
 
-## 📋 Tabela de Conteúdos
+- [About the Project](#about-the-project)
+- [Key Features](#key-features)
+- [The Bot's Philosophy](#the-bots-philosophy)
+- [The Bot's Ecosystem](#the-bots-ecosystem)
+- [Quick Start Guide](#quick-start-guide)
+- [Environment Configuration](#environment-configuration)
+- [The Professional Workflow](#the-professional-workflow)
+- [Project Structure](#project-structure)
+- [License](#license)
 
-- [🌟 Sobre o Projeto](#-sobre-o-projeto)
-- [✨ Features de Destaque](#-features-de-destaque)
-- [🧠 A Filosofia do Bot: Como Ele Pensa?](#-a-filosofia-do-bot-como-ele-pensa)
-- [⚙️ Ecossistema do Bot: Como os Módulos Interagem](#️-ecossistema-do-bot-como-os-módulos-interagem)
-- [🚀 Guia de Início Rápido](#-guia-de-início-rápido)
-- [🔧 Configuração do Ambiente (`.env`)](#-configuração-do-ambiente-env)
-- [▶️ O Workflow Profissional: Como Usar](#️-o-workflow-profissional-como-usar)
-- [📂 Estrutura do Projeto](#-estrutura-do-projeto)
-- [📜 Licença](#-licença)
+## About the Project
 
----
+This repository contains a complete algorithmic trading system, designed to be robust, intelligent, and methodologically sound. Unlike bots based on fixed rules, gcsBot uses a **Machine Learning (LightGBM)** model to find predictive patterns and a sophisticated architecture to adapt to market dynamics.
 
-## 🌟 Sobre o Projeto
+The core of the project is a **Walk-Forward Optimization (WFO)** process that ensures that the strategy is constantly re-evaluated and optimized on new data, avoiding overfitting and stagnation. The result is an autonomous agent that not only operates, but also learns and adjusts.
 
-Este repositório contém um sistema de trading algorítmico completo, projetado para ser robusto, inteligente e metodologicamente correto. Diferente de bots baseados em regras fixas, o gcsBot utiliza um modelo de **Machine Learning (LightGBM)** para encontrar padrões preditivos e uma arquitetura sofisticada para se adaptar às dinâmicas do mercado.
+## Key Features
 
-O núcleo do projeto é um processo de **Walk-Forward Optimization (WFO)** que garante que a estratégia seja constantemente reavaliada e otimizada em dados novos, evitando o overfitting e a estagnação. O resultado é um agente autônomo que não apenas opera, mas aprende e se ajusta.
+- **Multi-Layered Intelligence:**
+  - **Active Position Management:** Once in a trade, the bot actively manages risk with **Breakeven Stop, Partial Profit Taking, and Trailing Stop** techniques.
+  - **Dual Objective Strategy:** The bot not only seeks profit in USDT, but also uses it to **accumulate a "BTC Treasury"** in the long term, allocating a percentage of the profits for this purpose.
+  - **Dynamic Confidence:** The bot adjusts its own "courage" based on the performance of a **window of recent trades**, becoming bolder in winning streaks and more cautious after losses.
+  - **Dynamic Risk (Bet Sizing):** The size of each operation is proportional to the model's conviction and the current market regime, risking intelligently.
 
----
+- **Professional-Level Methodology:**
+  - **Robust Optimization (Calmar Ratio):** The system uses `Optuna` to optimize the strategy by seeking the best **Calmar Ratio** (Annualized Return / Maximum Drawdown), prioritizing capital security.
+  - **Market Regime Filter:** The bot first identifies the state of the market (e.g., `BULL_FORTE`, `BEAR`, `LATERAL`) and adjusts its risk behavior or even blocks operations.
+  - **Robust Validation (Train/Validate/Test):** The optimization process uses a rigorous methodology that prevents data leakage from the future (_look-ahead bias_).
 
-## ✨ Features de Destaque
+- **Cutting-Edge Engineering:**
+  - **Realistic Backtest:** All simulations include operational costs (fees and slippage) for a performance evaluation that is faithful to reality.
+  - **Automatic Data Update:** Automatically collects and updates not only crypto data from Binance, but also **macroeconomic data** (DXY, Gold, VIX, TNX) via `yfinance`.
+  - **Deployment with Docker:** 100% containerized environment for consistent and dependency-free execution.
+  - **Advanced Logs and Visualization:** Uses `tqdm` and `tabulate` to provide progress bars and clear, easy-to-read reports.
 
-- **🧠 Inteligência Multi-Camada:**
+## The Bot's Philosophy
 
-  - **Gestão Ativa de Posição:** Uma vez em um trade, o bot gerencia ativamente o risco com técnicas de **Breakeven Stop, Realização de Lucro Parcial e Trailing Stop**.
-  - **Estratégia de Duplo Objetivo:** O bot não só busca lucro em USDT, mas também o utiliza para **acumular um "Tesouro de BTC"** a longo prazo, alocando uma porcentagem dos lucros para essa finalidade.
-  - **Confiança Dinâmica:** O bot ajusta sua própria "coragem" com base na performance de uma **janela de trades recentes**, tornando-se mais ousado em sequências de vitórias e mais cauteloso após perdas.
-  - **Risco Dinâmico (Bet Sizing):** O tamanho de cada operação é proporcional à convicção do modelo e ao regime de mercado atual, arriscando de forma inteligente.
+The decision-making of gcsBot follows a **3-layer intelligence hierarchy**, mimicking a military command structure to ensure robust and well-founded decisions:
 
-- **🤖 Metodologia de Nível Profissional:**
+### Layer 1: The General (Strategy)
 
-  - **Otimização Robusta (Calmar Ratio):** O sistema utiliza `Optuna` para otimizar a estratégia buscando o melhor **Calmar Ratio** (Retorno Anualizado / Máximo Drawdown), priorizando a segurança do capital.
-  - **Filtro de Regime de Mercado:** O bot primeiro identifica o estado do mercado (ex: `BULL_FORTE`, `BEAR`, `LATERAL`) e ajusta seu comportamento de risco ou até mesmo bloqueia operações.
-  - **Validação Robusta (Train/Validate/Test):** O processo de otimização utiliza uma metodologia rigorosa que impede o vazamento de dados do futuro (_look-ahead bias_).
+- **Question:** "Is the battlefield favorable? Should we fight today?"
+- **Action:** Analyzes the long-term **market regime** (`BULL_FORTE`, `BEAR`, etc.) using daily moving averages. Based on this scenario, it defines the general risk policy: whether trades are allowed and what the level of aggressiveness is. In a `BEAR` regime, the General may order a total withdrawal, preserving capital.
 
-- **⚙️ Engenharia de Ponta:**
-  - **Backtest Realista:** Todas as simulações incluem custos operacionais (taxas e slippage) para uma avaliação de performance fiel à realidade.
-  - **Atualização Automática de Dados:** Coleta e atualiza automaticamente não só os dados de cripto da Binance, mas também os **dados macroeconômicos** (DXY, Ouro, VIX, TNX) via `yfinance`.
-  - **Deployment com Docker:** Ambiente 100% conteinerizado para uma execução consistente e livre de problemas de dependências.
-  - **Logs e Visualização Avançados:** Utiliza `tqdm` e `tabulate` para oferecer barras de progresso e relatórios claros e fáceis de ler.
+### Layer 2: The Captain (Tactic)
 
----
+- **Question:** "Given that the General has given the green light, is this the exact moment to attack?"
+- **Action:** The **Machine Learning model**, trained with recent data and aware of the market regime, looks for short-term patterns that indicate a high-probability buying opportunity. It generates a "buy confidence" signal.
 
-## 🧠 A Filosofia do Bot: Como Ele Pensa?
+### Layer 3: The Soldier (Execution and Management)
 
-A tomada de decisão do gcsBot segue uma **hierarquia de inteligência em 3 camadas**, imitando uma estrutura de comando militar para garantir decisões robustas e bem fundamentadas:
+- **Question:** "Attack initiated. How do we manage this position to maximize gains and minimize losses?"
+- **Action:** Once the purchase is executed, this module takes control with precise rules:
+  1.  **Protection:** Moves the stop to _breakeven_ as soon as the trade reaches a small profit, eliminating the risk on the main capital.
+  2.  **Realization:** Secures part of the profit by selling a fraction of the position when the profit target is reached.
+  3.  **Maximization:** Lets the rest of the position "run" with a _trailing stop_ to capture larger trends.
+  4.  **Treasury:** Allocates a portion of the realized profit to the "BTC Treasury", fulfilling the long-term accumulation objective.
 
-### **Camada 1: O General (Estratégia)**
+This process transforms the bot from a simple signal executor into a strategic agent that thinks in multiple layers.
 
-- **Pergunta:** "O campo de batalha é favorável? Devemos lutar hoje?"
-- **Ação:** Analisa o **regime de mercado** de longo prazo (`BULL_FORTE`, `BEAR`, etc.) usando médias móveis diárias. Com base nesse cenário, ele define a política de risco geral: se os trades são permitidos e qual o nível de agressividade. Em um regime `BEAR`, o General pode ordenar a retirada total, preservando o capital.
+## The Bot's Ecosystem
 
-### **Camada 2: O Capitão (Tática)**
+- **`optimizer.py`**: The research brain. Manages the WFO, calls the `model_trainer` and `backtest`, and uses `Optuna` to find the best parameters for the complete strategy, optimizing for the Calmar Ratio.
+- **`model_trainer.py`**: The "data scientist". Prepares all the features (technical, macro, and regime) and trains the LightGBM model so that it understands the market context.
+- **`confidence_manager.py`**: The bot's "psychologist". Implements the logic to adjust confidence based on recent performance, making it more stable.
+- **`backtest.py`**: The combat simulator. Executes the complete Multi-Layer strategy in a realistic way to provide the performance metrics (Drawdown, Return) for the optimizer.
+- **`quick_tester.py`**: The "auditor". Allows validating an already trained model in a future time period, generating a complete report with the new performance metrics.
+- **`trading_bot.py`**: The "elite pilot". Module that operates in the real market, implementing the same Multi-Layer strategy validated in the optimization.
 
-- **Pergunta:** "Dado que o General deu sinal verde, este é o momento exato para atacar?"
-- **Ação:** O **modelo de Machine Learning**, treinado com dados recentes e ciente do regime de mercado, busca por padrões de curto prazo que indiquem uma oportunidade de compra com alta probabilidade. Ele gera um sinal de "confiança de compra".
+## Quick Start Guide
 
-### **Camada 3: O Soldado (Execução e Gestão)**
+Follow these steps to get the bot up and running.
 
-- **Pergunta:** "Ataque iniciado. Como gerenciamos esta posição para maximizar ganhos e minimizar perdas?"
-- **Ação:** Uma vez que a compra é executada, este módulo assume o controle com regras precisas:
-  1.  **Proteção:** Move o stop para o _breakeven_ assim que o trade atinge um pequeno lucro, eliminando o risco sobre o capital principal.
-  2.  **Realização:** Garante parte do lucro vendendo uma fração da posição ao atingir o alvo de lucro.
-  3.  **Maximização:** Deixa o restante da posição "correr" com um _trailing stop_ para capturar tendências maiores.
-  4.  **Tesouraria:** Aloca uma parte do lucro realizado para o "Tesouro de BTC", cumprindo o objetivo de acumulação de longo prazo.
-
-Este processo transforma o bot de um simples executor de sinais em um agente estratégico que pensa em múltiplas camadas.
-
----
-
-## ⚙️ Ecossistema do Bot: Como os Módulos Interagem
-
-- **`optimizer.py`**: O cérebro da pesquisa. Gerencia o WFO, chama o `model_trainer` e o `backtest`, e usa o `Optuna` para encontrar os melhores parâmetros para a estratégia completa, otimizando pelo Calmar Ratio.
-- **`model_trainer.py`**: O "cientista de dados". Prepara todas as features (técnicas, macro e de regime) e treina o modelo LightGBM para que ele entenda o contexto do mercado.
-- **`confidence_manager.py`**: O "psicólogo" do bot. Implementa a lógica para ajustar a confiança com base na performance recente, tornando-o mais estável.
-- **`backtest.py`**: O simulador de combate. Executa a estratégia Multi-Camada completa de forma realista para fornecer as métricas de performance (Drawdown, Retorno) para o otimizador.
-- **`quick_tester.py`**: O "auditor". Permite validar um modelo já treinado em um período de tempo futuro, gerando um relatório completo com as novas métricas de performance.
-- **`trading_bot.py`**: O "piloto de elite". Módulo que opera no mercado real, implementando a mesma estratégia Multi-Camada validada na otimização.
-
----
-
-## 🚀 Guia de Início Rápido
-
-Siga estes passos para colocar o bot em funcionamento.
-
-### Pré-requisitos
+### Prerequisites
 
 - [Python 3.11+](https://www.python.org/downloads/)
 - [Git](https://git-scm.com/downloads)
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (em execução)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (running)
 
-### Instalação
+### Installation
 
-1.  **Clone o repositório:**
+1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/SEU_USUARIO/gcsbot-btc.git
+    git clone https://github.com/YOUR_USERNAME/gcsbot-btc.git
     cd gcsbot-btc
     ```
-2.  **Execute o Setup Automático:**
-    Este comando irá verificar o ambiente, instalar as dependências e criar o seu arquivo de configuração `.env`.
+2.  **Run the Automatic Setup:**
+    This command will check the environment, install the dependencies, and create your `.env` configuration file.
 
     ```bash
     python run.py setup
     ```
 
-    > ⚠️ **Atenção:** Após o setup, abra o arquivo `.env` recém-criado e preencha **todas** as variáveis, especialmente suas chaves de API.
+    > ⚠️ **Attention:** After the setup, open the newly created `.env` file and fill in **all** the variables, especially your API keys.
 
-3.  **Construa a Imagem Docker:**
+3.  **Build the Docker Image:**
     ```bash
-    python run.py build
+    docker-compose build
     ```
 
----
+## Environment Configuration
 
-## 🔧 Configuração do Ambiente (`.env`)
+The `.env` file is the main control panel of the bot.
 
-O arquivo `.env` é o painel de controle principal do bot.
+- **`MODE`**: Operating mode: `optimize`, `backtest`, `test`, or `trade`.
+- **`FORCE_OFFLINE_MODE`**: `True` or `False`. Prevents the bot from accessing the internet (useful for optimizations).
 
-- **`MODE`**: Modo de operação: `optimize`, `backtest`, `test`, ou `trade`.
-- **`FORCE_OFFLINE_MODE`**: `True` ou `False`. Impede o bot de acessar a internet (útil para otimizações).
+#### API Keys
 
-#### Chaves de API
+- `BINANCE_API_KEY` & `BINANCE_API_SECRET`: **Real** account keys.
+- `BINANCE_TESTNET_API_KEY` & `BINANCE_TESTNET_API_SECRET`: **Testnet** account keys.
 
-- `BINANCE_API_KEY` & `BINANCE_API_SECRET`: Chaves da conta **real**.
-- `BINANCE_TESTNET_API_KEY` & `BINANCE_TESTNET_API_SECRET`: Chaves da conta **Testnet**.
+#### Portfolio Management (For `test` and `trade` modes)
 
-#### Gestão de Portfólio (Para os modos `test` e `trade`)
+- `MAX_USDT_ALLOCATION`: The **MAXIMUM** USDT capital that the bot is allowed to manage in its trading part.
 
-- `MAX_USDT_ALLOCATION`: O **MÁXIMO** de capital em USDT que o bot tem permissão para gerenciar na sua parte de trading.
+## The Professional Workflow
 
----
+The interaction with the bot is done through the `run.py` orchestrator. Follow these phases in the correct order.
 
-## ▶️ O Workflow Profissional: Como Usar
+### Phase Zero: Environment Cleanup (VERY IMPORTANT)
 
-A interação com o bot é feita através do orquestrador `run.py`. Siga estas fases na ordem correta.
+Before starting a **new** optimization for a reformulated strategy, it is essential to delete the old artifacts to ensure that the system starts from scratch, without any information from the previous strategy.
 
-### Passo Zero: Limpeza do Ambiente (MUITO IMPORTANTE)
-
-Antes de iniciar uma **nova** otimização para uma estratégia reformulada, é essencial apagar os artefatos antigos para garantir que o sistema comece do zero, sem nenhuma informação da estratégia anterior.
-
-**Apague os seguintes arquivos do seu diretório `/data`:**
+**Delete the following files from your `/data` directory:**
 
 - `model.joblib`
 - `scaler.joblib`
@@ -156,45 +140,45 @@ Antes de iniciar uma **nova** otimização para uma estratégia reformulada, é 
 - `wfo_optimization_state.json`
 - `combined_data_cache.csv`
 
-### Fase 1: Pesquisa e Otimização (`optimize`)
+### Phase 1: Research and Optimization (`optimize`)
 
-O passo mais importante. O bot irá estudar todo o histórico para encontrar a melhor estratégia e criar os arquivos de modelo.
+The most important step. The bot will study the entire history to find the best strategy and create the model files.
 
 ```bash
 python run.py optimize
 ```
 
-Este processo é longo e pode levar horas ou dias. Ao final, os arquivos `trading_model.pkl`, `scaler.pkl` e `strategy_params.json` serão salvos na pasta /data.
+This process is long and can take hours or days. At the end, the `trading_model.pkl`, `scaler.pkl`, and `strategy_params.json` files will be saved in the `/data` folder.
 
 ---
 
-### Fase 2: Backtest Rápido
+### Phase 2: Quick Backtest
 
-Após a otimização, valide a nova estratégia em um período que o modelo nunca viu durante o treino.
+After optimization, validate the new strategy in a period that the model has never seen during training.
 
 ```bash
 python run.py backtest --start "2024-01-01" --end "2025-01-01"
 ```
 
-O bot irá rodar a simulação e imprimir um relatório de performance completo, incluindo Calmar Ratio e o Tesouro de BTC acumulado.
+The bot will run the simulation and print a complete performance report, including the Calmar Ratio and the accumulated BTC Treasury.
 
 ---
 
-### Fase 3: Validação em Testnet
+### Phase 3: Testnet Validation
 
-Se a validação for positiva, teste a estratégia no mercado ao vivo com dinheiro de teste.
+If the validation is positive, test the strategy in the live market with test money.
 
 ```bash
 python run.py test
 ```
 
-Ele usará o modelo e os parâmetros criados na Fase 1. Deixe rodando por pelo menos 1-2 semanas para observar o comportamento em tempo real.
+It will use the model and parameters created in Phase 1. Let it run for at least 1-2 weeks to observe the behavior in real time.
 
 ---
 
-### Fase 3: Trading Real
+### Phase 4: Real Trading
 
-O passo final. O bot operará da mesma forma que no modo test, mas utilizando sua conta real da Binance e sua alocação de capital definida.
+The final step. The bot will operate in the same way as in test mode, but using your real Binance account and your defined capital allocation.
 
 ```bash
 python run.py trade
@@ -202,15 +186,15 @@ python run.py trade
 
 ---
 
-## Comandos Adicionais
+## Additional Commands
 
-- Ver os Logs em Tempo Real:
+- View Logs in Real Time:
 
 ```bash
 python run.py logs
 ```
 
-- Parar o Bot (Modo `test` ou `trade`):
+- Stop the Bot (`test` or `trade` mode):
 
 ```bash
 python run.py stop
@@ -218,29 +202,33 @@ python run.py stop
 
 ---
 
-# 📂 Estrutura do Projeto
+## Project Structure
 
 ```bash
 gcsbot-btc/
-├── data/                  # Dados gerados (CSVs, modelos, estados) - Ignorado pelo Git
-├── logs/                  # Arquivos de log diários - Ignorado pelo Git
-├── src/                   # Código fonte do projeto
+├── data/                  # Generated data (CSVs, models, states) - Ignored by Git
+├── logs/                  # Daily log files - Ignored by Git
+├── src/                   # Project source code
 │   ├── __init__.py
-│   ├── backtest.py        # Motor de simulação realista (usado pela otimização)
-│   ├── config.py          # Gerenciador de configurações do .env
-│   ├── confidence_manager.py # Cérebro da confiança adaptativa
-│   ├── data_manager.py    # Gerenciador de coleta e cache de dados
-│   ├── logger.py          # Configuração do sistema de logs
-│   ├── model_trainer.py   # Prepara features e treina o modelo de ML
-│   ├── optimizer.py       # Orquestrador do Walk-Forward Optimization (WFO)
-│   ├── quick_tester.py    # Lógica para o modo de backtest rápido (validação)
-│   └── trading_bot.py     # Lógica de operação real e gestão de portfólio
-├── .dockerignore          # Arquivos a serem ignorados pelo Docker
-├── .env.example           # Exemplo do arquivo de configuração
-├── .gitignore             # Arquivos a serem ignorados pelo Git
-├── Dockerfile             # Define o ambiente Docker para o bot
-├── main.py                # Ponto de entrada principal (usado pelo Docker)
-├── README.md              # Esta documentação
-├── requirements.txt       # Dependências Python
-└── run.py                 # Orquestrador principal e ponto de entrada do usuário
+│   ├── backtest.py        # Realistic simulation engine (used by optimization)
+│   ├── config.py          # Configuration manager for .env
+│   ├── confidence_manager.py # Adaptive confidence brain
+│   ├── data_manager.py    # Data collection and caching manager
+│   ├── logger.py          # Log system configuration
+│   ├── model_trainer.py   # Prepares features and trains the ML model
+│   ├── optimizer.py       # Walk-Forward Optimization (WFO) orchestrator
+│   ├── quick_tester.py    # Logic for the quick backtest mode (validation)
+│   └── trading_bot.py     # Real operation and portfolio management logic
+├── .dockerignore          # Files to be ignored by Docker
+├── .env.example           # Example of the configuration file
+├── .gitignore             # Files to be ignored by Git
+├── Dockerfile             # Defines the Docker environment for the bot
+├── main.py                # Main entry point (used by Docker)
+├── README.md              # This documentation
+├── requirements.txt       # Python dependencies
+└── run.py                 # Main orchestrator and user entry point
 ```
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

@@ -30,3 +30,4 @@ venv/
 
 # Ignora o arquivo de segredos
 .secrets.toml
+/data
