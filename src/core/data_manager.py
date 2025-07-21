@@ -253,10 +253,17 @@ class DataManager:
                     logger.debug(f"Nenhum dado novo encontrado para '{nome_ativo}'.")
                     continue
                 
+                # Flatten the multi-level column names
+                df_downloaded.columns = [col[0] if isinstance(col, tuple) else col for col in df_downloaded.columns]
+                
                 clean_df = df_downloaded[['Open', 'High', 'Low', 'Close', 'Volume']].copy()
                 clean_df.index.name = 'Date'
                 
-                self.db.insert_dataframe(clean_df.reset_index(), table_name, if_exists='append')
+                # Convert column names to lowercase
+                clean_df = clean_df.reset_index()
+                clean_df.columns = [col.lower() for col in clean_df.columns]
+                
+                self.db.insert_dataframe(clean_df, table_name, if_exists='append')
                 time.sleep(1) 
             except Exception as e:
                 logger.error(f"Falha ao buscar ou salvar dados para o ativo '{nome_ativo}': {e}", exc_info=True)
@@ -270,15 +277,15 @@ class DataManager:
         for nome_ativo in nomes_ativos:
             table_name = f"macro_{nome_ativo}"
             try:
-                query = f"SELECT Date, Close FROM {table_name}"
+                query = f"SELECT date, close FROM {table_name}"
                 df = self.db.fetch_data(query)
                 if df.empty:
                     logger.warning(f"AVISO: Nenhum dado encontrado na tabela '{table_name}'. Pulando.")
                     continue
-                df.set_index('Date', inplace=True)
+                df.set_index('date', inplace=True)
                 if df.index.tz is None: df.index = df.index.tz_localize('UTC')
                 else: df.index = df.index.tz_convert('UTC')
-                df.rename(columns={'Close': f'{nome_ativo}_close'}, inplace=True)
+                df.rename(columns={'close': f'{nome_ativo}_close'}, inplace=True)
                 lista_dataframes.append(df)
             except Exception as e:
                 logger.error(f"ERRO ao processar a tabela macro '{table_name}': {e}", exc_info=True)
@@ -334,13 +341,13 @@ class DataManager:
         """
         all_dfs = []
         total_days = max(1, (end_date_dt - start_date_dt).days)
-        progress_bar = tqdm(total=total_days, desc=f"Baixando dados de {symbol}", unit="d", leave=False, disable=False)
+        progress_bar = tqdm(total=total_days, desc=f"Baixando dados de {symbol}", unit="d", leave=True, disable=False)
         cursor = start_date_dt
         while cursor < end_date_dt:
             chunk_size_days = 30
             next_cursor = min(cursor + datetime.timedelta(days=chunk_size_days), end_date_dt)
             start_str, end_str = cursor.strftime("%Y-%m-%d %H:%M:%S"), next_cursor.strftime("%Y-%m-%d %H:%M:%S")
-            klines = self.client.get_historical_klines(symbol, interval, start_str, end_str)
+            klines = self.client.get_historical_klines(symbol.replace('/', ''), interval, start_str, end_str)
             if not klines:
                 days_processed = (next_cursor - cursor).days; progress_bar.update(days_processed if days_processed > 0 else 1)
                 cursor = next_cursor
@@ -365,7 +372,7 @@ class DataManager:
         Returns:
             A pandas DataFrame with the BTC data.
         """
-        table_name = f"btc_{symbol.lower()}_{interval}"
+        table_name = f"btc_{symbol.lower().replace('/', '_')}_{interval}"
         self.db.create_table(table_name, [
             "timestamp TIMESTAMP",
             "open FLOAT",
@@ -479,7 +486,7 @@ class DataManager:
 
         df_with_features = self._prepare_all_features(df_combined)
         df_with_regimes = self._add_market_regime(df_with_features)
-        df_with_situations = self.situational_awareness.cluster_data(df_with_regimes)
+        df_with_situations = self.situational_awareness.cluster_data(df_with_regimes.copy())
 
         logger.info("Calculando features de interação (Camada 3: Tática Avançada)...")
         if 'dxy_close_change' in df_with_situations.columns:

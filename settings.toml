@@ -1,4 +1,6 @@
 [default]
+DATA_DIR = "data"
+LOGS_DIR = "logs"
 USE_TESTNET = false
 SYMBOL = "BTC/USDT"
 HISTORICAL_DATA_FILE = "data/historical_data.csv"

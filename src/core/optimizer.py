@@ -23,8 +23,8 @@ from src.core.backtest import BacktestingEngine
 from src.logger import logger, log_table
 from src.config import settings
 
-OPTIMIZER_STATUS_FILE = os.path.join(settings.DATA_DIR, 'optimizer_status.json')
-OPTIMIZER_STATUS_LOCK_FILE = os.path.join(settings.DATA_DIR, 'optimizer_status.json.lock')
+OPTIMIZER_STATUS_FILE = os.path.join(settings.LOGS_DIR, 'optimizer_status.json')
+OPTIMIZER_STATUS_LOCK_FILE = os.path.join(settings.LOGS_DIR, 'optimizer_status.json.lock')
 
 from typing import List, Dict, Any
 

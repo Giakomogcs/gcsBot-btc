@@ -18,13 +18,34 @@ class SituationalAwareness:
         features_for_clustering = [
             'rsi', 'macd_diff', 'atr', 'bb_width', 'volume_sma_50'
         ]
+        
+        # Ensure all required features are present
+        missing_features = [f for f in features_for_clustering if f not in df.columns]
+        if missing_features:
+            raise ValueError(f"Missing features for clustering: {missing_features}")
 
-        df_cluster = df[features_for_clustering].copy()
-        df_cluster.dropna(inplace=True)
+        # Create a copy to avoid SettingWithCopyWarning
+        df_copy = df.copy()
 
-        scaled_features = self.scaler.fit_transform(df_cluster)
+        # Drop rows with NaN values in the features to be scaled
+        df_copy.dropna(subset=features_for_clustering, inplace=True)
 
-        df['market_situation'] = self.kmeans.fit_predict(scaled_features)
+        if df_copy.empty:
+            logger.warning("DataFrame is empty after dropping NaNs. Cannot perform clustering.")
+            # Return the original dataframe with an empty 'market_situation' column
+            df['market_situation'] = pd.Series(dtype='int')
+            return df
+
+        scaled_features = self.scaler.fit_transform(df_copy[features_for_clustering])
+        
+        # Get the predictions
+        predictions = self.kmeans.fit_predict(scaled_features)
+        
+        # Create a new DataFrame for the predictions
+        df_predictions = pd.DataFrame(predictions, index=df_copy.index, columns=['market_situation'])
+        
+        # Join the predictions back to the original DataFrame
+        df = df.join(df_predictions, how='left')
 
         logger.info("Clustering complete.")
         return df
