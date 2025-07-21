@@ -6,7 +6,7 @@ import numpy as np
 from lightgbm import LGBMClassifier
 from sklearn.preprocessing import StandardScaler
 from numba import jit
-from typing import Tuple, List, Any, Dict
+from typing import Optional, Tuple, List, Any, Dict
 
 from src.logger import logger, log_table
 from src.core.feature_selector import FeatureSelector
