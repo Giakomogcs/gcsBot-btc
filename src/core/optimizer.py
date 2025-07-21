@@ -19,7 +19,7 @@ from filelock import FileLock
 from collections import defaultdict
 
 from src.core.model_trainer import ModelTrainer
-from src.core.backtest import run_backtest
+from src.core.backtest import BacktestingEngine
 from src.logger import logger, log_table
 from src.config import settings
 
@@ -168,7 +168,8 @@ class WalkForwardOptimizer:
             model, scaler = self.trainer.train(train_data, params, self.feature_names, base_model=self.base_model)
             if model is None:
                 continue
-            val_metrics = run_backtest(model, scaler, validation_data, params, self.feature_names)
+            backtesting_engine = BacktestingEngine(model, scaler, validation_data, params, self.feature_names)
+            val_metrics = backtesting_engine.run()
             all_fold_metrics.append(val_metrics)
             del model, scaler
             gc.collect()

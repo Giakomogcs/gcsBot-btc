@@ -19,6 +19,7 @@ DCA_MIN_CAPITAL_USDT = 100.0
 BACKTEST_START_DATE = "2023-01-01"
 BACKTEST_END_DATE = "2023-12-31"
 MODE = "trade"
+TWITTER_USERNAME = "elonmusk"
 
 [development]
 DATABASE_URL = "postgresql://user:password@localhost/gcsbot"

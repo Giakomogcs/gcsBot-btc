@@ -20,3 +20,5 @@ pytest
 psycopg2-binary
 SQLAlchemy
 dynaconf
+tensorflow
+vaderSentiment

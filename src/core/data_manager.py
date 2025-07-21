@@ -73,11 +73,45 @@ class DataManager:
                 self.client = None
         else:
             logger.info("MODO OFFLINE FORÇADO está ativo.")
+
+        self.situational_awareness = SituationalAwareness()
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
+class DataManager:
+    def __init__(self, db_url: Optional[str] = None) -> None:
+        """
+        Initializes the DataManager class.
+
+        Args:
+            db_url: The database URL. If not provided, it will be read from the DATABASE_URL environment variable.
+        """
+        self.db = Database(db_url)
+        self.client = None
+        if not settings.FORCE_OFFLINE_MODE:
+            try:
+                api_key_to_use = settings.BINANCE_TESTNET_API_KEY if settings.USE_TESTNET else settings.BINANCE_API_KEY
+                api_secret_to_use = settings.BINANCE_TESTNET_API_SECRET if settings.USE_TESTNET else settings.BINANCE_API_SECRET
+
+                if not api_key_to_use or not api_secret_to_use:
+                    logger.warning("API Key ou Secret não encontradas para o modo selecionado. Operando em modo OFFLINE-FALLBACK.")
+                    self.client = None
+                    return
+
+                self.client = Client(api_key_to_use, api_secret_to_use, tld='com', testnet=settings.USE_TESTNET, requests_params={"timeout": 20})
+                self.client.ping()
+                log_message = f"Cliente Binance inicializado em modo {'TESTNET' if settings.USE_TESTNET else 'REAL'}. Conexão com a API confirmada."
+                logger.info(log_message)
+            except (BinanceAPIException, BinanceRequestException, Exception) as e:
+                logger.warning(f"FALHA NA CONEXÃO: {e}. O bot operará em modo OFFLINE-FALLBACK.")
+                self.client = None
+        else:
+            logger.info("MODO OFFLINE FORÇADO está ativo.")
             
         self.situational_awareness = SituationalAwareness()
         self.feature_names = [
             'rsi', 'rsi_1h', 'rsi_4h', 'macd_diff', 'macd_diff_1h', 'stoch_osc', 'adx', 'adx_power',
             'atr', 'bb_width', 'bb_pband', 'sma_7_25_diff', 'close_sma_25_dist',
+            'twitter_sentiment',
             'price_change_1m', 'price_change_5m', 'dxy_close_change', 'vix_close_change',
             'gold_close_change', 'tnx_close_change', 'atr_long_avg', 'volume_sma_50',
             'cci', 'williams_r', 'momentum_10m', 'volatility_ratio', 'sma_50_200_diff',
@@ -256,6 +290,35 @@ class DataManager:
         logger.debug("Dados macro do banco de dados unificados com sucesso.")
         return df_final
     
+    def _fetch_and_update_twitter_sentiment(self) -> None:
+        """Fetches and updates the twitter sentiment from a specific user."""
+        if not self.client:
+            logger.debug("Modo offline. Pulando atualização de dados do Twitter.")
+            return
+
+        logger.info("Iniciando verificação e atualização do sentimento do Twitter...")
+        analyzer = SentimentIntensityAnalyzer()
+
+        # This is a placeholder for fetching tweets. In a real-world scenario, you would use the Twitter API to fetch the tweets.
+        tweets = [
+            "I love #Bitcoin!",
+            "I hate #Bitcoin!",
+            "I'm neutral on #Bitcoin.",
+        ]
+
+        sentiments = [analyzer.polarity_scores(tweet)['compound'] for tweet in tweets]
+        avg_sentiment = np.mean(sentiments)
+
+        table_name = "twitter_sentiment"
+        self.db.create_table(table_name, [
+            "timestamp TIMESTAMP",
+            "sentiment FLOAT"
+        ])
+
+        df = pd.DataFrame([{'timestamp': datetime.datetime.now(datetime.timezone.utc), 'sentiment': avg_sentiment}])
+        self.db.insert_dataframe(df, table_name, if_exists='append')
+        logger.debug("Verificação do sentimento do Twitter concluída.")
+
     def get_historical_data_by_batch(self, symbol: str, interval: str, start_date_dt: datetime.datetime, end_date_dt: datetime.datetime) -> pd.DataFrame:
         """
         Fetches historical data from Binance in batches.
@@ -393,13 +456,22 @@ class DataManager:
         logger.info("Iniciando processo de unificação de dados.")
         
         self._fetch_and_update_macro_data()
+        self._fetch_and_update_twitter_sentiment()
         df_btc = self._fetch_and_manage_btc_data(symbol, interval)
         if df_btc.empty: return pd.DataFrame()
 
         df_macro = self._load_and_unify_local_macro_data()
-        
+        df_sentiment = self.db.fetch_data("SELECT * FROM twitter_sentiment")
+        df_sentiment.set_index('timestamp', inplace=True)
+        df_sentiment.index = pd.to_datetime(df_sentiment.index, utc=True)
+
         if not df_macro.empty:
             df_combined = df_btc.join(df_macro, how='left')
+        else:
+            df_combined = df_btc
+
+        if not df_sentiment.empty:
+            df_combined = df_combined.join(df_sentiment, how='left')
             macro_cols = [col for col in df_combined.columns if '_close' in col]
             df_combined[macro_cols] = df_combined[macro_cols].ffill()
         else:

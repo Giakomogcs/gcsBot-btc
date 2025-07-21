@@ -24,7 +24,8 @@ from src.core.treasury_manager import TreasuryManager
 from src.core.anomaly_detector import AnomalyDetector
 from src.core.optimizer import WalkForwardOptimizer
 
-from typing import Any
+from typing import Any, Dict, Optional, Tuple
+from dateutil.parser import isoparse
 
 class PortfolioManager:
     """A class to manage the portfolio."""
@@ -126,7 +127,7 @@ class TradingBot:
         self.last_dca_time = None
         self.last_event_message = "Inicializando o bot..."
         self.specialist_stats = {}
-        self.rl_agent = BetSizingAgent(n_situations=10)
+        self.rl_agent = DQNAgent(state_size=2, action_size=5)
         self.treasury_manager = TreasuryManager()
         self.anomaly_detector = AnomalyDetector()
         self.performance_history = {}
@@ -243,6 +244,10 @@ from typing import Tuple, Any
             'f1_score FLOAT',
             'roc_auc FLOAT'
         ])
+        if os.path.exists("dqn_model.h5"):
+            self.rl_agent.load("dqn_model.h5")
+        if os.path.exists("dqn_model.h5"):
+            self.rl_agent.load("dqn_model.h5")
         if not self._load_state():
             if not self.portfolio.sync_with_live_balance():
                 logger.critical("Falha fatal ao inicializar portfólio. Encerrando."); return
@@ -388,7 +393,12 @@ from typing import Tuple, Any
         Args:
             latest_data: The latest data.
         """
-        amount_to_buy_usdt = self.treasury_manager.smart_accumulation(latest_data, self.portfolio.trading_capital_usdt)
+        amount_to_buy_usdt = self.treasury_manager.smart_accumulation(
+            latest_data,
+            self.portfolio.trading_capital_usdt,
+            self.session_wins,
+            self.session_trades
+        )
         if amount_to_buy_usdt == 0:
             return
 
@@ -524,14 +534,14 @@ from typing import Tuple, Any
 
                 # Update RL agent
                 reward = pnl_usdt
-                state = self.rl_agent.get_state(self.last_used_params.get('entry_situation'), self.last_used_params.get('buy_confidence'))
+                state = np.reshape([self.last_used_params.get('entry_situation'), self.last_used_params.get('buy_confidence')], [1, 2])
                 action = self.last_used_params.get('rl_action')
-                next_state = self.rl_agent.get_state(latest_data['market_situation'], 0) # No confidence in next state
-                self.rl_agent.update_q_table(state, action, reward, next_state)
+                next_state = np.reshape([latest_data['market_situation'], 0], [1, 2])
+                done = True
+                self.rl_agent.remember(state, action, reward, next_state, done)
 
-                # Learning from errors
-                if pnl_usdt < 0:
-                    self.rl_agent.update_q_table(state, action, -1, next_state)
+                if len(self.rl_agent.memory) > 32:
+                    self.rl_agent.replay(32)
 
                 # Update performance history
                 if situation_name not in self.performance_history:
@@ -651,5 +661,6 @@ from typing import Tuple, Any
         """
         logger.warning("🚨 SINAL DE INTERRUPÇÃO RECEBIDO. ENCERRANDO DE FORMA SEGURA... 🚨")
         self._save_state()
-        logger.info("Estado do bot salvo. Desligando.")
+        self.rl_agent.save("dqn_model.h5")
+        logger.info("Estado do bot e modelo de RL salvos. Desligando.")
         sys.exit(0)
