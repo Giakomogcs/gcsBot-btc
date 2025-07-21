@@ -92,6 +92,6 @@ def display_trading_dashboard(status_data: dict):
 
     footer = Panel(Text(f"Preço Atual BTC: ${portfolio.get('current_price', 0):,.2f} | Última atualização: {datetime.now().strftime('%H:%M:%S')}", justify="center"))
     layout["footer"].update(footer)
-
+    
     with Live(layout, console=console, screen=True, transient=True):
         pass

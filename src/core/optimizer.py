@@ -128,7 +128,7 @@ class WalkForwardOptimizer:
             'verbosity': -1,
             'boosting_type': 'gbdt',
         }
-
+        
         data_for_objective['block'] = (data_for_objective['market_regime'] != data_for_objective['market_regime'].shift()).cumsum()
         regime_blocks = sorted(data_for_objective['block'].unique())
         
@@ -199,12 +199,15 @@ class WalkForwardOptimizer:
             self.cumulative_pruning_stats[reason] += 1
 
         try:
-            best_trial = study.best_trial
+            best_trial = tuner.study.best_trial
             best_score = best_trial.value
         except ValueError:
             logger.warning(f"❌ Nenhum trial concluído com sucesso para '{name}'.")
             self.optimization_summary[name] = {'status': 'Skipped - All Trials Pruned', 'score': None}
             return
+
+        best_trial = tuner.study.best_trial
+        best_score = best_trial.value
 
         logger.info(f"\n🏁 Otimização de '{name}' concluída. Melhor Score: {best_score:.4f}")
 
@@ -255,7 +258,7 @@ class WalkForwardOptimizer:
         recent_data = self.full_data.tail(WFO_TRAIN_MINUTES).copy()
         
         situation_groups = recent_data.groupby('market_situation')
-
+        
         tasks_to_run = {}
         for situation, data in situation_groups:
             if len(data) >= 5000:
