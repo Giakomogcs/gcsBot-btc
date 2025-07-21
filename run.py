@@ -104,7 +104,7 @@ def show_logs():
 # <<< NOVO >>> Função para mostrar o painel de otimização
 def show_display():
     """Mostra o painel de otimização lendo o arquivo de status."""
-    from src.display_manager import display_optimization_dashboard # Importa a função de display
+    from src.core.display_manager import display_optimization_dashboard # Importa a função de display
     
     container_name = "gcsbot-optimizer"
     result = run_command(f"docker ps -q --filter \"name={container_name}\"", capture_output=True)

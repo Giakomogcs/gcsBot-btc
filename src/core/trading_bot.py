@@ -13,6 +13,7 @@ from binance.client import Client
 from binance.exceptions import BinanceAPIException, BinanceRequestException
 from datetime import datetime, timezone, timedelta
 from collections import deque
+from typing import Tuple, Any
 
 from src.logger import logger
 from src.config import settings
@@ -191,7 +192,6 @@ class TradingBot:
             logger.error(f"Erro fatal ao carregar modelos: {e}", exc_info=True)
             return False
 
-from typing import Tuple, Any
 
     def _get_active_model(self, situation: int) -> Tuple[Any, Any, Any, Any]:
         """
@@ -255,7 +255,7 @@ from typing import Tuple, Any
         
         while True:
             try:
-                processed_df = self.data_manager.update_and_load_data(SYMBOL, '1m')
+                processed_df = self.data_manager.update_and_load_data(settings.SYMBOL, '1m')
                 if processed_df.empty: time.sleep(60); continue
                 latest_data = processed_df.iloc[-1]
                 
@@ -316,7 +316,7 @@ from typing import Tuple, Any
         params = self.last_used_params
         if self.position_phase == 'INITIAL' and price >= self.buy_price * (1 + params.get('profit_threshold', 0.01) / 2):
             self.position_phase = 'TRAILING'
-            new_stop = self.buy_price * (1 + (FEE_RATE + SLIPPAGE_RATE) * 2)
+            new_stop = self.buy_price * (1 + (settings.FEE_RATE + settings.SLIPPAGE_RATE) * 2)
             self.current_stop_price = max(self.current_stop_price, new_stop)
             self.last_event_message = f"Posição em Breakeven. Stop: ${self.current_stop_price:,.2f}"
             logger.info(self.last_event_message)
@@ -539,7 +539,7 @@ from typing import Tuple, Any
                 next_state = np.reshape([latest_data['market_situation'], 0], [1, 2])
                 done = True
                 self.rl_agent.remember(state, action, reward, next_state, done)
-
+                
                 if len(self.rl_agent.memory) > 32:
                     self.rl_agent.replay(32)
 
@@ -577,8 +577,8 @@ from typing import Tuple, Any
                 average_pnl = np.mean(history)
                 if average_pnl < 0:
                     logger.warning(f"A performance do modelo para a situação {situation_name} está degradando. Acionando re-otimização...")
-                    optimizer = WalkForwardOptimizer(self.data_manager.update_and_load_data(SYMBOL, '1m'), self.model_feature_names)
-                    situation_data = self.data_manager.update_and_load_data(SYMBOL, '1m')
+                    optimizer = WalkForwardOptimizer(self.data_manager.update_and_load_data(settings.SYMBOL, '1m'), self.model_feature_names)
+                    situation_data = self.data_manager.update_and_load_data(settings.SYMBOL, '1m')
                     situation_data = situation_data[situation_data['market_situation'] == int(situation_name.split('_')[-1])]
                     optimizer.run_optimization_for_situation(situation_name, situation_data)
                     self.performance_history[situation_name].clear()
