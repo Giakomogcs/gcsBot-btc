@@ -1,4 +1,5 @@
 [default]
+USE_TESTNET = false
 SYMBOL = "BTC/USDT"
 HISTORICAL_DATA_FILE = "data/historical_data.csv"
 KAGGLE_BOOTSTRAP_FILE = "data/kaggle_bootstrap.csv"
@@ -23,6 +24,10 @@ TWITTER_USERNAME = "elonmusk"
 
 [development]
 DATABASE_URL = "postgresql://user:password@localhost/gcsbot"
+BINANCE_API_KEY = "test"
+BINANCE_API_SECRET = "test"
+BINANCE_TESTNET_API_KEY = "test"
+BINANCE_TESTNET_API_SECRET = "test"
 
 [production]
 DATABASE_URL = "@env/DATABASE_URL"

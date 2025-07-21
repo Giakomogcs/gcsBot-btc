@@ -128,7 +128,7 @@ class TradingBot:
         self.last_dca_time = None
         self.last_event_message = "Inicializando o bot..."
         self.specialist_stats = {}
-        self.rl_agent = DQNAgent(state_size=2, action_size=5)
+        self.rl_agent = BetSizingAgent(n_situations=10, n_bet_sizes=5)
         self.treasury_manager = TreasuryManager()
         self.anomaly_detector = AnomalyDetector()
         self.performance_history = {}
@@ -244,10 +244,6 @@ class TradingBot:
             'f1_score FLOAT',
             'roc_auc FLOAT'
         ])
-        if os.path.exists("dqn_model.h5"):
-            self.rl_agent.load("dqn_model.h5")
-        if os.path.exists("dqn_model.h5"):
-            self.rl_agent.load("dqn_model.h5")
         if not self._load_state():
             if not self.portfolio.sync_with_live_balance():
                 logger.critical("Falha fatal ao inicializar portfólio. Encerrando."); return
@@ -532,17 +528,6 @@ class TradingBot:
                 logger.performance("Trade fechado", extra_data=log_payload)
                 self._update_specialist_stats(situation_name, pnl_usdt)
 
-                # Update RL agent
-                reward = pnl_usdt
-                state = np.reshape([self.last_used_params.get('entry_situation'), self.last_used_params.get('buy_confidence')], [1, 2])
-                action = self.last_used_params.get('rl_action')
-                next_state = np.reshape([latest_data['market_situation'], 0], [1, 2])
-                done = True
-                self.rl_agent.remember(state, action, reward, next_state, done)
-                
-                if len(self.rl_agent.memory) > 32:
-                    self.rl_agent.replay(32)
-
                 # Update performance history
                 if situation_name not in self.performance_history:
                     self.performance_history[situation_name] = deque(maxlen=100)
@@ -661,6 +646,5 @@ class TradingBot:
         """
         logger.warning("🚨 SINAL DE INTERRUPÇÃO RECEBIDO. ENCERRANDO DE FORMA SEGURA... 🚨")
         self._save_state()
-        self.rl_agent.save("dqn_model.h5")
-        logger.info("Estado do bot e modelo de RL salvos. Desligando.")
+        logger.info("Estado do bot salvo. Desligando.")
         sys.exit(0)
