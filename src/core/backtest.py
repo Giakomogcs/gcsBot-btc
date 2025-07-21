@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from src.config import FEE_RATE, SLIPPAGE_RATE, IOF_RATE
-from src.confidence_manager import AdaptiveConfidenceManager
+from src.core.confidence_manager import AdaptiveConfidenceManager
 
 def calculate_sortino_ratio(series, periods_per_year=365*24*60):
     if len(series) < 2: return 0.0
