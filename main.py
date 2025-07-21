@@ -20,20 +20,23 @@ def main():
 
         from src.data_manager import DataManager
         from src.optimizer import WalkForwardOptimizer
-        
+
+        # O DataManager é responsável por carregar, processar e fazer o cache dos dados
         dm = DataManager()
+        # Garante que temos os dados mais recentes e todas as features calculadas
         full_historical_data = dm.update_and_load_data(SYMBOL, '1m')
-        
+
+        # Filtra os dados para começar a partir de 2018, garantindo um histórico relevante
         if not full_historical_data.empty and pd.to_datetime("2018-01-01", utc=True) < full_historical_data.index.max():
             full_historical_data = full_historical_data[full_historical_data.index >= '2018-01-01']
 
         if full_historical_data.empty:
-            logger.error("Não há dados disponíveis para otimizar. Verifique a conexão ou os arquivos de dados. Abortando.")
+            logger.error("Não foram encontrados dados históricos para a otimização. Verifique a conexão ou os arquivos locais. Abortando.")
             sys.exit(1)
-            
-        # <<< A CORREÇÃO ESTÁ AQUI >>>
-        # Agora passamos a lista de nomes das features (dm.feature_names) para o otimizador.
+
+        # A "Fábrica de Especialistas" é instanciada com os dados e a lista de features
         optimizer = WalkForwardOptimizer(full_historical_data, dm.feature_names)
+        # O método run() inicia todo o processo de otimização, que pode levar horas
         optimizer.run()
 
     elif MODE == 'backtest':

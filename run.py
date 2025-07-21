@@ -92,16 +92,35 @@ def model_guardian():
         sys.exit(1)
 
 def start_optimizer():
+    """Inicia o processo de otimização em um container Docker em modo background."""
     check_docker_running()
     container_name = "gcsbot-optimizer"
     print_color(f"--- Iniciando Otimização (Modo Background) no container '{container_name}' ---", "blue")
-    run_command(f"docker rm -f {container_name}", capture_output=True) # Remove container antigo se existir
-    data_volume = f"-v \"{os.path.abspath('data')}:/app/data\""; logs_volume = f"-v \"{os.path.abspath('logs')}:/app/logs\""
-    command = f"docker run -d --restart unless-stopped --name {container_name} --env-file .env -e MODE=optimize {data_volume} {logs_volume} {DOCKER_IMAGE_NAME}"
+
+    # Garante que um container antigo seja removido para evitar conflitos
+    run_command(f"docker rm -f {container_name}", capture_output=True)
+
+    # Mapeia os volumes de 'data' e 'logs' para persistir os resultados e logs
+    data_volume = f"-v \"{os.path.abspath('data')}:/app/data\""
+    logs_volume = f"-v \"{os.path.abspath('logs')}:/app/logs\""
+
+    # Comando para rodar o container em modo 'optimize'
+    # -d: detached (background)
+    # --restart unless-stopped: reinicia o container a menos que seja parado manualmente
+    # --name: nome do container
+    # --env-file: usa o .env para as variáveis de ambiente
+    # -e MODE=optimize: define o modo de operação
+    command = (
+        f"docker run -d --restart unless-stopped --name {container_name} "
+        f"--env-file .env -e MODE=optimize {data_volume} {logs_volume} {DOCKER_IMAGE_NAME}"
+    )
+
     run_command(command, check=True)
-    print_color(f"Otimização iniciada em segundo plano.", "green")
-    print_color("Para ver o painel de progresso, use: python run.py display", "yellow")
-    print_color("Para ver os logs brutos, use: python run.py logs", "yellow")
+    print_color("Otimização iniciada em segundo plano com sucesso!", "green")
+    print_color("Para acompanhar o progresso, use o comando:", "yellow")
+    print_color("python run.py display", "blue")
+    print_color("Para ver os logs completos, use o comando:", "yellow")
+    print_color("python run.py logs", "blue")
 
 def start_bot(mode):
     check_docker_running()
