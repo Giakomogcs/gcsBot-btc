@@ -109,7 +109,7 @@ class DataManager:
             
         self.situational_awareness = SituationalAwareness()
         self.feature_names = [
-            'rsi', 'rsi_1h', 'rsi_4h', 'macd_diff', 'macd_diff_1h', 'stoch_osc', 'adx', 'adx_power',
+            'rsi', 'rsi_1h', 'rsi_4h', 'macd_diff', 'macd_diff_1h', 'macd_diff_4h', 'stoch_osc', 'adx', 'adx_power',
             'atr', 'bb_width', 'bb_pband', 'sma_7_25_diff', 'close_sma_25_dist',
             'twitter_sentiment',
             'price_change_1m', 'price_change_5m', 'dxy_close_change', 'vix_close_change',
@@ -163,27 +163,30 @@ class DataManager:
         for asset_name, asset_col in macro_corr_assets.items():
             feature_name = f'btc_{asset_name}_corr_30d'
             if asset_col in df.columns:
-                df_daily_btc = df['close'].resample('D').last()
-                df_daily_asset = df[asset_col].resample('D').last()
-                btc_returns = df_daily_btc.pct_change()
-                asset_returns = df_daily_asset.pct_change()
-                rolling_corr = btc_returns.rolling(window=30).corr(asset_returns)
+                df_daily_btc = df['close'].resample('D').last().pct_change()
+                df_daily_asset = df[asset_col].resample('D').last().pct_change()
+                rolling_corr = df_daily_btc.rolling(window=30).corr(df_daily_asset).shift(1)
                 df[feature_name] = rolling_corr.reindex(df.index, method='ffill')
-                
-                # === CORREÇÃO DO FUTUREWARNING ===
-                # Substituímos .bfill(inplace=True) pela forma recomendada
                 df[feature_name] = df[feature_name].bfill()
             else:
                 df[feature_name] = 0.0
 
         # --- Features Multi-Timeframe ---
-        df_1h = df['close'].resample('h').last()
-        df['rsi_1h'] = RSIIndicator(close=df_1h, window=14).rsi().reindex(df.index, method='ffill')
-        df['macd_diff_1h'] = MACD(close=df_1h).macd_diff().reindex(df.index, method='ffill')
-        df_4h = df['close'].resample('4h').last()
-        df['rsi_4h'] = RSIIndicator(close=df_4h, window=14).rsi().reindex(df.index, method='ffill')
-        for col in ['rsi_1h', 'macd_diff_1h', 'rsi_4h']:
-            df[col] = df[col].bfill().ffill()
+        for tf, period in [('1h', 60), ('4h', 240)]:
+            df_resampled = df['close'].resample(tf).agg(['last']).shift(1)
+            df_resampled.columns = [f'close_{tf}']
+            
+            # RSI
+            rsi_values = RSIIndicator(close=df_resampled[f'close_{tf}'], window=14).rsi()
+            df[f'rsi_{tf}'] = rsi_values.reindex(df.index, method='ffill')
+
+            # MACD
+            macd = MACD(close=df_resampled[f'close_{tf}'])
+            df[f'macd_diff_{tf}'] = macd.macd_diff().reindex(df.index, method='ffill')
+
+        for col in ['rsi_1h', 'macd_diff_1h', 'rsi_4h', 'macd_diff_4h']:
+            if col in df.columns:
+                df[col] = df[col].bfill().ffill()
 
         logger.debug("Cálculo bruto das features concluído.")
         return df
@@ -195,20 +198,21 @@ class DataManager:
             df['market_regime'] = 'INDETERMINADO'
             return df
 
-        df_daily = df['close'].resample('D').last()
+        df_daily = df['close'].resample('D').last().shift(1)
         sma_50d = df_daily.rolling(window=50).mean()
         sma_200d = df_daily.rolling(window=200).mean()
         trend_conditions = [(df_daily > sma_50d) & (sma_50d > sma_200d), (df_daily > sma_200d) & (df_daily < sma_50d), (df_daily < sma_200d)]
         trend_outcomes = ['BULL_FORTE', 'RECUPERACAO', 'BEAR']
         regime_trend = np.select(trend_conditions, trend_outcomes, default='LATERAL')
         regime_trend = pd.Series(regime_trend, index=df_daily.index)
-        atr_daily = df['atr'].resample('D').mean()
+        
+        atr_daily = df['atr'].resample('D').mean().shift(1)
         atr_sma_50 = atr_daily.rolling(window=50).mean()
         volatility_regime = np.where(atr_daily > atr_sma_50, '_VOLATIL', '_CALMO')
         volatility_regime = pd.Series(volatility_regime, index=atr_daily.index)
+        
         combined_regime = regime_trend + volatility_regime
         df['market_regime'] = combined_regime.reindex(df.index, method='ffill')
-        # === CORREÇÃO DO FUTUREWARNING ===
         df['market_regime'] = df['market_regime'].bfill()
         logger.debug("Regimes de mercado calculados.")
         return df
@@ -478,11 +482,14 @@ class DataManager:
             df_combined = df_btc
 
         if not df_sentiment.empty:
-            df_combined = df_combined.join(df_sentiment, how='left')
-            macro_cols = [col for col in df_combined.columns if '_close' in col]
-            df_combined[macro_cols] = df_combined[macro_cols].ffill()
+            df_combined = df_combined.join(df_sentiment.rename(columns={'sentiment': 'twitter_sentiment'}), how='left')
+            df_combined['twitter_sentiment'].ffill(inplace=True)
         else:
-            df_combined = df_btc
+            df_combined['twitter_sentiment'] = 0.0
+
+        macro_cols = [col for col in df_combined.columns if '_close' in col]
+        if macro_cols:
+            df_combined[macro_cols] = df_combined[macro_cols].ffill()
 
         df_with_features = self._prepare_all_features(df_combined)
         df_with_regimes = self._add_market_regime(df_with_features)
@@ -505,7 +512,7 @@ class DataManager:
         df_filtered[self.feature_names] = df_filtered[self.feature_names].shift(1)
         
         df_filtered.replace([np.inf, -np.inf], np.nan, inplace=True)
-        df_filtered.dropna(inplace=True)
+        df_filtered.bfill(inplace=True)
         
         df_final = _optimize_memory_usage(df_filtered)
         

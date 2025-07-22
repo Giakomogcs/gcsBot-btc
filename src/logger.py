@@ -58,7 +58,7 @@ if not logger.handlers:
     
     # <<< A CORREÇÃO ESTÁ AQUI >>>
     # Agora o console mostrará INFO, WARNING, ERROR, etc.
-    console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(logging.DEBUG)
     logger.addHandler(console_handler)
 
     # 3. Handler para o ARQUIVO DE PERFORMANCE (performance.jsonl)

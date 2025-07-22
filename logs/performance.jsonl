@@ -1,1 +1,4 @@
 {"timestamp": "2025-07-21 22:43:37,328", "level": "ERROR", "message": "Um erro cr\u00edtico encerrou a aplica\u00e7\u00e3o: 'Settings' object has no attribute 'DATA_DIR'"}
+{"timestamp": "2025-07-21 23:42:26,998", "level": "ERROR", "message": "N\u00e3o foram encontrados dados hist\u00f3ricos para a otimiza\u00e7\u00e3o. Verifique a conex\u00e3o ou os arquivos locais. Abortando."}
+{"timestamp": "2025-07-21 23:57:47,216", "level": "ERROR", "message": "Um erro cr\u00edtico encerrou a aplica\u00e7\u00e3o: \nCould not find `optuna-integration` for `lightgbm`.\nPlease run `pip install optuna-integration[lightgbm]`."}
+{"timestamp": "2025-07-22 00:05:21,415", "level": "ERROR", "message": "Um erro cr\u00edtico encerrou a aplica\u00e7\u00e3o: \nCould not find `optuna-integration` for `lightgbm`.\nPlease run `pip install optuna-integration[lightgbm]`."}
