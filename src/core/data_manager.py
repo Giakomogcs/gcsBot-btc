@@ -64,7 +64,7 @@ class DataManager:
                     self.client = None
                     return
 
-                self.client = Client(api_key_to_use, api_secret_to_use, tld='com', testnet=settings.USE_TESTNET, requests_params={"timeout": 20})
+                self.client = Client(api_key_to_use, api_secret_to_use, tld='com', testnet=settings.USE_TESTNET, requests_params={"timeout": 60})
                 self.client.ping()
                 log_message = f"Cliente Binance inicializado em modo {'TESTNET' if settings.USE_TESTNET else 'REAL'}. Conexão com a API confirmada."
                 logger.info(log_message)
@@ -125,7 +125,10 @@ class DataManager:
         epsilon = 1e-10
         
         # --- Indicadores Técnicos ---
-        df['atr'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=14).average_true_range()
+        if len(df) > 14:
+            df['atr'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=14).average_true_range()
+        else:
+            df['atr'] = 0
         bb = BollingerBands(close=df['close'], window=20, window_dev=2)
         df['bb_width'] = (bb.bollinger_hband() - bb.bollinger_lband()) / (bb.bollinger_mavg() + epsilon)
         df['bb_pband'] = bb.bollinger_pband()
@@ -225,6 +228,8 @@ class DataManager:
 
         for nome_ativo, ticker in ticker_map.items():
             table_name = f"macro_{nome_ativo}"
+            file_path = os.path.join(settings.DATA_DIR, 'macro', f'{nome_ativo}.csv')
+
             try:
                 self.db.create_table(table_name, [
                     "Date TIMESTAMP",
@@ -237,11 +242,9 @@ class DataManager:
 
                 if not self.client:
                     logger.debug(f"Modo offline. Tentando carregar dados macro de '{nome_ativo}' do arquivo local.")
-                    file_path = os.path.join(settings.DATA_DIR, 'macro', f'{nome_ativo}.csv')
                     if os.path.exists(file_path):
                         df_local = pd.read_csv(file_path)
                         df_local['Date'] = pd.to_datetime(df_local['Date'], utc=True)
-                        df_local.columns = [col.lower() for col in df_local.columns]
                         self.db.insert_dataframe(df_local, table_name, if_exists='replace')
                         logger.info(f"Dados macro para '{nome_ativo}' carregados do arquivo local.")
                     else:
@@ -277,15 +280,24 @@ class DataManager:
                 clean_df.columns = [col.lower() for col in clean_df.columns]
                 
                 self.db.insert_dataframe(clean_df, table_name, if_exists='append')
+                
+                # Save to CSV
+                if os.path.exists(file_path):
+                    df_existing = pd.read_csv(file_path)
+                    df_existing['date'] = pd.to_datetime(df_existing['date'], utc=True)
+                    clean_df['date'] = pd.to_datetime(clean_df['date'], utc=True)
+                    df_combined = pd.concat([df_existing, clean_df]).drop_duplicates(subset=['date']).sort_values(by='date')
+                    df_combined.to_csv(file_path, index=False)
+                else:
+                    clean_df.to_csv(file_path, index=False)
+
                 time.sleep(1) 
             except Exception as e:
                 logger.error(f"Falha ao buscar ou salvar dados para o ativo '{nome_ativo}': {e}", exc_info=True)
                 logger.info(f"Tentando carregar dados macro de '{nome_ativo}' do arquivo local como fallback.")
-                file_path = os.path.join(settings.DATA_DIR, 'macro', f'{nome_ativo}.csv')
                 if os.path.exists(file_path):
                     df_local = pd.read_csv(file_path)
-                    df_local['Date'] = pd.to_datetime(df_local['Date'], utc=True)
-                    df_local.columns = [col.lower() for col in df_local.columns]
+                    df_local['date'] = pd.to_datetime(df_local['date'], utc=True)
                     self.db.insert_dataframe(df_local, table_name, if_exists='replace')
                     logger.info(f"Dados macro para '{nome_ativo}' carregados do arquivo local.")
                 else:
@@ -322,8 +334,23 @@ class DataManager:
     
     def _fetch_and_update_twitter_sentiment(self) -> None:
         """Fetches and updates the twitter sentiment from a specific user."""
+        table_name = "twitter_sentiment"
+        self.db.create_table(table_name, [
+            "timestamp TIMESTAMP",
+            "sentiment FLOAT"
+        ])
+        
+        sentiment_file_path = os.path.join(settings.DATA_DIR, 'twitter_sentiment.csv')
+
         if not self.client:
-            logger.debug("Modo offline. Pulando atualização de dados do Twitter.")
+            logger.debug("Modo offline. Tentando carregar dados de sentimento do Twitter do arquivo local.")
+            if os.path.exists(sentiment_file_path):
+                df_local = pd.read_csv(sentiment_file_path)
+                df_local['timestamp'] = pd.to_datetime(df_local['timestamp'], utc=True)
+                self.db.insert_dataframe(df_local, table_name, if_exists='replace')
+                logger.info("Dados de sentimento do Twitter carregados do arquivo local.")
+            else:
+                logger.warning(f"Arquivo local de sentimento do Twitter não encontrado em '{sentiment_file_path}'.")
             return
 
         logger.info("Iniciando verificação e atualização do sentimento do Twitter...")
@@ -339,14 +366,14 @@ class DataManager:
         sentiments = [analyzer.polarity_scores(tweet)['compound'] for tweet in tweets]
         avg_sentiment = np.mean(sentiments)
 
-        table_name = "twitter_sentiment"
-        self.db.create_table(table_name, [
-            "timestamp TIMESTAMP",
-            "sentiment FLOAT"
-        ])
-
         df = pd.DataFrame([{'timestamp': datetime.datetime.now(datetime.timezone.utc), 'sentiment': avg_sentiment}])
+        
+        # Save to database
         self.db.insert_dataframe(df, table_name, if_exists='append')
+
+        # Save to CSV
+        df.to_csv(sentiment_file_path, index=False)
+
         logger.debug("Verificação do sentimento do Twitter concluída.")
 
     def get_historical_data_by_batch(self, symbol: str, interval: str, start_date_dt: datetime.datetime, end_date_dt: datetime.datetime) -> pd.DataFrame:
@@ -523,7 +550,7 @@ class DataManager:
             df_sentiment.index = pd.to_datetime(df_sentiment.index, utc=True)
             df_combined = df_combined.join(df_sentiment.rename(columns={'sentiment': 'twitter_sentiment'}), how='left')
             df_combined['twitter_sentiment'] = df_combined['twitter_sentiment'].ffill()
-            df_combined['twitter_sentiment'].fillna(0.0, inplace=True)
+            df_combined['twitter_sentiment'] = df_combined['twitter_sentiment'].fillna(0.0)
         else:
             logger.warning("Nenhum dado de sentimento do Twitter encontrado. Coluna será preenchida com 0.")
             df_combined['twitter_sentiment'] = 0.0

@@ -224,11 +224,19 @@ class WalkForwardOptimizer:
             logger.warning(f"Found and removed low variance features: {low_variance_features}")
             self.feature_names = [f for f in self.feature_names if f not in low_variance_features]
 
-        study = optuna.create_study(direction="maximize")
+        study = optuna.create_study(direction="minimize")
+        
+        lgbm_params = {
+            "objective": "binary",
+            "metric": "binary_logloss",
+            "verbosity": -1,
+            "boosting_type": "gbdt",
+        }
+
         tuner = optuna.integration.LightGBMTuner(
-            study,
+            lgbm_params,
             self._objective,
-            n_jobs=-1,
+            study=study,
             callbacks=[self._progress_callback],
             model_dir=f"data/models/{name}",
         )
