@@ -12,12 +12,12 @@ def sample_kaggle_data():
     Provides a sample Kaggle dataframe.
     """
     data = {
-        'Timestamp': [1622505600, 1622505660, 1622505720],
-        'Open': [40000, 40100, 40200],
-        'High': [40100, 40200, 40300],
-        'Low': [39900, 40000, 40100],
-        'Close': [40100, 40200, 40300],
-        'Volume_(BTC)': [10, 20, 30]
+        'timestamp': ['2022-01-01 00:00:00', '2022-01-01 00:01:00', '2022-01-01 00:02:00'],
+        'open': [40000, 40100, 40200],
+        'high': [40100, 40200, 40300],
+        'low': [39900, 40000, 40100],
+        'close': [40100, 40200, 40300],
+        'volume': [10, 20, 30]
     }
     return pd.DataFrame(data)
 
@@ -36,7 +36,6 @@ def test_preprocess_kaggle_data(sample_kaggle_data):
     processed_df = dm._preprocess_kaggle_data(sample_kaggle_data)
     assert not processed_df.empty
     assert 'volume' in processed_df.columns
-    assert 'Volume_(BTC)' not in processed_df.columns
     assert pd.api.types.is_datetime64_ns_dtype(processed_df.index)
 
 @pytest.mark.online

@@ -220,10 +220,6 @@ class DataManager:
     # ... (O restante do arquivo permanece idêntico) ...
     def _fetch_and_update_macro_data(self) -> None:
         """Fetches and updates the macro data from Yahoo Finance."""
-        if not self.client:
-            logger.debug("Modo offline. Pulando atualização de dados macro.")
-            return
-
         logger.info("Iniciando verificação e atualização dos dados macro...")
         ticker_map = {'dxy': 'DX-Y.NYB', 'gold': 'GC=F', 'tnx': '^TNX', 'vix': '^VIX'}
 
@@ -238,6 +234,19 @@ class DataManager:
                     "Close FLOAT",
                     "Volume FLOAT"
                 ])
+
+                if not self.client:
+                    logger.debug(f"Modo offline. Tentando carregar dados macro de '{nome_ativo}' do arquivo local.")
+                    file_path = os.path.join(settings.DATA_DIR, 'macro', f'{nome_ativo}.csv')
+                    if os.path.exists(file_path):
+                        df_local = pd.read_csv(file_path)
+                        df_local['Date'] = pd.to_datetime(df_local['Date'], utc=True)
+                        df_local.columns = [col.lower() for col in df_local.columns]
+                        self.db.insert_dataframe(df_local, table_name, if_exists='replace')
+                        logger.info(f"Dados macro para '{nome_ativo}' carregados do arquivo local.")
+                    else:
+                        logger.warning(f"Arquivo local para '{nome_ativo}' não encontrado em '{file_path}'.")
+                    continue
 
                 last_date_query = f"SELECT MAX(Date) FROM {table_name}"
                 last_date_result = self.db.execute_query(last_date_query).scalar()
@@ -271,6 +280,16 @@ class DataManager:
                 time.sleep(1) 
             except Exception as e:
                 logger.error(f"Falha ao buscar ou salvar dados para o ativo '{nome_ativo}': {e}", exc_info=True)
+                logger.info(f"Tentando carregar dados macro de '{nome_ativo}' do arquivo local como fallback.")
+                file_path = os.path.join(settings.DATA_DIR, 'macro', f'{nome_ativo}.csv')
+                if os.path.exists(file_path):
+                    df_local = pd.read_csv(file_path)
+                    df_local['Date'] = pd.to_datetime(df_local['Date'], utc=True)
+                    df_local.columns = [col.lower() for col in df_local.columns]
+                    self.db.insert_dataframe(df_local, table_name, if_exists='replace')
+                    logger.info(f"Dados macro para '{nome_ativo}' carregados do arquivo local.")
+                else:
+                    logger.warning(f"Arquivo local para '{nome_ativo}' não encontrado em '{file_path}'.")
         logger.debug("Verificação de dados macro concluída.")
 
     def _load_and_unify_local_macro_data(self) -> pd.DataFrame:
@@ -405,15 +424,25 @@ class DataManager:
                         if not df_new.empty:
                             self.db.insert_dataframe(df_new.reset_index(), table_name, if_exists='append')
                             df = pd.concat([df, df_new]); df = df.loc[~df.index.duplicated(keep='last')]; df.sort_index(inplace=True)
+                            df.to_csv(settings.HISTORICAL_DATA_FILE)
                             logger.info(f"SUCESSO: Banco de dados do BTC atualizado com {len(df_new)} novas velas.")
                     except Exception as e: logger.warning(f"FALHA NA ATUALIZAÇÃO DO BTC: {e}. Continuando com dados do banco de dados.")
             return df
 
+        if os.path.exists(settings.HISTORICAL_DATA_FILE):
+            logger.info(f"Nenhum dado no banco de dados. Iniciando a partir do arquivo de dados histórico: '{settings.HISTORICAL_DATA_FILE}'")
+            df_historical = pd.read_csv(settings.HISTORICAL_DATA_FILE, low_memory=False, on_bad_lines='skip')
+            df = self._preprocess_kaggle_data(df_historical)
+            df_to_db = df[df.index >= '2018-01-01']
+            self.db.insert_dataframe(df_to_db.reset_index(), table_name, if_exists='replace')
+            return df
+
         if os.path.exists(settings.KAGGLE_BOOTSTRAP_FILE):
-            logger.info(f"Nenhum dado no banco de dados. Iniciando a partir do arquivo Kaggle: '{settings.KAGGLE_BOOTSTRAP_FILE}'")
+            logger.info(f"Nenhum arquivo de dados histórico encontrado. Iniciando a partir do arquivo Kaggle: '{settings.KAGGLE_BOOTSTRAP_FILE}'")
             df_kaggle = pd.read_csv(settings.KAGGLE_BOOTSTRAP_FILE, low_memory=False, on_bad_lines='skip')
             df = self._preprocess_kaggle_data(df_kaggle)
-            self.db.insert_dataframe(df.reset_index(), table_name, if_exists='replace')
+            df_to_db = df[df.index >= '2018-01-01']
+            self.db.insert_dataframe(df_to_db.reset_index(), table_name, if_exists='replace')
             return df
 
         if self.client:
@@ -421,6 +450,7 @@ class DataManager:
             start_utc = end_utc - datetime.timedelta(days=365); df = self.get_historical_data_by_batch(symbol, interval, start_utc, end_utc)
             if not df.empty:
                 self.db.insert_dataframe(df.reset_index(), table_name, if_exists='replace')
+                df.to_csv(settings.HISTORICAL_DATA_FILE)
             return df
 
         logger.error("Nenhum arquivo de dados local do BTC encontrado e o bot está em modo offline. Não é possível continuar.")
@@ -437,15 +467,10 @@ class DataManager:
             A preprocessed pandas DataFrame.
         """
         logger.debug("Pré-processando dados do Kaggle...")
-        column_mapping = {'Timestamp': 'timestamp', 'Open': 'open', 'High': 'high', 'Low': 'low', 'Close': 'close'}
-        possible_volume_names = ['Volume_(BTC)', 'Volume', 'Volume (BTC)', 'Volume (Currency)', 'Volume USD']
-        found_volume_col = next((name for name in possible_volume_names if name in df_kaggle.columns), None)
-        if not found_volume_col: raise ValueError(f"Não foi possível encontrar uma coluna de volume no arquivo Kaggle.")
-        column_mapping[found_volume_col] = 'volume'
+        column_mapping = {'Timestamp': 'timestamp', 'Open': 'open', 'High': 'high', 'Low': 'low', 'Close': 'close', 'Volume': 'volume'}
         df_kaggle.rename(columns=column_mapping, inplace=True)
-        df_kaggle['timestamp'] = pd.to_datetime(df_kaggle['timestamp'], unit='s')
+        df_kaggle['timestamp'] = pd.to_datetime(df_kaggle['timestamp'], utc=True)
         df_kaggle.set_index('timestamp', inplace=True)
-        df_kaggle.index = df_kaggle.index.tz_localize('UTC')
         final_columns = ['open', 'high', 'low', 'close', 'volume']
         df = df_kaggle[final_columns].copy()
         df.dropna(inplace=True)
@@ -472,6 +497,12 @@ class DataManager:
         if df_btc.empty: return pd.DataFrame()
 
         df_macro = self._load_and_unify_local_macro_data()
+        
+        table_name = "twitter_sentiment"
+        self.db.create_table(table_name, [
+            "timestamp TIMESTAMP",
+            "sentiment FLOAT"
+        ])
         df_sentiment = self.db.fetch_data("SELECT * FROM twitter_sentiment")
         df_sentiment.set_index('timestamp', inplace=True)
         df_sentiment.index = pd.to_datetime(df_sentiment.index, utc=True)
