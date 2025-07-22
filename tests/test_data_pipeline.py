@@ -33,14 +33,13 @@ def create_sample_data(rows=1000):
         'volume': np.random.uniform(10, 100, size=len(dates))
     }
     df = pd.DataFrame(data)
-    df.set_index('timestamp', inplace=True)
     return df
 
 @patch('src.core.data_manager.DataManager._fetch_and_manage_btc_data')
 @patch('src.core.data_manager.DataManager._load_and_unify_local_macro_data')
 @patch('src.core.data_manager.DataManager._fetch_and_update_macro_data')
 @patch('src.core.data_manager.DataManager._fetch_and_update_twitter_sentiment')
-def test_data_pipeline_does_not_lose_data(mock_fetch_twitter, mock_fetch_macro, mock_load_macro, mock_fetch_btc, test_dm):
+def test_data_pipeline_does_not_lose_data(mock_fetch_btc, mock_load_macro, mock_fetch_macro, mock_fetch_twitter, test_dm):
     """
     Tests that the data pipeline does not lose data unnecessarily.
     """
@@ -50,6 +49,7 @@ def test_data_pipeline_does_not_lose_data(mock_fetch_twitter, mock_fetch_macro, 
     mock_load_macro.return_value = pd.DataFrame()
     mock_fetch_macro.return_value = None
     mock_fetch_twitter.return_value = None
+    test_dm.db.fetch_data.return_value = pd.DataFrame(columns=['timestamp', 'sentiment'])
 
     # Act
     processed_data = test_dm.update_and_load_data('BTC/USDT', '1m')
