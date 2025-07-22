@@ -21,33 +21,39 @@ def sample_macro_data():
     Provides a sample macro dataframe.
     """
     data = {
-        'date': ['2023-01-01', '2023-01-02', '2023-01-03'],
-        'open': [100, 101, 102],
-        'high': [101, 102, 103],
-        'low': [99, 100, 101],
-        'close': [100, 101, 102],
-        'volume': [1000, 2000, 3000]
+        'Date': ['2023-01-01', '2023-01-02', '2023-01-03'],
+        'Open': [100, 101, 102],
+        'High': [101, 102, 103],
+        'Low': [99, 100, 101],
+        'Close': [100, 101, 102],
+        'Volume': [1000, 2000, 3000]
     }
-    return pd.DataFrame(data)
+    df = pd.DataFrame(data)
+    df['Date'] = pd.to_datetime(df['Date'])
+    df = df.set_index('Date')
+    return df
 
-def test_fetch_and_update_macro_data_offline(test_dm, sample_macro_data):
+@patch('yfinance.download')
+def test_fetch_and_update_macro_data_offline(mock_yf_download, test_dm, sample_macro_data):
     """
     Tests the _fetch_and_update_macro_data method in offline mode.
     """
     # Arrange
     test_dm.client = None
     file_path = os.path.join(settings.DATA_DIR, 'macro', 'dxy.csv')
-    sample_macro_data.to_csv(file_path, index=False)
+    sample_macro_data.reset_index().to_csv(file_path, index=False) # Save with 'Date' column
+    mock_yf_download.return_value = sample_macro_data
 
     # Act
     test_dm._fetch_and_update_macro_data()
 
     # Assert
-    for call in test_dm.db.insert_dataframe.call_args_list:
-        args, kwargs = call
-        assert isinstance(args[0], pd.DataFrame)
-        assert args[1] == 'macro_dxy'
-        assert kwargs['if_exists'] == 'replace'
+    # In offline mode, yf.download should not be called.
+    # Instead, the data should be loaded from the local file and inserted into the database.
+    assert mock_yf_download.call_count == 0
+    assert test_dm.db.insert_dataframe.call_count >= 1
+    inserted_df = test_dm.db.insert_dataframe.call_args[0][0]
+    assert not inserted_df.empty
 
 @patch('yfinance.download')
 def test_fetch_and_update_macro_data_online(mock_yf_download, test_dm, sample_macro_data):

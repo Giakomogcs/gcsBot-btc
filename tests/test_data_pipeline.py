@@ -35,16 +35,16 @@ def create_sample_data(rows=1000):
     df = pd.DataFrame(data)
     return df
 
-@patch('src.core.data_manager.DataManager._fetch_and_manage_btc_data')
-@patch('src.core.data_manager.DataManager._load_and_unify_local_macro_data')
-@patch('src.core.data_manager.DataManager._fetch_and_update_macro_data')
 @patch('src.core.data_manager.DataManager._fetch_and_update_twitter_sentiment')
+@patch('src.core.data_manager.DataManager._fetch_and_update_macro_data')
+@patch('src.core.data_manager.DataManager._load_and_unify_local_macro_data')
+@patch('src.core.data_manager.DataManager._fetch_and_manage_btc_data')
 def test_data_pipeline_does_not_lose_data(mock_fetch_btc, mock_load_macro, mock_fetch_macro, mock_fetch_twitter, test_dm):
     """
     Tests that the data pipeline does not lose data unnecessarily.
     """
     # Arrange
-    sample_data = create_sample_data()
+    sample_data = create_sample_data().set_index('timestamp')
     mock_fetch_btc.return_value = sample_data
     mock_load_macro.return_value = pd.DataFrame()
     mock_fetch_macro.return_value = None

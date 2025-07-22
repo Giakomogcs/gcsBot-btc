@@ -233,12 +233,21 @@ class WalkForwardOptimizer:
             "boosting_type": "gbdt",
         }
 
+        model_dir = f"data/models/{name}"
+        os.makedirs(model_dir, exist_ok=True)
+
+        # Create a validation set
+        data['signal'] = (data['close'].shift(-1) > data['close']).astype(int)
+        train_data = data.sample(frac=0.8, random_state=42)
+        validation_data = data.drop(train_data.index)
+
         tuner = optuna.integration.LightGBMTuner(
             lgbm_params,
-            self._objective,
+            train_set=lgb.Dataset(train_data[self.feature_names], label=train_data['signal']),
+            valid_sets=[lgb.Dataset(validation_data[self.feature_names], label=validation_data['signal'])],
             study=study,
             callbacks=[self._progress_callback],
-            model_dir=f"data/models/{name}",
+            model_dir=model_dir
         )
         tuner.run(n_trials=self.n_trials_for_cycle)
         

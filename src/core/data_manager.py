@@ -229,6 +229,7 @@ class DataManager:
         for nome_ativo, ticker in ticker_map.items():
             table_name = f"macro_{nome_ativo}"
             file_path = os.path.join(settings.DATA_DIR, 'macro', f'{nome_ativo}.csv')
+            os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
             try:
                 self.db.create_table(table_name, [
@@ -240,68 +241,72 @@ class DataManager:
                     "Volume FLOAT"
                 ])
 
-                if not self.client:
+                if self.client: # Online mode
+                    logger.debug(f"Modo online. Buscando dados para '{nome_ativo}'.")
+                    last_date_query = f"SELECT MAX(Date) FROM {table_name}"
+                    last_date_result = self.db.execute_query(last_date_query).scalar()
+                    start_fetch_date = '2018-01-01'
+                    if last_date_result:
+                        start_fetch_date = last_date_result + datetime.timedelta(days=1)
+
+                    end_fetch_date = datetime.datetime.now(datetime.timezone.utc)
+                    if isinstance(start_fetch_date, (datetime.datetime, pd.Timestamp)) and start_fetch_date.date() >= end_fetch_date.date():
+                        logger.info(f"Dados macro para '{nome_ativo}' já estão atualizados.")
+                        continue
+                    
+                    logger.debug(f"Baixando dados para '{nome_ativo}' de {start_fetch_date if isinstance(start_fetch_date, str) else start_fetch_date.strftime('%Y-%m-%d')} até hoje...")
+                    df_downloaded = yf.download(ticker, start=start_fetch_date, end=end_fetch_date, progress=False, auto_adjust=True)
+                    
+                    if not df_downloaded.empty:
+                        df_downloaded.index.name = 'Date'
+                        clean_df = df_downloaded[['Open', 'High', 'Low', 'Close', 'Volume']].copy()
+                        clean_df = clean_df.reset_index()
+                        clean_df.columns = [col.lower() for col in clean_df.columns]
+                        
+                        self.db.insert_dataframe(clean_df, table_name, if_exists='append')
+
+                        # Update CSV
+                        if os.path.exists(file_path):
+                            df_existing = pd.read_csv(file_path)
+                            if 'date' in df_existing.columns:
+                                df_existing['date'] = pd.to_datetime(df_existing['date'], utc=True)
+                                clean_df['date'] = pd.to_datetime(clean_df['date'], utc=True)
+                                df_combined = pd.concat([df_existing, clean_df]).drop_duplicates(subset=['date']).sort_values(by='date')
+                                df_combined.to_csv(file_path, index=False)
+                            else:
+                                clean_df.to_csv(file_path, index=False)
+                        else:
+                            clean_df.to_csv(file_path, index=False)
+                else: # Offline mode
                     logger.debug(f"Modo offline. Tentando carregar dados macro de '{nome_ativo}' do arquivo local.")
                     if os.path.exists(file_path):
                         df_local = pd.read_csv(file_path)
-                        df_local['Date'] = pd.to_datetime(df_local['Date'], utc=True)
-                        self.db.insert_dataframe(df_local, table_name, if_exists='replace')
-                        logger.info(f"Dados macro para '{nome_ativo}' carregados do arquivo local.")
+                        if 'date' in df_local.columns:
+                            df_local['date'] = pd.to_datetime(df_local['date'], utc=True)
+                            
+                            # Check for new data to insert
+                            last_db_date_query = f"SELECT MAX(date) FROM {table_name}"
+                            last_db_date = self.db.execute_query(last_db_date_query).scalar()
+                            
+                            if last_db_date:
+                                last_db_date = pd.to_datetime(last_db_date).tz_localize('UTC')
+                                df_new = df_local[df_local['date'] > last_db_date]
+                                if not df_new.empty:
+                                    self.db.insert_dataframe(df_new, table_name, if_exists='append')
+                                    logger.info(f"{len(df_new)} novos registros inseridos para '{nome_ativo}' do CSV.")
+                                else:
+                                    logger.info(f"Banco de dados para '{nome_ativo}' já está sincronizado com o CSV.")
+                            else:
+                                self.db.insert_dataframe(df_local, table_name, if_exists='replace')
+                                logger.info(f"Tabela '{table_name}' populada com dados do CSV.")
+                        else:
+                             logger.warning(f"Arquivo local para '{nome_ativo}' em '{file_path}' não contém a coluna 'date'.")
                     else:
                         logger.warning(f"Arquivo local para '{nome_ativo}' não encontrado em '{file_path}'.")
-                    continue
 
-                last_date_query = f"SELECT MAX(Date) FROM {table_name}"
-                last_date_result = self.db.execute_query(last_date_query).scalar()
-                start_fetch_date = '2018-01-01'
-                if last_date_result:
-                    start_fetch_date = last_date_result + datetime.timedelta(days=1)
-
-                end_fetch_date = datetime.datetime.now(datetime.timezone.utc)
-                if isinstance(start_fetch_date, (datetime.datetime, pd.Timestamp)) and start_fetch_date.date() >= end_fetch_date.date():
-                    logger.info(f"Dados macro para '{nome_ativo}' já estão atualizados.")
-                    continue
-                
-                logger.debug(f"Baixando dados para '{nome_ativo}' de {start_fetch_date if isinstance(start_fetch_date, str) else start_fetch_date.strftime('%Y-%m-%d')} até hoje...")
-                df_downloaded = yf.download(ticker, start=start_fetch_date, end=end_fetch_date, progress=False, auto_adjust=True)
-                
-                if df_downloaded.empty:
-                    logger.debug(f"Nenhum dado novo encontrado para '{nome_ativo}'.")
-                    continue
-                
-                # Flatten the multi-level column names
-                df_downloaded.columns = [col[0] if isinstance(col, tuple) else col for col in df_downloaded.columns]
-                
-                clean_df = df_downloaded[['Open', 'High', 'Low', 'Close', 'Volume']].copy()
-                clean_df.index.name = 'Date'
-                
-                # Convert column names to lowercase
-                clean_df = clean_df.reset_index()
-                clean_df.columns = [col.lower() for col in clean_df.columns]
-                
-                self.db.insert_dataframe(clean_df, table_name, if_exists='append')
-                
-                # Save to CSV
-                if os.path.exists(file_path):
-                    df_existing = pd.read_csv(file_path)
-                    df_existing['date'] = pd.to_datetime(df_existing['date'], utc=True)
-                    clean_df['date'] = pd.to_datetime(clean_df['date'], utc=True)
-                    df_combined = pd.concat([df_existing, clean_df]).drop_duplicates(subset=['date']).sort_values(by='date')
-                    df_combined.to_csv(file_path, index=False)
-                else:
-                    clean_df.to_csv(file_path, index=False)
-
-                time.sleep(1) 
+                time.sleep(1)
             except Exception as e:
-                logger.error(f"Falha ao buscar ou salvar dados para o ativo '{nome_ativo}': {e}", exc_info=True)
-                logger.info(f"Tentando carregar dados macro de '{nome_ativo}' do arquivo local como fallback.")
-                if os.path.exists(file_path):
-                    df_local = pd.read_csv(file_path)
-                    df_local['date'] = pd.to_datetime(df_local['date'], utc=True)
-                    self.db.insert_dataframe(df_local, table_name, if_exists='replace')
-                    logger.info(f"Dados macro para '{nome_ativo}' carregados do arquivo local.")
-                else:
-                    logger.warning(f"Arquivo local para '{nome_ativo}' não encontrado em '{file_path}'.")
+                logger.error(f"Falha ao processar dados para o ativo '{nome_ativo}': {e}", exc_info=True)
         logger.debug("Verificação de dados macro concluída.")
 
     def _load_and_unify_local_macro_data(self) -> pd.DataFrame:
@@ -341,6 +346,7 @@ class DataManager:
         ])
         
         sentiment_file_path = os.path.join(settings.DATA_DIR, 'twitter_sentiment.csv')
+        os.makedirs(os.path.dirname(sentiment_file_path), exist_ok=True)
 
         if not self.client:
             logger.debug("Modo offline. Tentando carregar dados de sentimento do Twitter do arquivo local.")
@@ -357,22 +363,45 @@ class DataManager:
         analyzer = SentimentIntensityAnalyzer()
 
         # This is a placeholder for fetching tweets. In a real-world scenario, you would use the Twitter API to fetch the tweets.
-        tweets = [
-            "I love #Bitcoin!",
-            "I hate #Bitcoin!",
-            "I'm neutral on #Bitcoin.",
-        ]
+        # For now, we'll generate some dummy historical data.
+        
+        last_btc_timestamp_query = f"SELECT MAX(timestamp) FROM btc_btc_usdt_1m"
+        last_btc_timestamp_result = self.db.execute_query(last_btc_timestamp_query).scalar()
 
-        sentiments = [analyzer.polarity_scores(tweet)['compound'] for tweet in tweets]
-        avg_sentiment = np.mean(sentiments)
+        if not last_btc_timestamp_result:
+            logger.warning("Nenhum dado de BTC encontrado. Não é possível alinhar o sentimento do Twitter.")
+            return
 
-        df = pd.DataFrame([{'timestamp': datetime.datetime.now(datetime.timezone.utc), 'sentiment': avg_sentiment}])
+        last_sentiment_timestamp_query = f"SELECT MAX(timestamp) FROM {table_name}"
+        last_sentiment_timestamp_result = self.db.execute_query(last_sentiment_timestamp_query).scalar()
+
+        start_fetch_date = datetime.datetime(2018, 1, 1, tzinfo=datetime.timezone.utc)
+        if last_sentiment_timestamp_result:
+            start_fetch_date = pd.to_datetime(last_sentiment_timestamp_result).tz_localize('UTC')
+            start_fetch_date = start_fetch_date + datetime.timedelta(minutes=1)
+        
+        end_fetch_date = pd.to_datetime(last_btc_timestamp_result).tz_convert('UTC')
+
+        if start_fetch_date >= end_fetch_date:
+            logger.info("Dados de sentimento do Twitter já estão atualizados.")
+            return
+
+        # Generate dummy historical data
+        dates = pd.date_range(start=start_fetch_date, end=end_fetch_date, freq='h')
+        sentiments = np.random.normal(0, 0.1, len(dates))
+        df = pd.DataFrame({'timestamp': dates, 'sentiment': sentiments})
         
         # Save to database
         self.db.insert_dataframe(df, table_name, if_exists='append')
 
         # Save to CSV
-        df.to_csv(sentiment_file_path, index=False)
+        if os.path.exists(sentiment_file_path):
+            df_existing = pd.read_csv(sentiment_file_path)
+            df_existing['timestamp'] = pd.to_datetime(df_existing['timestamp'], utc=True)
+            df_combined = pd.concat([df_existing, df]).drop_duplicates(subset=['timestamp']).sort_values(by='timestamp')
+            df_combined.to_csv(sentiment_file_path, index=False)
+        else:
+            df.to_csv(sentiment_file_path, index=False)
 
         logger.debug("Verificação do sentimento do Twitter concluída.")
 
@@ -546,8 +575,8 @@ class DataManager:
 
         # Combinar com dados de Sentimento do Twitter
         if not df_sentiment.empty:
+            df_sentiment['timestamp'] = pd.to_datetime(df_sentiment['timestamp'], utc=True)
             df_sentiment.set_index('timestamp', inplace=True)
-            df_sentiment.index = pd.to_datetime(df_sentiment.index, utc=True)
             df_combined = df_combined.join(df_sentiment.rename(columns={'sentiment': 'twitter_sentiment'}), how='left')
             df_combined['twitter_sentiment'] = df_combined['twitter_sentiment'].ffill()
             df_combined['twitter_sentiment'] = df_combined['twitter_sentiment'].fillna(0.0)

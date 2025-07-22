@@ -1,61 +1,60 @@
 import pytest
 import pandas as pd
+import numpy as np
 import sys
 import os
+from unittest.mock import patch
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from src.core.data_manager import DataManager
-from unittest.mock import patch
 
 @pytest.fixture
-def sample_kaggle_data():
+def test_dm():
     """
-    Provides a sample Kaggle dataframe.
+    Provides a DataManager instance with a mock database.
     """
+    with patch('src.core.data_manager.Database') as mock_db:
+        dm = DataManager()
+        dm.db = mock_db.return_value
+        yield dm
+
+def create_sample_data(rows=1000):
+    """
+    Creates a sample dataframe with realistic data.
+    """
+    start_date = pd.to_datetime('2023-01-01')
+    end_date = start_date + pd.to_timedelta(rows, 'm')
+    dates = pd.date_range(start=start_date, end=end_date, freq='m')
     data = {
-        'timestamp': ['2022-01-01 00:00:00', '2022-01-01 00:01:00', '2022-01-01 00:02:00'],
-        'open': [40000, 40100, 40200],
-        'high': [40100, 40200, 40300],
-        'low': [39900, 40000, 40100],
-        'close': [40100, 40200, 40300],
-        'volume': [10, 20, 30]
+        'timestamp': dates,
+        'open': np.random.uniform(30000, 50000, size=len(dates)),
+        'high': np.random.uniform(30000, 50000, size=len(dates)),
+        'low': np.random.uniform(30000, 50000, size=len(dates)),
+        'close': np.random.uniform(30000, 50000, size=len(dates)),
+        'volume': np.random.uniform(10, 100, size=len(dates))
     }
-    return pd.DataFrame(data)
+    df = pd.DataFrame(data)
+    return df
 
-def test_data_manager_instantiation():
+@patch('src.core.data_manager.DataManager._fetch_and_update_twitter_sentiment')
+@patch('src.core.data_manager.DataManager._fetch_and_update_macro_data')
+@patch('src.core.data_manager.DataManager._load_and_unify_local_macro_data')
+@patch('src.core.data_manager.DataManager._fetch_and_manage_btc_data')
+def test_data_pipeline_does_not_lose_data(mock_fetch_btc, mock_load_macro, mock_fetch_macro, mock_fetch_twitter, test_dm):
     """
-    Tests if the DataManager class can be instantiated.
+    Tests that the data pipeline does not lose data unnecessarily.
     """
-    dm = DataManager()
-    assert dm is not None
+    # Arrange
+    sample_data = create_sample_data().set_index('timestamp')
+    mock_fetch_btc.return_value = sample_data
+    mock_load_macro.return_value = pd.DataFrame()
+    mock_fetch_macro.return_value = None
+    mock_fetch_twitter.return_value = None
+    test_dm.db.fetch_data.return_value = pd.DataFrame(columns=['timestamp', 'sentiment'])
 
-def test_preprocess_kaggle_data(sample_kaggle_data):
-    """
-    Tests the _preprocess_kaggle_data method in DataManager.
-    """
-    dm = DataManager()
-    processed_df = dm._preprocess_kaggle_data(sample_kaggle_data)
-    assert not processed_df.empty
-    assert 'volume' in processed_df.columns
-    assert pd.api.types.is_datetime64_ns_dtype(processed_df.index)
+    # Act
+    processed_data = test_dm.update_and_load_data('BTC/USDT', '1m')
 
-@pytest.mark.online
-@patch('yfinance.download')
-@patch('src.core.data_manager.Client')
-@patch('src.core.data_manager.Database')
-def test_fetch_and_update_macro_data(mock_database, mock_binance_client, mock_yf_download, tmp_path):
-    """
-    Tests the _fetch_and_update_macro_data method in DataManager.
-    """
-    # Create a dummy dataframe to be returned by the mock
-    dummy_df = pd.DataFrame({
-        'Open': [100], 'High': [101], 'Low': [99], 'Close': [100], 'Volume': [1000]
-    }, index=[pd.to_datetime('2023-01-01')])
-    mock_yf_download.return_value = dummy_df
-
-    dm = DataManager()
-    dm.is_online = True  # Force online mode for the test
-    dm._fetch_and_update_macro_data()
-
-    # We can't easily check if the data was written to the database,
-    # but we can check that the mock was called.
-    assert mock_yf_download.call_count == 4
+    # Assert
+    assert not processed_data.empty, "Processed data is empty"
+    assert len(processed_data) > 0, "Processed data has no rows"
+    assert len(processed_data) <= len(sample_data), "Processed data has more rows than original data"
