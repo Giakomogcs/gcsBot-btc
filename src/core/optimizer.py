@@ -169,7 +169,7 @@ class WalkForwardOptimizer:
             backtesting_engine = BacktestingEngine(model, scaler, validation_data, params, self.feature_names)
             val_metrics = backtesting_engine.run()
             all_fold_metrics.append(val_metrics)
-            del model, scaler
+            del model, scaler, backtesting_engine, train_data, validation_data
             gc.collect()
 
         if not all_fold_metrics:
@@ -297,6 +297,8 @@ class WalkForwardOptimizer:
         self.base_model = self.trainer.train_base_model(self.full_data, base_model_params, self.feature_names)
 
         recent_data = self.full_data.tail(settings.WFO_TRAIN_MINUTES).copy()
+        del self.full_data
+        gc.collect()
         
         situation_groups = recent_data.groupby('market_situation')
         

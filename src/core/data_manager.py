@@ -480,50 +480,74 @@ class DataManager:
 
     def update_and_load_data(self, symbol: str, interval: str = '1m') -> pd.DataFrame:
         """
-        Updates and loads the data.
+        Atualiza e carrega todos os dados necessários, aplicando otimizações de memória.
 
         Args:
-            symbol: The symbol to fetch the data for.
-            interval: The interval of the data.
+            symbol: O símbolo do ativo (ex: 'BTC/USDT').
+            interval: O intervalo dos candles (ex: '1m').
 
         Returns:
-            A pandas DataFrame with the updated and loaded data.
+            Um DataFrame do pandas com todos os dados e features prontos para uso.
         """
         logger.info("Iniciando processo de unificação de dados.")
-        
+
+        # --- 1. BUSCAR TODAS AS FONTES DE DADOS ---
         self._fetch_and_update_macro_data()
         self._fetch_and_update_twitter_sentiment()
+
         df_btc = self._fetch_and_manage_btc_data(symbol, interval)
-        if df_btc.empty: return pd.DataFrame()
+        if df_btc.empty:
+            return pd.DataFrame()
 
         df_macro = self._load_and_unify_local_macro_data()
-        
-        table_name = "twitter_sentiment"
-        self.db.create_table(table_name, [
-            "timestamp TIMESTAMP",
-            "sentiment FLOAT"
-        ])
-        df_sentiment = self.db.fetch_data("SELECT * FROM twitter_sentiment")
-        df_sentiment.set_index('timestamp', inplace=True)
-        df_sentiment.index = pd.to_datetime(df_sentiment.index, utc=True)
+        df_sentiment = self.db.fetch_data("SELECT timestamp, sentiment FROM twitter_sentiment")
 
+        # --- 2. OTIMIZAR DATAFRAMES CARREGADOS ---
+        df_btc = _optimize_memory_usage(df_btc)
+        if not df_macro.empty:
+            df_macro = _optimize_memory_usage(df_macro)
+
+        # --- 3. COMBINAR DATAFRAMES E LIBERAR MEMÓRIA ---
+        # Combinar BTC com dados Macro
         if not df_macro.empty:
             df_combined = df_btc.join(df_macro, how='left')
         else:
             df_combined = df_btc
+        
+        # Liberar memória dos DataFrames originais
+        del df_btc, df_macro
 
+        # Combinar com dados de Sentimento do Twitter
         if not df_sentiment.empty:
+            df_sentiment.set_index('timestamp', inplace=True)
+            df_sentiment.index = pd.to_datetime(df_sentiment.index, utc=True)
             df_combined = df_combined.join(df_sentiment.rename(columns={'sentiment': 'twitter_sentiment'}), how='left')
             df_combined['twitter_sentiment'] = df_combined['twitter_sentiment'].ffill()
+            df_combined['twitter_sentiment'].fillna(0.0, inplace=True)
         else:
+            logger.warning("Nenhum dado de sentimento do Twitter encontrado. Coluna será preenchida com 0.")
             df_combined['twitter_sentiment'] = 0.0
 
+        # Liberar memória e forçar coleta de lixo
+        del df_sentiment
+        import gc
+        gc.collect()
+
+        # --- 4. ENGENHARIA DE FEATURES E PROCESSAMENTO FINAL ---
         macro_cols = [col for col in df_combined.columns if '_close' in col]
         if macro_cols:
             df_combined[macro_cols] = df_combined[macro_cols].ffill()
 
         df_with_features = self._prepare_all_features(df_combined)
+        df_with_features = _optimize_memory_usage(df_with_features)
+        del df_combined
+        gc.collect()
+
         df_with_regimes = self._add_market_regime(df_with_features)
+        df_with_regimes = _optimize_memory_usage(df_with_regimes)
+        del df_with_features
+        gc.collect()
+
         df_with_situations = self.situational_awareness.cluster_data(df_with_regimes.copy())
 
         logger.info("Calculando features de interação (Camada 3: Tática Avançada)...")
@@ -547,5 +571,5 @@ class DataManager:
         
         df_final = _optimize_memory_usage(df_filtered)
         
-        logger.info("Processo de coleta e preparação de dados concluído com sucesso.")
+        logger.info("✅ Processo de coleta e preparação de dados concluído com sucesso.")
         return df_final
