@@ -106,7 +106,7 @@ def show_display():
     """Mostra o painel de otimização lendo o arquivo de status."""
     from src.core.display_manager import display_optimization_dashboard # Importa a função de display
     
-    container_name = "gcsbot-optimizer"
+    container_name = "gcsbot-btc-app"
     result = run_command(f"docker ps -q --filter \"name={container_name}\"", capture_output=True)
     if not result.stdout.strip():
         print_color(f"O container de otimização '{container_name}' não está em execução.", "red")

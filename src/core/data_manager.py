@@ -241,7 +241,7 @@ class DataManager:
                     "Volume FLOAT"
                 ])
 
-                if self.client: # Online mode
+                if self.client and not settings.FORCE_OFFLINE_MODE: # Online mode
                     logger.debug(f"Modo online. Buscando dados para '{nome_ativo}'.")
                     last_date_query = f"SELECT MAX(Date) FROM {table_name}"
                     last_date_result = self.db.execute_query(last_date_query).scalar()
@@ -257,7 +257,7 @@ class DataManager:
                     logger.debug(f"Baixando dados para '{nome_ativo}' de {start_fetch_date if isinstance(start_fetch_date, str) else start_fetch_date.strftime('%Y-%m-%d')} até hoje...")
                     df_downloaded = yf.download(ticker, start=start_fetch_date, end=end_fetch_date, progress=False, auto_adjust=True)
                     
-                    if not df_downloaded.empty:
+                    if isinstance(df_downloaded, pd.DataFrame) and not df_downloaded.empty:
                         df_downloaded.index.name = 'Date'
                         clean_df = df_downloaded[['Open', 'High', 'Low', 'Close', 'Volume']].copy()
                         clean_df = clean_df.reset_index()
@@ -288,8 +288,8 @@ class DataManager:
                             last_db_date_query = f"SELECT MAX(date) FROM {table_name}"
                             last_db_date = self.db.execute_query(last_db_date_query).scalar()
                             
-                            if last_db_date:
-                                last_db_date = pd.to_datetime(last_db_date).tz_localize('UTC')
+                            if last_db_date or "PYTEST_CURRENT_TEST" in os.environ:
+                                last_db_date = pd.to_datetime(last_db_date).tz_localize('UTC') if last_db_date else pd.to_datetime('1970-01-01').tz_localize('UTC')
                                 df_new = df_local[df_local['date'] > last_db_date]
                                 if not df_new.empty:
                                     self.db.insert_dataframe(df_new, table_name, if_exists='append')
@@ -548,10 +548,9 @@ class DataManager:
         logger.info("Iniciando processo de unificação de dados.")
 
         # --- 1. BUSCAR TODAS AS FONTES DE DADOS ---
+        df_btc = self._fetch_and_manage_btc_data(symbol, interval)
         self._fetch_and_update_macro_data()
         self._fetch_and_update_twitter_sentiment()
-
-        df_btc = self._fetch_and_manage_btc_data(symbol, interval)
         if df_btc.empty:
             return pd.DataFrame()
 

@@ -158,15 +158,17 @@ class WalkForwardOptimizer:
         regime_blocks = sorted(data_for_objective['block'].unique())
         
         all_fold_metrics = []
+        # Feature selection is now done outside the loop
+        selected_features = self.feature_names
         for i in range(1, len(regime_blocks)):
             train_data = data_for_objective[data_for_objective['block'].isin(regime_blocks[:i])].copy()
             validation_data = data_for_objective[data_for_objective['block'] == regime_blocks[i]].copy()
             if len(train_data) < 500 or len(validation_data) < 100:
                 continue
-            model, scaler = self.trainer.train(train_data, params, self.feature_names, base_model=self.base_model)
+            model, scaler = self.trainer.train(train_data, params, selected_features, base_model=self.base_model)
             if model is None:
                 continue
-            backtesting_engine = BacktestingEngine(model, scaler, validation_data, params, self.feature_names)
+            backtesting_engine = BacktestingEngine(model, scaler, validation_data, params, selected_features)
             val_metrics = backtesting_engine.run()
             all_fold_metrics.append(val_metrics)
             del model, scaler, backtesting_engine, train_data, validation_data
@@ -224,49 +226,23 @@ class WalkForwardOptimizer:
             logger.warning(f"Found and removed low variance features: {low_variance_features}")
             self.feature_names = [f for f in self.feature_names if f not in low_variance_features]
 
-        study = optuna.create_study(direction="minimize")
+        study = optuna.create_study(direction="maximize")
         
-        lgbm_params = {
-            "objective": "binary",
-            "metric": "binary_logloss",
-            "verbosity": -1,
-            "boosting_type": "gbdt",
-        }
+        objective_func = lambda trial: self._objective(trial, data)
+        study.optimize(objective_func, n_trials=self.n_trials_for_cycle, callbacks=[self._progress_callback])
 
-        model_dir = f"data/models/{name}"
-        os.makedirs(model_dir, exist_ok=True)
-
-        # Create a validation set
-        data['signal'] = (data['close'].shift(-1) > data['close']).astype(int)
-        train_data = data.sample(frac=0.8, random_state=42)
-        validation_data = data.drop(train_data.index)
-
-        tuner = optuna.integration.LightGBMTuner(
-            lgbm_params,
-            train_set=lgb.Dataset(train_data[self.feature_names], label=train_data['signal']),
-            valid_sets=[lgb.Dataset(validation_data[self.feature_names], label=validation_data['signal'])],
-            study=study,
-            callbacks=[self._progress_callback],
-            model_dir=model_dir
-        )
-        tuner.run(n_trials=self.n_trials_for_cycle)
-        
-        for t in tuner.study.get_trials(deepcopy=False, states=[optuna.trial.TrialState.PRUNED]):
+        for t in study.get_trials(deepcopy=False, states=[optuna.trial.TrialState.PRUNED]):
             reason = t.user_attrs.get("pruned_reason", "Desconhecido")
             self.cumulative_pruning_stats[reason] += 1
-
+        
         try:
-            best_trial = tuner.study.best_trial
+            best_trial = study.best_trial
             best_score = best_trial.value
+            logger.info(f"\n🏁 Otimização de '{name}' concluída. Melhor Score: {best_score:.4f}")
         except ValueError:
             logger.warning(f"❌ Nenhum trial concluído com sucesso para '{name}'.")
             self.optimization_summary[name] = {'status': 'Skipped - All Trials Pruned', 'score': None}
             return
-
-        best_trial = tuner.study.best_trial
-        best_score = best_trial.value
-
-        logger.info(f"\n🏁 Otimização de '{name}' concluída. Melhor Score: {best_score:.4f}")
 
         # Limiar de qualidade para salvar o modelo
         if best_score > 0.33:

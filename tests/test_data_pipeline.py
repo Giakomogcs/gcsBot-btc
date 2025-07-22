@@ -44,7 +44,8 @@ def test_data_pipeline_does_not_lose_data(mock_fetch_btc, mock_load_macro, mock_
     Tests that the data pipeline does not lose data unnecessarily.
     """
     # Arrange
-    sample_data = create_sample_data().set_index('timestamp')
+    os.makedirs(os.path.join("data", "macro"), exist_ok=True)
+    sample_data = create_sample_data()
     mock_fetch_btc.return_value = sample_data
     mock_load_macro.return_value = pd.DataFrame()
     mock_fetch_macro.return_value = None
