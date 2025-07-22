@@ -1,5 +1,3 @@
-# src/optimizer.py (VERSÃO 9.0 - FÁBRICA DE ESPECIALISTAS COMPLETA)
-
 import optuna
 import pandas as pd
 import numpy as np
@@ -226,15 +224,15 @@ class WalkForwardOptimizer:
             logger.warning(f"Found and removed low variance features: {low_variance_features}")
             self.feature_names = [f for f in self.feature_names if f not in low_variance_features]
 
+        study = optuna.create_study(direction="maximize")
         tuner = optuna.integration.LightGBMTuner(
+            study,
             self._objective,
-            study_name=name,
-            n_trials=self.n_trials_for_cycle,
             n_jobs=-1,
             callbacks=[self._progress_callback],
             model_dir=f"data/models/{name}",
         )
-        tuner.run()
+        tuner.run(n_trials=self.n_trials_for_cycle)
         
         for t in tuner.study.get_trials(deepcopy=False, states=[optuna.trial.TrialState.PRUNED]):
             reason = t.user_attrs.get("pruned_reason", "Desconhecido")
