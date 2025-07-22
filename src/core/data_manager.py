@@ -241,7 +241,7 @@ class DataManager:
 
                 last_date_query = f"SELECT MAX(Date) FROM {table_name}"
                 last_date_result = self.db.execute_query(last_date_query).scalar()
-                start_fetch_date = '2017-01-01'
+                start_fetch_date = '2018-01-01'
                 if last_date_result:
                     start_fetch_date = last_date_result + datetime.timedelta(days=1)
 
@@ -483,7 +483,7 @@ class DataManager:
 
         if not df_sentiment.empty:
             df_combined = df_combined.join(df_sentiment.rename(columns={'sentiment': 'twitter_sentiment'}), how='left')
-            df_combined['twitter_sentiment'].ffill(inplace=True)
+            df_combined['twitter_sentiment'] = df_combined['twitter_sentiment'].ffill()
         else:
             df_combined['twitter_sentiment'] = 0.0
 
@@ -505,8 +505,8 @@ class DataManager:
             df_with_situations['dxy_change_X_bear'] = 0.0
             df_with_situations['dxy_change_X_lateral'] = 0.0
 
-        logger.info("Filtrando dados de 2017 em diante e tratando valores ausentes/infinitos...")
-        df_filtered = df_with_situations[df_with_situations.index >= '2017-01-01'].copy()
+        logger.info("Filtrando dados de 2018 em diante e tratando valores ausentes/infinitos...")
+        df_filtered = df_with_situations[df_with_situations.index >= '2018-01-01'].copy()
         
         logger.info("Aplicando shift(1) nas features para evitar lookahead bias...")
         df_filtered[self.feature_names] = df_filtered[self.feature_names].shift(1)

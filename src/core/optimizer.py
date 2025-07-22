@@ -219,6 +219,13 @@ class WalkForwardOptimizer:
         self.start_time = time.time()
         logger.info(f"\n{'='*20} Iniciando otimização para: {name.upper()} ({len(data)} velas) {'='*20}")
 
+        # Check for low variance features
+        variances = data[self.feature_names].var()
+        low_variance_features = variances[variances < 1e-4].index.tolist()
+        if low_variance_features:
+            logger.warning(f"Found and removed low variance features: {low_variance_features}")
+            self.feature_names = [f for f in self.feature_names if f not in low_variance_features]
+
         tuner = optuna.integration.LightGBMTuner(
             self._objective,
             study_name=name,
