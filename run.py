@@ -1,4 +1,4 @@
-# run.py (VERSÃO 3.1 - Com Display Corrigido e Verificação Robusta)
+# run.py (VERSÃO 3.2 - Usando Docker Compose V2)
 
 import subprocess
 import os
@@ -16,7 +16,7 @@ KAGGLE_DATA_FILE = os.path.join("data", "kaggle_btc_1m_bootstrap.csv")
 ENV_FILE = ".env"
 ENV_EXAMPLE_FILE = ".env.example"
 MODEL_METADATA_FILE = os.path.join("data", "model_metadata.json")
-OPTIMIZER_STATUS_FILE = os.path.join("logs", "optimizer_status.json") # <<< CORRIGIDO: O optimizer salva em /logs
+OPTIMIZER_STATUS_FILE = os.path.join("logs", "optimizer_status.json")
 # -----------------------------
 
 def print_color(text, color="green"):
@@ -63,7 +63,7 @@ def initial_setup():
     print_color("--- Iniciando Setup e Verificação do Ambiente ---", "blue")
     check_env_file()
     os.makedirs("data", exist_ok=True)
-    os.makedirs("logs", exist_ok=True) # Garante que a pasta de logs existe
+    os.makedirs("logs", exist_ok=True)
     run_command(f"\"{sys.executable}\" -m pip install -r requirements.txt", check=True)
     print_color("--- Setup Concluído com Sucesso ---", "green")
 
@@ -71,46 +71,48 @@ def start_optimizer():
     """Inicia o processo de otimização em um container Docker em modo background."""
     check_docker_running()
     print_color("--- Iniciando Otimização (Modo Background) ---", "blue")
-    run_command("docker-compose up -d --build app", check=True)
+    # <<< CORRIGIDO AQUI
+    run_command("docker compose up -d --build app", check=True)
     print_color("Otimização iniciada em segundo plano com sucesso!", "green")
     print_color("Para acompanhar o progresso, use o comando:", "yellow")
-    print_color("python run.py display", "blue")
+    print_color("python3 run.py display", "blue")
     print_color("Para ver os logs completos, use o comando:", "yellow")
-    print_color("python run.py logs", "blue")
+    print_color("python3 run.py logs", "blue")
 
 def start_bot(mode):
     check_docker_running()
     print_color(f"--- Iniciando Bot em Modo '{mode.upper()}' ---", "blue")
-    run_command(f"MODE={mode} docker-compose up -d --build app", check=True)
+    # <<< CORRIGIDO AQUI
+    run_command(f"MODE={mode} docker compose up -d --build app", check=True)
 
     if mode in ['test', 'trade']:
         print_color(f"Bot no modo '{mode}' iniciado em segundo plano.", "green")
-        print_color("Para ver os logs, use: python run.py logs", "yellow")
+        print_color("Para ver os logs, use: python3 run.py logs", "yellow")
 
 def stop_all():
     check_docker_running()
     print_color("--- Parando e Removendo TODOS os Containers do Bot ---", "yellow")
-    run_command("docker-compose down", check=True)
+    # <<< CORRIGIDO AQUI
+    run_command("docker compose down", check=True)
     print_color("Containers parados e removidos com sucesso.", "green")
 
 def show_logs():
     check_docker_running()
     print_color("Anexando aos logs do container 'app'. Pressione CTRL+C para sair.", "green")
     try:
-        subprocess.run("docker-compose logs -f app", shell=True)
+        # <<< CORRIGIDO AQUI
+        subprocess.run("docker compose logs -f app", shell=True)
     except KeyboardInterrupt: print_color("\n\nDesanexado dos logs.", "yellow")
 
 def show_display():
     """Mostra o painel de otimização lendo o arquivo de status."""
-    # <<< MUDANÇA 1: Import corrigido >>>
     from src.core.display_manager import display_optimization_dashboard
     
-    # <<< MUDANÇA 2: Verificação robusta do container >>>
-    # Em vez de um nome fixo, pegamos o container do serviço 'app'
-    result = run_command("docker-compose ps -q app", capture_output=True)
+    # <<< CORRIGIDO AQUI
+    result = run_command("docker compose ps -q app", capture_output=True)
     if not result.stdout.strip():
         print_color("O container de otimização 'app' não está em execução.", "red")
-        print_color("Inicie-o com: python run.py optimize", "yellow")
+        print_color("Inicie-o com: python3 run.py optimize", "yellow")
         return
 
     print_color("Mostrando painel de otimização. Pressione CTRL+C para sair.", "green")
@@ -132,7 +134,7 @@ def show_display():
 
 def main():
     if len(sys.argv) < 2:
-        print_color("Uso: python run.py [comando]", "blue")
+        print_color("Uso: python3 run.py [comando]", "blue")
         print("Comandos disponíveis:")
         print("  setup        - Instala dependências e prepara o ambiente.")
         print("  optimize     - Roda a otimização em SEGUNDO PLANO.")
