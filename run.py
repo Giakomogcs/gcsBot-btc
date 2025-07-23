@@ -1,4 +1,4 @@
-# run.py (VERSÃO 3.0 - Com Display Desacoplado)
+# run.py (VERSÃO 3.1 - Com Display Corrigido e Verificação Robusta)
 
 import subprocess
 import os
@@ -16,8 +16,7 @@ KAGGLE_DATA_FILE = os.path.join("data", "kaggle_btc_1m_bootstrap.csv")
 ENV_FILE = ".env"
 ENV_EXAMPLE_FILE = ".env.example"
 MODEL_METADATA_FILE = os.path.join("data", "model_metadata.json")
-# <<< NOVO >>> Arquivo de status para o display
-OPTIMIZER_STATUS_FILE = os.path.join("data", "optimizer_status.json")
+OPTIMIZER_STATUS_FILE = os.path.join("logs", "optimizer_status.json") # <<< CORRIGIDO: O optimizer salva em /logs
 # -----------------------------
 
 def print_color(text, color="green"):
@@ -29,7 +28,6 @@ def run_command(command, shell=True, capture_output=False, check=False):
     """Executa um comando no shell."""
     print_color(f"\n> Executando: {command}", "blue")
     try:
-        # Usar Popen para streaming de output se não for capture_output
         if not capture_output:
             process = subprocess.Popen(command, shell=shell, text=True, stdout=sys.stdout, stderr=sys.stderr)
             process.wait()
@@ -65,6 +63,7 @@ def initial_setup():
     print_color("--- Iniciando Setup e Verificação do Ambiente ---", "blue")
     check_env_file()
     os.makedirs("data", exist_ok=True)
+    os.makedirs("logs", exist_ok=True) # Garante que a pasta de logs existe
     run_command(f"\"{sys.executable}\" -m pip install -r requirements.txt", check=True)
     print_color("--- Setup Concluído com Sucesso ---", "green")
 
@@ -101,15 +100,16 @@ def show_logs():
         subprocess.run("docker-compose logs -f app", shell=True)
     except KeyboardInterrupt: print_color("\n\nDesanexado dos logs.", "yellow")
 
-# <<< NOVO >>> Função para mostrar o painel de otimização
 def show_display():
     """Mostra o painel de otimização lendo o arquivo de status."""
-    from src.core.display_manager import display_optimization_dashboard # Importa a função de display
+    # <<< MUDANÇA 1: Import corrigido >>>
+    from src.core.display_manager import display_optimization_dashboard
     
-    container_name = "gcsbot-btc-app"
-    result = run_command(f"docker ps -q --filter \"name={container_name}\"", capture_output=True)
+    # <<< MUDANÇA 2: Verificação robusta do container >>>
+    # Em vez de um nome fixo, pegamos o container do serviço 'app'
+    result = run_command("docker-compose ps -q app", capture_output=True)
     if not result.stdout.strip():
-        print_color(f"O container de otimização '{container_name}' não está em execução.", "red")
+        print_color("O container de otimização 'app' não está em execução.", "red")
         print_color("Inicie-o com: python run.py optimize", "yellow")
         return
 
@@ -120,14 +120,13 @@ def show_display():
                 try:
                     with open(OPTIMIZER_STATUS_FILE, 'r') as f:
                         status_data = json.load(f)
-                    # Passa o dicionário de dados para a função de display
                     display_optimization_dashboard(status_data)
                 except (json.JSONDecodeError, KeyError) as e:
                     print(f"Aguardando arquivo de status válido... Erro: {e}")
             else:
                 print("Aguardando o otimizador iniciar e criar o arquivo de status...")
             
-            time.sleep(2) # Intervalo de atualização
+            time.sleep(2)
     except KeyboardInterrupt:
         print_color("\nPainel finalizado.", "yellow")
 
@@ -148,11 +147,9 @@ def main():
     
     if command == "setup": initial_setup()
     elif command == "optimize": start_optimizer()
-    elif command == "display": show_display() # <<< NOVO COMANDO
-    elif command in ["test", "trade"]:
-        start_bot(command)
-    elif command == "backtest":
-        start_bot(command)
+    elif command == "display": show_display()
+    elif command in ["test", "trade"]: start_bot(command)
+    elif command == "backtest": start_bot(command)
     elif command == "stop": stop_all()
     elif command == "logs": show_logs()
     else: print_color(f"Comando '{command}' não reconhecido.", "red")

@@ -10,6 +10,8 @@ from typing import Optional, Tuple, List, Any, Dict
 
 from src.logger import logger, log_table
 from src.core.feature_selector import FeatureSelector
+from src.database import Database
+from src.core.model_evaluator import ModelEvaluator
 
 @jit(nopython=True)
 def create_labels_triple_barrier(
@@ -58,8 +60,11 @@ class ModelTrainer:
     def __init__(self) -> None:
         """Initializes the ModelTrainer class."""
         self.feature_selector = FeatureSelector()
+        # 2. CREATE A DATABASE INSTANCE FOR THE TRAINER
+        self.db = Database()
 
-    def train(self, data: pd.DataFrame, all_params: Dict[str, Any], feature_names: List[str], base_model: Optional[LGBMClassifier] = None) -> Tuple[Optional[LGBMClassifier], Optional[StandardScaler]]:
+
+    def train(self, data: pd.DataFrame, all_params: Dict[str, Any], feature_names: List[str], base_model: Optional[LGBMClassifier] = None) -> Tuple[Optional[LGBMClassifier], Optional[StandardScaler], Optional[List[str]]]:
         """
         Trains the model.
 
@@ -70,11 +75,12 @@ class ModelTrainer:
             base_model: The base model to use for training.
 
         Returns:
-            A tuple with the trained model and the scaler.
+            A tuple with the trained model, the scaler, and the list of selected features.
         """
         if len(data) < 500:
             logger.warning(f"Dados insuficientes para treino ({len(data)} registros). Pulando.")
-            return None, None
+            # 2. UPDATE THE RETURN STATEMENT FOR FAILURE
+            return None, None, None
 
         logger.debug("Iniciando o processo de treino do modelo...")
         
@@ -101,7 +107,8 @@ class ModelTrainer:
         # Agora só precisamos checar se há exemplos de compra (label 1)
         if counts.get(1, 0) < 15:
             logger.warning(f"Não há exemplos suficientes de compra (label 1) para um treino confiável. Counts: {counts.to_dict()}")
-            return None, None
+            # 3. UPDATE THE RETURN STATEMENT FOR FAILURE
+            return None, None, None
 
         logger.info(f"Treinando modelo com {len(feature_names)} features.")
         log_table("Distribuição dos Labels no Treino", y.value_counts(normalize=True).reset_index(), headers=["Label", "Frequência"])
@@ -120,7 +127,7 @@ class ModelTrainer:
 
         logger.debug("Treinamento do modelo concluído com sucesso.")
 
-        from src.core.model_evaluator import ModelEvaluator
+        
         evaluator = ModelEvaluator(model, scaler, df_processed, selected_features, y)
         metrics, _ = evaluator.evaluate()
 
@@ -128,9 +135,13 @@ class ModelTrainer:
         metrics_df = pd.DataFrame([metrics])
         metrics_df['timestamp'] = datetime.now(timezone.utc)
         metrics_df['model_name'] = all_params.get('model_name', 'default')
-        self.feature_selector.db.insert_dataframe(metrics_df, 'model_metrics')
+        
+        # 3. USE THE TRAINER'S OWN DB CONNECTION
+        # This was the line causing the crash.
+        self.db.insert_dataframe(metrics_df, 'model_metrics')
 
-        return model, scaler
+        # 5. UPDATE THE FINAL RETURN STATEMENT
+        return model, scaler, selected_features
 
     def train_base_model(self, data: pd.DataFrame, all_params: Dict[str, Any], feature_names: List[str]) -> Optional[LGBMClassifier]:
         """

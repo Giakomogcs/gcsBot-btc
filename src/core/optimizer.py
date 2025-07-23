@@ -165,10 +165,15 @@ class WalkForwardOptimizer:
             validation_data = data_for_objective[data_for_objective['block'] == regime_blocks[i]].copy()
             if len(train_data) < 500 or len(validation_data) < 100:
                 continue
-            model, scaler = self.trainer.train(train_data, params, selected_features, base_model=self.base_model)
+
+            # - Set `base_model=None` to avoid the feature mismatch crash.
+            model, scaler, model_features = self.trainer.train(train_data, params, selected_features, base_model=None)
+            
             if model is None:
                 continue
-            backtesting_engine = BacktestingEngine(model, scaler, validation_data, params, selected_features)
+
+            # Pass the correct `model_features` to the backtester.
+            backtesting_engine = BacktestingEngine(model, scaler, validation_data, params, model_features)
             val_metrics = backtesting_engine.run()
             all_fold_metrics.append(val_metrics)
             del model, scaler, backtesting_engine, train_data, validation_data
@@ -247,7 +252,8 @@ class WalkForwardOptimizer:
         # Limiar de qualidade para salvar o modelo
         if best_score > 0.33:
             logger.info(f"🏆 Resultado excelente! Salvando especialista para '{name}'...")
-            final_model, final_scaler = self.trainer.train(data, best_trial.params, self.feature_names, base_model=self.base_model)
+            # - Unpack the return values correctly.
+            final_model, final_scaler, _ = self.trainer.train(data, best_trial.params, self.feature_names, base_model=None)
             
             model_filename = f'model_{name}.joblib'
             scaler_filename = f'scaler_{name}.joblib'

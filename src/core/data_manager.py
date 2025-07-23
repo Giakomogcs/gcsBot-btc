@@ -261,7 +261,13 @@ class DataManager:
                         df_downloaded.index.name = 'Date'
                         clean_df = df_downloaded[['Open', 'High', 'Low', 'Close', 'Volume']].copy()
                         clean_df = clean_df.reset_index()
-                        clean_df.columns = [col.lower() for col in clean_df.columns]
+                        
+                        # OLD LINE THAT CAUSED THE ERROR
+                        # clean_df.columns = [str(col).lower() for col in clean_df.columns]
+                        
+                        # CORRECTED LINE
+                        # This ensures the column names are simple, clean strings for the database.
+                        clean_df.columns = ['date', 'open', 'high', 'low', 'close', 'volume']
                         
                         self.db.insert_dataframe(clean_df, table_name, if_exists='append')
 
