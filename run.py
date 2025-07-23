@@ -1,4 +1,4 @@
-# run.py (VERSÃO 3.0 - Com Display Desacoplado)
+# run.py (VERSÃO 3.2 - Usando Docker Compose V2)
 
 import subprocess
 import os
@@ -16,8 +16,7 @@ KAGGLE_DATA_FILE = os.path.join("data", "kaggle_btc_1m_bootstrap.csv")
 ENV_FILE = ".env"
 ENV_EXAMPLE_FILE = ".env.example"
 MODEL_METADATA_FILE = os.path.join("data", "model_metadata.json")
-# <<< NOVO >>> Arquivo de status para o display
-OPTIMIZER_STATUS_FILE = os.path.join("data", "optimizer_status.json")
+OPTIMIZER_STATUS_FILE = os.path.join("logs", "optimizer_status.json")
 # -----------------------------
 
 def print_color(text, color="green"):
@@ -29,7 +28,6 @@ def run_command(command, shell=True, capture_output=False, check=False):
     """Executa um comando no shell."""
     print_color(f"\n> Executando: {command}", "blue")
     try:
-        # Usar Popen para streaming de output se não for capture_output
         if not capture_output:
             process = subprocess.Popen(command, shell=shell, text=True, stdout=sys.stdout, stderr=sys.stderr)
             process.wait()
@@ -65,133 +63,56 @@ def initial_setup():
     print_color("--- Iniciando Setup e Verificação do Ambiente ---", "blue")
     check_env_file()
     os.makedirs("data", exist_ok=True)
+    os.makedirs("logs", exist_ok=True)
     run_command(f"\"{sys.executable}\" -m pip install -r requirements.txt", check=True)
     print_color("--- Setup Concluído com Sucesso ---", "green")
-
-def docker_build():
-    check_docker_running()
-    print_color(f"--- Construindo Imagem Docker: {DOCKER_IMAGE_NAME} ---", "blue")
-    run_command(f"docker build -t {DOCKER_IMAGE_NAME} .", check=True)
-    print_color("--- Imagem Docker Construída com Sucesso ---", "green")
-
-def model_guardian():
-    print_color("\n--- 🛡️ Guardião do Modelo: Verificando Status 🛡️ ---", "blue")
-    if not os.path.exists(MODEL_METADATA_FILE):
-        print_color("AVISO: Nenhum modelo encontrado. Rode 'python run.py optimize' primeiro.", "yellow")
-        sys.exit(1)
-    try:
-        with open(MODEL_METADATA_FILE, 'r') as f: metadata = json.load(f)
-        valid_until = isoparse(metadata.get("valid_until"))
-        if datetime.now(timezone.utc) > valid_until:
-            print_color(f"AVISO: O modelo atual expirou. Rode 'python run.py optimize' para criar um novo.", "red")
-            sys.exit(1)
-        else:
-            print_color(f"✅ Modelo está válido. Expira em: {(valid_until - datetime.now(timezone.utc)).days} dias.", "green")
-    except Exception as e:
-        print_color(f"Erro ao ler metadados do modelo: {e}. Rode 'optimize' por segurança.", "red")
-        sys.exit(1)
 
 def start_optimizer():
     """Inicia o processo de otimização em um container Docker em modo background."""
     check_docker_running()
-    container_name = "gcsbot-optimizer"
-    print_color(f"--- Iniciando Otimização (Modo Background) no container '{container_name}' ---", "blue")
-
-    # Garante que um container antigo seja removido para evitar conflitos
-    run_command(f"docker rm -f {container_name}", capture_output=True)
-
-    # Mapeia os volumes de 'data' e 'logs' para persistir os resultados e logs
-    data_volume = f"-v \"{os.path.abspath('data')}:/app/data\""
-    logs_volume = f"-v \"{os.path.abspath('logs')}:/app/logs\""
-
-    # Comando para rodar o container em modo 'optimize'
-    # -d: detached (background)
-    # --restart unless-stopped: reinicia o container a menos que seja parado manualmente
-    # --name: nome do container
-    # --env-file: usa o .env para as variáveis de ambiente
-    # -e MODE=optimize: define o modo de operação
-    command = (
-        f"docker run -d --restart unless-stopped --name {container_name} "
-        f"--env-file .env -e MODE=optimize {data_volume} {logs_volume} {DOCKER_IMAGE_NAME}"
-    )
-
-    run_command(command, check=True)
+    print_color("--- Iniciando Otimização (Modo Background) ---", "blue")
+    # <<< CORRIGIDO AQUI
+    run_command("docker compose up -d --build app", check=True)
     print_color("Otimização iniciada em segundo plano com sucesso!", "green")
     print_color("Para acompanhar o progresso, use o comando:", "yellow")
-    print_color("python run.py display", "blue")
+    print_color("python3 run.py display", "blue")
     print_color("Para ver os logs completos, use o comando:", "yellow")
-    print_color("python run.py logs", "blue")
+    print_color("python3 run.py logs", "blue")
 
 def start_bot(mode):
     check_docker_running()
-    container_name = f"gcsbot-{mode}"
-    print_color(f"--- Iniciando Bot em Modo '{mode.upper()}' no container '{container_name}' ---", "blue")
-    run_command(f"docker rm -f {container_name}", capture_output=True)
-    data_volume = f"-v \"{os.path.abspath('data')}:/app/data\""; logs_volume = f"-v \"{os.path.abspath('logs')}:/app/logs\""
-    
-    if mode in ['test', 'trade']:
-        run_params = "-d --restart always"
-        detached = True
-    else: # backtest
-        run_params = "--rm -it"
-        detached = False
-        
-    command = f"docker run {run_params} --name {container_name} --env-file .env -e MODE={mode} {data_volume} {logs_volume} {DOCKER_IMAGE_NAME}"
-    run_command(command, check=True)
+    print_color(f"--- Iniciando Bot em Modo '{mode.upper()}' ---", "blue")
+    # <<< CORRIGIDO AQUI
+    run_command(f"MODE={mode} docker compose up -d --build app", check=True)
 
-    if detached:
+    if mode in ['test', 'trade']:
         print_color(f"Bot no modo '{mode}' iniciado em segundo plano.", "green")
-        print_color("Para ver os logs, use: python run.py logs", "yellow")
+        print_color("Para ver os logs, use: python3 run.py logs", "yellow")
 
 def stop_all():
     check_docker_running()
     print_color("--- Parando e Removendo TODOS os Containers do Bot ---", "yellow")
-    result = run_command("docker ps -a --filter \"name=gcsbot-\" --format \"{{.Names}}\"", capture_output=True)
-    containers = [c for c in result.stdout.strip().split('\n') if c]
-    if not containers: print_color("Nenhum container do bot encontrado.", "green"); return
-    for container in containers:
-        print_color(f"Parando e removendo o container {container}...")
-        run_command(f"docker stop {container}", capture_output=True)
-        run_command(f"docker rm {container}", capture_output=True)
+    # <<< CORRIGIDO AQUI
+    run_command("docker compose down", check=True)
     print_color("Containers parados e removidos com sucesso.", "green")
 
 def show_logs():
     check_docker_running()
-    # <<< ALTERADO >>> Procura por qualquer container gcsbot
-    result = run_command("docker ps -q --filter \"name=gcsbot-\"", capture_output=True)
-    if not result.stdout.strip():
-        print_color("Nenhum container do bot está em execução.", "red")
-        return
-
-    # Pede ao usuário para escolher se houver mais de um
-    containers = run_command("docker ps --format \"{{.Names}}\" --filter \"name=gcsbot-\"", capture_output=True).stdout.strip().split('\n')
-    container_name = containers[0]
-    if len(containers) > 1:
-        print_color("Múltiplos containers em execução. Qual você quer ver?", "yellow")
-        for i, name in enumerate(containers):
-            print(f"  {i+1}) {name}")
-        choice = input("Digite o número: ")
-        try:
-            container_name = containers[int(choice) - 1]
-        except (ValueError, IndexError):
-            print_color("Seleção inválida.", "red")
-            return
-
-    print_color(f"Anexando aos logs do container '{container_name}'. Pressione CTRL+C para sair.", "green")
+    print_color("Anexando aos logs do container 'app'. Pressione CTRL+C para sair.", "green")
     try:
-        subprocess.run(f"docker logs -f {container_name}", shell=True)
+        # <<< CORRIGIDO AQUI
+        subprocess.run("docker compose logs -f app", shell=True)
     except KeyboardInterrupt: print_color("\n\nDesanexado dos logs.", "yellow")
 
-# <<< NOVO >>> Função para mostrar o painel de otimização
 def show_display():
     """Mostra o painel de otimização lendo o arquivo de status."""
-    from src.display_manager import display_optimization_dashboard # Importa a função de display
+    from src.core.display_manager import display_optimization_dashboard
     
-    container_name = "gcsbot-optimizer"
-    result = run_command(f"docker ps -q --filter \"name={container_name}\"", capture_output=True)
+    # <<< CORRIGIDO AQUI
+    result = run_command("docker compose ps -q app", capture_output=True)
     if not result.stdout.strip():
-        print_color(f"O container de otimização '{container_name}' não está em execução.", "red")
-        print_color("Inicie-o com: python run.py optimize", "yellow")
+        print_color("O container de otimização 'app' não está em execução.", "red")
+        print_color("Inicie-o com: python3 run.py optimize", "yellow")
         return
 
     print_color("Mostrando painel de otimização. Pressione CTRL+C para sair.", "green")
@@ -201,43 +122,25 @@ def show_display():
                 try:
                     with open(OPTIMIZER_STATUS_FILE, 'r') as f:
                         status_data = json.load(f)
-                    # Passa o dicionário de dados para a função de display
                     display_optimization_dashboard(status_data)
                 except (json.JSONDecodeError, KeyError) as e:
                     print(f"Aguardando arquivo de status válido... Erro: {e}")
             else:
                 print("Aguardando o otimizador iniciar e criar o arquivo de status...")
             
-            time.sleep(2) # Intervalo de atualização
+            time.sleep(2)
     except KeyboardInterrupt:
         print_color("\nPainel finalizado.", "yellow")
 
-def show_status():
-    print_color("\n--- 🔍 Verificando Status do Modelo 🔍 ---", "blue")
-    if not os.path.exists(MODEL_METADATA_FILE):
-        print_color("Status: NENHUM MODELO ENCONTRADO.", "red"); return
-    try:
-        with open(MODEL_METADATA_FILE, 'r') as f: metadata = json.load(f)
-        valid_until = isoparse(metadata.get("valid_until"))
-        last_opt = isoparse(metadata.get("last_optimization_date"))
-        if datetime.now(timezone.utc) > valid_until: print_color("Status: EXPIRADO", "red")
-        else: print_color("Status: VÁLIDO", "green")
-        print(f"  - Última Otimização: {last_opt.strftime('%Y-%m-%d %H:%M')}")
-        print(f"  - Válido Até:          {valid_until.strftime('%Y-%m-%d %H:%M')}")
-    except Exception as e: print_color(f"Status: ERRO AO LER METADADOS ({e})", "red")
-
-
 def main():
     if len(sys.argv) < 2:
-        print_color("Uso: python run.py [comando]", "blue")
+        print_color("Uso: python3 run.py [comando]", "blue")
         print("Comandos disponíveis:")
         print("  setup        - Instala dependências e prepara o ambiente.")
-        print("  build        - Constrói (ou reconstrói) a imagem Docker.")
         print("  optimize     - Roda a otimização em SEGUNDO PLANO.")
         print("  display      - Mostra o PAINEL da otimização em execução.")
         print("  backtest     - Roda um backtest rápido com o modelo atual.")
         print("  test / trade - Roda o bot (em segundo plano).")
-        print("  status       - Verifica a validade do modelo atual.")
         print("  stop         - Para e remove TODOS os containers do bot.")
         print("  logs         - Mostra os logs brutos de um container em execução.")
         return
@@ -245,15 +148,10 @@ def main():
     command = sys.argv[1].lower()
     
     if command == "setup": initial_setup()
-    elif command == "build": docker_build()
     elif command == "optimize": start_optimizer()
-    elif command == "display": show_display() # <<< NOVO COMANDO
-    elif command == "status": show_status()
-    elif command in ["test", "trade"]:
-        model_guardian()
-        start_bot(command)
-    elif command == "backtest":
-        start_bot(command)
+    elif command == "display": show_display()
+    elif command in ["test", "trade"]: start_bot(command)
+    elif command == "backtest": start_bot(command)
     elif command == "stop": stop_all()
     elif command == "logs": show_logs()
     else: print_color(f"Comando '{command}' não reconhecido.", "red")
