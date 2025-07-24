@@ -192,7 +192,7 @@ class DataManager:
     def _fetch_and_manage_btc_data(self, symbol: str, interval: str = '1m'):
         """
         Busca e gerencia os dados, combinando um longo histórico de velas (OHLCV)
-        com dados recentes de fluxo de ordens.
+        com dados de fluxo de ordens, com lógica robusta de backfill.
         """
         measurement_name = f"btc_{symbol.lower().replace('/', '_')}_{interval}"
         end_utc = datetime.datetime.now(datetime.timezone.utc).replace(second=0, microsecond=0)
@@ -203,30 +203,45 @@ class DataManager:
             logger.info(f"Nenhum dado encontrado para '{measurement_name}'. Iniciando processo de bootstrap com histórico completo.")
             
             df_ohlcv_history = pd.DataFrame()
-
-            # Prioridade 1: Ficheiro Histórico completo
-            if os.path.exists(settings.data_paths.historical_data_file):
-                logger.info(f"Carregando histórico completo de: '{settings.data_paths.historical_data_file}'")
-                df_csv = pd.read_csv(settings.data_paths.historical_data_file, low_memory=False, on_bad_lines='skip')
+            csv_path = settings.data_paths.historical_data_file
+            if not os.path.exists(csv_path):
+                csv_path = settings.data_paths.kaggle_bootstrap_file
+            
+            if os.path.exists(csv_path):
+                logger.info(f"Carregando histórico completo de: '{csv_path}'")
+                df_csv = pd.read_csv(csv_path, low_memory=False, on_bad_lines='skip')
                 df_ohlcv_history = self._preprocess_kaggle_data(df_csv)
-            elif os.path.exists(settings.data_paths.kaggle_bootstrap_file):
-                 logger.info(f"Carregando histórico completo de: '{settings.data_paths.kaggle_bootstrap_file}'")
-                 df_csv = pd.read_csv(settings.data_paths.kaggle_bootstrap_file, low_memory=False, on_bad_lines='skip')
-                 df_ohlcv_history = self._preprocess_kaggle_data(df_csv)
-
+            
             if not df_ohlcv_history.empty:
-                logger.info(f"Histórico de {len(df_ohlcv_history)} velas carregado. Preparando para escrever no DB.")
-                # Adiciona colunas de order flow vazias ao histórico antigo
+                logger.info(f"Histórico de {len(df_ohlcv_history)} velas OHLCV carregado. Escrevendo no DB...")
                 df_ohlcv_history['taker_buy_volume'] = 0.0
                 df_ohlcv_history['taker_sell_volume'] = 0.0
-                
                 df_to_db = df_ohlcv_history[df_ohlcv_history.index >= '2018-01-01']
                 self._write_dataframe_to_influx(df_to_db, measurement_name)
+
+                # --- CORREÇÃO DA LÓGICA DE BACKFILL DE ORDER FLOW ---
+                logger.info("Iniciando processo de Backfill para dados de Fluxo de Ordens do último ano...")
+                one_year_ago = df_to_db.index.max() - pd.Timedelta(days=365)
+                backfill_start_date = max(one_year_ago, df_to_db.index.min())
+                backfill_end_date = df_to_db.index.max()
+
+                logger.info(f"Período de Backfill: de {backfill_start_date} até {backfill_end_date}")
+
+                if self.client and backfill_start_date < backfill_end_date:
+                    df_orderflow_backfill = self._get_historical_agg_trades(symbol, backfill_start_date, backfill_end_date)
+                    if not df_orderflow_backfill.empty:
+                        logger.info(f"Sucesso! {len(df_orderflow_backfill)} registos de Fluxo de Ordens encontrados para o backfill.")
+                        self._write_dataframe_to_influx(df_orderflow_backfill, measurement_name)
+                        logger.info("✅ Backfill de Fluxo de Ordens concluído e escrito no DB.")
+                    else:
+                        logger.warning("Nenhum dado de Fluxo de Ordens encontrado para o período de backfill.")
+                else:
+                    logger.warning("Cliente offline ou período de backfill inválido. Pulando backfill.")
+
             else:
                 logger.error("Nenhum ficheiro de histórico (historical_data.csv ou kaggle_bootstrap.csv) encontrado. Impossível fazer o bootstrap.")
-                return # Aborta se não houver base histórica
-            
-            # Após o bootstrap, obtemos o último timestamp para a atualização incremental
+                return
+
             last_timestamp_in_db = self._query_last_timestamp(measurement_name)
 
         # --- LÓGICA DE ATUALIZAÇÃO INCREMENTAL ---
@@ -238,14 +253,17 @@ class DataManager:
         if self.client and start_utc < end_utc:
             logger.info(f"Buscando novos dados de {start_utc.strftime('%Y-%m-%d %H:%M:%S')} até {end_utc.strftime('%Y-%m-%d %H:%M:%S')}...")
             
-            # Busca novos dados de velas (OHLCV)
             df_ohlcv_new = self._get_historical_klines_binance(symbol, interval, start_utc, end_utc)
-            
-            # Busca novos dados de fluxo de ordens para o mesmo período
             df_orderflow_new = self._get_historical_agg_trades(symbol, start_utc, end_utc)
             
+            # --- LOGGING DE DIAGNÓSTICO ---
+            if df_orderflow_new.empty:
+                logger.warning("!!! AVISO: A busca por Fluxo de Ordens para o período recente não retornou NENHUM dado. (Isto é comum no Testnet).")
+            else:
+                logger.info(f"Dados de Fluxo de Ordens recentes encontrados. Amostra:")
+                print(df_orderflow_new.head())
+
             if not df_ohlcv_new.empty:
-                # Combina os dois novos dataframes, preenchendo com 0 se não houver dados de order flow
                 df_combined = df_ohlcv_new.join(df_orderflow_new, how='left').fillna(0)
                 self._write_dataframe_to_influx(df_combined, measurement_name)
         else:
