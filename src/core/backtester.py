@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-from config_manager import settings
+from src.config_manager import settings
 
 
 # Resolução de Path
@@ -114,13 +114,43 @@ class Backtester:
             return
 
         results_df = pd.DataFrame(self.trades)
-        # ... (cálculos continuam iguais) ...
         
+        # --- A CORREÇÃO CRÍTICA ESTÁ AQUI ---
+        # Calcula o fator de crescimento para cada trade e depois a curva de capital cumulativa
+        results_df['growth_factor'] = 1 + results_df['pnl_percent']
+        results_df['equity_curve'] = results_df['growth_factor'].cumprod()
+        # --- FIM DA CORREÇÃO ---
+
+        # Calcula as métricas de performance
+        total_trades = len(results_df)
+        wins = results_df[results_df['pnl_percent'] > 0]
+        num_wins = len(wins)
+        num_losses = total_trades - num_wins
+        win_rate = (num_wins / total_trades * 100) if total_trades > 0 else 0
+        
+        total_pnl = results_df['equity_curve'].iloc[-1] - 1
+        average_pnl = results_df['pnl_percent'].mean()
+        average_win = wins['pnl_percent'].mean()
+        average_loss = results_df[results_df['pnl_percent'] <= 0]['pnl_percent'].mean()
+        
+        risk_reward_ratio = abs(average_win / average_loss) if average_loss != 0 else float('inf')
+
         print("\n--- 📊 RESULTADOS DO BACKTEST 📊 ---")
-        # ... (prints continuam iguais) ...
+        print(f" Período Analisado: {self.data.index.min()} a {self.data.index.max()}")
+        print("------------------------------------")
+        print(f" Trades Totais: {total_trades}")
+        print(f" Vitórias: {num_wins}")
+        print(f" Derrotas: {num_losses}")
+        print(f" Taxa de Acerto: {win_rate:.2f}%")
+        print("------------------------------------")
+        print(f" Lucro Total: {total_pnl:+.2%}")
+        print(f" Média por Trade: {average_pnl:+.4%}")
+        print(f" Média das Vitórias: {average_win:+.4%}")
+        print(f" Média das Derrotas: {average_loss:+.4%}")
+        print(f" Rácio Risco/Recompensa: {risk_reward_ratio:.2f}")
         print("------------------------------------")
         
-        # Chama a nova função de plot
+        # Chama a função de plot, que agora irá funcionar
         self._plot_equity_curve(results_df)
 
     def run(self):

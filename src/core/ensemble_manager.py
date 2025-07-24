@@ -119,7 +119,8 @@ class EnsembleManager:
             X = current_features[model_features]
             
             X_scaled = specialist['scaler'].transform(X.values)
-            confidence = specialist['model'].predict_proba(X_scaled)[0][1]
+            # Adicionamos verbose=-1 para silenciar os avisos durante a previsão
+            confidence = specialist['model'].predict_proba(X_scaled, verbose=-1)[0][1]
             individual_confidences[name] = confidence
             
             specialist_weight = weights.get(name, 1.0)

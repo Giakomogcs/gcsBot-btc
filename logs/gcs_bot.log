@@ -85,3 +85,324 @@
 2025-07-24 14:09:56,768 - gcsBot - INFO - 
 ==================== Iniciando otimização para: ALL_DATA ====================
 2025-07-24 14:09:56,772 - gcsBot - INFO - --- Otimizando especialista: 'price_action' ---
+2025-07-24 14:16:05,945 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-24 14:16:06,260 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-24 14:16:07,735 - gcsBot - INFO - --- 🌐 INICIANDO PIPELINE DE DADOS E FEATURES 🌐 ---
+2025-07-24 14:16:08,403 - gcsBot - INFO - ✅ Cliente Binance inicializado em modo TESTNET.
+2025-07-24 14:16:08,403 - gcsBot - INFO - 🚀 INICIANDO PIPELINE DE DADOS E FEATURES 🚀
+2025-07-24 14:16:08,435 - gcsBot - INFO - Buscando novos dados de 2025-07-24 14:02:00 até 2025-07-24 14:16:00...
+2025-07-24 14:16:08,436 - gcsBot - INFO - Baixando dados de BTCUSDT de 2025-07-24 14:02:00+00:00 até 2025-07-24 14:16:00+00:00...
+2025-07-24 14:16:09,047 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2025-07-24 14:02:00+00:00 até 2025-07-24 14:16:00+00:00...
+2025-07-24 14:16:10,383 - gcsBot - INFO - Dados de Fluxo de Ordens recentes encontrados. Amostra:
+2025-07-24 14:16:10,391 - gcsBot - INFO - Escrevendo 15 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-24 14:16:10,401 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-24 14:16:10,402 - gcsBot - INFO - Lendo dados da measurement 'btc_btcusdt_1m' desde -3y...
+2025-07-24 14:16:49,823 - gcsBot - INFO - ✅ 1576720 registos lidos do InfluxDB com sucesso.
+2025-07-24 14:16:49,958 - gcsBot - INFO - Calculando indicadores técnicos...
+2025-07-24 14:17:38,196 - gcsBot - INFO - Calculando features de Fluxo de Ordens (CVD)...
+2025-07-24 14:17:38,663 - gcsBot - INFO - ✅ Engenharia de features concluída.
+2025-07-24 14:17:38,664 - gcsBot - INFO - Amostra dos dados finais com features (incluindo CVD):
+2025-07-24 14:17:38,691 - gcsBot - INFO - ✅ PIPELINE DE DADOS E FEATURES CONCLUÍDO ✅
+2025-07-24 14:17:38,712 - gcsBot - INFO - ✅ Pipeline de dados concluído com sucesso. Iniciando o otimizador...
+2025-07-24 14:17:38,712 - gcsBot - INFO - 
+================================================================================
+--- 🚀 INICIANDO PROCESSO DE OTIMIZAÇÃO DA MENTE-COLMEIA 🚀 ---
+================================================================================
+2025-07-24 14:17:38,713 - gcsBot - INFO - 
+==================== Iniciando otimização para: ALL_DATA ====================
+2025-07-24 14:17:38,716 - gcsBot - INFO - --- Otimizando especialista: 'price_action' ---
+2025-07-24 14:59:21,738 - gcsBot - INFO - 🏆 Otimização de 'price_action' concluída. Melhor Score: 153.8109
+2025-07-24 14:59:21,748 - gcsBot - INFO -    -> Score excelente! Treinando e salvando modelo final...
+2025-07-24 14:59:42,642 - gcsBot - INFO -    -> ✅ Modelo, Scaler e Parâmetros para 'price_action' salvos com sucesso!
+2025-07-24 14:59:42,643 - gcsBot - INFO - --- Otimizando especialista: 'quant_classic' ---
+2025-07-24 15:38:31,493 - gcsBot - INFO - 🏆 Otimização de 'quant_classic' concluída. Melhor Score: 111.9499
+2025-07-24 15:38:31,501 - gcsBot - INFO -    -> Score excelente! Treinando e salvando modelo final...
+2025-07-24 15:38:42,585 - gcsBot - INFO -    -> ✅ Modelo, Scaler e Parâmetros para 'quant_classic' salvos com sucesso!
+2025-07-24 15:38:42,586 - gcsBot - INFO - --- Otimizando especialista: 'macro_hedger' ---
+2025-07-24 15:56:36,239 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-24 15:56:36,740 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-24 15:56:38,706 - gcsBot - INFO - --- 🌐 INICIANDO PIPELINE DE DADOS E FEATURES 🌐 ---
+2025-07-24 15:56:39,609 - gcsBot - INFO - ✅ Cliente Binance inicializado em modo TESTNET.
+2025-07-24 15:56:39,611 - gcsBot - INFO - 🚀 INICIANDO PIPELINE DE DADOS E FEATURES 🚀
+2025-07-24 15:56:39,669 - gcsBot - INFO - Buscando novos dados de 2025-07-24 14:17:00 até 2025-07-24 15:56:00...
+2025-07-24 15:56:39,669 - gcsBot - INFO - Baixando dados de BTCUSDT de 2025-07-24 14:17:00+00:00 até 2025-07-24 15:56:00+00:00...
+2025-07-24 15:56:40,319 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2025-07-24 14:17:00+00:00 até 2025-07-24 15:56:00+00:00...
+2025-07-24 15:56:41,137 - gcsBot - INFO - Dados de Fluxo de Ordens recentes encontrados. Amostra:
+2025-07-24 15:56:41,144 - gcsBot - INFO - Escrevendo 100 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-24 15:56:41,161 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-24 15:56:41,162 - gcsBot - INFO - Lendo dados da measurement 'btc_btcusdt_1m' desde -3y...
+2025-07-24 15:57:17,570 - gcsBot - INFO - ✅ 1576720 registos lidos do InfluxDB com sucesso.
+2025-07-24 15:57:17,984 - gcsBot - INFO - Calculando indicadores técnicos...
+2025-07-24 15:58:01,880 - gcsBot - INFO - Calculando features de Fluxo de Ordens (CVD)...
+2025-07-24 15:58:01,923 - gcsBot - INFO - Iniciando pipeline de dados macroeconómicos...
+2025-07-24 15:58:02,429 - gcsBot - DEBUG - Processando ativo macro: DXY
+2025-07-24 15:58:02,449 - gcsBot - DEBUG - Buscando novos dados para DXY de 2025-07-24 até hoje.
+2025-07-24 15:58:06,596 - gcsBot - DEBUG - Processando ativo macro: VIX
+2025-07-24 15:58:06,621 - gcsBot - DEBUG - Buscando novos dados para VIX de 2025-07-24 até hoje.
+2025-07-24 15:58:19,411 - gcsBot - DEBUG - Processando ativo macro: GOLD
+2025-07-24 15:58:19,434 - gcsBot - DEBUG - Buscando novos dados para GOLD de 2025-07-24 até hoje.
+2025-07-24 15:58:26,245 - gcsBot - DEBUG - Processando ativo macro: TNX
+2025-07-24 15:58:26,267 - gcsBot - DEBUG - Buscando novos dados para TNX de 2025-07-23 até hoje.
+2025-07-24 15:58:30,307 - gcsBot - INFO - Calculando correlações macro...
+2025-07-24 15:58:30,551 - gcsBot - INFO - ✅ Pipeline de dados macroeconómicos concluído.
+2025-07-24 15:58:30,605 - gcsBot - INFO - Limpando e preenchendo valores nulos restantes...
+2025-07-24 15:58:32,130 - gcsBot - INFO - ✅ Engenharia de features concluída.
+2025-07-24 15:58:32,131 - gcsBot - INFO - Amostra dos dados finais com features (incluindo CVD):
+2025-07-24 15:58:32,163 - gcsBot - INFO - ✅ PIPELINE DE DADOS E FEATURES CONCLUÍDO ✅
+2025-07-24 15:58:32,181 - gcsBot - INFO - ✅ Pipeline de dados concluído com sucesso. Iniciando o otimizador...
+2025-07-24 15:58:32,181 - gcsBot - INFO - 
+================================================================================
+--- 🚀 INICIANDO PROCESSO DE OTIMIZAÇÃO DA MENTE-COLMEIA 🚀 ---
+================================================================================
+2025-07-24 15:58:32,182 - gcsBot - INFO - 
+==================== Iniciando otimização para: ALL_DATA ====================
+2025-07-24 15:58:32,186 - gcsBot - INFO - --- Otimizando especialista: 'price_action' ---
+2025-07-24 17:00:29,181 - gcsBot - INFO - 🏆 Otimização de 'price_action' concluída. Melhor Score: 153.1277
+2025-07-24 17:00:29,190 - gcsBot - INFO -    -> Score excelente! Treinando e salvando modelo final...
+2025-07-24 17:01:14,713 - gcsBot - INFO -    -> ✅ Modelo, Scaler e Parâmetros para 'price_action' salvos com sucesso!
+2025-07-24 17:01:14,715 - gcsBot - INFO - --- Otimizando especialista: 'quant_classic' ---
+2025-07-24 17:20:23,369 - gcsBot - INFO - 🏆 Otimização de 'quant_classic' concluída. Melhor Score: 114.0121
+2025-07-24 17:20:23,376 - gcsBot - INFO -    -> Score excelente! Treinando e salvando modelo final...
+2025-07-24 17:20:28,164 - gcsBot - INFO -    -> ✅ Modelo, Scaler e Parâmetros para 'quant_classic' salvos com sucesso!
+2025-07-24 17:20:28,164 - gcsBot - INFO - --- Otimizando especialista: 'macro_hedger' ---
+2025-07-24 17:28:46,878 - gcsBot - INFO - 🏆 Otimização de 'macro_hedger' concluída. Melhor Score: 0.0000
+2025-07-24 17:28:46,879 - gcsBot - WARNING -    -> Score de 0.0000 não atingiu o limiar de qualidade (0.33). Modelo não foi salvo.
+2025-07-24 17:28:46,883 - gcsBot - INFO - 
+================================================================================
+--- ✅ PROCESSO DE OTIMIZAÇÃO CONCLUÍDO ✅ ---
+================================================================================
+2025-07-24 17:35:07,127 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-24 17:35:07,443 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-24 17:36:03,819 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-24 17:36:04,055 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-24 17:36:05,216 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-24 17:36:05,217 - gcsBot - INFO - Executando o pipeline de dados para garantir que a base de dados está pronta...
+2025-07-24 17:36:06,672 - gcsBot - INFO - ✅ Cliente Binance inicializado em modo TESTNET.
+2025-07-24 17:36:06,674 - gcsBot - INFO - 🚀 INICIANDO PIPELINE DE DADOS E FEATURES 🚀
+2025-07-24 17:36:06,741 - gcsBot - INFO - Buscando novos dados de 2025-07-24 15:57:00 até 2025-07-24 17:36:00...
+2025-07-24 17:36:06,742 - gcsBot - INFO - Baixando dados de BTCUSDT de 2025-07-24 15:57:00+00:00 até 2025-07-24 17:36:00+00:00...
+2025-07-24 17:36:07,392 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2025-07-24 15:57:00+00:00 até 2025-07-24 17:36:00+00:00...
+2025-07-24 17:36:08,200 - gcsBot - INFO - Dados de Fluxo de Ordens recentes encontrados. Amostra:
+2025-07-24 17:36:08,205 - gcsBot - INFO - Escrevendo 100 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-24 17:36:08,219 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-24 17:36:08,220 - gcsBot - INFO - Lendo dados da measurement 'btc_btcusdt_1m' desde -3y...
+2025-07-24 17:36:45,503 - gcsBot - INFO - ✅ 1576720 registos lidos do InfluxDB com sucesso.
+2025-07-24 17:36:45,758 - gcsBot - INFO - Calculando indicadores técnicos...
+2025-07-24 17:37:29,548 - gcsBot - INFO - Calculando features de Fluxo de Ordens (CVD)...
+2025-07-24 17:37:29,586 - gcsBot - INFO - Iniciando pipeline de dados macroeconómicos...
+2025-07-24 17:37:30,145 - gcsBot - DEBUG - Processando ativo macro: DXY
+2025-07-24 17:37:30,168 - gcsBot - ERROR - Falha CRÍTICA ao processar dados para DXY: 'date' is not in list
+Traceback (most recent call last):
+  File "/app/src/core/feature_engineering.py", line 38, in add_macro_economic_features
+    historical_data = pd.read_csv(asset_info["path"], index_col='date', parse_dates=True)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 1026, in read_csv
+    return _read(filepath_or_buffer, kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 620, in _read
+    parser = TextFileReader(filepath_or_buffer, **kwds)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 1620, in __init__
+    self._engine = self._make_engine(f, self.engine)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 1898, in _make_engine
+    return mapping[engine](f, **self.options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/io/parsers/c_parser_wrapper.py", line 162, in __init__
+    self._set_noconvert_columns()
+  File "/usr/local/lib/python3.12/site-packages/pandas/io/parsers/c_parser_wrapper.py", line 215, in _set_noconvert_columns
+    noconvert_columns = self._set_noconvert_dtype_columns(
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/io/parsers/base_parser.py", line 673, in _set_noconvert_dtype_columns
+    noconvert_columns.add(_set(k))
+                          ^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/io/parsers/base_parser.py", line 650, in _set
+    x = col_indices[names.index(x)]
+                    ^^^^^^^^^^^^^^
+ValueError: 'date' is not in list
+2025-07-24 17:37:30,181 - gcsBot - DEBUG - Processando ativo macro: VIX
+2025-07-24 17:37:30,206 - gcsBot - DEBUG - Buscando novos dados para VIX de 2025-07-24 até hoje.
+2025-07-24 17:37:31,925 - gcsBot - DEBUG - Processando ativo macro: GOLD
+2025-07-24 17:37:31,948 - gcsBot - ERROR - Falha CRÍTICA ao processar dados para GOLD: 'date' is not in list
+Traceback (most recent call last):
+  File "/app/src/core/feature_engineering.py", line 38, in add_macro_economic_features
+    historical_data = pd.read_csv(asset_info["path"], index_col='date', parse_dates=True)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 1026, in read_csv
+    return _read(filepath_or_buffer, kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 620, in _read
+    parser = TextFileReader(filepath_or_buffer, **kwds)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 1620, in __init__
+    self._engine = self._make_engine(f, self.engine)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 1898, in _make_engine
+    return mapping[engine](f, **self.options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/io/parsers/c_parser_wrapper.py", line 162, in __init__
+    self._set_noconvert_columns()
+  File "/usr/local/lib/python3.12/site-packages/pandas/io/parsers/c_parser_wrapper.py", line 215, in _set_noconvert_columns
+    noconvert_columns = self._set_noconvert_dtype_columns(
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/io/parsers/base_parser.py", line 673, in _set_noconvert_dtype_columns
+    noconvert_columns.add(_set(k))
+                          ^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/io/parsers/base_parser.py", line 650, in _set
+    x = col_indices[names.index(x)]
+                    ^^^^^^^^^^^^^^
+ValueError: 'date' is not in list
+2025-07-24 17:37:31,953 - gcsBot - DEBUG - Processando ativo macro: TNX
+2025-07-24 17:37:31,968 - gcsBot - ERROR - Falha CRÍTICA ao processar dados para TNX: 'date' is not in list
+Traceback (most recent call last):
+  File "/app/src/core/feature_engineering.py", line 38, in add_macro_economic_features
+    historical_data = pd.read_csv(asset_info["path"], index_col='date', parse_dates=True)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 1026, in read_csv
+    return _read(filepath_or_buffer, kwds)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 620, in _read
+    parser = TextFileReader(filepath_or_buffer, **kwds)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 1620, in __init__
+    self._engine = self._make_engine(f, self.engine)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/io/parsers/readers.py", line 1898, in _make_engine
+    return mapping[engine](f, **self.options)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/io/parsers/c_parser_wrapper.py", line 162, in __init__
+    self._set_noconvert_columns()
+  File "/usr/local/lib/python3.12/site-packages/pandas/io/parsers/c_parser_wrapper.py", line 215, in _set_noconvert_columns
+    noconvert_columns = self._set_noconvert_dtype_columns(
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/io/parsers/base_parser.py", line 673, in _set_noconvert_dtype_columns
+    noconvert_columns.add(_set(k))
+                          ^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/pandas/io/parsers/base_parser.py", line 650, in _set
+    x = col_indices[names.index(x)]
+                    ^^^^^^^^^^^^^^
+ValueError: 'date' is not in list
+2025-07-24 17:37:31,972 - gcsBot - INFO - Calculando correlações macro...
+2025-07-24 17:37:32,364 - gcsBot - INFO - ✅ Pipeline de dados macroeconómicos concluído.
+2025-07-24 17:37:32,408 - gcsBot - INFO - Limpando e preenchendo valores nulos restantes...
+2025-07-24 17:37:33,919 - gcsBot - INFO - ✅ Engenharia de features concluída.
+2025-07-24 17:37:33,919 - gcsBot - INFO - Amostra dos dados finais com features (incluindo CVD):
+2025-07-24 17:37:33,951 - gcsBot - INFO - ✅ PIPELINE DE DADOS E FEATURES CONCLUÍDO ✅
+2025-07-24 17:37:33,979 - gcsBot - INFO - Carregando especialista 'price_action'...
+2025-07-24 17:37:34,146 - gcsBot - INFO -  -> ✅ Especialista 'price_action' carregado com sucesso.
+2025-07-24 17:37:34,150 - gcsBot - INFO - Carregando especialista 'quant_classic'...
+2025-07-24 17:37:34,187 - gcsBot - INFO -  -> ✅ Especialista 'quant_classic' carregado com sucesso.
+2025-07-24 17:37:34,187 - gcsBot - INFO - Executando backtest em 262800 velas (aprox. 6 meses)...
+2025-07-24 17:37:34,188 - gcsBot - INFO - 🚀 Iniciando Backtest Profissional...
+2025-07-24 18:09:58,448 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-24 18:09:58,891 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-24 18:10:00,691 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-24 18:10:00,692 - gcsBot - INFO - Executando o pipeline de dados para garantir que a base de dados está pronta...
+2025-07-24 18:10:01,544 - gcsBot - INFO - ✅ Cliente Binance inicializado em modo TESTNET.
+2025-07-24 18:10:01,545 - gcsBot - INFO - 🚀 INICIANDO PIPELINE DE DADOS E FEATURES 🚀
+2025-07-24 18:10:01,596 - gcsBot - INFO - Buscando novos dados de 2025-07-24 17:37:00 até 2025-07-24 18:10:00...
+2025-07-24 18:10:01,597 - gcsBot - INFO - Baixando dados de BTCUSDT de 2025-07-24 17:37:00+00:00 até 2025-07-24 18:10:00+00:00...
+2025-07-24 18:10:02,265 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2025-07-24 17:37:00+00:00 até 2025-07-24 18:10:00+00:00...
+2025-07-24 18:10:03,091 - gcsBot - INFO - Dados de Fluxo de Ordens recentes encontrados. Amostra:
+2025-07-24 18:10:03,100 - gcsBot - INFO - Escrevendo 34 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-24 18:10:03,123 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-24 18:10:03,124 - gcsBot - INFO - Lendo dados da measurement 'btc_btcusdt_1m' desde -3y...
+2025-07-24 18:10:41,544 - gcsBot - INFO - ✅ 1576720 registos lidos do InfluxDB com sucesso.
+2025-07-24 18:10:41,880 - gcsBot - INFO - Calculando indicadores técnicos...
+2025-07-24 18:11:31,392 - gcsBot - INFO - Calculando features de Fluxo de Ordens (CVD)...
+2025-07-24 18:11:31,516 - gcsBot - INFO - Iniciando pipeline de dados macroeconómicos...
+2025-07-24 18:11:32,495 - gcsBot - DEBUG - Processando ativo macro: DXY
+2025-07-24 18:11:32,512 - gcsBot - DEBUG - Buscando novos dados para DXY de 2025-07-23 até hoje.
+2025-07-24 18:11:34,171 - gcsBot - DEBUG - Processando ativo macro: VIX
+2025-07-24 18:11:34,184 - gcsBot - DEBUG - Buscando novos dados para VIX de 2025-07-23 até hoje.
+2025-07-24 18:11:35,373 - gcsBot - DEBUG - Processando ativo macro: GOLD
+2025-07-24 18:11:35,384 - gcsBot - DEBUG - Buscando novos dados para GOLD de 2025-07-23 até hoje.
+2025-07-24 18:11:36,568 - gcsBot - DEBUG - Processando ativo macro: TNX
+2025-07-24 18:11:36,579 - gcsBot - DEBUG - Buscando novos dados para TNX de 2025-07-23 até hoje.
+2025-07-24 18:11:37,524 - gcsBot - INFO - Calculando correlações macro...
+2025-07-24 18:11:37,854 - gcsBot - INFO - ✅ Pipeline de dados macroeconómicos concluído.
+2025-07-24 18:11:37,897 - gcsBot - INFO - Limpando e preenchendo valores nulos restantes...
+2025-07-24 18:11:39,523 - gcsBot - INFO - ✅ Engenharia de features concluída.
+2025-07-24 18:11:39,523 - gcsBot - INFO - Amostra dos dados finais com features (incluindo CVD):
+2025-07-24 18:11:39,558 - gcsBot - INFO - ✅ PIPELINE DE DADOS E FEATURES CONCLUÍDO ✅
+2025-07-24 18:11:39,589 - gcsBot - INFO - Carregando especialista 'price_action'...
+2025-07-24 18:11:39,820 - gcsBot - INFO -  -> ✅ Especialista 'price_action' carregado com sucesso.
+2025-07-24 18:11:39,825 - gcsBot - INFO - Carregando especialista 'quant_classic'...
+2025-07-24 18:11:39,854 - gcsBot - INFO -  -> ✅ Especialista 'quant_classic' carregado com sucesso.
+2025-07-24 18:11:39,854 - gcsBot - INFO - Executando backtest em 262800 velas (aprox. 6 meses)...
+2025-07-24 18:11:39,855 - gcsBot - INFO - 🚀 Iniciando Backtest Profissional...
+2025-07-24 18:15:30,829 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-24 18:15:31,173 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-24 18:15:32,403 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-24 18:15:32,403 - gcsBot - INFO - Executando o pipeline de dados para garantir que a base de dados está pronta...
+2025-07-24 18:15:33,089 - gcsBot - INFO - ✅ Cliente Binance inicializado em modo TESTNET.
+2025-07-24 18:15:33,091 - gcsBot - INFO - 🚀 INICIANDO PIPELINE DE DADOS E FEATURES 🚀
+2025-07-24 18:15:33,140 - gcsBot - INFO - Buscando novos dados de 2025-07-24 18:11:00 até 2025-07-24 18:15:00...
+2025-07-24 18:15:33,140 - gcsBot - INFO - Baixando dados de BTCUSDT de 2025-07-24 18:11:00+00:00 até 2025-07-24 18:15:00+00:00...
+2025-07-24 18:15:34,269 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2025-07-24 18:11:00+00:00 até 2025-07-24 18:15:00+00:00...
+2025-07-24 18:15:35,070 - gcsBot - INFO - Dados de Fluxo de Ordens recentes encontrados. Amostra:
+2025-07-24 18:15:35,076 - gcsBot - INFO - Escrevendo 5 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-24 18:15:35,087 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-24 18:15:35,087 - gcsBot - INFO - Lendo dados da measurement 'btc_btcusdt_1m' desde -3y...
+2025-07-24 18:16:11,576 - gcsBot - INFO - ✅ 1576720 registos lidos do InfluxDB com sucesso.
+2025-07-24 18:16:11,773 - gcsBot - INFO - Calculando indicadores técnicos...
+2025-07-24 18:16:54,846 - gcsBot - INFO - Calculando features de Fluxo de Ordens (CVD)...
+2025-07-24 18:16:54,887 - gcsBot - INFO - Iniciando pipeline de dados macroeconómicos...
+2025-07-24 18:16:55,447 - gcsBot - DEBUG - Processando ativo macro: DXY
+2025-07-24 18:16:55,478 - gcsBot - DEBUG - Buscando novos dados para DXY de 2025-07-23 até hoje.
+2025-07-24 18:16:57,448 - gcsBot - DEBUG - Processando ativo macro: VIX
+2025-07-24 18:16:57,469 - gcsBot - DEBUG - Buscando novos dados para VIX de 2025-07-23 até hoje.
+2025-07-24 18:17:07,856 - gcsBot - DEBUG - Processando ativo macro: GOLD
+2025-07-24 18:17:07,880 - gcsBot - DEBUG - Buscando novos dados para GOLD de 2025-07-23 até hoje.
+2025-07-24 18:17:08,785 - gcsBot - DEBUG - Processando ativo macro: TNX
+2025-07-24 18:17:08,804 - gcsBot - DEBUG - Buscando novos dados para TNX de 2025-07-23 até hoje.
+2025-07-24 18:17:09,735 - gcsBot - INFO - Calculando correlações macro...
+2025-07-24 18:17:10,043 - gcsBot - INFO - ✅ Pipeline de dados macroeconómicos concluído.
+2025-07-24 18:17:10,075 - gcsBot - INFO - Limpando e preenchendo valores nulos restantes...
+2025-07-24 18:17:11,586 - gcsBot - INFO - ✅ Engenharia de features concluída.
+2025-07-24 18:17:11,587 - gcsBot - INFO - Amostra dos dados finais com features (incluindo CVD):
+2025-07-24 18:17:11,624 - gcsBot - INFO - ✅ PIPELINE DE DADOS E FEATURES CONCLUÍDO ✅
+2025-07-24 18:17:11,651 - gcsBot - INFO - Carregando especialista 'price_action'...
+2025-07-24 18:17:11,773 - gcsBot - INFO -  -> ✅ Especialista 'price_action' carregado com sucesso.
+2025-07-24 18:17:11,780 - gcsBot - INFO - Carregando especialista 'quant_classic'...
+2025-07-24 18:17:11,793 - gcsBot - INFO -  -> ✅ Especialista 'quant_classic' carregado com sucesso.
+2025-07-24 18:17:11,793 - gcsBot - INFO - Executando backtest em 262800 velas (aprox. 6 meses)...
+2025-07-24 18:17:11,794 - gcsBot - INFO - 🚀 Iniciando Backtest Profissional...
+2025-07-24 19:00:26,716 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-24 19:00:27,466 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-24 19:00:30,424 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-24 19:00:30,425 - gcsBot - INFO - Executando o pipeline de dados para garantir que a base de dados está pronta...
+2025-07-24 19:00:31,314 - gcsBot - INFO - ✅ Cliente Binance inicializado em modo TESTNET.
+2025-07-24 19:00:31,315 - gcsBot - INFO - 🚀 INICIANDO PIPELINE DE DADOS E FEATURES 🚀
+2025-07-24 19:00:31,426 - gcsBot - INFO - Buscando novos dados de 2025-07-24 18:16:00 até 2025-07-24 19:00:00...
+2025-07-24 19:00:31,427 - gcsBot - INFO - Baixando dados de BTCUSDT de 2025-07-24 18:16:00+00:00 até 2025-07-24 19:00:00+00:00...
+2025-07-24 19:00:32,086 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2025-07-24 18:16:00+00:00 até 2025-07-24 19:00:00+00:00...
+2025-07-24 19:00:32,909 - gcsBot - INFO - Dados de Fluxo de Ordens recentes encontrados. Amostra:
+2025-07-24 19:00:32,926 - gcsBot - INFO - Escrevendo 45 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-24 19:00:32,961 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-24 19:00:32,961 - gcsBot - INFO - Lendo dados da measurement 'btc_btcusdt_1m' desde -3y...
+2025-07-24 19:01:30,290 - gcsBot - INFO - ✅ 1576720 registos lidos do InfluxDB com sucesso.
+2025-07-24 19:01:30,756 - gcsBot - INFO - Calculando indicadores técnicos...
+2025-07-24 19:02:19,288 - gcsBot - INFO - Calculando features de Fluxo de Ordens (CVD)...
+2025-07-24 19:02:19,377 - gcsBot - INFO - Iniciando pipeline de dados macroeconómicos...
+2025-07-24 19:02:20,301 - gcsBot - DEBUG - Processando ativo macro: DXY
+2025-07-24 19:02:20,321 - gcsBot - DEBUG - Buscando novos dados para DXY de 2025-07-24 até hoje.
+2025-07-24 19:02:23,870 - gcsBot - DEBUG - Processando ativo macro: VIX
+2025-07-24 19:02:23,882 - gcsBot - DEBUG - Buscando novos dados para VIX de 2025-07-24 até hoje.
+2025-07-24 19:02:25,088 - gcsBot - DEBUG - Processando ativo macro: GOLD
+2025-07-24 19:02:25,101 - gcsBot - DEBUG - Buscando novos dados para GOLD de 2025-07-24 até hoje.
+2025-07-24 19:02:26,231 - gcsBot - DEBUG - Processando ativo macro: TNX
+2025-07-24 19:02:26,247 - gcsBot - DEBUG - Buscando novos dados para TNX de 2025-07-24 até hoje.
+2025-07-24 19:02:27,403 - gcsBot - INFO - Calculando correlações macro...
+2025-07-24 19:02:27,707 - gcsBot - INFO - ✅ Pipeline de dados macroeconómicos concluído.
+2025-07-24 19:02:27,756 - gcsBot - INFO - Limpando e preenchendo valores nulos restantes...
+2025-07-24 19:02:29,481 - gcsBot - INFO - ✅ Engenharia de features concluída.
+2025-07-24 19:02:29,483 - gcsBot - INFO - Amostra dos dados finais com features (incluindo CVD):
+2025-07-24 19:02:29,518 - gcsBot - INFO - ✅ PIPELINE DE DADOS E FEATURES CONCLUÍDO ✅
+2025-07-24 19:02:29,549 - gcsBot - INFO - Carregando especialista 'price_action'...
+2025-07-24 19:02:29,751 - gcsBot - INFO -  -> ✅ Especialista 'price_action' carregado com sucesso.
+2025-07-24 19:02:29,755 - gcsBot - INFO - Carregando especialista 'quant_classic'...
+2025-07-24 19:02:29,771 - gcsBot - INFO -  -> ✅ Especialista 'quant_classic' carregado com sucesso.
+2025-07-24 19:02:29,771 - gcsBot - INFO - Executando backtest em 262800 velas (aprox. 6 meses)...
+2025-07-24 19:02:29,772 - gcsBot - INFO - 🚀 Iniciando Backtest Profissional...
+2025-07-24 19:17:55,297 - gcsBot - INFO - 📈 Gráfico da curva de capital salvo em: data/equity_curve.png

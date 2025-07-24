@@ -35,6 +35,12 @@ class DcaConfig(BaseSettings):
     min_capital_usdt: float = 100.0
     daily_amount_usdt: float = 5.0
 
+class ExecutionConfig(BaseSettings):
+    """
+    Parâmetros que controlam a lógica de execução de trades.
+    """
+    confidence_threshold: float = 0.60 # Limiar de confiança para abrir um trade (60%)
+
 
 # --- Classe Principal de Configuração ---
 class Settings(BaseSettings):
@@ -61,6 +67,7 @@ class Settings(BaseSettings):
     model_params: ModelParamsConfig = ModelParamsConfig()
     optimizer: OptimizerConfig = OptimizerConfig()
     dca: DcaConfig = DcaConfig()
+    execution: ExecutionConfig = ExecutionConfig()
 
     model_config = SettingsConfigDict(
         env_file='.env',

@@ -34,3 +34,7 @@
 {"timestamp": "2025-07-24 07:44:34,732", "level": "ERROR", "message": "Nenhum dado foi carregado. Otimiza\u00e7\u00e3o abortada."}
 {"timestamp": "2025-07-24 09:48:05,266", "level": "WARNING", "message": "Nenhum dado retornado para a measurement 'btc_btcusdt_1m'."}
 {"timestamp": "2025-07-24 09:48:05,267", "level": "ERROR", "message": "Nenhum dado foi carregado. Otimiza\u00e7\u00e3o abortada."}
+{"timestamp": "2025-07-24 17:28:46,879", "level": "WARNING", "message": "   -> Score de 0.0000 n\u00e3o atingiu o limiar de qualidade (0.33). Modelo n\u00e3o foi salvo."}
+{"timestamp": "2025-07-24 17:37:30,168", "level": "ERROR", "message": "Falha CR\u00cdTICA ao processar dados para DXY: 'date' is not in list"}
+{"timestamp": "2025-07-24 17:37:31,948", "level": "ERROR", "message": "Falha CR\u00cdTICA ao processar dados para GOLD: 'date' is not in list"}
+{"timestamp": "2025-07-24 17:37:31,968", "level": "ERROR", "message": "Falha CR\u00cdTICA ao processar dados para TNX: 'date' is not in list"}
