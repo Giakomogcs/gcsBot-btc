@@ -39,7 +39,22 @@ class ExecutionConfig(BaseSettings):
     """
     Parâmetros que controlam a lógica de execução de trades.
     """
-    confidence_threshold: float = 0.60 # Limiar de confiança para abrir um trade (60%)
+    confidence_threshold: float = 0.55 # Limiar de confiança para abrir um trade (55%)
+
+class BacktestConfig(BaseSettings):
+    """
+    Parâmetros que controlam o comportamento do backtester.
+    """
+    commission_rate: float = 0.001
+    initial_capital: float = 10000.0
+    
+    # --- NOVOS PARÂMETROS PARA O RISCO DINÂMICO ---
+    base_risk_percentage: float = 1.0       # Arriscar 1% do capital como base por trade
+    max_leverage_percentage: float = 25.0   # Nunca alocar mais de 25% do capital num único trade
+    
+    future_periods: int = 30
+    profit_mult: float = 2.0
+    stop_mult: float = 2.0
 
 
 # --- Classe Principal de Configuração ---
@@ -68,6 +83,7 @@ class Settings(BaseSettings):
     optimizer: OptimizerConfig = OptimizerConfig()
     dca: DcaConfig = DcaConfig()
     execution: ExecutionConfig = ExecutionConfig()
+    backtest: BacktestConfig = BacktestConfig()
 
     model_config = SettingsConfigDict(
         env_file='.env',

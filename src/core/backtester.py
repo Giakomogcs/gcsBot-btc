@@ -5,6 +5,7 @@ import numpy as np
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from src.config_manager import settings
+from src.core.position_sizer import DynamicPositionSizer
 
 
 # Resolução de Path
@@ -22,18 +23,22 @@ class Backtester:
     que simula a performance de uma estratégia no passado.
     """
     def __init__(self, data: pd.DataFrame, ensemble: EnsembleManager):
+        
         self.data = data
         self.ensemble = ensemble
         self.trades = []
         self.active_trade = None
 
-        # --- Parâmetros de Backtest (deveriam vir do config.yml) ---
-        self.commission_rate = 0.001 # 0.1% por transação
-        self.initial_capital = 10000 # Começar com 10,000 USDT
-        self.trade_amount = 1000 # Investir 1,000 USDT por trade
-        self.future_periods = 30
-        self.profit_mult = 2.0
-        self.stop_mult = 2.0
+        # --- USA AS CONFIGURAÇÕES CENTRALIZADAS ---
+        self.commission_rate = settings.backtest.commission_rate
+        self.initial_capital = settings.backtest.initial_capital
+        self.future_periods = settings.backtest.future_periods
+        self.profit_mult = settings.backtest.profit_mult
+        self.stop_mult = settings.backtest.stop_mult
+        
+        
+        self.position_sizer = DynamicPositionSizer()
+        self.equity = self.initial_capital # O capital que cresce ou diminui
 
     def _plot_equity_curve(self, results_df: pd.DataFrame):
         """Plota a curva de capital ao longo do tempo."""
@@ -71,37 +76,60 @@ class Backtester:
             self._close_trade(current_index, "Stop Loss")
 
     def _open_trade(self, current_index):
-        """Abre uma nova posição de compra."""
+        """Abre uma nova posição de compra usando o dimensionamento dinâmico."""
         entry_price = self.data['close'].iloc[current_index]
         atr = self.data['atr'].iloc[current_index]
         
+        # --- LÓGICA DE DIMENSIONAMENTO DINÂMICO ---
+        signal, confidence = self.ensemble.get_consensus_signal(self.data.iloc[[current_index]])
+        
+        # Se o sinal não for de compra, não faz nada
+        if signal != 1:
+            return
+
+        trade_amount_usdt = self.position_sizer.calculate_trade_size(
+            current_equity=self.equity,
+            atr=atr,
+            confidence_score=confidence
+        )
+        
+        # Se o sizer decidir que o trade é muito pequeno ou arriscado, não abre
+        if trade_amount_usdt <= 0:
+            return
+        
+        # Abre o trade
         self.active_trade = {
             "entry_index": current_index,
             "entry_time": self.data.index[current_index],
             "entry_price": entry_price,
+            "trade_amount_usdt": trade_amount_usdt, # Armazena o valor do trade
             "profit_barrier": entry_price + (atr * self.profit_mult),
             "stop_barrier": entry_price - (atr * self.stop_mult),
         }
+        logger.debug(f"Trade Aberto em {self.data.index[current_index]} | Preço: {entry_price:.2f} | Tamanho: {trade_amount_usdt:.2f} USDT")
 
     def _close_trade(self, current_index, reason: str):
-        """Fecha a posição ativa e regista o resultado."""
+        """Fecha a posição ativa, regista o resultado e atualiza o capital."""
         exit_price = self.data['close'].iloc[current_index]
         entry_price = self.active_trade['entry_price']
         
         pnl_percent = (exit_price / entry_price) - 1
-        commission = self.commission_rate * 2 # Comissão na entrada e na saída
+        commission = self.commission_rate * 2
         net_pnl_percent = pnl_percent - commission
+
+        # Atualiza o capital
+        pnl_amount = self.active_trade['trade_amount_usdt'] * net_pnl_percent
+        self.equity += pnl_amount
 
         self.trades.append({
             **self.active_trade,
             "exit_time": self.data.index[current_index],
             "exit_price": exit_price,
             "exit_reason": reason,
-            "pnl_percent": net_pnl_percent
+            "pnl_percent": net_pnl_percent,
+            "pnl_amount_usdt": pnl_amount # Regista o PnL em USDT
         })
         
-        # Informa o Maestro sobre o resultado do trade
-        # (Por enquanto, de forma simplificada)
         for specialist_name in self.ensemble.specialists.keys():
              self.ensemble.update_performance(specialist_name, net_pnl_percent)
 

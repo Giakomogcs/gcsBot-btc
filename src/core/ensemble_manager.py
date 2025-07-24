@@ -94,19 +94,18 @@ class EnsembleManager:
         
         return weights
 
-    def get_consensus_signal(self, current_features: pd.DataFrame) -> tuple[int, dict]:
+    def get_consensus_signal(self, current_features: pd.DataFrame) -> tuple[int, float]:
         """
-        Obtém a previsão de cada especialista, pondera pela performance e retorna um sinal de consenso.
-        Retorna: (sinal, confianças_individuais)
+        Obtém a previsão de cada especialista, pondera e retorna um sinal e a confiança.
+        Retorna: (sinal, pontuacao_final_de_confianca)
         Sinal: 1 para COMPRA, 0 para MANTER.
         """
         if not self.specialists:
             logger.warning("Nenhum especialista carregado. Impossível gerar sinal.")
-            return 0, {}
+            return 0, 0.0
 
         weights = self._get_performance_weights()
         final_score = 0
-        individual_confidences = {}
         total_weight = 0
 
         for name, specialist in self.specialists.items():
@@ -114,28 +113,25 @@ class EnsembleManager:
             
             if not all(feat in current_features.columns for feat in model_features):
                 logger.error(f"Faltam features para o especialista '{name}'. Sinal não pode ser gerado.")
-                return 0, {}
+                return 0, 0.0
             
             X = current_features[model_features]
             
             X_scaled = specialist['scaler'].transform(X.values)
-            # Adicionamos verbose=-1 para silenciar os avisos durante a previsão
             confidence = specialist['model'].predict_proba(X_scaled, verbose=-1)[0][1]
-            individual_confidences[name] = confidence
             
             specialist_weight = weights.get(name, 1.0)
             final_score += confidence * specialist_weight
             total_weight += specialist_weight
         
-        if total_weight == 0: return 0, individual_confidences
-
-        final_score /= total_weight
-        
-        # TODO:
-        if final_score > settings.execution.confidence_threshold: 
-            return 1, individual_confidences
+        if total_weight > 0:
+            final_score /= total_weight
         else:
-            return 0, individual_confidences
+            final_score = 0.0
+
+        signal = 1 if final_score > settings.execution.confidence_threshold else 0
+        
+        return signal, final_score
 
 
 if __name__ == '__main__':
