@@ -32,7 +32,7 @@ class JsonFormatter(logging.Formatter):
 
 # --- CONFIGURAÇÃO DO LOGGER ---
 try:
-    from src.config import MODE, LOGS_DIR
+    from config_manager import MODE, LOGS_DIR
 except ImportError:
     MODE = os.getenv("MODE", "optimize").lower()
     LOGS_DIR = "logs"

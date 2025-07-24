@@ -1,0 +1,31 @@
+# config.yml - Parâmetros de Comportamento do Bot
+app:
+  environment: "development" # Pode ser development, production ou testing
+  use_testnet: false
+  force_offline_mode: false
+
+data_paths:
+  data_dir: "data"
+  logs_dir: "logs"
+  model_metadata_file: "data/model_metadata.json"
+  historical_data_file: "data/btc_historical_data.csv"
+  kaggle_bootstrap_file: "data/kaggle_bootstrap.csv"
+
+model_params:
+  future_periods: 30
+  profit_mult: 2.0
+  stop_mult: 2.0
+  model_validity_months: 1
+
+optimizer:
+  wfo_train_minutes: 432000 # ~10 meses
+  n_trials_for_cycle: 150
+  quality_threshold: 0.33
+
+dca:
+  enabled: true
+  min_capital_usdt: 100.0
+  daily_amount_usdt: 5.0
+
+execution:
+  confidence_threshold: 0.60 # Começar com um valor ligeiramente mais baixo

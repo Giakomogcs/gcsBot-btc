@@ -16,7 +16,7 @@ from collections import deque
 from typing import Tuple, Any
 
 from src.logger import logger
-from src.config import settings
+from config_manager import settings
 from src.core.data_manager import DataManager
 from src.core.confidence_manager import AdaptiveConfidenceManager
 from src.core.display_manager import display_trading_dashboard

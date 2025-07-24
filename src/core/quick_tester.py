@@ -8,13 +8,13 @@ import os
 from datetime import datetime, timezone, timedelta
 
 from src.logger import logger, log_table
-from src.config import (
+from config_manager import (
     MODEL_METADATA_FILE, SYMBOL, FEE_RATE, SLIPPAGE_RATE, IOF_RATE, DATA_DIR,
     DCA_IN_BEAR_MARKET_ENABLED, DCA_DAILY_AMOUNT_USDT, DCA_MIN_CAPITAL_USDT
 )
 from src.core.data_manager import DataManager
 from src.core.confidence_manager import AdaptiveConfidenceManager
-from src.core.backtest import calculate_sortino_ratio
+from core.backtester import calculate_sortino_ratio
 
 class QuickTester:
     def __init__(self):

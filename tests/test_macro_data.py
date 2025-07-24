@@ -3,7 +3,7 @@ import pandas as pd
 import os
 from unittest.mock import patch
 from src.core.data_manager import DataManager
-from src.config import settings
+from config_manager import settings
 
 @pytest.fixture
 def test_dm():
