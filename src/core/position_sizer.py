@@ -8,12 +8,14 @@ class DynamicPositionSizer:
     Calcula o tamanho da posição de forma dinâmica com base no capital,
     volatilidade e confiança do modelo.
     """
+
     def __init__(self):
         # Carrega os parâmetros de configuração
         self.base_risk_percentage = settings.backtest.base_risk_percentage
         self.stop_mult = settings.backtest.stop_mult
         self.max_leverage_pct = settings.backtest.max_leverage_percentage
         self.min_trade_size_usdt = 10.0 # Valor mínimo para uma ordem na Binance
+        self.initial_capital = settings.backtest.initial_capital # <-- ADICIONE ESTA LINHA
 
     def calculate_trade_size(self, current_equity: float, atr: float, confidence_score: float) -> float:
         """
