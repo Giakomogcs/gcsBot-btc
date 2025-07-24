@@ -269,6 +269,7 @@ class DataManager:
         else:
             logger.info("Dados no DB já estão atualizados ou cliente offline.")
             
+            
     # <<< O resto dos métodos (_get_historical_klines_binance, _preprocess_kaggle_data, run_data_pipeline) continuam iguais >>>
     def _get_historical_klines_binance(self, symbol: str, interval: str, start_dt: datetime.datetime, end_dt: datetime.datetime) -> pd.DataFrame:
         logger.info(f"Baixando dados de {symbol} de {start_dt} até {end_dt}...")
