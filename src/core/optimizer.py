@@ -15,6 +15,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+from data_manager import DataManager
 from src.core.model_trainer import ModelTrainer
 from src.logger import logger
 from src.config_manager import settings
@@ -131,21 +132,28 @@ class WalkForwardOptimizer:
 
         logger.info("\n" + "="*80 + "\n--- ✅ PROCESSO DE OTIMIZAÇÃO CONCLUÍDO ✅ ---\n" + "="*80)
 
+# src/core/optimizer.py
+
+# ... (todo o resto do seu código, como a classe WalkForwardOptimizer, continua igual) ...
+
 if __name__ == '__main__':
-    # (O ponto de entrada para teste continua igual)
-    import datetime # Adicionado import
-    logger.info("Carregando dados para o teste do otimizador...")
-    from src.core.data_manager import DataManager
-    from src.core.feature_engineering import add_all_features
-    settings.influxdb_bucket = "btc_data"
+    import datetime  # Import necessário para a lógica de salvar artefactos
+
+    logger.info("--- 🌐 INICIANDO PIPELINE DE DADOS E FEATURES 🌐 ---")
+    
+    # --- A MUDANÇA ESTÁ AQUI ---
+    # 1. Instanciamos o DataManager
     data_manager = DataManager()
-    full_dataframe = data_manager.read_data_from_influx(
-        measurement="btc_btcusdt_1m", 
-        start_date="-1y"
-    )
-    if not full_dataframe.empty:
-        df_with_features = add_all_features(full_dataframe)
+    
+    # 2. Executamos o pipeline completo. 
+    #    Esta função agora é responsável por verificar, popular (bootstrap), 
+    #    atualizar a base de dados e adicionar features.
+    df_with_features = data_manager.run_data_pipeline(symbol='BTCUSDT', interval='1m')
+
+    # 3. Verificamos se o pipeline retornou dados válidos antes de continuar
+    if df_with_features is not None and not df_with_features.empty:
+        logger.info("✅ Pipeline de dados concluído com sucesso. Iniciando o otimizador...")
         optimizer = WalkForwardOptimizer(full_data=df_with_features)
         optimizer.run()
     else:
-        logger.error("Nenhum dado foi carregado. Otimização abortada.")
+        logger.error("❌ O pipeline de dados não retornou um DataFrame válido. Otimização abortada.")

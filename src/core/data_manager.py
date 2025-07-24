@@ -141,15 +141,28 @@ class DataManager:
             if current_end > end_dt:
                 current_end = end_dt
             
-            try:
-                trades = self.client.get_aggregate_trades(
-                    symbol=symbol.replace('/', ''), 
-                    startTime=int(current_start.timestamp() * 1000),
-                    endTime=int(current_end.timestamp() * 1000)
-                )
-                all_trades.extend(trades)
-            except Exception as e:
-                logger.warning(f"Erro ao buscar agg trades para o período {current_start}: {e}")
+            # Adicione estas variáveis antes do loop 'try'
+            max_retries = 5
+            retry_delay = 5  # segundos
+            for attempt in range(max_retries):
+                try:
+                    trades = self.client.get_aggregate_trades(
+                        symbol=symbol.replace('/', ''),
+                        startTime=int(current_start.timestamp() * 1000),
+                        endTime=int(current_end.timestamp() * 1000)
+                    )
+                    all_trades.extend(trades)
+                    break  # Se a chamada for bem-sucedida, sai do loop de retentativas
+                except (BinanceAPIException, BinanceRequestException) as e:
+                    logger.warning(
+                        f"Erro na API da Binance ao buscar agg_trades (tentativa {attempt + 1}/{max_retries}): {e}. "
+                        f"Aguardando {retry_delay}s..."
+                    )
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Aumenta o tempo de espera (exponential backoff)
+                except Exception as e:
+                     logger.error(f"Erro inesperado ao buscar agg_trades: {e}", exc_info=True)
+                     break # Sai em caso de erro não relacionado à API
             
             current_start = current_end
             time.sleep(0.5) # Respeitar os limites da API
