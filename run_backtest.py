@@ -14,7 +14,7 @@ warnings.filterwarnings("ignore", message=".*lambda_l1 is set.*")
 warnings.filterwarnings("ignore", message=".*lambda_l2 is set.*")
 warnings.filterwarnings("ignore", message=".*bagging_freq is set.*")
 
-from src.core.data_manager import DataManager
+from src.data_manager import DataManager
 from src.core.ensemble_manager import EnsembleManager
 from src.core.backtester import Backtester
 from src.logger import logger

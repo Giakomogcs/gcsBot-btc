@@ -38,3 +38,63 @@
 {"timestamp": "2025-07-24 17:37:30,168", "level": "ERROR", "message": "Falha CR\u00cdTICA ao processar dados para DXY: 'date' is not in list"}
 {"timestamp": "2025-07-24 17:37:31,948", "level": "ERROR", "message": "Falha CR\u00cdTICA ao processar dados para GOLD: 'date' is not in list"}
 {"timestamp": "2025-07-24 17:37:31,968", "level": "ERROR", "message": "Falha CR\u00cdTICA ao processar dados para TNX: 'date' is not in list"}
+{"timestamp": "2025-07-25 12:27:41,554", "level": "WARNING", "message": "   -> Score de 0.0000 n\u00e3o atingiu o limiar de qualidade (0.33). Modelo n\u00e3o foi salvo."}
+{"timestamp": "2025-07-25 13:18:07,239", "level": "WARNING", "message": "Nenhum trade foi executado durante o backtest."}
+{"timestamp": "2025-07-25 15:54:14,661", "level": "WARNING", "message": "Nenhum trade foi executado durante o backtest."}
+{"timestamp": "2025-07-25 17:15:12,706", "level": "ERROR", "message": "Falha ao processar dados da Polygon para DXY: 'RESTClient' object has no attribute 'get_aggs'"}
+{"timestamp": "2025-07-25 17:15:12,722", "level": "ERROR", "message": "Falha ao processar dados da Polygon para VIX: 'RESTClient' object has no attribute 'get_aggs'"}
+{"timestamp": "2025-07-25 17:15:12,740", "level": "ERROR", "message": "Falha ao processar dados da Polygon para GOLD: 'RESTClient' object has no attribute 'get_aggs'"}
+{"timestamp": "2025-07-25 17:15:12,757", "level": "ERROR", "message": "Falha ao processar dados da Polygon para TNX: 'RESTClient' object has no attribute 'get_aggs'"}
+{"timestamp": "2025-07-25 17:18:48,605", "level": "ERROR", "message": "\u274c Erro ao ler do InfluxDB: <urllib3.connection.HTTPConnection object at 0x799d2c73ef60>: Failed to resolve 'db' ([Errno -2] Name or service not known)"}
+{"timestamp": "2025-07-25 17:21:25,792", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 0 days 19:21:00."}
+{"timestamp": "2025-07-25 17:21:25,793", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, VIX) est\u00e3o em falta. O especialista macro pode ter performance degradada."}
+{"timestamp": "2025-07-25 17:21:35,892", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: <urllib3.connection.HTTPConnection object at 0x799d284a7680>: Failed to resolve 'db' ([Errno -2] Name or service not known)"}
+{"timestamp": "2025-07-25 17:32:13,954", "level": "ERROR", "message": "Falha ao processar dados da Polygon para DXY: 'RESTClient' object has no attribute 'list_aggs'"}
+{"timestamp": "2025-07-25 17:32:13,967", "level": "ERROR", "message": "Falha ao processar dados da Polygon para VIX: 'RESTClient' object has no attribute 'list_aggs'"}
+{"timestamp": "2025-07-25 17:32:13,981", "level": "ERROR", "message": "Falha ao processar dados da Polygon para GOLD: 'RESTClient' object has no attribute 'list_aggs'"}
+{"timestamp": "2025-07-25 17:32:13,994", "level": "ERROR", "message": "Falha ao processar dados da Polygon para TNX: 'RESTClient' object has no attribute 'list_aggs'"}
+{"timestamp": "2025-07-25 17:32:13,997", "level": "ERROR", "message": "Falha ao processar dados da Polygon para SPX: 'RESTClient' object has no attribute 'list_aggs'"}
+{"timestamp": "2025-07-25 17:32:14,001", "level": "ERROR", "message": "Falha ao processar dados da Polygon para NDX: 'RESTClient' object has no attribute 'list_aggs'"}
+{"timestamp": "2025-07-25 17:32:14,003", "level": "ERROR", "message": "Falha ao processar dados da Polygon para USO: 'RESTClient' object has no attribute 'list_aggs'"}
+{"timestamp": "2025-07-25 18:13:30,328", "level": "ERROR", "message": "Falha ao processar dados da Polygon para DXY: {\"status\":\"NOT_AUTHORIZED\",\"request_id\":\"45627a796913d98dc9c36801e5623430\",\"message\":\"Your plan doesn't include this data timeframe. Please upgrade your plan at https://polygon.io/pricing\"}"}
+{"timestamp": "2025-07-25 18:13:30,531", "level": "ERROR", "message": "Falha ao processar dados da Polygon para VIX: {\"status\":\"NOT_AUTHORIZED\",\"request_id\":\"bacb3194b9dfe7062922920286f2c3ed\",\"message\":\"You are not entitled to this data. Please upgrade your plan at https://polygon.io/pricing\"}"}
+{"timestamp": "2025-07-25 18:13:30,717", "level": "ERROR", "message": "Falha ao processar dados da Polygon para GOLD: 404 page not found"}
+{"timestamp": "2025-07-25 18:13:30,929", "level": "ERROR", "message": "Falha ao processar dados da Polygon para TNX: {\"status\":\"NOT_AUTHORIZED\",\"request_id\":\"2aa92d1049c3b5681b8996dfb00d7439\",\"message\":\"You are not entitled to this data. Please upgrade your plan at https://polygon.io/pricing\"}"}
+{"timestamp": "2025-07-25 18:13:31,098", "level": "ERROR", "message": "Falha ao processar dados da Polygon para SPX: {\"status\":\"NOT_AUTHORIZED\",\"request_id\":\"182ce253fe24232f0e8b2d0e9c14fd57\",\"message\":\"You are not entitled to this data. Please upgrade your plan at https://polygon.io/pricing\"}"}
+{"timestamp": "2025-07-25 18:13:32,303", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: 'timestamp'"}
+{"timestamp": "2025-07-25 18:16:07,877", "level": "WARNING", "message": "Nenhum dado retornado para a measurement 'macro_data_1m'."}
+{"timestamp": "2025-07-25 18:17:05,419", "level": "ERROR", "message": "Falha ao processar dados da Polygon para VIX: {\"status\":\"NOT_AUTHORIZED\",\"request_id\":\"10673a546b7668546c4c510b71acd69f\",\"message\":\"You are not entitled to this data. Please upgrade your plan at https://polygon.io/pricing\"}"}
+{"timestamp": "2025-07-25 18:17:05,582", "level": "ERROR", "message": "Falha ao processar dados da Polygon para GOLD: 404 page not found"}
+{"timestamp": "2025-07-25 18:17:05,746", "level": "ERROR", "message": "Falha ao processar dados da Polygon para TNX: {\"status\":\"NOT_AUTHORIZED\",\"request_id\":\"b8541b6c58a1197386849463b1d47560\",\"message\":\"You are not entitled to this data. Please upgrade your plan at https://polygon.io/pricing\"}"}
+{"timestamp": "2025-07-25 18:17:05,910", "level": "ERROR", "message": "Falha ao processar dados da Polygon para SPX: {\"status\":\"NOT_AUTHORIZED\",\"request_id\":\"fb7661f189f8abac25ca1cc2d87fe736\",\"message\":\"You are not entitled to this data. Please upgrade your plan at https://polygon.io/pricing\"}"}
+{"timestamp": "2025-07-25 18:17:06,760", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: 'timestamp'"}
+{"timestamp": "2025-07-25 18:19:15,228", "level": "WARNING", "message": "Nenhum dado retornado para a measurement 'macro_data_1m'."}
+{"timestamp": "2025-07-25 18:22:13,255", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 0 days 19:21:00."}
+{"timestamp": "2025-07-25 18:22:13,259", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, VIX) est\u00e3o em falta. O especialista macro pode ter performance degradada."}
+{"timestamp": "2025-07-25 18:28:35,436", "level": "ERROR", "message": "Falha ao processar dados de yfinance para DXY: 'tuple' object has no attribute 'lower'"}
+{"timestamp": "2025-07-25 18:28:39,500", "level": "ERROR", "message": "Falha ao processar dados de yfinance para VIX: 'tuple' object has no attribute 'lower'"}
+{"timestamp": "2025-07-25 18:28:43,352", "level": "ERROR", "message": "Falha ao processar dados de yfinance para GOLD: 'tuple' object has no attribute 'lower'"}
+{"timestamp": "2025-07-25 18:28:47,439", "level": "ERROR", "message": "Falha ao processar dados de yfinance para TNX: 'tuple' object has no attribute 'lower'"}
+{"timestamp": "2025-07-25 18:28:51,652", "level": "ERROR", "message": "Falha ao processar dados de yfinance para SPX: 'tuple' object has no attribute 'lower'"}
+{"timestamp": "2025-07-25 18:28:55,565", "level": "ERROR", "message": "Falha ao processar dados de yfinance para NDX: 'tuple' object has no attribute 'lower'"}
+{"timestamp": "2025-07-25 18:28:59,510", "level": "ERROR", "message": "Falha ao processar dados de yfinance para USO: 'tuple' object has no attribute 'lower'"}
+{"timestamp": "2025-07-25 18:31:31,520", "level": "ERROR", "message": "\u274c Erro ao ler do InfluxDB: <urllib3.connection.HTTPConnection object at 0x7debca222390>: Failed to resolve 'db' ([Errno -2] Name or service not known)"}
+{"timestamp": "2025-07-25 18:33:15,413", "level": "ERROR", "message": "\u274c Falha ao conectar com InfluxDB. Verifique a sa\u00fade do servi\u00e7o."}
+{"timestamp": "2025-07-25 18:33:16,356", "level": "WARNING", "message": "N\u00e3o h\u00e1 conex\u00e3o com o InfluxDB. Tentando reconectar..."}
+{"timestamp": "2025-07-25 18:33:19,473", "level": "ERROR", "message": "\u274c Falha ao conectar com InfluxDB. Verifique a sa\u00fade do servi\u00e7o."}
+{"timestamp": "2025-07-25 18:33:31,943", "level": "WARNING", "message": "N\u00e3o h\u00e1 conex\u00e3o com o InfluxDB. Tentando reconectar..."}
+{"timestamp": "2025-07-25 18:33:35,875", "level": "ERROR", "message": "\u274c Falha ao conectar com InfluxDB. Verifique a sa\u00fade do servi\u00e7o."}
+{"timestamp": "2025-07-25 18:33:35,876", "level": "ERROR", "message": "API de escrita do InfluxDB indispon\u00edvel. Escrita para 'btc_btcusdt_1m' abortada."}
+{"timestamp": "2025-07-25 19:02:56,974", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))"}
+{"timestamp": "2025-07-25 19:02:57,196", "level": "ERROR", "message": "\u274c Erro ao ler do InfluxDB: <urllib3.connection.HTTPConnection object at 0x759a67296f90>: Failed to establish a new connection: [Errno 111] Connection refused"}
+{"timestamp": "2025-07-25 19:02:57,254", "level": "ERROR", "message": "\u274c Erro ao ler do InfluxDB: <urllib3.connection.HTTPConnection object at 0x759a6b336510>: Failed to establish a new connection: [Errno 111] Connection refused"}
+{"timestamp": "2025-07-25 19:02:57,264", "level": "ERROR", "message": "Dados de BTC n\u00e3o encontrados no DB. Abortando cria\u00e7\u00e3o da tabela mestre."}
+{"timestamp": "2025-07-25 19:17:50,279", "level": "ERROR", "message": "\u274c Falha ao conectar com InfluxDB. Verifique a sa\u00fade do servi\u00e7o."}
+{"timestamp": "2025-07-25 19:17:51,144", "level": "WARNING", "message": "N\u00e3o h\u00e1 conex\u00e3o com o InfluxDB. Tentando reconectar..."}
+{"timestamp": "2025-07-25 19:17:54,971", "level": "ERROR", "message": "\u274c Falha ao conectar com InfluxDB. Verifique a sa\u00fade do servi\u00e7o."}
+{"timestamp": "2025-07-25 19:18:07,027", "level": "WARNING", "message": "N\u00e3o h\u00e1 conex\u00e3o com o InfluxDB. Tentando reconectar..."}
+{"timestamp": "2025-07-25 19:21:50,849", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))"}
+{"timestamp": "2025-07-25 19:21:50,922", "level": "ERROR", "message": "\u274c Erro ao ler do InfluxDB: <urllib3.connection.HTTPConnection object at 0x701fe0f321b0>: Failed to establish a new connection: [Errno 111] Connection refused"}
+{"timestamp": "2025-07-25 19:21:50,965", "level": "ERROR", "message": "\u274c Erro ao ler do InfluxDB: <urllib3.connection.HTTPConnection object at 0x701fe0f32c00>: Failed to establish a new connection: [Errno 111] Connection refused"}
+{"timestamp": "2025-07-25 19:21:50,970", "level": "ERROR", "message": "Dados de BTC n\u00e3o encontrados no DB. Abortando cria\u00e7\u00e3o da tabela mestre."}
+{"timestamp": "2025-07-25 19:25:51,213", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (500)\nReason: Internal Server Error\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'internal error', 'Date': 'Fri, 25 Jul 2025 19:25:22 GMT', 'Content-Length': '90'})\nHTTP response body: {\"code\":\"internal error\",\"message\":\"unexpected error writing points to database: timeout\"}\n"}

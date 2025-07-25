@@ -138,7 +138,7 @@ if __name__ == '__main__':
     # O Ponto de Entrada para Teste continua igual
     logger.info("--- Testando o EnsembleManager (Versão Flexível) ---")
     
-    from src.core.data_manager import DataManager
+    from src.data_manager import DataManager
     from src.core.feature_engineering import add_all_features
 
     settings.influxdb_bucket = "btc_data"

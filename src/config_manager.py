@@ -15,6 +15,7 @@ class AppConfig(BaseSettings):
 class DataPathsConfig(BaseSettings):
     data_dir: str = "data"
     logs_dir: str = "logs"
+    macro_data_dir: str = "data/macro"
     model_metadata_file: str = "data/model_metadata.json"
     historical_data_file: str = "data/btc_historical_data.csv"
     kaggle_bootstrap_file: str = "data/kaggle_bootstrap.csv"
@@ -39,7 +40,7 @@ class ExecutionConfig(BaseSettings):
     """
     Parâmetros que controlam a lógica de execução de trades.
     """
-    confidence_threshold: float = 0.55 # Limiar de confiança para abrir um trade (55%)
+    confidence_threshold: float = 0.68 # Limiar de confiança para abrir um trade (68%)
 
 class BacktestConfig(BaseSettings):
     """
@@ -53,8 +54,8 @@ class BacktestConfig(BaseSettings):
     max_leverage_percentage: float = 25.0   # Nunca alocar mais de 25% do capital num único trade
     
     future_periods: int = 30
-    profit_mult: float = 2.0
-    stop_mult: float = 2.0
+    profit_mult: float = 3.0
+    stop_mult: float = 1.5
 
 
 # --- Classe Principal de Configuração ---
@@ -68,6 +69,7 @@ class Settings(BaseSettings):
     binance_api_secret: Optional[str] = Field(None, alias='BINANCE_API_SECRET')
     binance_testnet_api_key: Optional[str] = Field(None, alias='BINANCE_TESTNET_API_KEY')
     binance_testnet_api_secret: Optional[str] = Field(None, alias='BINANCE_TESTNET_API_SECRET')
+    polygon_api_key: Optional[str] = Field(None, alias='POLYGON_API_KEY')
 
     influxdb_url: str = Field(..., alias='INFLUXDB_URL')
     influxdb_token: str = Field(..., alias='INFLUXDB_TOKEN')

@@ -15,7 +15,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from data_manager import DataManager
+from src.data_manager import DataManager
 from src.core.model_trainer import ModelTrainer
 from src.logger import logger
 from src.config_manager import settings

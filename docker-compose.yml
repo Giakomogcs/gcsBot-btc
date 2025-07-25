@@ -1,7 +1,6 @@
-# docker-compose.yml (VERSÃO FINAL E ROBUSTA)
+# Ficheiro: docker-compose.yml (VERSÃO FINAL COM CONFIGURAÇÃO DE PERFORMANCE)
 
 services:
-  # O serviço do InfluxDB, o nosso banco de dados time-series
   db:
     image: influxdb:2.7
     container_name: gcsbot-influxdb
@@ -13,23 +12,34 @@ services:
       - DOCKER_INFLUXDB_INIT_BUCKET=btc_data
       - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=my-super-secret-auth-token
     ports:
-      - "8086:8086" # Porta da API do InfluxDB
+      - "8086:8086"
     volumes:
       - influxdb_data:/var/lib/influxdb2
+      # --- A GRANDE MELHORIA ESTÁ AQUI ---
+      # Mapeia o nosso ficheiro de configuração local para dentro do container
+      - ./config/influxdb.conf:/etc/influxdb2/influxdb.conf:ro
+    command:
+      [
+        "influxd",
+        "--bolt-path",
+        "/var/lib/influxdb2/influxd.bolt",
+        "--engine-path",
+        "/var/lib/influxdb2/engine",
+        "--config-file",
+        "/etc/influxdb2/influxdb.conf",
+      ]
     healthcheck:
       test: ["CMD", "influx", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # O serviço da nossa aplicação principal (o bot)
   app:
     build: .
     container_name: gcsbot-app
     depends_on:
       db:
-        condition: service_healthy # Só inicia a app quando o DB estiver saudável
-    # As variáveis de ambiente para a app se conectar ao InfluxDB
+        condition: service_healthy
     environment:
       - INFLUXDB_URL=http://db:8086
       - INFLUXDB_TOKEN=my-super-secret-auth-token
@@ -40,13 +50,8 @@ services:
       - BINANCE_TESTNET_API_KEY=${BINANCE_TESTNET_API_KEY}
       - BINANCE_TESTNET_API_SECRET=${BINANCE_TESTNET_API_SECRET}
     volumes:
-      - .:/app # Mapeia o seu código local para dentro do container para desenvolvimento
-
-    # --- A MÁGICA ESTÁ AQUI ---
-    # Este comando substitui o CMD do Dockerfile.
-    # Ele mantém o container a correr indefinidamente, à espera dos seus comandos.
+      - .:/app
     command: tail -f /dev/null
 
 volumes:
-  # O volume que irá persistir os dados do InfluxDB
   influxdb_data:
