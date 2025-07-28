@@ -1,30 +1,47 @@
-# Dockerfile (VERSÃO CORRIGIDA)
-# Substitua o conteúdo do seu Dockerfile por este.
+# Dockerfile (VERSÃO OTIMIZADA COM MULTI-STAGE)
 
-# Usa uma imagem base oficial do Python, leve e otimizada
-FROM python:3.12-slim
+# --- ESTÁGIO 1: Build ---
+# Usamos uma imagem completa para compilar dependências que possam precisar de ferramentas de build
+FROM python:3.12-slim as builder
 
-# Instala a dependência de sistema 'libgomp1' que é necessária para o LightGBM.
+# Instala dependências de sistema necessárias para compilar pacotes Python [cite: 3]
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc libgomp1 && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Instala as dependências Python em um ambiente virtual isolado
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+COPY requirements-core.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements-core.txt
+
+# --- ESTÁGIO 2: Final ---
+# Usamos a imagem slim, que é leve, para a imagem final
+FROM python:3.12-slim as final
+
+# Instala apenas a dependência de sistema necessária para rodar o LightGBM [cite: 3]
 RUN apt-get update && \
     apt-get install -y --no-install-recommends libgomp1 && \
     rm -rf /var/lib/apt/lists/*
 
-# Define o diretório de trabalho dentro do container
 WORKDIR /app
 
-# Copia o arquivo de dependências primeiro para aproveitar o cache do Docker
-COPY requirements.txt .
+# Copia o ambiente virtual com as dependências já instaladas do estágio de build
+COPY --from=builder /opt/venv /opt/venv
 
-# Instala as dependências Python
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
-
-# Copia todo o resto do código do seu projeto para dentro do container
+# Copia o código da sua aplicação [cite: 5]
 COPY . .
 
-# Adiciona o script wait-for-it e o torna executável
+# Copia o script wait-for-it
 ADD https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh /
 RUN chmod +x /wait-for-it.sh
 
-# O CMD agora espera pelo serviço 'db' na porta do InfluxDB (8086)
+# Define o PATH para usar o Python do ambiente virtual
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Comando para iniciar a aplicação, agora usando o ambiente virtual
 CMD ["/wait-for-it.sh", "db:8086", "--", "python", "-u", "main.py"]
