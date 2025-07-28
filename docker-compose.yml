@@ -41,6 +41,8 @@ services:
     volumes:
       - .:/app # Mantenha para desenvolvimento, remova para testar a imagem de produção
     command: tail -f /dev/null
+    dns:
+      - 8.8.8.8
 
 volumes:
   influxdb_data:

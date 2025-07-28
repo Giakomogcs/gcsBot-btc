@@ -8,7 +8,7 @@ from typing import Optional
 # --- Modelos de Dados para o arquivo config.yml (sem alteração) ---
 class AppConfig(BaseSettings):
     environment: str = "development"
-    use_testnet: bool = True
+    use_testnet: bool = False
     force_offline_mode: bool = False
 
 # ... (O resto das classes de config - DataPathsConfig, ModelParamsConfig, etc. - continuam iguais) ...
