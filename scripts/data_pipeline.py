@@ -13,6 +13,7 @@ from tqdm import tqdm
 from typing import Optional
 from dateutil.relativedelta import relativedelta
 
+
 # Adiciona a raiz do projeto ao path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if project_root not in sys.path:
@@ -30,6 +31,7 @@ class DataPipeline:
     def __init__(self):
         self.binance_client = self._init_binance_client()
 
+
     def _init_binance_client(self) -> Optional[Client]:
         if settings.app.force_offline_mode: return None
         try:
@@ -46,7 +48,7 @@ class DataPipeline:
             logger.warning(f"❌ FALHA NA CONEXÃO com a Binance: {e}.")
             return None
 
-    def _write_dataframe_to_influx(self, df: pd.DataFrame, measurement: str, batch_size: int = 2000):
+    def _write_dataframe_to_influx(self, df: pd.DataFrame, measurement: str, batch_size: int = 1000):
         write_api = db_manager.get_write_api()
         if not write_api:
             logger.error(f"API de escrita do InfluxDB indisponível. Escrita para '{measurement}' abortada.")
@@ -71,6 +73,10 @@ class DataPipeline:
                     data_frame_measurement_name=measurement,
                     data_frame_timestamp_column="timestamp"
                 )
+                del batch
+                gc.collect()
+                time.sleep(0.1)
+
             logger.info(f"✅ Escrita para '{measurement}' concluída com sucesso.")
         except Exception as e:
             logger.error(f"❌ Erro ao escrever dados para o InfluxDB: {e}", exc_info=True)
@@ -101,11 +107,22 @@ class DataPipeline:
                 |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
             '''
             df = query_api.query_data_frame(query)
-            if df.empty: return pd.DataFrame()
+            if df.empty:
+                return pd.DataFrame()
+
             df = df.rename(columns={"_time": "timestamp"})
             df['timestamp'] = pd.to_datetime(df['timestamp'])
             df = df.set_index('timestamp')
-            return df.drop(columns=[col for col in ['result', 'table'] if col in df.columns])
+
+            # --- CORREÇÃO APLICADA AQUI ---
+            # Lista mais completa de colunas de metadados para remover
+            cols_to_drop = ['result', 'table', '_start', '_stop', '_measurement']
+            
+            # Remove as colunas da lista que existirem no DataFrame
+            df_cleaned = df.drop(columns=[col for col in cols_to_drop if col in df.columns])
+            
+            return df_cleaned
+            
         except Exception as e:
             logger.error(f"❌ Erro ao ler range do InfluxDB: {e}", exc_info=True)
             return pd.DataFrame()
@@ -321,30 +338,37 @@ class DataPipeline:
             else:
                 logger.warning(f"Nenhum dado (nem histórico, nem novo) disponível para {name.upper()}.")
 
+   
         if all_macro_data_for_db:
-            logger.info("Combinando todos os dados macro para escrita no banco de dados...")
+            logger.info("Combinando todos os dados macro para análise...")
             df_macro_combined = pd.concat(all_macro_data_for_db, axis=1)
             # Preenche para a frente os valores em dias não úteis (finais de semana, feriados)
-            df_macro_combined.ffill(inplace=True) 
+            df_macro_combined.ffill(inplace=True)
             df_macro_combined.dropna(how='all', inplace=True) # Remove linhas onde todos os dados são nulos
-            
-            # Reamostra para 1 minuto para corresponder aos dados de BTC
-            df_macro_combined_resampled = df_macro_combined.resample('1min').ffill()
-            df_macro_combined_resampled.index.name = 'timestamp'
-            
-            # --- MELHORIA DE PERFORMANCE CRÍTICA ---
-            # 1. Verifica qual é o último registro já salvo no banco de dados.
+
+            # --- LÓGICA DE PERFORMANCE CRÍTICA OTIMIZADA ---
+            # 1. Primeiro, descobrimos o que precisa ser atualizado no DB.
             measurement_name = "macro_data_1m"
             last_ts_in_db = self._query_last_timestamp(measurement_name)
-            
-            df_to_write = df_macro_combined_resampled # Por padrão, escreve tudo
-            
+
+            # 2. Filtramos APENAS OS DADOS NOVOS do DataFrame DIÁRIO.
+            #    Isso resulta em um DataFrame muito pequeno e leve.
             if last_ts_in_db:
-                logger.info(f"Último registro macro no DB é de {last_ts_in_db}. Filtrando para enviar apenas dados novos.")
-                # 2. Filtra o DataFrame para pegar apenas as linhas MAIORES (mais recentes) que o último registro.
-                df_to_write = df_macro_combined_resampled[df_macro_combined_resampled.index > last_ts_in_db]
+                logger.info(f"Último registro macro no DB é de {last_ts_in_db}. Filtrando para processar apenas dados diários novos.")
+                df_to_process = df_macro_combined[df_macro_combined.index > last_ts_in_db]
             else:
-                logger.info("Nenhum dado macro encontrado no DB. Preparando para escrever todo o histórico.")
+                logger.info("Nenhum dado macro encontrado no DB. Processando todo o histórico diário.")
+                df_to_process = df_macro_combined
+
+            if df_to_process.empty:
+                logger.info("✅ Dados macro já estão sincronizados com o banco de dados. Nenhuma ação necessária.")
+                return
+
+            # 3. SÓ AGORA aplicamos o 'resample' no conjunto PEQUENO e FILTRADO de dados.
+            #    Esta operação agora é leve e extremamente rápida.
+            logger.info(f"Reamostrando {len(df_to_process)} registos diários para 1 minuto...")
+            df_to_write = df_to_process.resample('1min').ffill()
+            df_to_write.index.name = 'timestamp'
 
             logger.info(f"Dados macro combinados e reamostrados. Preparando para escrever {len(df_to_write)} registos no DB...")
             self._write_dataframe_to_influx(df_to_write, measurement_name)

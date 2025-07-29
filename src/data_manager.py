@@ -1,50 +1,96 @@
-# Ficheiro: src/core/data_manager.py
+# src/data_manager.py
 
 import pandas as pd
-from binance.client import Client
-from src.logger import logger
+import influxdb_client
+from influxdb_client.client.write_api import SYNCHRONOUS
+
+# Resolução de Path (assumindo que você o queira aqui também)
+import sys
+import os
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 from src.config_manager import settings
-from src.database_manager import db_manager
+from src.logger import logger
 
 class DataManager:
-    """
-    Gerencia a LEITURA da tabela mestre de features já processada pelo pipeline.
-    """
-    def __init__(self) -> None:
-        pass # A inicialização do cliente já não é necessária aqui.
-
-    def get_feature_dataframe(self) -> pd.DataFrame:
-        """
-        Lê a tabela mestre de features do InfluxDB.
-        """
-        measurement_name = "features_master_table"
-        query_api = db_manager.get_query_api()
-        if not query_api:
-            logger.error("API de consulta do InfluxDB indisponível.")
-            return pd.DataFrame()
-        logger.info(f"Lendo a tabela mestre de features '{measurement_name}'...")
+    def __init__(self):
         try:
-            query = f'from(bucket:"{settings.influxdb_bucket}") |> range(start: -10y) |> filter(fn: (r) => r._measurement == "{measurement_name}") |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")'
-            df = query_api.query_data_frame(query)
-            if df.empty:
-                logger.error(f"Nenhum dado retornado da tabela mestre. Execute o pipeline de ingestão primeiro ('./manage.ps1 update-db').")
-                return pd.DataFrame()
-            df = df.rename(columns={"_time": "timestamp"})
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
-            df = df.set_index('timestamp')
-            cols_to_drop = ['result', 'table']
-            df = df.drop(columns=[col for col in cols_to_drop if col in df.columns])
-            logger.info(f"✅ {len(df)} registos lidos da tabela mestre com sucesso.")
-            return df
+            self.client = influxdb_client.InfluxDBClient(
+                url=settings.influxdb_url,
+                token=settings.influxdb_token,
+                org=settings.influxdb_org,
+                timeout=300_000 
+            )
+            self.query_api = self.client.query_api()
+            logger.info("Conexão com o InfluxDB estabelecida com sucesso.")
         except Exception as e:
-            logger.error(f"❌ Erro ao ler a tabela mestre do InfluxDB: {e}", exc_info=True)
+            logger.error(f"Falha ao conectar com o InfluxDB: {e}")
+            self.client = None
+            self.query_api = None
+
+    def read_data_from_influx(self, measurement: str, start_date: str, end_date: str = "now()") -> pd.DataFrame:
+        """
+        Lê dados de uma 'measurement' específica do InfluxDB.
+
+        Args:
+            measurement (str): O nome da tabela/measurement a ser consultada.
+            start_date (str): O início do intervalo de tempo (ex: "-1y", "-180d").
+            end_date (str, optional): O fim do intervalo de tempo. Padrão "now()".
+
+        Returns:
+            pd.DataFrame: Um DataFrame com os dados solicitados, indexado por tempo e
+                          com o fuso horário correto (UTC), ou um DataFrame vazio se
+                          nenhum dado for encontrado ou ocorrer um erro.
+        """
+        if not self.query_api:
+            logger.error("Cliente InfluxDB não inicializado. Leitura abortada.")
+            return pd.DataFrame()
+        
+        flux_query = f'''
+            from(bucket:"{settings.influxdb_bucket}") 
+                |> range(start: {start_date}, stop: {end_date}) 
+                |> filter(fn: (r) => r._measurement == "{measurement}") 
+                |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+            '''
+
+        try:
+            logger.info(f"Executando query na measurement '{measurement}' de {start_date} até {end_date}...")
+            result = self.query_api.query_data_frame(query=flux_query)
+
+            if result.empty:
+                logger.warning(f"Nenhum dado encontrado para a measurement '{measurement}' no período especificado.")
+                return pd.DataFrame()
+
+            # Limpeza e formatação do DataFrame
+            df = result.copy()
+            df.rename(columns={'_time': 'timestamp'}, inplace=True)
+            df.set_index('timestamp', inplace=True)
+            df = df.drop(columns=['result', 'table', '_start', '_stop', '_measurement'], errors='ignore')
+            
+            # Garante que o índice é do tipo datetime e está em UTC
+            if not pd.api.types.is_datetime64_any_dtype(df.index):
+                 df.index = pd.to_datetime(df.index)
+            
+            if df.index.tz is None:
+                df = df.tz_localize('UTC')
+            else:
+                df = df.tz_convert('UTC')
+
+            df = df.sort_index()
+            
+            logger.info(f"{len(df)} registros carregados da measurement '{measurement}'.")
+            return df
+
+        except Exception as e:
+            logger.error(f"Erro ao executar a query no InfluxDB para '{measurement}': {e}")
             return pd.DataFrame()
 
-    def run_data_pipeline(self, **kwargs):
+    def __del__(self):
         """
-        Esta função foi depreciada nesta classe.
-        A lógica de ingestão agora vive em 'scripts/data_pipeline.py'.
-        Este método agora simplesmente lê a tabela de features final.
+        Fecha o cliente InfluxDB ao destruir o objeto.
         """
-        logger.info("--- 🚀 LENDO TABELA DE FEATURES PRÉ-PROCESSADA 🚀 ---")
-        return self.get_feature_dataframe()
+        if self.client:
+            self.client.close()
+            logger.info("Conexão com o InfluxDB fechada.")
