@@ -17,7 +17,7 @@ from typing import Tuple, Any
 
 from src.logger import logger
 from config_manager import settings
-from src.core.data_manager import DataManager
+from src.data_manager import DataManager
 from src.core.confidence_manager import AdaptiveConfidenceManager
 from src.core.display_manager import display_trading_dashboard
 from src.core.rl_agent import BetSizingAgent

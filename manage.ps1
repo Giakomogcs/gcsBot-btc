@@ -45,6 +45,10 @@ switch ($command) {
          Write-Host "${Yellow}--- Iniciando o Laboratório de Simulação (Backtester) DENTRO do container...${Reset}"
          docker-compose exec app python run_backtest.py
     }
+    "update-db" {
+        Write-Host "${Yellow}--- Iniciando Pipeline de Ingestão de Dados (ETL)...${Reset}"
+        docker-compose exec app python scripts/data_pipeline.py
+    }
     default {
         Write-Host "${Yellow}GCS-Bot - Painel de Controle${Reset}"
         Write-Host "---------------------------"
@@ -58,5 +62,6 @@ switch ($command) {
         Write-Host " Operações do Bot:"
         Write-Host "  ${Green}optimize${Reset}        - Executa a otimização para treinar os modelos."
         Write-Host "  ${Green}backtest${Reset}        - Executa um backtest com os modelos treinados."
+        Write-Host "  ${Green}update-db${Reset}       - Executa o pipeline ETL completo para popular e atualizar o DB."
     }
 }

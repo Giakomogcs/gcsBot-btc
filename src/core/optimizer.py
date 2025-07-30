@@ -15,7 +15,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from data_manager import DataManager
+from src.data_manager import DataManager
 from src.core.model_trainer import ModelTrainer
 from src.logger import logger
 from src.config_manager import settings
@@ -132,28 +132,22 @@ class WalkForwardOptimizer:
 
         logger.info("\n" + "="*80 + "\n--- ✅ PROCESSO DE OTIMIZAÇÃO CONCLUÍDO ✅ ---\n" + "="*80)
 
-# src/core/optimizer.py
-
-# ... (todo o resto do seu código, como a classe WalkForwardOptimizer, continua igual) ...
 
 if __name__ == '__main__':
-    import datetime  # Import necessário para a lógica de salvar artefactos
-
-    logger.info("--- 🌐 INICIANDO PIPELINE DE DADOS E FEATURES 🌐 ---")
+    import datetime
+    logger.info("Carregando dados para o teste do otimizador...")
     
-    # --- A MUDANÇA ESTÁ AQUI ---
-    # 1. Instanciamos o DataManager
+    from src.data_manager import DataManager 
+    
+    # A chamada já é compatível com o DataManager refatorado. Nenhuma mudança necessária aqui.
     data_manager = DataManager()
-    
-    # 2. Executamos o pipeline completo. 
-    #    Esta função agora é responsável por verificar, popular (bootstrap), 
-    #    atualizar a base de dados e adicionar features.
-    df_with_features = data_manager.run_data_pipeline(symbol='BTCUSDT', interval='1m')
+    full_dataframe = data_manager.read_data_from_influx(
+        measurement="features_master_table",
+        start_date="-180d"
+    )
 
-    # 3. Verificamos se o pipeline retornou dados válidos antes de continuar
-    if df_with_features is not None and not df_with_features.empty:
-        logger.info("✅ Pipeline de dados concluído com sucesso. Iniciando o otimizador...")
-        optimizer = WalkForwardOptimizer(full_data=df_with_features)
+    if not full_dataframe.empty:
+        optimizer = WalkForwardOptimizer(full_data=full_dataframe)
         optimizer.run()
     else:
-        logger.error("❌ O pipeline de dados não retornou um DataFrame válido. Otimização abortada.")
+        logger.error("Nenhuma feature foi carregada da 'features_master_table'. Execute o data_pipeline primeiro.")

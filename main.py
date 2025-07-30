@@ -18,7 +18,7 @@ def main():
         logger.info("--- MODO: OTIMIZAÇÃO WALK-FORWARD ---")
         logger.info("Iniciando o processo de otimização para encontrar os melhores parâmetros...")
 
-        from src.core.data_manager import DataManager
+        from src.data_manager import DataManager
         from src.core.optimizer import WalkForwardOptimizer
 
         # O DataManager é responsável por carregar, processar e fazer o cache dos dados
