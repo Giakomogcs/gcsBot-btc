@@ -2620,3 +2620,4 @@
 {"timestamp": "2025-07-29 19:14:27,324", "level": "ERROR", "message": "Nenhuma feature foi carregada da 'features_master_table'. Execute o data_pipeline primeiro."}
 {"timestamp": "2025-07-29 19:16:36,187", "level": "ERROR", "message": "Erro ao executar a query no InfluxDB para 'features_master_table': HTTPConnectionPool(host='db', port=8086): Read timed out. (read timeout=9.996654116999707)"}
 {"timestamp": "2025-07-29 19:16:36,189", "level": "ERROR", "message": "Nenhuma feature foi carregada da 'features_master_table'. Execute o data_pipeline primeiro."}
+{"timestamp": "2025-07-29 19:41:49,778", "level": "WARNING", "message": "   -> Score de 0.0000 n\u00e3o atingiu o limiar de qualidade (0.33). Modelo n\u00e3o foi salvo."}

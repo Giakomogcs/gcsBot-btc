@@ -56492,3 +56492,197 @@ HTTP response body: b'{"code":"invalid","message":"error @5:69-5:77: found unexp
 2025-07-29 19:16:26,175 - gcsBot - INFO - Executando query na measurement 'features_master_table' de -180d até now()...
 2025-07-29 19:16:36,187 - gcsBot - ERROR - Erro ao executar a query no InfluxDB para 'features_master_table': HTTPConnectionPool(host='db', port=8086): Read timed out. (read timeout=9.996654116999707)
 2025-07-29 19:16:36,189 - gcsBot - ERROR - Nenhuma feature foi carregada da 'features_master_table'. Execute o data_pipeline primeiro.
+2025-07-29 19:26:05,248 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-29 19:26:06,519 - gcsBot - INFO - Carregando dados para o teste do otimizador...
+2025-07-29 19:26:06,521 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-29 19:26:06,522 - gcsBot - INFO - Executando query na measurement 'features_master_table' de -180d até now()...
+2025-07-29 19:26:52,320 - gcsBot - INFO - 257958 registros carregados da measurement 'features_master_table'.
+2025-07-29 19:26:52,425 - gcsBot - INFO - 
+================================================================================
+--- 🚀 INICIANDO PROCESSO DE OTIMIZAÇÃO DA MENTE-COLMEIA 🚀 ---
+================================================================================
+2025-07-29 19:26:52,427 - gcsBot - INFO - 
+==================== Iniciando otimização para: ALL_DATA ====================
+2025-07-29 19:26:52,430 - gcsBot - INFO - --- Otimizando especialista: 'price_action' ---
+2025-07-29 19:34:43,235 - gcsBot - INFO - 🏆 Otimização de 'price_action' concluída. Melhor Score: 33.3604
+2025-07-29 19:34:43,236 - gcsBot - INFO -    -> Score excelente! Treinando e salvando modelo final...
+2025-07-29 19:34:46,874 - gcsBot - INFO -    -> ✅ Modelo, Scaler e Parâmetros para 'price_action' salvos com sucesso!
+2025-07-29 19:34:46,874 - gcsBot - INFO - --- Otimizando especialista: 'quant_classic' ---
+2025-07-29 19:38:30,854 - gcsBot - INFO - 🏆 Otimização de 'quant_classic' concluída. Melhor Score: 26.4354
+2025-07-29 19:38:30,855 - gcsBot - INFO -    -> Score excelente! Treinando e salvando modelo final...
+2025-07-29 19:38:32,389 - gcsBot - INFO -    -> ✅ Modelo, Scaler e Parâmetros para 'quant_classic' salvos com sucesso!
+2025-07-29 19:38:32,389 - gcsBot - INFO - --- Otimizando especialista: 'macro_hedger' ---
+2025-07-29 19:41:49,778 - gcsBot - INFO - 🏆 Otimização de 'macro_hedger' concluída. Melhor Score: 0.0000
+2025-07-29 19:41:49,778 - gcsBot - WARNING -    -> Score de 0.0000 não atingiu o limiar de qualidade (0.33). Modelo não foi salvo.
+2025-07-29 19:41:49,780 - gcsBot - INFO - 
+================================================================================
+--- ✅ PROCESSO DE OTIMIZAÇÃO CONCLUÍDO ✅ ---
+================================================================================
+2025-07-29 19:42:02,228 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-29 19:42:02,954 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-29 19:42:02,956 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-29 19:42:02,956 - gcsBot - INFO - Executando query na measurement 'features_master_table' de -180d até now()...
+2025-07-29 19:42:49,191 - gcsBot - INFO - 257942 registros carregados da measurement 'features_master_table'.
+2025-07-29 19:42:49,306 - gcsBot - INFO - Carregando especialista 'price_action'...
+2025-07-29 19:42:50,220 - gcsBot - INFO -  -> ✅ Especialista 'price_action' carregado com sucesso.
+2025-07-29 19:42:50,224 - gcsBot - INFO - Carregando especialista 'quant_classic'...
+2025-07-29 19:42:50,253 - gcsBot - INFO -  -> ✅ Especialista 'quant_classic' carregado com sucesso.
+2025-07-29 19:42:50,253 - gcsBot - INFO - 🚀 Iniciando Backtest Profissional...
+2025-07-29 19:44:02,665 - gcsBot - DEBUG - Position Sizer: Equity=10000.00, ATR=50.68, Confidence=0.69 -> Trade Size=2500.00 USDT
+2025-07-29 19:44:02,667 - gcsBot - DEBUG - Trade Aberto em 2025-02-09 23:36:00+00:00 | Preço: 96160.00 | Tamanho: 2500.00 USDT
+2025-07-29 19:44:16,054 - gcsBot - DEBUG - Position Sizer: Equity=9999.73, ATR=73.45, Confidence=0.69 -> Trade Size=2499.93 USDT
+2025-07-29 19:44:16,055 - gcsBot - DEBUG - Trade Aberto em 2025-02-12 19:12:00+00:00 | Preço: 96364.00 | Tamanho: 2499.93 USDT
+2025-07-29 19:44:32,818 - gcsBot - DEBUG - Position Sizer: Equity=10000.91, ATR=6.92, Confidence=0.70 -> Trade Size=2500.23 USDT
+2025-07-29 19:44:32,818 - gcsBot - DEBUG - Trade Aberto em 2025-02-16 06:31:00+00:00 | Preço: 97604.00 | Tamanho: 2500.23 USDT
+2025-07-29 19:45:04,729 - gcsBot - DEBUG - Position Sizer: Equity=9996.37, ATR=4.29, Confidence=0.68 -> Trade Size=2499.09 USDT
+2025-07-29 19:45:04,729 - gcsBot - DEBUG - Trade Aberto em 2025-02-22 12:00:00+00:00 | Preço: 96585.00 | Tamanho: 2499.09 USDT
+2025-07-29 19:45:04,737 - gcsBot - DEBUG - Position Sizer: Equity=9991.37, ATR=3.99, Confidence=0.70 -> Trade Size=2497.84 USDT
+2025-07-29 19:45:04,738 - gcsBot - DEBUG - Trade Aberto em 2025-02-22 12:01:00+00:00 | Preço: 96585.00 | Tamanho: 2497.84 USDT
+2025-07-29 19:45:04,758 - gcsBot - DEBUG - Position Sizer: Equity=9986.97, ATR=6.87, Confidence=0.70 -> Trade Size=2496.74 USDT
+2025-07-29 19:45:04,758 - gcsBot - DEBUG - Trade Aberto em 2025-02-22 12:09:00+00:00 | Preço: 96654.00 | Tamanho: 2496.74 USDT
+2025-07-29 19:45:04,775 - gcsBot - DEBUG - Position Sizer: Equity=9981.97, ATR=6.38, Confidence=0.72 -> Trade Size=2495.49 USDT
+2025-07-29 19:45:04,775 - gcsBot - DEBUG - Trade Aberto em 2025-02-22 12:10:00+00:00 | Preço: 96654.00 | Tamanho: 2495.49 USDT
+2025-07-29 19:45:07,376 - gcsBot - DEBUG - Position Sizer: Equity=9976.67, ATR=5.86, Confidence=0.69 -> Trade Size=2494.17 USDT
+2025-07-29 19:45:07,378 - gcsBot - DEBUG - Trade Aberto em 2025-02-23 00:50:00+00:00 | Preço: 96604.00 | Tamanho: 2494.17 USDT
+2025-07-29 19:45:07,392 - gcsBot - DEBUG - Position Sizer: Equity=9972.43, ATR=6.67, Confidence=0.73 -> Trade Size=2493.11 USDT
+2025-07-29 19:45:07,393 - gcsBot - DEBUG - Trade Aberto em 2025-02-23 00:55:00+00:00 | Preço: 96641.00 | Tamanho: 2493.11 USDT
+2025-07-29 19:45:56,915 - gcsBot - DEBUG - Position Sizer: Equity=9968.09, ATR=32.67, Confidence=0.69 -> Trade Size=2492.02 USDT
+2025-07-29 19:45:56,915 - gcsBot - DEBUG - Trade Aberto em 2025-03-05 22:55:00+00:00 | Preço: 90415.00 | Tamanho: 2492.02 USDT
+2025-07-29 19:47:11,635 - gcsBot - DEBUG - Position Sizer: Equity=9962.53, ATR=5.82, Confidence=0.70 -> Trade Size=2490.63 USDT
+2025-07-29 19:47:11,635 - gcsBot - DEBUG - Trade Aberto em 2025-03-22 17:25:00+00:00 | Preço: 84166.00 | Tamanho: 2490.63 USDT
+2025-07-29 19:47:11,647 - gcsBot - DEBUG - Position Sizer: Equity=9958.47, ATR=5.19, Confidence=0.71 -> Trade Size=2489.62 USDT
+2025-07-29 19:47:11,647 - gcsBot - DEBUG - Trade Aberto em 2025-03-22 17:43:00+00:00 | Preço: 84199.00 | Tamanho: 2489.62 USDT
+2025-07-29 19:47:12,354 - gcsBot - DEBUG - Position Sizer: Equity=9953.99, ATR=16.86, Confidence=0.69 -> Trade Size=2488.50 USDT
+2025-07-29 19:47:12,356 - gcsBot - DEBUG - Trade Aberto em 2025-03-22 21:03:00+00:00 | Preço: 83863.00 | Tamanho: 2488.50 USDT
+2025-07-29 19:47:13,252 - gcsBot - DEBUG - Position Sizer: Equity=9950.56, ATR=7.86, Confidence=0.71 -> Trade Size=2487.64 USDT
+2025-07-29 19:47:13,253 - gcsBot - DEBUG - Trade Aberto em 2025-03-23 01:14:00+00:00 | Preço: 84035.00 | Tamanho: 2487.64 USDT
+2025-07-29 19:47:14,205 - gcsBot - DEBUG - Position Sizer: Equity=9946.76, ATR=5.74, Confidence=0.72 -> Trade Size=2486.69 USDT
+2025-07-29 19:47:14,205 - gcsBot - DEBUG - Trade Aberto em 2025-03-23 05:37:00+00:00 | Preço: 84157.00 | Tamanho: 2486.69 USDT
+2025-07-29 19:47:14,699 - gcsBot - DEBUG - Position Sizer: Equity=9942.65, ATR=2.97, Confidence=0.71 -> Trade Size=2485.66 USDT
+2025-07-29 19:47:14,700 - gcsBot - DEBUG - Trade Aberto em 2025-03-23 07:42:00+00:00 | Preço: 84287.00 | Tamanho: 2485.66 USDT
+2025-07-29 19:47:14,711 - gcsBot - DEBUG - Position Sizer: Equity=9937.94, ATR=2.31, Confidence=0.68 -> Trade Size=2484.49 USDT
+2025-07-29 19:47:14,713 - gcsBot - DEBUG - Trade Aberto em 2025-03-23 07:51:00+00:00 | Preço: 84296.00 | Tamanho: 2484.49 USDT
+2025-07-29 19:47:15,267 - gcsBot - DEBUG - Position Sizer: Equity=9933.00, ATR=4.61, Confidence=0.69 -> Trade Size=2483.25 USDT
+2025-07-29 19:47:15,268 - gcsBot - DEBUG - Trade Aberto em 2025-03-23 10:36:00+00:00 | Preço: 84337.00 | Tamanho: 2483.25 USDT
+2025-07-29 19:47:15,278 - gcsBot - DEBUG - Position Sizer: Equity=9929.54, ATR=6.94, Confidence=0.77 -> Trade Size=2482.38 USDT
+2025-07-29 19:47:15,279 - gcsBot - DEBUG - Trade Aberto em 2025-03-23 10:41:00+00:00 | Preço: 84388.00 | Tamanho: 2482.38 USDT
+2025-07-29 19:47:15,289 - gcsBot - DEBUG - Position Sizer: Equity=9925.19, ATR=7.94, Confidence=0.75 -> Trade Size=2481.30 USDT
+2025-07-29 19:47:15,291 - gcsBot - DEBUG - Trade Aberto em 2025-03-23 10:42:00+00:00 | Preço: 84409.00 | Tamanho: 2481.30 USDT
+2025-07-29 19:47:15,427 - gcsBot - DEBUG - Position Sizer: Equity=9921.55, ATR=28.57, Confidence=0.69 -> Trade Size=2480.39 USDT
+2025-07-29 19:47:15,429 - gcsBot - DEBUG - Trade Aberto em 2025-03-23 11:11:00+00:00 | Preço: 84724.00 | Tamanho: 2480.39 USDT
+2025-07-29 19:47:38,504 - gcsBot - DEBUG - Position Sizer: Equity=9919.25, ATR=27.97, Confidence=0.69 -> Trade Size=2479.81 USDT
+2025-07-29 19:47:38,504 - gcsBot - DEBUG - Trade Aberto em 2025-03-28 10:57:00+00:00 | Preço: 84888.00 | Tamanho: 2479.81 USDT
+2025-07-29 19:47:43,498 - gcsBot - DEBUG - Position Sizer: Equity=9914.88, ATR=31.72, Confidence=0.69 -> Trade Size=2478.72 USDT
+2025-07-29 19:47:43,499 - gcsBot - DEBUG - Trade Aberto em 2025-03-29 12:52:00+00:00 | Preço: 82361.00 | Tamanho: 2478.72 USDT
+2025-07-29 19:49:16,873 - gcsBot - DEBUG - Position Sizer: Equity=9914.59, ATR=7.58, Confidence=0.73 -> Trade Size=2478.65 USDT
+2025-07-29 19:49:16,873 - gcsBot - DEBUG - Trade Aberto em 2025-04-18 21:32:00+00:00 | Preço: 84550.00 | Tamanho: 2478.65 USDT
+2025-07-29 19:50:20,948 - gcsBot - DEBUG - Position Sizer: Equity=9911.42, ATR=22.08, Confidence=0.68 -> Trade Size=2477.85 USDT
+2025-07-29 19:50:20,949 - gcsBot - DEBUG - Trade Aberto em 2025-05-02 21:56:00+00:00 | Preço: 96616.00 | Tamanho: 2477.85 USDT
+2025-07-29 19:51:31,691 - gcsBot - DEBUG - Position Sizer: Equity=9911.18, ATR=5.23, Confidence=0.70 -> Trade Size=2477.80 USDT
+2025-07-29 19:51:31,693 - gcsBot - DEBUG - Trade Aberto em 2025-05-18 04:33:00+00:00 | Preço: 103353.00 | Tamanho: 2477.80 USDT
+2025-07-29 19:54:40,045 - gcsBot - DEBUG - Position Sizer: Equity=9907.64, ATR=6.23, Confidence=0.69 -> Trade Size=2476.91 USDT
+2025-07-29 19:54:40,046 - gcsBot - DEBUG - Trade Aberto em 2025-06-28 03:53:00+00:00 | Preço: 107258.45 | Tamanho: 2476.91 USDT
+2025-07-29 19:54:40,054 - gcsBot - DEBUG - Position Sizer: Equity=9903.15, ATR=7.21, Confidence=0.71 -> Trade Size=2475.79 USDT
+2025-07-29 19:54:40,055 - gcsBot - DEBUG - Trade Aberto em 2025-06-28 03:54:00+00:00 | Preço: 107278.42 | Tamanho: 2475.79 USDT
+2025-07-29 19:54:40,497 - gcsBot - DEBUG - Position Sizer: Equity=9899.28, ATR=6.74, Confidence=0.71 -> Trade Size=2474.82 USDT
+2025-07-29 19:54:40,497 - gcsBot - DEBUG - Trade Aberto em 2025-06-28 06:03:00+00:00 | Preço: 107341.17 | Tamanho: 2474.82 USDT
+2025-07-29 19:54:40,504 - gcsBot - DEBUG - Position Sizer: Equity=9894.33, ATR=6.26, Confidence=0.69 -> Trade Size=2473.58 USDT
+2025-07-29 19:54:40,506 - gcsBot - DEBUG - Trade Aberto em 2025-06-28 06:04:00+00:00 | Preço: 107341.17 | Tamanho: 2473.58 USDT
+2025-07-29 19:54:40,515 - gcsBot - DEBUG - Position Sizer: Equity=9889.85, ATR=5.68, Confidence=0.68 -> Trade Size=2472.46 USDT
+2025-07-29 19:54:40,517 - gcsBot - DEBUG - Trade Aberto em 2025-06-28 06:09:00+00:00 | Preço: 107361.44 | Tamanho: 2472.46 USDT
+2025-07-29 19:54:40,545 - gcsBot - DEBUG - Position Sizer: Equity=9885.37, ATR=4.84, Confidence=0.70 -> Trade Size=2471.34 USDT
+2025-07-29 19:54:40,546 - gcsBot - DEBUG - Trade Aberto em 2025-06-28 06:15:00+00:00 | Preço: 107383.33 | Tamanho: 2471.34 USDT
+2025-07-29 19:54:40,793 - gcsBot - DEBUG - Position Sizer: Equity=9880.77, ATR=3.03, Confidence=0.70 -> Trade Size=2470.19 USDT
+2025-07-29 19:54:40,795 - gcsBot - DEBUG - Trade Aberto em 2025-06-28 07:23:00+00:00 | Preço: 107427.59 | Tamanho: 2470.19 USDT
+2025-07-29 19:54:41,387 - gcsBot - DEBUG - Position Sizer: Equity=9875.64, ATR=5.23, Confidence=0.72 -> Trade Size=2468.91 USDT
+2025-07-29 19:54:41,388 - gcsBot - DEBUG - Trade Aberto em 2025-06-28 10:26:00+00:00 | Preço: 107346.00 | Tamanho: 2468.91 USDT
+2025-07-29 19:54:41,631 - gcsBot - DEBUG - Position Sizer: Equity=9870.44, ATR=5.31, Confidence=0.71 -> Trade Size=2467.61 USDT
+2025-07-29 19:54:41,631 - gcsBot - DEBUG - Trade Aberto em 2025-06-28 11:39:00+00:00 | Preço: 107341.37 | Tamanho: 2467.61 USDT
+2025-07-29 19:54:42,122 - gcsBot - DEBUG - Position Sizer: Equity=9865.45, ATR=4.37, Confidence=0.69 -> Trade Size=2466.36 USDT
+2025-07-29 19:54:42,122 - gcsBot - DEBUG - Trade Aberto em 2025-06-28 14:13:00+00:00 | Preço: 107146.22 | Tamanho: 2466.36 USDT
+2025-07-29 19:54:42,176 - gcsBot - DEBUG - Position Sizer: Equity=9861.22, ATR=5.32, Confidence=0.73 -> Trade Size=2465.30 USDT
+2025-07-29 19:54:42,177 - gcsBot - DEBUG - Trade Aberto em 2025-06-28 14:23:00+00:00 | Preço: 107214.99 | Tamanho: 2465.30 USDT
+2025-07-29 19:54:42,324 - gcsBot - DEBUG - Position Sizer: Equity=9857.28, ATR=3.33, Confidence=0.74 -> Trade Size=2464.32 USDT
+2025-07-29 19:54:42,325 - gcsBot - DEBUG - Trade Aberto em 2025-06-28 15:04:00+00:00 | Preço: 107230.61 | Tamanho: 2464.32 USDT
+2025-07-29 19:54:42,334 - gcsBot - DEBUG - Position Sizer: Equity=9852.36, ATR=3.09, Confidence=0.68 -> Trade Size=2463.09 USDT
+2025-07-29 19:54:42,335 - gcsBot - DEBUG - Trade Aberto em 2025-06-28 15:05:00+00:00 | Preço: 107230.61 | Tamanho: 2463.09 USDT
+2025-07-29 19:54:43,093 - gcsBot - DEBUG - Position Sizer: Equity=9846.84, ATR=4.39, Confidence=0.70 -> Trade Size=2461.71 USDT
+2025-07-29 19:54:43,094 - gcsBot - DEBUG - Trade Aberto em 2025-06-28 19:19:00+00:00 | Preço: 107339.37 | Tamanho: 2461.71 USDT
+2025-07-29 19:54:43,488 - gcsBot - DEBUG - Position Sizer: Equity=9841.91, ATR=5.80, Confidence=0.72 -> Trade Size=2460.48 USDT
+2025-07-29 19:54:43,488 - gcsBot - DEBUG - Trade Aberto em 2025-06-28 21:26:00+00:00 | Preço: 107255.62 | Tamanho: 2460.48 USDT
+2025-07-29 19:54:43,495 - gcsBot - DEBUG - Position Sizer: Equity=9836.99, ATR=5.39, Confidence=0.70 -> Trade Size=2459.25 USDT
+2025-07-29 19:54:43,495 - gcsBot - DEBUG - Trade Aberto em 2025-06-28 21:27:00+00:00 | Preço: 107255.62 | Tamanho: 2459.25 USDT
+2025-07-29 19:54:44,698 - gcsBot - DEBUG - Position Sizer: Equity=9832.99, ATR=3.38, Confidence=0.72 -> Trade Size=2458.25 USDT
+2025-07-29 19:54:44,699 - gcsBot - DEBUG - Trade Aberto em 2025-06-29 03:23:00+00:00 | Preço: 107286.00 | Tamanho: 2458.25 USDT
+2025-07-29 19:54:45,005 - gcsBot - DEBUG - Position Sizer: Equity=9828.24, ATR=0.60, Confidence=0.69 -> Trade Size=2457.06 USDT
+2025-07-29 19:54:45,006 - gcsBot - DEBUG - Trade Aberto em 2025-06-29 04:38:00+00:00 | Preço: 107237.53 | Tamanho: 2457.06 USDT
+2025-07-29 19:54:45,020 - gcsBot - DEBUG - Position Sizer: Equity=9823.75, ATR=1.56, Confidence=0.80 -> Trade Size=2455.94 USDT
+2025-07-29 19:54:45,021 - gcsBot - DEBUG - Trade Aberto em 2025-06-29 04:51:00+00:00 | Preço: 107256.06 | Tamanho: 2455.94 USDT
+2025-07-29 19:54:45,040 - gcsBot - DEBUG - Position Sizer: Equity=9818.84, ATR=1.45, Confidence=0.79 -> Trade Size=2454.71 USDT
+2025-07-29 19:54:45,041 - gcsBot - DEBUG - Trade Aberto em 2025-06-29 04:52:00+00:00 | Preço: 107256.06 | Tamanho: 2454.71 USDT
+2025-07-29 19:54:45,263 - gcsBot - DEBUG - Position Sizer: Equity=9814.31, ATR=5.08, Confidence=0.70 -> Trade Size=2453.58 USDT
+2025-07-29 19:54:45,264 - gcsBot - DEBUG - Trade Aberto em 2025-06-29 05:49:00+00:00 | Preço: 107293.20 | Tamanho: 2453.58 USDT
+2025-07-29 19:54:45,278 - gcsBot - DEBUG - Position Sizer: Equity=9809.79, ATR=5.22, Confidence=0.70 -> Trade Size=2452.45 USDT
+2025-07-29 19:54:45,279 - gcsBot - DEBUG - Trade Aberto em 2025-06-29 05:52:00+00:00 | Preço: 107310.00 | Tamanho: 2452.45 USDT
+2025-07-29 19:54:45,292 - gcsBot - DEBUG - Position Sizer: Equity=9804.88, ATR=4.85, Confidence=0.70 -> Trade Size=2451.22 USDT
+2025-07-29 19:54:45,293 - gcsBot - DEBUG - Trade Aberto em 2025-06-29 05:53:00+00:00 | Preço: 107310.00 | Tamanho: 2451.22 USDT
+2025-07-29 19:54:45,472 - gcsBot - DEBUG - Position Sizer: Equity=9800.41, ATR=0.72, Confidence=0.70 -> Trade Size=2450.10 USDT
+2025-07-29 19:54:45,472 - gcsBot - DEBUG - Trade Aberto em 2025-06-29 06:54:00+00:00 | Preço: 107339.53 | Tamanho: 2450.10 USDT
+2025-07-29 19:54:45,489 - gcsBot - DEBUG - Position Sizer: Equity=9795.75, ATR=3.75, Confidence=0.73 -> Trade Size=2448.94 USDT
+2025-07-29 19:54:45,490 - gcsBot - DEBUG - Trade Aberto em 2025-06-29 06:58:00+00:00 | Preço: 107385.92 | Tamanho: 2448.94 USDT
+2025-07-29 19:54:45,727 - gcsBot - DEBUG - Position Sizer: Equity=9790.64, ATR=0.87, Confidence=0.69 -> Trade Size=2447.66 USDT
+2025-07-29 19:54:45,728 - gcsBot - DEBUG - Trade Aberto em 2025-06-29 07:49:00+00:00 | Preço: 107330.01 | Tamanho: 2447.66 USDT
+2025-07-29 19:54:45,758 - gcsBot - DEBUG - Position Sizer: Equity=9785.99, ATR=2.23, Confidence=0.70 -> Trade Size=2446.50 USDT
+2025-07-29 19:54:45,758 - gcsBot - DEBUG - Trade Aberto em 2025-06-29 07:57:00+00:00 | Preço: 107357.19 | Tamanho: 2446.50 USDT
+2025-07-29 19:54:45,770 - gcsBot - DEBUG - Position Sizer: Equity=9781.09, ATR=2.08, Confidence=0.71 -> Trade Size=2445.27 USDT
+2025-07-29 19:54:45,771 - gcsBot - DEBUG - Trade Aberto em 2025-06-29 07:58:00+00:00 | Preço: 107357.18 | Tamanho: 2445.27 USDT
+2025-07-29 19:54:45,786 - gcsBot - DEBUG - Position Sizer: Equity=9777.23, ATR=5.14, Confidence=0.69 -> Trade Size=2444.31 USDT
+2025-07-29 19:54:45,787 - gcsBot - DEBUG - Trade Aberto em 2025-06-29 07:59:00+00:00 | Preço: 107402.18 | Tamanho: 2444.31 USDT
+2025-07-29 19:54:45,801 - gcsBot - DEBUG - Position Sizer: Equity=9772.40, ATR=4.97, Confidence=0.69 -> Trade Size=2443.10 USDT
+2025-07-29 19:54:45,802 - gcsBot - DEBUG - Trade Aberto em 2025-06-29 08:00:00+00:00 | Preço: 107404.86 | Tamanho: 2443.10 USDT
+2025-07-29 19:55:17,810 - gcsBot - DEBUG - Position Sizer: Equity=9769.23, ATR=2.02, Confidence=0.70 -> Trade Size=2442.31 USDT
+2025-07-29 19:55:17,811 - gcsBot - DEBUG - Trade Aberto em 2025-07-06 05:13:00+00:00 | Preço: 107971.30 | Tamanho: 2442.31 USDT
+2025-07-29 19:55:17,990 - gcsBot - DEBUG - Position Sizer: Equity=9764.75, ATR=6.63, Confidence=0.68 -> Trade Size=2441.19 USDT
+2025-07-29 19:55:17,991 - gcsBot - DEBUG - Trade Aberto em 2025-07-06 06:12:00+00:00 | Preço: 108056.00 | Tamanho: 2441.19 USDT
+2025-07-29 19:55:18,003 - gcsBot - DEBUG - Position Sizer: Equity=9760.34, ATR=7.32, Confidence=0.70 -> Trade Size=2440.09 USDT
+2025-07-29 19:55:18,004 - gcsBot - DEBUG - Trade Aberto em 2025-07-06 06:14:00+00:00 | Preço: 108079.99 | Tamanho: 2440.09 USDT
+2025-07-29 19:55:18,616 - gcsBot - DEBUG - Position Sizer: Equity=9756.00, ATR=4.25, Confidence=0.71 -> Trade Size=2439.00 USDT
+2025-07-29 19:55:18,617 - gcsBot - DEBUG - Trade Aberto em 2025-07-06 09:05:00+00:00 | Preço: 108043.58 | Tamanho: 2439.00 USDT
+2025-07-29 19:55:19,144 - gcsBot - DEBUG - Position Sizer: Equity=9751.12, ATR=4.97, Confidence=0.68 -> Trade Size=2437.78 USDT
+2025-07-29 19:55:19,145 - gcsBot - DEBUG - Trade Aberto em 2025-07-06 11:40:00+00:00 | Preço: 108039.88 | Tamanho: 2437.78 USDT
+2025-07-29 19:55:19,373 - gcsBot - DEBUG - Position Sizer: Equity=9746.25, ATR=5.10, Confidence=0.71 -> Trade Size=2436.56 USDT
+2025-07-29 19:55:19,374 - gcsBot - DEBUG - Trade Aberto em 2025-07-06 12:41:00+00:00 | Preço: 108147.99 | Tamanho: 2436.56 USDT
+2025-07-29 19:55:19,411 - gcsBot - DEBUG - Position Sizer: Equity=9742.11, ATR=6.49, Confidence=0.69 -> Trade Size=2435.53 USDT
+2025-07-29 19:55:19,413 - gcsBot - DEBUG - Trade Aberto em 2025-07-06 12:49:00+00:00 | Preço: 108195.55 | Tamanho: 2435.53 USDT
+2025-07-29 19:55:22,812 - gcsBot - DEBUG - Position Sizer: Equity=9738.08, ATR=19.65, Confidence=0.70 -> Trade Size=2434.52 USDT
+2025-07-29 19:55:22,812 - gcsBot - DEBUG - Trade Aberto em 2025-07-07 06:46:00+00:00 | Preço: 108842.70 | Tamanho: 2434.52 USDT
+2025-07-29 19:56:18,630 - gcsBot - DEBUG - Position Sizer: Equity=9732.21, ATR=13.79, Confidence=0.71 -> Trade Size=2433.05 USDT
+2025-07-29 19:56:18,631 - gcsBot - DEBUG - Trade Aberto em 2025-07-19 10:40:00+00:00 | Preço: 118425.68 | Tamanho: 2433.05 USDT
+2025-07-29 19:56:49,974 - gcsBot - DEBUG - Position Sizer: Equity=9728.44, ATR=2.14, Confidence=0.69 -> Trade Size=2432.11 USDT
+2025-07-29 19:56:49,974 - gcsBot - DEBUG - Trade Aberto em 2025-07-26 07:18:00+00:00 | Preço: 117329.56 | Tamanho: 2432.11 USDT
+2025-07-29 19:56:50,188 - gcsBot - DEBUG - Position Sizer: Equity=9724.55, ATR=5.54, Confidence=0.76 -> Trade Size=2431.14 USDT
+2025-07-29 19:56:50,189 - gcsBot - DEBUG - Trade Aberto em 2025-07-26 08:17:00+00:00 | Preço: 117370.68 | Tamanho: 2431.14 USDT
+2025-07-29 19:56:50,198 - gcsBot - DEBUG - Position Sizer: Equity=9720.30, ATR=7.24, Confidence=0.73 -> Trade Size=2430.07 USDT
+2025-07-29 19:56:50,198 - gcsBot - DEBUG - Trade Aberto em 2025-07-26 08:18:00+00:00 | Preço: 117399.99 | Tamanho: 2430.07 USDT
+2025-07-29 19:56:50,621 - gcsBot - DEBUG - Position Sizer: Equity=9716.02, ATR=8.48, Confidence=0.69 -> Trade Size=2429.00 USDT
+2025-07-29 19:56:50,622 - gcsBot - DEBUG - Trade Aberto em 2025-07-26 10:14:00+00:00 | Preço: 117621.78 | Tamanho: 2429.00 USDT
+2025-07-29 19:56:51,769 - gcsBot - DEBUG - Position Sizer: Equity=9711.16, ATR=27.84, Confidence=0.69 -> Trade Size=2427.79 USDT
+2025-07-29 19:56:51,770 - gcsBot - DEBUG - Trade Aberto em 2025-07-26 15:18:00+00:00 | Preço: 117848.58 | Tamanho: 2427.79 USDT
+2025-07-29 19:56:52,755 - gcsBot - DEBUG - Position Sizer: Equity=9707.87, ATR=4.69, Confidence=0.70 -> Trade Size=2426.97 USDT
+2025-07-29 19:56:52,755 - gcsBot - DEBUG - Trade Aberto em 2025-07-26 19:29:00+00:00 | Preço: 118088.85 | Tamanho: 2426.97 USDT
+2025-07-29 19:56:52,766 - gcsBot - DEBUG - Position Sizer: Equity=9704.40, ATR=6.40, Confidence=0.71 -> Trade Size=2426.10 USDT
+2025-07-29 19:56:52,767 - gcsBot - DEBUG - Trade Aberto em 2025-07-26 19:43:00+00:00 | Preço: 118156.00 | Tamanho: 2426.10 USDT
+2025-07-29 19:56:52,779 - gcsBot - DEBUG - Position Sizer: Equity=9699.54, ATR=5.94, Confidence=0.75 -> Trade Size=2424.89 USDT
+2025-07-29 19:56:52,780 - gcsBot - DEBUG - Trade Aberto em 2025-07-26 19:44:00+00:00 | Preço: 118155.99 | Tamanho: 2424.89 USDT
+2025-07-29 19:56:52,793 - gcsBot - DEBUG - Position Sizer: Equity=9695.19, ATR=6.80, Confidence=0.70 -> Trade Size=2423.80 USDT
+2025-07-29 19:56:52,794 - gcsBot - DEBUG - Trade Aberto em 2025-07-26 19:46:00+00:00 | Preço: 118179.99 | Tamanho: 2423.80 USDT
+2025-07-29 19:56:52,807 - gcsBot - DEBUG - Position Sizer: Equity=9690.75, ATR=7.74, Confidence=0.72 -> Trade Size=2422.69 USDT
+2025-07-29 19:56:52,808 - gcsBot - DEBUG - Trade Aberto em 2025-07-26 19:47:00+00:00 | Preço: 118199.98 | Tamanho: 2422.69 USDT
+2025-07-29 19:56:54,587 - gcsBot - DEBUG - Position Sizer: Equity=9687.17, ATR=8.54, Confidence=0.73 -> Trade Size=2421.79 USDT
+2025-07-29 19:56:54,588 - gcsBot - DEBUG - Trade Aberto em 2025-07-27 04:05:00+00:00 | Preço: 118235.15 | Tamanho: 2421.79 USDT
+2025-07-29 19:56:55,088 - gcsBot - DEBUG - Position Sizer: Equity=9682.97, ATR=7.23, Confidence=0.72 -> Trade Size=2420.74 USDT
+2025-07-29 19:56:55,088 - gcsBot - DEBUG - Trade Aberto em 2025-07-27 06:41:00+00:00 | Preço: 118337.80 | Tamanho: 2420.74 USDT
+2025-07-29 19:57:03,356 - gcsBot - DEBUG - Position Sizer: Equity=9678.13, ATR=63.54, Confidence=0.69 -> Trade Size=2419.53 USDT
+2025-07-29 19:57:03,357 - gcsBot - DEBUG - Trade Aberto em 2025-07-29 02:18:00+00:00 | Preço: 117453.64 | Tamanho: 2419.53 USDT
+2025-07-29 19:57:06,452 - gcsBot - INFO - 📈 Gráfico da curva de capital salvo em: data/equity_curve.png
+2025-07-29 19:57:06,453 - gcsBot - INFO - Conexão com o InfluxDB fechada.
