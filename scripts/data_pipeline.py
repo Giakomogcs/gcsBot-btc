@@ -68,7 +68,7 @@ class DataPipeline:
             for i in tqdm(range(0, total_rows, batch_size), desc=f"Writing to {measurement}"):
                 batch = df_to_write.iloc[i:i + batch_size]
                 write_api.write(
-                    bucket=settings.influxdb_bucket,
+                    bucket=settings.database.influxdb.bucket,
                     record=batch,
                     data_frame_measurement_name=measurement,
                     data_frame_timestamp_column="timestamp"
@@ -84,7 +84,7 @@ class DataPipeline:
     def _query_last_timestamp(self, measurement: str) -> Optional[pd.Timestamp]:
         query_api = db_manager.get_query_api()
         if not query_api: return None
-        query = f'from(bucket:"{settings.influxdb_bucket}") |> range(start: 0) |> filter(fn: (r) => r._measurement == "{measurement}") |> last() |> keep(columns: ["_time"])'
+        query = f'from(bucket:"{settings.database.influxdb.bucket}") |> range(start: 0) |> filter(fn: (r) => r._measurement == "{measurement}") |> last() |> keep(columns: ["_time"])'
         try:
             result = query_api.query(query)
             if not result or not result[0].records: return None
@@ -101,7 +101,7 @@ class DataPipeline:
         logger.debug(f"Lendo dados de '{measurement}' de {start_date} a {end_date}")
         try:
             query = f'''
-            from(bucket:"{settings.influxdb_bucket}") 
+            from(bucket:"{settings.database.influxdb.bucket}") 
                 |> range(start: {start_date}, stop: {end_date}) 
                 |> filter(fn: (r) => r._measurement == "{measurement}") 
                 |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")

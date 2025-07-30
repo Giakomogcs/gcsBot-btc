@@ -18,9 +18,9 @@ class DataManager:
     def __init__(self):
         try:
             self.client = influxdb_client.InfluxDBClient(
-                url=settings.influxdb_url,
-                token=settings.influxdb_token,
-                org=settings.influxdb_org,
+                url=settings.database.influxdb.url,
+                token=settings.database.influxdb.token,
+                org=settings.database.influxdb.org,
                 timeout=300_000 
             )
             self.query_api = self.client.query_api()
@@ -49,7 +49,7 @@ class DataManager:
             return pd.DataFrame()
         
         flux_query = f'''
-            from(bucket:"{settings.influxdb_bucket}") 
+            from(bucket:"{settings.database.influxdb.bucket}") 
                 |> range(start: {start_date}, stop: {end_date}) 
                 |> filter(fn: (r) => r._measurement == "{measurement}") 
                 |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")

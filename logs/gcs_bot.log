@@ -56686,3 +56686,158 @@ HTTP response body: b'{"code":"invalid","message":"error @5:69-5:77: found unexp
 2025-07-29 19:57:03,357 - gcsBot - DEBUG - Trade Aberto em 2025-07-29 02:18:00+00:00 | Preço: 117453.64 | Tamanho: 2419.53 USDT
 2025-07-29 19:57:06,452 - gcsBot - INFO - 📈 Gráfico da curva de capital salvo em: data/equity_curve.png
 2025-07-29 19:57:06,453 - gcsBot - INFO - Conexão com o InfluxDB fechada.
+2025-07-30 11:48:04,217 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 11:48:04,359 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-30 11:48:04,363 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-30 11:48:04,364 - gcsBot - INFO - Executando query na measurement 'features_master_table' de -180d até now()...
+2025-07-30 11:48:48,942 - gcsBot - INFO - 256976 registros carregados da measurement 'features_master_table'.
+2025-07-30 11:48:49,131 - gcsBot - INFO - Conexão com o InfluxDB fechada.
+2025-07-30 11:50:10,410 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 11:50:10,477 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-30 11:50:10,481 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-30 11:50:10,521 - gcsBot - INFO - Conexão com o InfluxDB fechada.
+2025-07-30 11:50:16,455 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 11:50:16,509 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-30 11:50:16,510 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-30 11:50:16,543 - gcsBot - INFO - Conexão com o InfluxDB fechada.
+2025-07-30 11:51:55,297 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 11:51:55,353 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-30 11:51:55,355 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-30 11:51:55,355 - gcsBot - INFO - Executando query na measurement 'features_master_table' de -180d até now()...
+2025-07-30 11:52:38,122 - gcsBot - INFO - 256973 registros carregados da measurement 'features_master_table'.
+2025-07-30 11:52:38,250 - gcsBot - INFO - Conexão com o InfluxDB fechada.
+2025-07-30 12:16:28,234 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 12:16:28,344 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-30 12:16:28,344 - gcsBot - ERROR - Falha ao conectar com o InfluxDB: 'Settings' object has no attribute 'influxdb_url'
+2025-07-30 12:16:28,345 - gcsBot - ERROR - Cliente InfluxDB não inicializado. Leitura abortada.
+2025-07-30 12:16:28,347 - gcsBot - ERROR - Nenhuma feature foi carregada da 'features_master_table'. Execute o data_pipeline primeiro.
+2025-07-30 12:21:01,411 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 12:21:01,465 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-30 12:21:01,467 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-30 12:21:01,504 - gcsBot - INFO - Conexão com o InfluxDB fechada.
+2025-07-30 12:23:41,671 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 12:23:41,730 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-30 12:23:41,732 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-30 12:23:41,732 - gcsBot - INFO - Executando query na measurement 'features_master_table' de -365d até now()...
+2025-07-30 12:23:41,766 - gcsBot - ERROR - Erro ao executar a query no InfluxDB para 'features_master_table': <urllib3.connection.HTTPConnection object at 0x76a0cf3769f0>: Failed to resolve 'influxdb' ([Errno -2] Name or service not known)
+2025-07-30 12:23:41,768 - gcsBot - ERROR - Nenhuma feature foi carregada da 'features_master_table'. Execute o data_pipeline primeiro.
+2025-07-30 12:23:41,798 - gcsBot - INFO - Conexão com o InfluxDB fechada.
+2025-07-30 12:26:35,902 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 12:26:35,978 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-30 12:26:35,981 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-30 12:26:35,981 - gcsBot - INFO - Executando query na measurement 'features_master_table' de -365d até now()...
+2025-07-30 12:26:35,994 - gcsBot - ERROR - Erro ao executar a query no InfluxDB para 'features_master_table': (401)
+Reason: Unauthorized
+HTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unauthorized', 'Date': 'Wed, 30 Jul 2025 12:26:35 GMT', 'Content-Length': '55'})
+HTTP response body: b'{"code":"unauthorized","message":"unauthorized access"}'
+
+2025-07-30 12:26:35,997 - gcsBot - ERROR - Nenhuma feature foi carregada da 'features_master_table'. Execute o data_pipeline primeiro.
+2025-07-30 12:26:35,998 - gcsBot - INFO - Conexão com o InfluxDB fechada.
+2025-07-30 12:27:40,717 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 12:27:40,792 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-30 12:27:40,795 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-30 12:27:40,795 - gcsBot - INFO - Executando query na measurement 'features_master_table' de -365d até now()...
+2025-07-30 12:27:40,806 - gcsBot - ERROR - Erro ao executar a query no InfluxDB para 'features_master_table': (400)
+Reason: Bad Request
+HTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'Vary': 'Accept-Encoding', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'invalid', 'Date': 'Wed, 30 Jul 2025 12:27:40 GMT', 'Content-Length': '100'})
+HTTP response body: b'{"code":"invalid","message":"failed to decode request body: organization name \\"my-org\\" not found"}'
+
+2025-07-30 12:27:40,810 - gcsBot - ERROR - Nenhuma feature foi carregada da 'features_master_table'. Execute o data_pipeline primeiro.
+2025-07-30 12:27:40,810 - gcsBot - INFO - Conexão com o InfluxDB fechada.
+2025-07-30 12:28:44,843 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 12:28:44,924 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-30 12:28:44,926 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-30 12:28:44,927 - gcsBot - INFO - Executando query na measurement 'features_master_table' de -365d até now()...
+2025-07-30 12:30:11,042 - gcsBot - INFO - 523336 registros carregados da measurement 'features_master_table'.
+2025-07-30 12:30:11,276 - gcsBot - INFO - Conexão com o InfluxDB fechada.
+2025-07-30 12:31:12,478 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 12:31:12,577 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-30 12:31:12,579 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-30 12:31:12,579 - gcsBot - INFO - Executando query na measurement 'features_master_table' de -365d até now()...
+2025-07-30 12:32:39,306 - gcsBot - INFO - 523333 registros carregados da measurement 'features_master_table'.
+2025-07-30 12:32:39,488 - gcsBot - ERROR - Nenhum especialista foi carregado. Execute o otimizador primeiro.
+2025-07-30 12:32:39,493 - gcsBot - INFO - Conexão com o InfluxDB fechada.
+2025-07-30 12:33:53,490 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 12:33:53,546 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-30 12:33:53,547 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-30 12:33:53,547 - gcsBot - INFO - Executando query na measurement 'features_master_table' de -365d até now()...
+2025-07-30 12:35:20,909 - gcsBot - INFO - 523331 registros carregados da measurement 'features_master_table'.
+2025-07-30 12:35:22,742 - gcsBot - INFO - Conexão com o InfluxDB fechada.
+2025-07-30 12:36:38,535 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 12:36:38,592 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-30 12:36:38,594 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-30 12:36:38,594 - gcsBot - INFO - Executando query na measurement 'features_master_table' de -365d até now()...
+2025-07-30 12:38:05,345 - gcsBot - INFO - 523328 registros carregados da measurement 'features_master_table'.
+2025-07-30 12:38:06,597 - gcsBot - INFO - Conexão com o InfluxDB fechada.
+2025-07-30 12:40:05,636 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 12:40:05,754 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-30 12:40:05,756 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-30 12:40:05,756 - gcsBot - INFO - Executando query na measurement 'features_master_table' de -365d até now()...
+2025-07-30 12:40:12,008 - gcsBot - INFO - Conexão com o InfluxDB fechada.
+2025-07-30 12:40:23,679 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 12:40:23,735 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-30 12:40:23,737 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-30 12:40:23,737 - gcsBot - INFO - Executando query na measurement 'features_master_table' de -180d até now()...
+2025-07-30 12:41:05,034 - gcsBot - INFO - 256924 registros carregados da measurement 'features_master_table'.
+2025-07-30 12:41:05,996 - gcsBot - INFO - Conexão com o InfluxDB fechada.
+2025-07-30 12:43:36,625 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 12:43:36,722 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-30 12:43:36,723 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-30 12:43:36,724 - gcsBot - INFO - Executando query na measurement 'features_master_table' de -180d até now()...
+2025-07-30 12:44:18,481 - gcsBot - INFO - 256921 registros carregados da measurement 'features_master_table'.
+2025-07-30 12:44:19,348 - gcsBot - INFO - Colunas disponíveis para o backtest: ['adx', 'adx_power', 'atr', 'bb_pband', 'bb_width', 'btc_dxy_corr_30d', 'btc_gold_corr_30d', 'btc_ndx_corr_30d', 'btc_spx_corr_30d', 'btc_tnx_corr_30d', 'btc_uso_corr_30d', 'btc_vix_corr_30d', 'cci', 'close', 'cvd', 'cvd_short_term', 'dxy_close', 'dxy_close_change', 'dxy_high', 'dxy_low', 'dxy_open', 'dxy_volume', 'gold_close', 'gold_close_change', 'gold_high', 'gold_low', 'gold_open', 'gold_volume', 'high', 'low', 'macd_diff', 'momentum_10m', 'ndx_close', 'ndx_close_change', 'ndx_high', 'ndx_low', 'ndx_open', 'ndx_volume', 'open', 'price_change_1m', 'price_change_5m', 'rsi', 'spx_close', 'spx_close_change', 'spx_high', 'spx_low', 'spx_open', 'spx_volume', 'stoch_osc', 'taker_buy_volume', 'taker_sell_volume', 'tnx_close', 'tnx_close_change', 'tnx_high', 'tnx_low', 'tnx_open', 'tnx_volume', 'uso_close', 'uso_close_change', 'uso_high', 'uso_low', 'uso_open', 'uso_volume', 'vix_close', 'vix_close_change', 'vix_high', 'vix_low', 'vix_open', 'vix_volume', 'volatility_ratio', 'volume', 'volume_delta', 'williams_r']
+2025-07-30 12:44:19,348 - gcsBot - INFO - Iniciando backtest...
+2025-07-30 12:45:04,174 - gcsBot - INFO - Conexão com o InfluxDB fechada.
+2025-07-30 12:54:30,028 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 12:54:30,089 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-30 12:54:30,091 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-30 12:54:30,091 - gcsBot - INFO - Executando query na measurement 'features_master_table' de -180d até now()...
+2025-07-30 12:55:13,923 - gcsBot - INFO - 256910 registros carregados da measurement 'features_master_table'.
+2025-07-30 12:55:14,789 - gcsBot - INFO - Colunas disponíveis para o backtest: ['adx', 'adx_power', 'atr', 'bb_pband', 'bb_width', 'btc_dxy_corr_30d', 'btc_gold_corr_30d', 'btc_ndx_corr_30d', 'btc_spx_corr_30d', 'btc_tnx_corr_30d', 'btc_uso_corr_30d', 'btc_vix_corr_30d', 'cci', 'close', 'cvd', 'cvd_short_term', 'dxy_close', 'dxy_close_change', 'dxy_high', 'dxy_low', 'dxy_open', 'dxy_volume', 'gold_close', 'gold_close_change', 'gold_high', 'gold_low', 'gold_open', 'gold_volume', 'high', 'low', 'macd_diff', 'momentum_10m', 'ndx_close', 'ndx_close_change', 'ndx_high', 'ndx_low', 'ndx_open', 'ndx_volume', 'open', 'price_change_1m', 'price_change_5m', 'rsi', 'spx_close', 'spx_close_change', 'spx_high', 'spx_low', 'spx_open', 'spx_volume', 'stoch_osc', 'taker_buy_volume', 'taker_sell_volume', 'tnx_close', 'tnx_close_change', 'tnx_high', 'tnx_low', 'tnx_open', 'tnx_volume', 'uso_close', 'uso_close_change', 'uso_high', 'uso_low', 'uso_open', 'uso_volume', 'vix_close', 'vix_close_change', 'vix_high', 'vix_low', 'vix_open', 'vix_volume', 'volatility_ratio', 'volume', 'volume_delta', 'williams_r']
+2025-07-30 12:55:14,789 - gcsBot - INFO - Iniciando backtest...
+2025-07-30 12:55:14,958 - gcsBot - INFO - Conexão com o InfluxDB fechada.
+2025-07-30 12:56:58,506 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 12:56:58,601 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-30 12:56:58,603 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-30 12:56:58,604 - gcsBot - INFO - Executando query na measurement 'features_master_table' de -180d até now()...
+2025-07-30 12:57:40,156 - gcsBot - INFO - 256908 registros carregados da measurement 'features_master_table'.
+2025-07-30 12:57:41,060 - gcsBot - INFO - Colunas disponíveis para o backtest: ['adx', 'adx_power', 'atr', 'bb_pband', 'bb_width', 'btc_dxy_corr_30d', 'btc_gold_corr_30d', 'btc_ndx_corr_30d', 'btc_spx_corr_30d', 'btc_tnx_corr_30d', 'btc_uso_corr_30d', 'btc_vix_corr_30d', 'cci', 'close', 'cvd', 'cvd_short_term', 'dxy_close', 'dxy_close_change', 'dxy_high', 'dxy_low', 'dxy_open', 'dxy_volume', 'gold_close', 'gold_close_change', 'gold_high', 'gold_low', 'gold_open', 'gold_volume', 'high', 'low', 'macd_diff', 'momentum_10m', 'ndx_close', 'ndx_close_change', 'ndx_high', 'ndx_low', 'ndx_open', 'ndx_volume', 'open', 'price_change_1m', 'price_change_5m', 'rsi', 'spx_close', 'spx_close_change', 'spx_high', 'spx_low', 'spx_open', 'spx_volume', 'stoch_osc', 'taker_buy_volume', 'taker_sell_volume', 'tnx_close', 'tnx_close_change', 'tnx_high', 'tnx_low', 'tnx_open', 'tnx_volume', 'uso_close', 'uso_close_change', 'uso_high', 'uso_low', 'uso_open', 'uso_volume', 'vix_close', 'vix_close_change', 'vix_high', 'vix_low', 'vix_open', 'vix_volume', 'volatility_ratio', 'volume', 'volume_delta', 'williams_r']
+2025-07-30 12:57:41,061 - gcsBot - INFO - Iniciando backtest...
+2025-07-30 12:57:41,154 - gcsBot - INFO - Conexão com o InfluxDB fechada.
+2025-07-30 12:58:59,133 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 12:58:59,222 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-30 12:58:59,224 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-30 12:58:59,224 - gcsBot - INFO - Executando query na measurement 'features_master_table' de -180d até now()...
+2025-07-30 12:59:40,758 - gcsBot - INFO - 256906 registros carregados da measurement 'features_master_table'.
+2025-07-30 12:59:41,726 - gcsBot - INFO - Colunas disponíveis para o backtest: ['adx', 'adx_power', 'atr', 'bb_pband', 'bb_width', 'btc_dxy_corr_30d', 'btc_gold_corr_30d', 'btc_ndx_corr_30d', 'btc_spx_corr_30d', 'btc_tnx_corr_30d', 'btc_uso_corr_30d', 'btc_vix_corr_30d', 'cci', 'close', 'cvd', 'cvd_short_term', 'dxy_close', 'dxy_close_change', 'dxy_high', 'dxy_low', 'dxy_open', 'dxy_volume', 'gold_close', 'gold_close_change', 'gold_high', 'gold_low', 'gold_open', 'gold_volume', 'high', 'low', 'macd_diff', 'momentum_10m', 'ndx_close', 'ndx_close_change', 'ndx_high', 'ndx_low', 'ndx_open', 'ndx_volume', 'open', 'price_change_1m', 'price_change_5m', 'rsi', 'spx_close', 'spx_close_change', 'spx_high', 'spx_low', 'spx_open', 'spx_volume', 'stoch_osc', 'taker_buy_volume', 'taker_sell_volume', 'tnx_close', 'tnx_close_change', 'tnx_high', 'tnx_low', 'tnx_open', 'tnx_volume', 'uso_close', 'uso_close_change', 'uso_high', 'uso_low', 'uso_open', 'uso_volume', 'vix_close', 'vix_close_change', 'vix_high', 'vix_low', 'vix_open', 'vix_volume', 'volatility_ratio', 'volume', 'volume_delta', 'williams_r']
+2025-07-30 12:59:41,727 - gcsBot - INFO - Iniciando backtest...
+2025-07-30 13:24:55,718 - gcsBot - INFO - Salvando o histórico de confiança...
+2025-07-30 13:24:59,868 - gcsBot - INFO - Histórico de confiança salvo com sucesso em: data/output/confidence_history.csv
+2025-07-30 13:25:00,007 - gcsBot - INFO - Conexão com o InfluxDB fechada.
+2025-07-30 13:58:55,864 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 13:58:55,993 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-30 13:58:55,994 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-30 13:58:55,994 - gcsBot - INFO - Executando query na measurement 'features_master_table' de -180d até now()...
+2025-07-30 13:59:42,006 - gcsBot - INFO - 256846 registros carregados da measurement 'features_master_table'.
+2025-07-30 13:59:43,129 - gcsBot - INFO - Colunas disponíveis para o backtest: ['adx', 'adx_power', 'atr', 'bb_pband', 'bb_width', 'btc_dxy_corr_30d', 'btc_gold_corr_30d', 'btc_ndx_corr_30d', 'btc_spx_corr_30d', 'btc_tnx_corr_30d', 'btc_uso_corr_30d', 'btc_vix_corr_30d', 'cci', 'close', 'cvd', 'cvd_short_term', 'dxy_close', 'dxy_close_change', 'dxy_high', 'dxy_low', 'dxy_open', 'dxy_volume', 'gold_close', 'gold_close_change', 'gold_high', 'gold_low', 'gold_open', 'gold_volume', 'high', 'low', 'macd_diff', 'momentum_10m', 'ndx_close', 'ndx_close_change', 'ndx_high', 'ndx_low', 'ndx_open', 'ndx_volume', 'open', 'price_change_1m', 'price_change_5m', 'rsi', 'spx_close', 'spx_close_change', 'spx_high', 'spx_low', 'spx_open', 'spx_volume', 'stoch_osc', 'taker_buy_volume', 'taker_sell_volume', 'tnx_close', 'tnx_close_change', 'tnx_high', 'tnx_low', 'tnx_open', 'tnx_volume', 'uso_close', 'uso_close_change', 'uso_high', 'uso_low', 'uso_open', 'uso_volume', 'vix_close', 'vix_close_change', 'vix_high', 'vix_low', 'vix_open', 'vix_volume', 'volatility_ratio', 'volume', 'volume_delta', 'williams_r']
+2025-07-30 13:59:43,129 - gcsBot - INFO - Iniciando backtest...
+2025-07-30 14:02:35,794 - gcsBot - INFO - Conexão com o InfluxDB fechada.
+2025-07-30 14:02:39,357 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 14:02:39,432 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-30 14:02:39,434 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-30 14:02:39,434 - gcsBot - INFO - Executando query na measurement 'features_master_table' de -180d até now()...
+2025-07-30 14:03:26,169 - gcsBot - INFO - 256842 registros carregados da measurement 'features_master_table'.
+2025-07-30 14:03:27,168 - gcsBot - INFO - Colunas disponíveis para o backtest: ['adx', 'adx_power', 'atr', 'bb_pband', 'bb_width', 'btc_dxy_corr_30d', 'btc_gold_corr_30d', 'btc_ndx_corr_30d', 'btc_spx_corr_30d', 'btc_tnx_corr_30d', 'btc_uso_corr_30d', 'btc_vix_corr_30d', 'cci', 'close', 'cvd', 'cvd_short_term', 'dxy_close', 'dxy_close_change', 'dxy_high', 'dxy_low', 'dxy_open', 'dxy_volume', 'gold_close', 'gold_close_change', 'gold_high', 'gold_low', 'gold_open', 'gold_volume', 'high', 'low', 'macd_diff', 'momentum_10m', 'ndx_close', 'ndx_close_change', 'ndx_high', 'ndx_low', 'ndx_open', 'ndx_volume', 'open', 'price_change_1m', 'price_change_5m', 'rsi', 'spx_close', 'spx_close_change', 'spx_high', 'spx_low', 'spx_open', 'spx_volume', 'stoch_osc', 'taker_buy_volume', 'taker_sell_volume', 'tnx_close', 'tnx_close_change', 'tnx_high', 'tnx_low', 'tnx_open', 'tnx_volume', 'uso_close', 'uso_close_change', 'uso_high', 'uso_low', 'uso_open', 'uso_volume', 'vix_close', 'vix_close_change', 'vix_high', 'vix_low', 'vix_open', 'vix_volume', 'volatility_ratio', 'volume', 'volume_delta', 'williams_r']
+2025-07-30 14:03:27,169 - gcsBot - INFO - Iniciando backtest...
+2025-07-30 14:03:45,133 - gcsBot - INFO - Conexão com o InfluxDB fechada.
+2025-07-30 14:06:00,040 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 14:06:00,116 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST ---
+2025-07-30 14:06:00,118 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-30 14:06:00,119 - gcsBot - INFO - Executando query na measurement 'features_master_table' de -180d até now()...
+2025-07-30 14:06:43,938 - gcsBot - INFO - 256838 registros carregados da measurement 'features_master_table'.
+2025-07-30 14:06:44,821 - gcsBot - INFO - Colunas disponíveis para o backtest: ['adx', 'adx_power', 'atr', 'bb_pband', 'bb_width', 'btc_dxy_corr_30d', 'btc_gold_corr_30d', 'btc_ndx_corr_30d', 'btc_spx_corr_30d', 'btc_tnx_corr_30d', 'btc_uso_corr_30d', 'btc_vix_corr_30d', 'cci', 'close', 'cvd', 'cvd_short_term', 'dxy_close', 'dxy_close_change', 'dxy_high', 'dxy_low', 'dxy_open', 'dxy_volume', 'gold_close', 'gold_close_change', 'gold_high', 'gold_low', 'gold_open', 'gold_volume', 'high', 'low', 'macd_diff', 'momentum_10m', 'ndx_close', 'ndx_close_change', 'ndx_high', 'ndx_low', 'ndx_open', 'ndx_volume', 'open', 'price_change_1m', 'price_change_5m', 'rsi', 'spx_close', 'spx_close_change', 'spx_high', 'spx_low', 'spx_open', 'spx_volume', 'stoch_osc', 'taker_buy_volume', 'taker_sell_volume', 'tnx_close', 'tnx_close_change', 'tnx_high', 'tnx_low', 'tnx_open', 'tnx_volume', 'uso_close', 'uso_close_change', 'uso_high', 'uso_low', 'uso_open', 'uso_volume', 'vix_close', 'vix_close_change', 'vix_high', 'vix_low', 'vix_open', 'vix_volume', 'volatility_ratio', 'volume', 'volume_delta', 'williams_r']
+2025-07-30 14:06:44,822 - gcsBot - INFO - Iniciando backtest...
+2025-07-30 14:30:18,684 - gcsBot - INFO - Salvando o histórico de confiança...
+2025-07-30 14:30:22,807 - gcsBot - INFO - Histórico de confiança salvo com sucesso em: data/output/confidence_history.csv
+2025-07-30 14:30:23,157 - gcsBot - INFO - Histórico de trades salvo com sucesso em: data/output/trades_history.csv
+2025-07-30 14:30:23,160 - gcsBot - INFO - Conexão com o InfluxDB fechada.

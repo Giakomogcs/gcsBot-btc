@@ -1,31 +1,84 @@
-# config.yml - Parâmetros de Comportamento do Bot
-app:
-  environment: "development" # Pode ser development, production ou testing
-  use_testnet: false
-  force_offline_mode: false
+# config.yml (VERSÃO FINAL COM AMBIENTE)
 
-data_paths:
-  data_dir: "data"
-  logs_dir: "logs"
-  model_metadata_file: "data/model_metadata.json"
-  historical_data_file: "data/btc_historical_data.csv"
-  kaggle_bootstrap_file: "data/kaggle_bootstrap.csv"
+# Configurações de conexão com o banco de dados
+database:
+  influxdb:
+    url: "http://db:8086"
+    token: "my-super-secret-auth-token"
+    org: "gcsbot_org"
+    bucket: "btc_data"
 
-model_params:
-  future_periods: 30
-  profit_mult: 2.0
-  stop_mult: 2.0
-  model_validity_months: 1
+# Configurações do backtest (parâmetros da simulação)
+backtest:
+  start_date: "-180d"
+  initial_capital: 100
+  commission_rate: 0.001
 
+# Estratégia de Trading: o cérebro da tomada de decisão
+trading_strategy:
+  confidence_threshold: 0.60
+
+  triple_barrier:
+    profit_mult: 6.0
+    stop_mult: 2.0
+    time_limit_candles: 96
+
+  models:
+    models_path: "data/all_data"
+    specialists:
+      price_action:
+        filename: "model_price_action.joblib"
+        features:
+          [
+            "atr",
+            "bb_width",
+            "bb_pband",
+            "price_change_1m",
+            "price_change_5m",
+            "momentum_10m",
+            "volatility_ratio",
+          ]
+      quant_classic:
+        filename: "model_quant_classic.joblib"
+        features:
+          [
+            "rsi",
+            "macd_diff",
+            "stoch_osc",
+            "adx",
+            "adx_power",
+            "cci",
+            "williams_r",
+            "cvd",
+            "cvd_short_term",
+          ]
+      macro_hedger:
+        filename: "model_macro_hedger.joblib"
+        features:
+          [
+            "dxy_close_change",
+            "vix_close_change",
+            "gold_close_change",
+            "tnx_close_change",
+            "btc_dxy_corr_30d",
+            "btc_vix_corr_30d",
+          ]
+
+  ensemble_weights:
+    price_action: 0.6
+    quant_classic: 0.4
+
+# Configuração do dimensionamento de posição
+position_sizing:
+  method: "Dynamic"
+  risk_per_trade: 0.02
+
+# Configurações do otimizador de modelos (Optuna)
 optimizer:
-  wfo_train_minutes: 432000 # ~10 meses
-  n_trials_for_cycle: 150
-  quality_threshold: 0.33
+  n_trials: 100
+  storage_name: "gcsbot_optimizer_db"
+  objective_metric: "Profit Factor"
 
-dca:
-  enabled: true
-  min_capital_usdt: 100.0
-  daily_amount_usdt: 5.0
-
-execution:
-  confidence_threshold: 0.60 # Começar com um valor ligeiramente mais baixo
+# Configuração do logger
+logging:
+  level: "INFO"

@@ -3,16 +3,19 @@
 from influxdb_client import InfluxDBClient
 from influxdb_client.client.write_api import SYNCHRONOUS
 from src.config_manager import settings
-from src.logger import logger # Assumindo que você tem um logger configurado
+from src.logger import logger # Assuming you have a logger configured
 
 class DatabaseManager:
     """
     Gerencia todas as interações com o banco de dados InfluxDB.
     """
     def __init__(self):
-        self.url = settings.influxdb_url
-        self.token = settings.influxdb_token
-        self.org = settings.influxdb_org
+        # --- START OF CORRECTION ---
+        # Accessing the new hierarchical configuration
+        self.url = settings.database.influxdb.url
+        self.token = settings.database.influxdb.token
+        self.org = settings.database.influxdb.org
+        # --- END OF CORRECTION ---
         self._client = None
         self.connect()
 
@@ -53,7 +56,7 @@ class DatabaseManager:
         if self._client:
             self._client.close()
             logger.info("Conexão com InfluxDB fechada.")
-            
+
 
 # Instância única para ser usada em outros módulos
 db_manager = DatabaseManager()

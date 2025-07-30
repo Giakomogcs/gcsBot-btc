@@ -1,51 +1,70 @@
-# src/situational_awareness.py
-
 import pandas as pd
-from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
 from src.logger import logger
 
 class SituationalAwareness:
-    def __init__(self, n_clusters=10, random_state=42):
-        self.n_clusters = n_clusters
-        self.random_state = random_state
-        self.kmeans = KMeans(n_clusters=self.n_clusters, random_state=self.random_state, n_init=10)
+    """
+    Analisa a tabela de features para identificar e rotular diferentes
+    regimes de mercado usando clustering.
+    """
+    def __init__(self, n_regimes: int = 4):
+        """
+        Inicializa o módulo.
+        
+        Args:
+            n_regimes (int): O número de diferentes "situações" de mercado
+                             que queremos que o modelo identifique.
+        """
+        self.n_regimes = n_regimes
+        # Usaremos KMeans para agrupar as características do mercado em regimes
+        self.cluster_model = KMeans(n_clusters=self.n_regimes, random_state=42, n_init=10)
         self.scaler = StandardScaler()
 
-    def cluster_data(self, df: pd.DataFrame) -> pd.DataFrame:
-        logger.info(f"Clustering data into {self.n_clusters} market situations...")
+    def determine_regimes(self, features_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Adiciona a coluna 'market_regime' ao DataFrame.
 
-        features_for_clustering = [
-            'rsi', 'macd_diff', 'atr', 'bb_width', 'volume_sma_50'
-        ]
+        Args:
+            features_df (pd.DataFrame): O DataFrame completo da features_master_table.
+
+        Returns:
+            pd.DataFrame: O mesmo DataFrame com a coluna 'market_regime' adicionada.
+        """
+        logger.info(f"Iniciando a determinação de {self.n_regimes} regimes de mercado...")
+
+        # Selecionamos as características que definem um "regime".
+        # Volatilidade (atr) e tendência (usando a diferença entre médias) são bons começos.
+        # Sinta-se à vontade para adicionar outras, como 'volume_delta' ou 'momentum_10m'.
+        regime_features = ['atr', 'macd_diff', 'rsi'] # Exemplo inicial
         
-        # Ensure all required features are present
-        missing_features = [f for f in features_for_clustering if f not in df.columns]
-        if missing_features:
-            raise ValueError(f"Missing features for clustering: {missing_features}")
+        df = features_df.copy()
 
-        # Create a copy to avoid SettingWithCopyWarning
-        df_copy = df.copy()
+        # Garante que as features existem
+        for feature in regime_features:
+            if feature not in df.columns:
+                logger.error(f"Feature '{feature}' para determinação de regime não encontrada no DataFrame. Abortando.")
+                # Retorna o DF original sem a coluna de regime
+                return features_df
 
-        # Drop rows with NaN values in the features to be scaled
-        df_copy.dropna(subset=features_for_clustering, inplace=True)
+        # Removemos valores nulos que podem ter sido gerados no cálculo das features
+        df.dropna(subset=regime_features, inplace=True)
+        if df.empty:
+            logger.error("Após remover NaNs, não restaram dados para determinar regimes. Verifique o data_pipeline.")
+            return features_df
 
-        if df_copy.empty:
-            logger.warning("DataFrame is empty after dropping NaNs. Cannot perform clustering.")
-            # Return the original dataframe with an empty 'market_situation' column
-            df['market_situation'] = pd.Series(dtype='int')
-            return df
+        # Normalizamos os dados para que o KMeans funcione corretamente
+        scaled_features = self.scaler.fit_transform(df[regime_features])
 
-        scaled_features = self.scaler.fit_transform(df_copy[features_for_clustering])
+        # Treina o modelo de clustering e atribui um regime a cada linha
+        regime_labels = self.cluster_model.fit_predict(scaled_features)
+
+        # Adiciona os rótulos de regime de volta ao DataFrame
+        df['market_regime'] = regime_labels
         
-        # Get the predictions
-        predictions = self.kmeans.fit_predict(scaled_features)
-        
-        # Create a new DataFrame for the predictions
-        df_predictions = pd.DataFrame(predictions, index=df_copy.index, columns=['market_situation'])
-        
-        # Join the predictions back to the original DataFrame
-        df = df.join(df_predictions, how='left')
+        logger.info("Análise de regimes de mercado concluída.")
+        # Exibe um resumo de quantos pontos de dados caíram em cada regime
+        logger.info(f"Distribuição dos regimes:\n{df['market_regime'].value_counts().sort_index()}")
 
-        logger.info("Clustering complete.")
-        return df
+        # Retorna o DataFrame original com a nova coluna, preenchendo com -1 onde não foi possível calcular
+        return features_df.join(df[['market_regime']]).fillna({'market_regime': -1})

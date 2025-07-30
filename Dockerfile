@@ -15,9 +15,9 @@ WORKDIR /app
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-COPY requirements-core.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements-core.txt
+    pip install --no-cache-dir -r requirements.txt
 
 # --- ESTÁGIO 2: Final ---
 # Usamos a imagem slim, que é leve, para a imagem final
