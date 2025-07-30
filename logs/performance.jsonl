@@ -2631,3 +2631,32 @@
 {"timestamp": "2025-07-30 12:27:40,806", "level": "ERROR", "message": "Erro ao executar a query no InfluxDB para 'features_master_table': (400)\nReason: Bad Request\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'Vary': 'Accept-Encoding', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'invalid', 'Date': 'Wed, 30 Jul 2025 12:27:40 GMT', 'Content-Length': '100'})\nHTTP response body: b'{\"code\":\"invalid\",\"message\":\"failed to decode request body: organization name \\\\\"my-org\\\\\" not found\"}'\n"}
 {"timestamp": "2025-07-30 12:27:40,810", "level": "ERROR", "message": "Nenhuma feature foi carregada da 'features_master_table'. Execute o data_pipeline primeiro."}
 {"timestamp": "2025-07-30 12:32:39,488", "level": "ERROR", "message": "Nenhum especialista foi carregado. Execute o otimizador primeiro."}
+{"timestamp": "2025-07-30 15:46:10,960", "level": "WARNING", "message": "\u274c FALHA NA CONEX\u00c3O com a Binance: 'Settings' object has no attribute 'binance_api_key'."}
+{"timestamp": "2025-07-30 15:46:15,521", "level": "ERROR", "message": "\u274c Falha no pipeline de Sentimento: cannot access local variable 'df' where it is not associated with a value"}
+{"timestamp": "2025-07-30 16:25:20,879", "level": "WARNING", "message": "\u274c FALHA NA CONEX\u00c3O com a Binance: 'Settings' object has no attribute 'binance_api_key'."}
+{"timestamp": "2025-07-30 16:25:25,469", "level": "ERROR", "message": "\u274c Falha no pipeline de Sentimento: cannot access local variable 'df' where it is not associated with a value"}
+{"timestamp": "2025-07-30 16:25:25,490", "level": "ERROR", "message": "Nenhum ficheiro de hist\u00f3rico encontrado. Bootstrap imposs\u00edvel."}
+{"timestamp": "2025-07-30 16:46:12,439", "level": "ERROR", "message": "Ficheiro de bootstrap n\u00e3o encontrado em data/input/bootstrap/kaggle_btc_1m.csv. Bootstrap imposs\u00edvel."}
+{"timestamp": "2025-07-30 16:50:46,013", "level": "ERROR", "message": "Ficheiro de bootstrap n\u00e3o encontrado em data/input/bootstrap/kaggle_btc_1m.csv. Bootstrap imposs\u00edvel."}
+{"timestamp": "2025-07-30 17:39:19,196", "level": "ERROR", "message": "Erro ao buscar dados de derivativos: 'Client' object has no attribute 'get_funding_rate_history'"}
+{"timestamp": "2025-07-30 17:55:54,470", "level": "ERROR", "message": "Arquivo do modelo de SituationalAwareness n\u00e3o encontrado em data/models/situational_awareness.joblib"}
+{"timestamp": "2025-07-30 17:55:54,471", "level": "ERROR", "message": "Modelo de SituationalAwareness n\u00e3o p\u00f4de ser carregado. O pipeline n\u00e3o pode continuar com a classifica\u00e7\u00e3o de regimes."}
+{"timestamp": "2025-07-30 18:37:07,668", "level": "ERROR", "message": "Nenhuma feature foi carregada. Execute o data_pipeline primeiro."}
+{"timestamp": "2025-07-30 18:38:10,817", "level": "ERROR", "message": "Nenhuma feature foi carregada. Execute o data_pipeline primeiro."}
+{"timestamp": "2025-07-30 18:39:53,136", "level": "ERROR", "message": "Nenhuma feature foi carregada. Execute o data_pipeline primeiro."}
+{"timestamp": "2025-07-30 18:52:37,031", "level": "ERROR", "message": "Nenhuma feature foi carregada. Execute o data_pipeline primeiro."}
+{"timestamp": "2025-07-30 18:53:05,146", "level": "ERROR", "message": "Nenhuma feature foi carregada. Execute o data_pipeline primeiro."}
+{"timestamp": "2025-07-30 18:57:46,487", "level": "ERROR", "message": "A consulta n\u00e3o retornou dados. Verifique se o pipeline foi executado com sucesso e se h\u00e1 dados no \u00faltimo ano."}
+{"timestamp": "2025-07-30 18:57:46,488", "level": "ERROR", "message": "Causas poss\u00edveis: (1) O 'data_pipeline' n\u00e3o foi executado ap\u00f3s o 'reset-db'. (2) Ocorreu um erro durante o pipeline que o impediu de salvar a 'features_master_table'. (3) N\u00e3o h\u00e1 dados no per\u00edodo de 1 ano."}
+{"timestamp": "2025-07-30 18:58:45,038", "level": "ERROR", "message": "A consulta n\u00e3o retornou dados. Verifique se o pipeline foi executado com sucesso e se h\u00e1 dados no \u00faltimo ano."}
+{"timestamp": "2025-07-30 18:58:45,039", "level": "ERROR", "message": "Causas poss\u00edveis: (1) O 'data_pipeline' n\u00e3o foi executado ap\u00f3s o 'reset-db'. (2) Ocorreu um erro durante o pipeline que o impediu de salvar a 'features_master_table'. (3) N\u00e3o h\u00e1 dados no per\u00edodo de 1 ano."}
+{"timestamp": "2025-07-30 18:59:50,342", "level": "ERROR", "message": "Nenhuma feature foi carregada. Execute o data_pipeline primeiro."}
+{"timestamp": "2025-07-30 19:02:28,573", "level": "WARNING", "message": "\u274c FALHA NA CONEX\u00c3O com a Binance: HTTPSConnectionPool(host='api.binance.com', port=443): Read timed out. (read timeout=10)."}
+{"timestamp": "2025-07-30 19:02:28,592", "level": "ERROR", "message": "Nenhuma feature foi carregada. Verifique se o pipeline foi executado com sucesso e se h\u00e1 dados no per\u00edodo de treino."}
+{"timestamp": "2025-07-30 19:05:48,978", "level": "ERROR", "message": "A consulta n\u00e3o retornou dados. Verifique se o pipeline foi executado com sucesso e se h\u00e1 dados no \u00faltimo ano."}
+{"timestamp": "2025-07-30 19:07:42,592", "level": "ERROR", "message": "A consulta n\u00e3o retornou dados. Verifique se o `update-db` foi executado com sucesso."}
+{"timestamp": "2025-07-30 19:09:35,036", "level": "ERROR", "message": "A consulta n\u00e3o retornou dados. Verifique se o `update-db` foi executado com sucesso e se h\u00e1 dados no \u00faltimo ano."}
+{"timestamp": "2025-07-30 19:14:00,582", "level": "WARNING", "message": "\u274c FALHA NA CONEX\u00c3O com a Binance: HTTPSConnectionPool(host='api.binance.com', port=443): Read timed out. (read timeout=10)."}
+{"timestamp": "2025-07-30 19:35:07,177", "level": "ERROR", "message": "A consulta n\u00e3o retornou dados. Causas prov\u00e1veis: (1) O 'update-db' n\u00e3o foi executado ou falhou. (2) N\u00e3o existem dados no \u00faltimo ano."}
+{"timestamp": "2025-07-30 19:35:33,625", "level": "ERROR", "message": "A consulta n\u00e3o retornou dados. Causas prov\u00e1veis: (1) O 'update-db' n\u00e3o foi executado ou falhou. (2) N\u00e3o existem dados no \u00faltimo ano."}
+{"timestamp": "2025-07-30 19:36:38,620", "level": "ERROR", "message": "A consulta n\u00e3o retornou dados. Causas prov\u00e1veis: (1) O pipeline 'update-db' n\u00e3o foi executado ou falhou. (2) N\u00e3o existem dados no \u00faltimo ano na sua base de dados."}

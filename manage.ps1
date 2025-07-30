@@ -39,7 +39,9 @@ switch ($command) {
     }
     "optimize" {
         Write-Host "${Yellow}--- Iniciando a Fábrica de IAs (Otimizador) DENTRO do container...${Reset}"
-        docker-compose exec app python src/core/optimizer.py
+        # Permite passar argumentos como 'train_regime_model'
+        $extraArgs = $args[1..($args.Length-1)]
+        docker-compose exec app python src/core/optimizer.py $extraArgs
     }
     "backtest" {
          Write-Host "${Yellow}--- Iniciando o Laboratório de Simulação (Backtester) DENTRO do container...${Reset}"

@@ -1,37 +1,41 @@
-# src/config_manager.py (VERSÃO FINAL E CORRETA)
-
 import yaml
 from pathlib import Path
-from pydantic_settings import BaseSettings
-from pydantic import BaseModel
+from typing import Any
+from pydantic import BaseModel, Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# --- Modelos para o config.yml ---
+class AppConfig(BaseModel):
+    use_testnet: bool
+    force_offline_mode: bool
 
-class InfluxDBConfig(BaseModel):
-    url: str
-    token: str
-    org: str
-    bucket: str
+class DataPathsConfig(BaseModel):
+    macro_data_dir: str
+    historical_data_file: str
+    kaggle_bootstrap_file: str
+    models_dir: str
 
-class DatabaseConfig(BaseModel):
-    influxdb: InfluxDBConfig
+class TargetConfig(BaseModel):
+    future_periods: int
+    profit_mult: float
+    stop_mult: float
 
-class BacktestConfig(BaseModel):
-    start_date: str
-    initial_capital: float
-    commission_rate: float
+class DataPipelineConfig(BaseModel):
+    start_date_ingestion: str
+    regime_features: list[str]
+    tags_for_master_table: list[str]
+    target: TargetConfig
+
+class SpecialistConfig(BaseModel):
+    features: list[str]
+
+class ModelsConfig(BaseModel):
+    specialists: dict[str, SpecialistConfig]
 
 class TripleBarrierConfig(BaseModel):
     profit_mult: float
     stop_mult: float
     time_limit_candles: int
-
-class SpecialistConfig(BaseModel):
-    filename: str
-    features: list[str]
-
-class ModelsConfig(BaseModel):
-    models_path: str
-    specialists: dict[str, SpecialistConfig]
 
 class TradingStrategyConfig(BaseModel):
     confidence_threshold: float
@@ -45,39 +49,57 @@ class PositionSizingConfig(BaseModel):
 
 class OptimizerConfig(BaseModel):
     n_trials: int
-    storage_name: str
+    quality_threshold: float
     objective_metric: str
 
 class LoggingConfig(BaseModel):
     level: str
+    
+class BacktestConfig(BaseModel):
+    start_date: str
+    initial_capital: int
+    commission_rate: float
 
-# --- A Classe Principal de Configurações ---
-# Ela herda de BaseModel, pois vamos popular os dados manualmente.
+# --- Modelos para Variáveis de Ambiente (.env) ---
+class InfluxDBConfig(BaseSettings):
+    model_config = SettingsConfigDict(env_file='.env', extra='ignore')
+    url: str = Field(..., alias='INFLUXDB_URL')
+    token: str = Field(..., alias='INFLUXDB_TOKEN')
+    org: str = Field(..., alias='INFLUXDB_ORG')
+    bucket: str = Field(..., alias='INFLUXDB_BUCKET')
 
-class Settings(BaseModel):
-    database: DatabaseConfig
-    backtest: BacktestConfig
+class ApiKeysConfig(BaseSettings):
+    model_config = SettingsConfigDict(env_file='.env', extra='ignore')
+    binance_api_key: str = Field("", alias='BINANCE_API_KEY')
+    binance_api_secret: str = Field("", alias='BINANCE_API_SECRET')
+    binance_testnet_api_key: str = Field("", alias='BINANCE_TESTNET_API_KEY')
+    binance_testnet_api_secret: str = Field("", alias='BINANCE_TESTNET_API_SECRET')
+
+# --- Classe de Configuração Principal ---
+class Settings(BaseSettings):
+    database: InfluxDBConfig = InfluxDBConfig()
+    api_keys: ApiKeysConfig = ApiKeysConfig()
+    
+    app: AppConfig
+    data_paths: DataPathsConfig
+    data_pipeline: DataPipelineConfig
     trading_strategy: TradingStrategyConfig
     position_sizing: PositionSizingConfig
     optimizer: OptimizerConfig
     logging: LoggingConfig
+    backtest: BacktestConfig # <-- ADICIONADO O CAMPO QUE FALTAVA
 
-# --- A LÓGICA DE CARREGAMENTO (SIMPLES E DIRETA) ---
+    @classmethod
+    def settings_customise_sources(
+        cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings
+    ):
+        def yaml_config_source() -> dict[str, Any]:
+            yaml_file = Path('config.yml')
+            if not yaml_file.is_file():
+                raise FileNotFoundError("Ficheiro 'config.yml' não encontrado!")
+            return yaml.safe_load(yaml_file.read_text())
 
-def load_settings() -> Settings:
-    """
-    Carrega as configurações do arquivo config.yml e as valida com Pydantic.
-    Esta é a abordagem mais robusta e simples.
-    """
-    config_path = Path('config.yml')
-    if not config_path.is_file():
-        raise FileNotFoundError(f"Arquivo de configuração não encontrado em: {config_path.resolve()}")
+        return (yaml_config_source,)
 
-    with open(config_path, 'r') as f:
-        config_data = yaml.safe_load(f)
-
-    return Settings(**config_data)
-
-# --- A INSTÂNCIA FINAL ---
-# Chamamos nossa função para criar a instância única de configurações.
-settings = load_settings()
+# --- Instância Final ---
+settings = Settings()

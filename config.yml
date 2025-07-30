@@ -1,6 +1,5 @@
-# config.yml (VERSÃO FINAL COM AMBIENTE)
+# config.yml (VERSÃO ALINHADA)
 
-# Configurações de conexão com o banco de dados
 database:
   influxdb:
     url: "http://db:8086"
@@ -14,59 +13,68 @@ backtest:
   initial_capital: 100
   commission_rate: 0.001
 
+app:
+  use_testnet: false
+  force_offline_mode: false
+
+# Caminhos para dados e modelos
+data_paths:
+  macro_data_dir: "data/input/macro"
+  historical_data_file: "data/input/history/BTCUSDT-1m-data.csv"
+  kaggle_bootstrap_file: "data/input/bootstrap/kaggle_btc_1m.csv"
+  models_dir: "data/models"
+
+# Configurações do pipeline de dados
+data_pipeline:
+  start_date_ingestion: "-5y"
+  regime_features: ["atr_14", "macd_12_26_9_diff", "rsi_14"]
+  tags_for_master_table: ["target", "market_regime"]
+  target:
+    future_periods: 60
+    profit_mult: 1.5
+    stop_mult: 1.5
+
 # Estratégia de Trading: o cérebro da tomada de decisão
 trading_strategy:
   confidence_threshold: 0.60
-
   triple_barrier:
-    profit_mult: 6.0
+    profit_mult: 4.0
     stop_mult: 2.0
     time_limit_candles: 96
 
   models:
-    models_path: "data/all_data"
     specialists:
+      # Especialista em ação de preço e microestrutura
       price_action:
-        filename: "model_price_action.joblib"
         features:
-          [
-            "atr",
-            "bb_width",
-            "bb_pband",
-            "price_change_1m",
-            "price_change_5m",
-            "momentum_10m",
-            "volatility_ratio",
-          ]
-      quant_classic:
-        filename: "model_quant_classic.joblib"
+          - "atr_14"
+          - "bbands_20_2_0_bbp" # Percent-band é mais informativo que as bandas brutas
+          - "volume_delta"
+          - "cvd"
+
+      # Especialista em sentimento e posicionamento de mercado
+      market_dynamics:
         features:
-          [
-            "rsi",
-            "macd_diff",
-            "stoch_osc",
-            "adx",
-            "adx_power",
-            "cci",
-            "williams_r",
-            "cvd",
-            "cvd_short_term",
-          ]
-      macro_hedger:
-        filename: "model_macro_hedger.joblib"
+          - "funding_rate_mean_24h"
+          - "open_interest_pct_change_4h"
+          - "fear_and_greed"
+          - "fng_change_3d"
+
+      # --- INÍCIO DA MODIFICAÇÃO: O NOVO ESPECIALISTA ---
+      # Especialista em correlações e ambiente macro
+      intermarket_analyst:
         features:
-          [
-            "dxy_close_change",
-            "vix_close_change",
-            "gold_close_change",
-            "tnx_close_change",
-            "btc_dxy_corr_30d",
-            "btc_vix_corr_30d",
-          ]
+          - "btc_spx_corr_30d" # Correlação com o mercado de ações (risco on/off)
+          - "btc_ndx_corr_30d" # Correlação com o setor de tecnologia
+          - "btc_gold_corr_30d" # Correlação com o ouro (ativo de refúgio)
+          - "btc_dxy_corr_30d" # Correlação com a força do dólar
+          - "btc_vix_corr_30d" # Correlação com a volatilidade/medo
+      # --- FIM DA MODIFICAÇÃO ---
 
   ensemble_weights:
-    price_action: 0.6
-    quant_classic: 0.4
+    price_action: 0.4
+    market_dynamics: 0.4
+    intermarket_analyst: 0.2
 
 # Configuração do dimensionamento de posição
 position_sizing:
@@ -76,7 +84,7 @@ position_sizing:
 # Configurações do otimizador de modelos (Optuna)
 optimizer:
   n_trials: 100
-  storage_name: "gcsbot_optimizer_db"
+  quality_threshold: 0.55 # Limiar de qualidade para salvar um modelo
   objective_metric: "Profit Factor"
 
 # Configuração do logger

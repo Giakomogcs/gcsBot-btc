@@ -1,4 +1,4 @@
-# Ficheiro: docker-compose.yml (VERSÃO FINAL COM CONFIGURAÇÃO DE PERFORMANCE)
+# docker-compose.yml (VERSÃO ALINHADA)
 
 services:
   db:
@@ -8,15 +8,14 @@ services:
       - DOCKER_INFLUXDB_INIT_MODE=setup
       - DOCKER_INFLUXDB_INIT_USERNAME=user
       - DOCKER_INFLUXDB_INIT_PASSWORD=password
-      - DOCKER_INFLUXDB_INIT_ORG=gcsbot_org
-      - DOCKER_INFLUXDB_INIT_BUCKET=btc_data
-      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=my-super-secret-auth-token
+      # Estas variáveis agora vêm diretamente do ficheiro .env
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG}
+      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET}
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN}
     ports:
       - "8086:8086"
     volumes:
       - influxdb_data:/var/lib/influxdb2
-      - ./config/influxdb.conf:/etc/influxdb2/influxdb.conf
-    # A SEÇÃO "command" FOI COMPLETAMENTE REMOVIDA DAQUI
     healthcheck:
       test: ["CMD", "influx", "ping"]
       interval: 10s
@@ -29,20 +28,14 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    environment:
-      - INFLUXDB_URL=http://db:8086
-      - INFLUXDB_TOKEN=my-super-secret-auth-token
-      - INFLUXDB_ORG=gcsbot_org
-      - INFLUXDB_BUCKET=btc_data
-      - BINANCE_API_KEY=${BINANCE_API_KEY}
-      - BINANCE_API_SECRET=${BINANCE_API_SECRET}
-      - BINANCE_TESTNET_API_KEY=${BINANCE_TESTNET_API_KEY}
-      - BINANCE_TESTNET_API_SECRET=${BINANCE_TESTNET_API_SECRET}
+    # Passa o ficheiro .env inteiro para dentro do contentor
+    # A aplicação Python irá lê-lo diretamente
+    env_file:
+      - .env
     volumes:
-      - .:/app # Mantenha para desenvolvimento, remova para testar a imagem de produção
+      - .:/app
+    # Mantém o contentor a correr para que possamos usar 'exec'
     command: tail -f /dev/null
-    dns:
-      - 8.8.8.8
 
 volumes:
   influxdb_data:

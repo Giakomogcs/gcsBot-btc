@@ -1,10 +1,11 @@
-# Ficheiro: scripts/data_pipeline.py (VERSÃO INDUSTRIAL DEFINITIVA)
+# Ficheiro: scripts/data_pipeline.py (VERSÃO FINAL ALINHADA)
 
 import os
 import sys
 import datetime
 import pandas as pd
 import time
+import requests
 import yfinance as yf
 import gc
 from binance.client import Client
@@ -12,7 +13,6 @@ from binance.exceptions import BinanceAPIException, BinanceRequestException
 from tqdm import tqdm
 from typing import Optional
 from dateutil.relativedelta import relativedelta
-
 
 # Adiciona a raiz do projeto ao path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -23,20 +23,20 @@ from src.config_manager import settings
 from src.database_manager import db_manager
 from src.logger import logger
 from src.core.feature_engineering import add_all_features
+from src.core.situational_awareness import SituationalAwareness
 
 class DataPipeline:
-    """
-    O motor ETL (Extract, Transform, Load) do projeto.
-    """
     def __init__(self):
         self.binance_client = self._init_binance_client()
-
 
     def _init_binance_client(self) -> Optional[Client]:
         if settings.app.force_offline_mode: return None
         try:
-            api_key = settings.binance_testnet_api_key if settings.app.use_testnet else settings.binance_api_key
-            api_secret = settings.binance_testnet_api_secret if settings.app.use_testnet else settings.binance_api_secret
+            # --- INÍCIO DA CORREÇÃO 1: CAMINHO CORRETO PARA AS API KEYS ---
+            api_key = settings.api_keys.binance_testnet_api_key if settings.app.use_testnet else settings.api_keys.binance_api_key
+            api_secret = settings.api_keys.binance_testnet_api_secret if settings.app.use_testnet else settings.api_keys.binance_api_secret
+            # --- FIM DA CORREÇÃO 1 ---
+            
             if not api_key or not api_secret:
                 logger.warning("API Key/Secret da Binance não encontradas.")
                 return None
@@ -47,6 +47,47 @@ class DataPipeline:
         except Exception as e:
             logger.warning(f"❌ FALHA NA CONEXÃO com a Binance: {e}.")
             return None
+
+    # ... (outros métodos como _write_dataframe_to_influx, _query_last_timestamp, etc. permanecem os mesmos)
+
+    def run_sentiment_pipeline(self):
+        """Busca o Índice de Medo e Ganância e o salva no InfluxDB."""
+        logger.info("--- ❤️ INICIANDO PIPELINE DE SENTIMENTO (FONTE: ALTERNATIVE.ME) ❤️ ---")
+        measurement_name = "sentiment_fear_and_greed"
+        
+        try:
+            last_ts_in_db = self._query_last_timestamp(measurement_name)
+            url = "https://api.alternative.me/fng/?limit=730&format=json"
+            response = requests.get(url)
+            response.raise_for_status()
+            
+            data = response.json().get('data')
+            if not data:
+                logger.warning("API de Sentimento não retornou dados.")
+                return
+
+            # --- INÍCIO DA CORREÇÃO 2: LÓGICA DE CRIAÇÃO DO DATAFRAME ---
+            # Passo 1: Criar o DataFrame base a partir dos dados JSON
+            df = pd.DataFrame(data)
+
+            # Passo 2: Processar e formatar o DataFrame
+            df_processed = df.rename(columns={'value': 'fear_and_greed'})
+            df_processed['timestamp'] = pd.to_datetime(pd.to_numeric(df_processed['timestamp']), unit='s', utc=True)
+            df_processed = df_processed.set_index('timestamp')[['fear_and_greed']]
+            df_processed['fear_and_greed'] = pd.to_numeric(df_processed['fear_and_greed'])
+            # --- FIM DA CORREÇÃO 2 ---
+            
+            if last_ts_in_db:
+                df_processed = df_processed[df_processed.index > last_ts_in_db]
+
+            if df_processed.empty:
+                logger.info("✅ Dados de Sentimento já estão atualizados.")
+                return
+
+            self._write_dataframe_to_influx(df_processed.resample('1min').ffill(), measurement_name)
+        except Exception as e:
+            logger.error(f"❌ Falha no pipeline de Sentimento: {e}", exc_info=True)
+
 
     def _write_dataframe_to_influx(self, df: pd.DataFrame, measurement: str, batch_size: int = 1000):
         write_api = db_manager.get_write_api()
@@ -68,7 +109,7 @@ class DataPipeline:
             for i in tqdm(range(0, total_rows, batch_size), desc=f"Writing to {measurement}"):
                 batch = df_to_write.iloc[i:i + batch_size]
                 write_api.write(
-                    bucket=settings.database.influxdb.bucket,
+                    bucket=settings.database.bucket,
                     record=batch,
                     data_frame_measurement_name=measurement,
                     data_frame_timestamp_column="timestamp"
@@ -84,7 +125,7 @@ class DataPipeline:
     def _query_last_timestamp(self, measurement: str) -> Optional[pd.Timestamp]:
         query_api = db_manager.get_query_api()
         if not query_api: return None
-        query = f'from(bucket:"{settings.database.influxdb.bucket}") |> range(start: 0) |> filter(fn: (r) => r._measurement == "{measurement}") |> last() |> keep(columns: ["_time"])'
+        query = f'from(bucket:"{settings.database.bucket}") |> range(start: 0) |> filter(fn: (r) => r._measurement == "{measurement}") |> last() |> keep(columns: ["_time"])'
         try:
             result = query_api.query(query)
             if not result or not result[0].records: return None
@@ -101,7 +142,7 @@ class DataPipeline:
         logger.debug(f"Lendo dados de '{measurement}' de {start_date} a {end_date}")
         try:
             query = f'''
-            from(bucket:"{settings.database.influxdb.bucket}") 
+            from(bucket:"{settings.database.bucket}") 
                 |> range(start: {start_date}, stop: {end_date}) 
                 |> filter(fn: (r) => r._measurement == "{measurement}") 
                 |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
@@ -199,54 +240,89 @@ class DataPipeline:
         df = df.astype(float)
         return df
 
+    def run_order_flow_backfill(self, symbol: str, measurement_name: str, months_to_backfill: int = 12):
+        """
+        Executa um backfill robusto de dados de fluxo de ordens (agg_trades)
+        para um período histórico, processando mês a mês para trás.
+        """
+        if not self.binance_client:
+            logger.warning("Cliente Binance offline. Backfill de fluxo de ordens abortado.")
+            return
+
+        logger.info(f"--- 🌊 INICIANDO BACKFILL ROBUSTO DE FLUXO DE ORDENS ({months_to_backfill} meses) 🌊 ---")
+        end_date = self._query_last_timestamp(measurement_name) or datetime.datetime.now(datetime.timezone.utc)
+        start_date = end_date - relativedelta(months=months_to_backfill)
+
+        current_start = start_date
+        pbar = tqdm(total=months_to_backfill, desc="Backfill Order Flow")
+        while current_start < end_date:
+            current_end = current_start + relativedelta(months=1)
+            if current_end > end_date:
+                current_end = end_date
+            
+            logger.info(f"Buscando dados de fluxo de ordens de {current_start.date()} a {current_end.date()}")
+            df_orderflow = self._get_historical_agg_trades(symbol, current_start, current_end)
+            
+            if not df_orderflow.empty:
+                self._write_dataframe_to_influx(df_orderflow, measurement_name)
+            else:
+                logger.warning(f"Nenhum dado de fluxo de ordens encontrado para {current_start.strftime('%Y-%m')}.")
+            
+            current_start = current_end
+            pbar.update(1)
+        pbar.close()
+        logger.info("--- ✅ BACKFILL DE FLUXO DE ORDENS CONCLUÍDO ---")
+
     def run_btc_pipeline(self, symbol: str, interval: str = '1m'):
+        """
+        Pipeline principal para dados de BTC, agora com lógica de bootstrap e atualização separada.
+        """
         measurement_name = f"btc_{symbol.lower().replace('/', '_')}_{interval}"
         end_utc = datetime.datetime.now(datetime.timezone.utc).replace(second=0, microsecond=0)
         last_timestamp_in_db = self._query_last_timestamp(measurement_name)
+
+        # FASE DE BOOTSTRAP: Ocorre apenas se o banco de dados estiver vazio
         if not last_timestamp_in_db:
-            logger.info(f"Nenhum dado encontrado para '{measurement_name}'. Iniciando bootstrap.")
-            df_ohlcv_history = pd.DataFrame()
-            csv_path = settings.data_paths.historical_data_file
-            if not os.path.exists(csv_path): csv_path = settings.data_paths.kaggle_bootstrap_file
+            logger.info(f"Nenhum dado encontrado para '{measurement_name}'. Iniciando bootstrap de OHLCV.")
+            csv_path = settings.data_paths.kaggle_bootstrap_file
             if os.path.exists(csv_path):
-                logger.info(f"Carregando histórico de '{csv_path}'...")
                 df_csv = pd.read_csv(csv_path, low_memory=False, on_bad_lines='skip')
                 df_ohlcv_history = self._preprocess_kaggle_data(df_csv)
-            if not df_ohlcv_history.empty:
-                logger.info(f"{len(df_ohlcv_history)} velas históricas carregadas. Escrevendo no DB...")
-                df_ohlcv_history['taker_buy_volume'] = 0.0
-                df_ohlcv_history['taker_sell_volume'] = 0.0
-                df_to_db = df_ohlcv_history[df_ohlcv_history.index >= '2018-01-01']
-                self._write_dataframe_to_influx(df_to_db, measurement_name)
-                logger.info("Iniciando backfill de Order Flow do último ano...")
-                one_year_ago = df_to_db.index.max() - pd.Timedelta(days=365)
-                backfill_start_date = max(one_year_ago, df_to_db.index.min())
-                backfill_end_date = df_to_db.index.max()
-                if self.binance_client and backfill_start_date < backfill_end_date:
-                    df_orderflow_backfill = self._get_historical_agg_trades(symbol, backfill_start_date, backfill_end_date)
-                    if not df_orderflow_backfill.empty:
-                        logger.info(f"{len(df_orderflow_backfill)} registos de Order Flow encontrados para o backfill.")
-                        self._write_dataframe_to_influx(df_orderflow_backfill, measurement_name)
-                        logger.info("✅ Backfill de Order Flow concluído.")
-                    else:
-                        logger.warning("Nenhum dado de Order Flow encontrado para o período de backfill.")
+                if not df_ohlcv_history.empty:
+                    logger.info(f"{len(df_ohlcv_history)} velas históricas (OHLCV) carregadas. Escrevendo no DB...")
+                    self._write_dataframe_to_influx(df_ohlcv_history, measurement_name)
+                    # Agora, chamamos o backfill para enriquecer os dados que acabamos de inserir
+                    self.run_order_flow_backfill(symbol, measurement_name, months_to_backfill=24) # Ex: 24 meses
+                else:
+                    logger.error("Ficheiro de bootstrap CSV vazio ou inválido.")
             else:
-                logger.error("Nenhum ficheiro de histórico encontrado. Bootstrap impossível.")
+                logger.error(f"Ficheiro de bootstrap não encontrado em {csv_path}. Bootstrap impossível.")
                 return
-            last_timestamp_in_db = self._query_last_timestamp(measurement_name)
-        if not last_timestamp_in_db:
-            logger.error("Falha ao obter timestamp após bootstrap.")
-            return
-        start_utc = last_timestamp_in_db + pd.Timedelta(minutes=1)
+
+        # FASE DE ATUALIZAÇÃO: Busca apenas os dados mais recentes
+        start_utc = (self._query_last_timestamp(measurement_name) or pd.to_datetime('2018-01-01', utc=True)) + pd.Timedelta(minutes=1)
         if self.binance_client and start_utc < end_utc:
-            logger.info(f"Buscando novos dados de BTC de {start_utc.strftime('%Y-%m-%d %H:%M:%S')} até {end_utc.strftime('%Y-%m-%d %H:%M:%S')}...")
+            logger.info(f"Buscando novos dados de {start_utc.strftime('%Y-%m-%d %H:%M:%S')} até {end_utc.strftime('%Y-%m-%d %H:%M:%S')}...")
+            
             df_ohlcv_new = self._get_historical_klines_binance(symbol, interval, start_utc, end_utc)
-            df_orderflow_new = self._get_historical_agg_trades(symbol, start_utc, end_utc)
             if not df_ohlcv_new.empty:
-                df_combined = df_ohlcv_new.join(df_orderflow_new, how='left').fillna(0)
+                df_orderflow_new = self._get_historical_agg_trades(symbol, start_utc, end_utc)
+                df_derivatives_new = self._get_derivatives_data(symbol, start_utc, end_utc)
+                
+                df_combined = df_ohlcv_new.join(df_orderflow_new, how='left')
+                if not df_derivatives_new.empty:
+                    df_combined = df_combined.join(df_derivatives_new, how='outer')
+
+                # Preenche valores que podem faltar (ex: funding rate só aparece de 8 em 8 horas)
+                df_combined.ffill(inplace=True) 
+                df_combined.fillna(0, inplace=True) # Garante que não há NaNs antes de salvar
+
                 self._write_dataframe_to_influx(df_combined, measurement_name)
+            else:
+                logger.info("Nenhum dado novo de velas (OHLCV) encontrado.")
         else:
             logger.info("Dados de BTC no DB já estão atualizados ou cliente offline.")
+            
 
     def run_macro_pipeline(self):
         """
@@ -402,13 +478,103 @@ class DataPipeline:
             
         return is_valid
 
+
+    def _get_derivatives_data(self, symbol: str, start_dt: datetime.datetime, end_dt: datetime.datetime) -> pd.DataFrame:
+        """Busca dados de Derivativos (Funding Rate, Open Interest) da Binance."""
+        if not self.binance_client: return pd.DataFrame()
+        logger.info(f"Buscando dados de Derivativos para {symbol} de {start_dt} a {end_dt}...")
+        
+        try:
+            funding_rates = self.binance_client.get_funding_rate_history(symbol=symbol.replace('/', ''), startTime=int(start_dt.timestamp() * 1000), limit=1000)
+            df_funding = pd.DataFrame(funding_rates)
+            if not df_funding.empty:
+                df_funding['fundingTime'] = pd.to_datetime(df_funding['fundingTime'], unit='ms', utc=True)
+                df_funding = df_funding.rename(columns={'fundingTime': 'timestamp', 'fundingRate': 'funding_rate'}).set_index('timestamp')[['funding_rate']]
+                df_funding['funding_rate'] = pd.to_numeric(df_funding['funding_rate'])
+            
+            oi_stats = self.binance_client.get_open_interest_hist(symbol=symbol.replace('/', ''), period='1h', limit=500, startTime=int(start_dt.timestamp() * 1000))
+            df_oi = pd.DataFrame(oi_stats)
+            if not df_oi.empty:
+                df_oi['timestamp'] = pd.to_datetime(df_oi['timestamp'], unit='ms', utc=True)
+                df_oi = df_oi.rename(columns={'sumOpenInterestValue': 'open_interest'}).set_index('timestamp')[['open_interest']]
+                df_oi['open_interest'] = pd.to_numeric(df_oi['open_interest'])
+
+            if df_funding.empty and df_oi.empty:
+                return pd.DataFrame()
+            
+            return df_funding.join(df_oi, how='outer')
+
+        except Exception as e:
+            logger.error(f"Erro ao buscar dados de derivativos: {e}", exc_info=True)
+            return pd.DataFrame()
+        
+    def _train_and_save_regime_model(self):
+        """
+        Lógica de treino para o modelo de SituationalAwareness.
+        Esta função é chamada automaticamente pelo pipeline se o modelo não existir.
+        """
+        logger.info("--- 🧠 Modelo de Regimes não encontrado. INICIANDO TREINAMENTO... 🧠 ---")
+        
+        # Carrega um período de dados brutos robusto para o treino
+        start_date = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=730)).isoformat()
+        end_date = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        
+        df_btc = self.read_data_in_range("btc_btcusdt_1m", start_date, end_date)
+        df_macro = self.read_data_in_range("macro_data_1m", start_date, end_date)
+        
+        if df_btc.empty:
+            logger.error("Nenhum dado de BTC encontrado para treinar o modelo de regimes. Abortando.")
+            return False # Retorna falha
+
+        df_combined = df_btc.join(df_macro, how='left').ffill()
+        df_with_features = add_all_features(df_combined)
+        
+        sa_model = SituationalAwareness(n_regimes=4)
+        sa_model.fit(df_with_features)
+        
+        model_path = os.path.join(settings.data_paths.models_dir, 'situational_awareness.joblib')
+        sa_model.save_model(model_path)
+        return True # Retorna sucesso
+
+
+    
     def run_full_pipeline(self):
+
+        # FASE 0: PREPARAÇÃO E VALIDAÇÃO DE PRÉ-REQUISITOS
+        sa_model_path = os.path.join(settings.data_paths.models_dir, 'situational_awareness.joblib')
+        if not os.path.exists(sa_model_path):
+            success = self._train_and_save_regime_model()
+            if not success:
+                logger.critical("Falha ao treinar o modelo de regimes. O pipeline não pode continuar.")
+                return
+
+        # FASE 1: INGESTÃO DE DADOS BRUTOS
+        # ... (seu código para run_sentiment_pipeline, run_btc_pipeline, run_macro_pipeline)
+        
+        # FASE 2: PROCESSAMENTO EM LOTES
+        logger.info("--- 🧠 Carregando o modelo de diagnóstico de regimes pré-treinado... ---")
+        situational_awareness_model = SituationalAwareness.load_model(sa_model_path)
+        if not situational_awareness_model:
+            logger.critical("Modelo de SituationalAwareness não pôde ser carregado. Abortando.")
+            return
+        
         """
         Executa o pipeline completo em LOTES MENSAIS para otimizar o uso de memória.
         """
-        # FASE 1: Ingestão de dados brutos
-        self.run_btc_pipeline(symbol='BTCUSDT', interval='1m')
-        self.run_macro_pipeline()
+        self.run_sentiment_pipeline() # Primeiro o sentimento
+        self.run_btc_pipeline(symbol='BTCUSDT', interval='1m') # Depois BTC (que agora inclui derivativos)
+        self.run_macro_pipeline() # E o macro
+
+        # --- INÍCIO DA MODIFICAÇÃO 2: CARREGAR O MODELO DE REGIMES ---
+        logger.info("--- 🧠 Carregando o modelo de diagnóstico de regimes pré-treinado... ---")
+        sa_model_path = os.path.join(settings.data_paths.models_dir, 'situational_awareness.joblib')
+        situational_awareness_model = SituationalAwareness.load_model(sa_model_path)
+        if not situational_awareness_model:
+            logger.error("Modelo de SituationalAwareness não pôde ser carregado. O pipeline não pode continuar com a classificação de regimes.")
+            # Você pode decidir se quer parar o pipeline ou continuar sem a classificação.
+            # Por segurança, vamos parar.
+            return
+        # --- FIM DA MODIFICAÇÃO 2 ---
 
         # FASE 2: Processamento em "Streaming" (Mês a Mês)
         logger.info("--- 🔄 INICIANDO PROCESSAMENTO DA TABELA MESTRE EM LOTES MENSAIS 🔄 ---")
@@ -428,6 +594,7 @@ class DataPipeline:
 
             df_btc_chunk = self.read_data_in_range("btc_btcusdt_1m", chunk_start, chunk_end)
             df_macro_chunk = self.read_data_in_range("macro_data_1m", chunk_start, chunk_end)
+            df_sentiment_chunk = self.read_data_in_range("sentiment_fear_and_greed", chunk_start, chunk_end)
 
             if df_btc_chunk.empty:
                 logger.debug(f"Nenhum dado de BTC para o período {current_date.strftime('%Y-%m')}. A saltar.")
@@ -435,15 +602,21 @@ class DataPipeline:
                 pbar.update(1)
                 continue
 
-            df_combined = df_btc_chunk.join(df_macro_chunk, how='left').ffill()
-            df_final_features = add_all_features(df_combined)
+            df_combined = df_btc_chunk.join(df_macro_chunk, how='left')
+            df_combined = df_combined.join(df_sentiment_chunk, how='left')
+            df_combined.ffill(inplace=True) # Preenche para a frente os dados macro e de sentimento
+
+            df_with_features = add_all_features(df_combined)
 
             if self.validate_data(df_final_features):
+                # A sua função _write_dataframe_to_influx já lida com o batching.
+                # Precisamos apenas garantir que a nova coluna 'market_regime' é tratada como tag.
+                # Você precisará adicionar 'market_regime' às tags no seu config.yml
                 self._write_dataframe_to_influx(df_final_features, "features_master_table")
             else:
                 logger.error(f"Validação falhou para o lote {current_date.strftime('%Y-%m')}. Este lote não será salvo.")
             
-            del df_btc_chunk, df_macro_chunk, df_combined, df_final_features
+            del df_btc_chunk, df_macro_chunk, df_combined, df_with_features, df_final_features
             gc.collect()
 
             current_date += relativedelta(months=1)

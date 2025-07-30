@@ -56841,3 +56841,384 @@ HTTP response body: b'{"code":"invalid","message":"failed to decode request body
 2025-07-30 14:30:22,807 - gcsBot - INFO - Histórico de confiança salvo com sucesso em: data/output/confidence_history.csv
 2025-07-30 14:30:23,157 - gcsBot - INFO - Histórico de trades salvo com sucesso em: data/output/trades_history.csv
 2025-07-30 14:30:23,160 - gcsBot - INFO - Conexão com o InfluxDB fechada.
+2025-07-30 15:43:40,411 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 15:43:40,439 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-30 15:46:09,553 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 15:46:09,565 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-30 15:46:10,960 - gcsBot - WARNING - ❌ FALHA NA CONEXÃO com a Binance: 'Settings' object has no attribute 'binance_api_key'.
+2025-07-30 15:46:10,961 - gcsBot - INFO - --- ❤️ INICIANDO PIPELINE DE SENTIMENTO (FONTE: ALTERNATIVE.ME) ❤️ ---
+2025-07-30 15:46:15,521 - gcsBot - ERROR - ❌ Falha no pipeline de Sentimento: cannot access local variable 'df' where it is not associated with a value
+Traceback (most recent call last):
+  File "/app/scripts/data_pipeline.py", line 469, in run_sentiment_pipeline
+    df = pd.DataFrame(data).rename(columns={'value': 'fear_and_greed'}).set_index(pd.to_datetime(pd.to_numeric(df['timestamp']), unit='s', utc=True))[['fear_and_greed']]
+                                                                                                               ^^
+UnboundLocalError: cannot access local variable 'df' where it is not associated with a value
+2025-07-30 15:46:15,537 - gcsBot - INFO - Nenhum dado encontrado para 'btc_btcusdt_1m'. Iniciando bootstrap.
+2025-07-30 16:06:21,522 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 16:09:20,692 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 16:19:17,672 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 16:21:53,258 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 16:25:19,674 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 16:25:19,687 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-30 16:25:20,879 - gcsBot - WARNING - ❌ FALHA NA CONEXÃO com a Binance: 'Settings' object has no attribute 'binance_api_key'.
+2025-07-30 16:25:20,879 - gcsBot - INFO - --- ❤️ INICIANDO PIPELINE DE SENTIMENTO (FONTE: ALTERNATIVE.ME) ❤️ ---
+2025-07-30 16:25:25,469 - gcsBot - ERROR - ❌ Falha no pipeline de Sentimento: cannot access local variable 'df' where it is not associated with a value
+Traceback (most recent call last):
+  File "/app/scripts/data_pipeline.py", line 469, in run_sentiment_pipeline
+    df = pd.DataFrame(data).rename(columns={'value': 'fear_and_greed'}).set_index(pd.to_datetime(pd.to_numeric(df['timestamp']), unit='s', utc=True))[['fear_and_greed']]
+                                                                                                               ^^
+UnboundLocalError: cannot access local variable 'df' where it is not associated with a value
+2025-07-30 16:25:25,487 - gcsBot - INFO - Nenhum dado encontrado para 'btc_btcusdt_1m'. Iniciando bootstrap.
+2025-07-30 16:25:25,490 - gcsBot - ERROR - Nenhum ficheiro de histórico encontrado. Bootstrap impossível.
+2025-07-30 16:25:25,490 - gcsBot - INFO - --- 🌐 INICIANDO PIPELINE DE DADOS MACRO (FONTE: YFINANCE) 🌐 ---
+2025-07-30 16:25:25,496 - gcsBot - INFO - Processando ativo macro: DXY
+2025-07-30 16:25:25,501 - gcsBot - INFO - Buscando dados para DXY de 2018-01-01 até 2025-07-31.
+2025-07-30 16:29:39,272 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 16:29:39,284 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-30 16:29:45,394 - gcsBot - INFO - ✅ Cliente Binance inicializado em modo REAL.
+2025-07-30 16:29:45,395 - gcsBot - INFO - --- ❤️ INICIANDO PIPELINE DE SENTIMENTO (FONTE: ALTERNATIVE.ME) ❤️ ---
+2025-07-30 16:29:49,988 - gcsBot - INFO - Escrevendo 1051201 registos para 'sentiment_fear_and_greed' em 1052 lotes...
+2025-07-30 16:43:04,359 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 16:43:04,371 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-30 16:43:10,648 - gcsBot - INFO - ✅ Cliente Binance inicializado em modo REAL.
+2025-07-30 16:43:10,649 - gcsBot - INFO - --- ❤️ INICIANDO PIPELINE DE SENTIMENTO (FONTE: ALTERNATIVE.ME) ❤️ ---
+2025-07-30 16:43:15,253 - gcsBot - INFO - Escrevendo 1033921 registos para 'sentiment_fear_and_greed' em 1034 lotes...
+2025-07-30 16:46:12,422 - gcsBot - INFO - ✅ Escrita para 'sentiment_fear_and_greed' concluída com sucesso.
+2025-07-30 16:46:12,436 - gcsBot - INFO - Nenhum dado encontrado para 'btc_btcusdt_1m'. Iniciando bootstrap de OHLCV.
+2025-07-30 16:46:12,439 - gcsBot - ERROR - Ficheiro de bootstrap não encontrado em data/input/bootstrap/kaggle_btc_1m.csv. Bootstrap impossível.
+2025-07-30 16:46:12,440 - gcsBot - INFO - --- 🌐 INICIANDO PIPELINE DE DADOS MACRO (FONTE: YFINANCE) 🌐 ---
+2025-07-30 16:46:12,445 - gcsBot - INFO - Processando ativo macro: DXY
+2025-07-30 16:46:12,448 - gcsBot - DEBUG - Ficheiro CSV encontrado para DXY. Lendo dados históricos.
+2025-07-30 16:46:12,471 - gcsBot - INFO - Buscando dados para DXY de 2025-07-30 até 2025-07-31.
+2025-07-30 16:46:17,470 - gcsBot - INFO - ✅ 1 novos registos baixados para DXY.
+2025-07-30 16:46:17,510 - gcsBot - DEBUG - CSV para DXY salvo/atualizado com sucesso em data/input/macro/DXY.csv.
+2025-07-30 16:46:17,511 - gcsBot - INFO - Processando ativo macro: VIX
+2025-07-30 16:46:17,514 - gcsBot - DEBUG - Ficheiro CSV encontrado para VIX. Lendo dados históricos.
+2025-07-30 16:46:17,532 - gcsBot - INFO - Buscando dados para VIX de 2025-07-30 até 2025-07-31.
+2025-07-30 16:46:20,447 - gcsBot - INFO - ✅ 1 novos registos baixados para VIX.
+2025-07-30 16:46:20,483 - gcsBot - DEBUG - CSV para VIX salvo/atualizado com sucesso em data/input/macro/VIX.csv.
+2025-07-30 16:46:20,484 - gcsBot - INFO - Processando ativo macro: GOLD
+2025-07-30 16:46:20,487 - gcsBot - DEBUG - Ficheiro CSV encontrado para GOLD. Lendo dados históricos.
+2025-07-30 16:46:20,510 - gcsBot - INFO - Buscando dados para GOLD de 2025-07-30 até 2025-07-31.
+2025-07-30 16:46:23,426 - gcsBot - INFO - ✅ 1 novos registos baixados para GOLD.
+2025-07-30 16:46:23,463 - gcsBot - DEBUG - CSV para GOLD salvo/atualizado com sucesso em data/input/macro/GOLD.csv.
+2025-07-30 16:46:23,464 - gcsBot - INFO - Processando ativo macro: TNX
+2025-07-30 16:46:23,467 - gcsBot - DEBUG - Ficheiro CSV encontrado para TNX. Lendo dados históricos.
+2025-07-30 16:46:23,487 - gcsBot - INFO - Buscando dados para TNX de 2025-07-30 até 2025-07-31.
+2025-07-30 16:46:26,175 - gcsBot - INFO - ✅ 1 novos registos baixados para TNX.
+2025-07-30 16:46:26,216 - gcsBot - DEBUG - CSV para TNX salvo/atualizado com sucesso em data/input/macro/TNX.csv.
+2025-07-30 16:46:26,217 - gcsBot - INFO - Processando ativo macro: SPX
+2025-07-30 16:46:26,221 - gcsBot - DEBUG - Ficheiro CSV encontrado para SPX. Lendo dados históricos.
+2025-07-30 16:46:26,247 - gcsBot - INFO - Buscando dados para SPX de 2025-07-30 até 2025-07-31.
+2025-07-30 16:46:28,901 - gcsBot - INFO - ✅ 1 novos registos baixados para SPX.
+2025-07-30 16:46:28,936 - gcsBot - DEBUG - CSV para SPX salvo/atualizado com sucesso em data/input/macro/SPX.csv.
+2025-07-30 16:46:28,936 - gcsBot - INFO - Processando ativo macro: NDX
+2025-07-30 16:46:28,939 - gcsBot - DEBUG - Ficheiro CSV encontrado para NDX. Lendo dados históricos.
+2025-07-30 16:46:28,962 - gcsBot - INFO - Buscando dados para NDX de 2025-07-30 até 2025-07-31.
+2025-07-30 16:46:31,607 - gcsBot - INFO - ✅ 1 novos registos baixados para NDX.
+2025-07-30 16:46:31,641 - gcsBot - DEBUG - CSV para NDX salvo/atualizado com sucesso em data/input/macro/NDX.csv.
+2025-07-30 16:46:31,642 - gcsBot - INFO - Processando ativo macro: USO
+2025-07-30 16:46:31,645 - gcsBot - DEBUG - Ficheiro CSV encontrado para USO. Lendo dados históricos.
+2025-07-30 16:46:31,664 - gcsBot - INFO - Buscando dados para USO de 2025-07-30 até 2025-07-31.
+2025-07-30 16:46:34,628 - gcsBot - INFO - ✅ 1 novos registos baixados para USO.
+2025-07-30 16:46:34,667 - gcsBot - DEBUG - CSV para USO salvo/atualizado com sucesso em data/input/macro/USO.csv.
+2025-07-30 16:46:34,668 - gcsBot - INFO - Combinando todos os dados macro para análise...
+2025-07-30 16:46:34,689 - gcsBot - INFO - Nenhum dado macro encontrado no DB. Processando todo o histórico diário.
+2025-07-30 16:46:34,690 - gcsBot - INFO - Reamostrando 1907 registos diários para 1 minuto...
+2025-07-30 16:46:36,679 - gcsBot - INFO - Dados macro combinados e reamostrados. Preparando para escrever 3983041 registos no DB...
+2025-07-30 16:46:39,522 - gcsBot - INFO - Escrevendo 3983041 registos para 'macro_data_1m' em 3984 lotes...
+2025-07-30 16:47:41,343 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 16:47:41,382 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-30 16:47:43,615 - gcsBot - INFO - ✅ Cliente Binance inicializado em modo REAL.
+2025-07-30 16:47:43,616 - gcsBot - INFO - --- ❤️ INICIANDO PIPELINE DE SENTIMENTO (FONTE: ALTERNATIVE.ME) ❤️ ---
+2025-07-30 16:47:44,366 - gcsBot - INFO - Escrevendo 1051201 registos para 'sentiment_fear_and_greed' em 1052 lotes...
+2025-07-30 16:50:46,000 - gcsBot - INFO - ✅ Escrita para 'sentiment_fear_and_greed' concluída com sucesso.
+2025-07-30 16:50:46,010 - gcsBot - INFO - Nenhum dado encontrado para 'btc_btcusdt_1m'. Iniciando bootstrap de OHLCV.
+2025-07-30 16:50:46,013 - gcsBot - ERROR - Ficheiro de bootstrap não encontrado em data/input/bootstrap/kaggle_btc_1m.csv. Bootstrap impossível.
+2025-07-30 16:50:46,014 - gcsBot - INFO - --- 🌐 INICIANDO PIPELINE DE DADOS MACRO (FONTE: YFINANCE) 🌐 ---
+2025-07-30 16:50:46,019 - gcsBot - INFO - Processando ativo macro: DXY
+2025-07-30 16:50:46,025 - gcsBot - INFO - Buscando dados para DXY de 2018-01-01 até 2025-07-31.
+2025-07-30 16:51:00,440 - gcsBot - INFO - ✅ 1906 novos registos baixados para DXY.
+2025-07-30 16:51:00,480 - gcsBot - DEBUG - CSV para DXY salvo/atualizado com sucesso em data/input/macro/DXY.csv.
+2025-07-30 16:51:00,481 - gcsBot - INFO - Processando ativo macro: VIX
+2025-07-30 16:51:00,485 - gcsBot - INFO - Buscando dados para VIX de 2018-01-01 até 2025-07-31.
+2025-07-30 16:51:03,239 - gcsBot - INFO - ✅ 1904 novos registos baixados para VIX.
+2025-07-30 16:51:03,276 - gcsBot - DEBUG - CSV para VIX salvo/atualizado com sucesso em data/input/macro/VIX.csv.
+2025-07-30 16:51:03,276 - gcsBot - INFO - Processando ativo macro: GOLD
+2025-07-30 16:51:03,280 - gcsBot - INFO - Buscando dados para GOLD de 2018-01-01 até 2025-07-31.
+2025-07-30 16:51:06,078 - gcsBot - INFO - ✅ 1905 novos registos baixados para GOLD.
+2025-07-30 16:51:06,109 - gcsBot - DEBUG - CSV para GOLD salvo/atualizado com sucesso em data/input/macro/GOLD.csv.
+2025-07-30 16:51:06,109 - gcsBot - INFO - Processando ativo macro: TNX
+2025-07-30 16:51:06,112 - gcsBot - INFO - Buscando dados para TNX de 2018-01-01 até 2025-07-31.
+2025-07-30 16:51:09,054 - gcsBot - INFO - ✅ 1904 novos registos baixados para TNX.
+2025-07-30 16:51:09,086 - gcsBot - DEBUG - CSV para TNX salvo/atualizado com sucesso em data/input/macro/TNX.csv.
+2025-07-30 16:51:09,087 - gcsBot - INFO - Processando ativo macro: SPX
+2025-07-30 16:51:09,090 - gcsBot - INFO - Buscando dados para SPX de 2018-01-01 até 2025-07-31.
+2025-07-30 16:51:11,865 - gcsBot - INFO - ✅ 1904 novos registos baixados para SPX.
+2025-07-30 16:51:11,897 - gcsBot - DEBUG - CSV para SPX salvo/atualizado com sucesso em data/input/macro/SPX.csv.
+2025-07-30 16:51:11,898 - gcsBot - INFO - Processando ativo macro: NDX
+2025-07-30 16:51:11,901 - gcsBot - INFO - Buscando dados para NDX de 2018-01-01 até 2025-07-31.
+2025-07-30 16:51:14,689 - gcsBot - INFO - ✅ 1904 novos registos baixados para NDX.
+2025-07-30 16:51:14,721 - gcsBot - DEBUG - CSV para NDX salvo/atualizado com sucesso em data/input/macro/NDX.csv.
+2025-07-30 16:51:14,722 - gcsBot - INFO - Processando ativo macro: USO
+2025-07-30 16:51:14,725 - gcsBot - INFO - Buscando dados para USO de 2018-01-01 até 2025-07-31.
+2025-07-30 16:51:17,684 - gcsBot - INFO - ✅ 1904 novos registos baixados para USO.
+2025-07-30 16:51:17,723 - gcsBot - DEBUG - CSV para USO salvo/atualizado com sucesso em data/input/macro/USO.csv.
+2025-07-30 16:51:17,724 - gcsBot - INFO - Combinando todos os dados macro para análise...
+2025-07-30 16:51:17,744 - gcsBot - INFO - Nenhum dado macro encontrado no DB. Processando todo o histórico diário.
+2025-07-30 16:51:17,745 - gcsBot - INFO - Reamostrando 1907 registos diários para 1 minuto...
+2025-07-30 16:51:18,564 - gcsBot - INFO - Dados macro combinados e reamostrados. Preparando para escrever 3983041 registos no DB...
+2025-07-30 16:51:19,388 - gcsBot - INFO - Escrevendo 3983041 registos para 'macro_data_1m' em 3984 lotes...
+2025-07-30 17:02:33,511 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 17:02:33,541 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-30 17:02:35,771 - gcsBot - INFO - ✅ Cliente Binance inicializado em modo REAL.
+2025-07-30 17:02:35,772 - gcsBot - INFO - --- ❤️ INICIANDO PIPELINE DE SENTIMENTO (FONTE: ALTERNATIVE.ME) ❤️ ---
+2025-07-30 17:02:36,434 - gcsBot - INFO - Escrevendo 1051201 registos para 'sentiment_fear_and_greed' em 1052 lotes...
+2025-07-30 17:05:39,160 - gcsBot - INFO - ✅ Escrita para 'sentiment_fear_and_greed' concluída com sucesso.
+2025-07-30 17:05:39,175 - gcsBot - INFO - Nenhum dado encontrado para 'btc_btcusdt_1m'. Iniciando bootstrap de OHLCV.
+2025-07-30 17:05:45,548 - gcsBot - DEBUG - Pré-processando dados do ficheiro CSV...
+2025-07-30 17:05:48,874 - gcsBot - INFO - 7091728 velas históricas (OHLCV) carregadas. Escrevendo no DB...
+2025-07-30 17:05:48,950 - gcsBot - INFO - Escrevendo 7091728 registos para 'btc_btcusdt_1m' em 7092 lotes...
+2025-07-30 17:26:53,041 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-30 17:26:53,052 - gcsBot - INFO - --- 🌊 INICIANDO BACKFILL ROBUSTO DE FLUXO DE ORDENS (24 meses) 🌊 ---
+2025-07-30 17:26:53,086 - gcsBot - INFO - Buscando dados de fluxo de ordens de 2023-06-27 a 2023-07-27
+2025-07-30 17:26:53,087 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2023-06-27 00:48:00+00:00 até 2023-07-27 00:48:00+00:00...
+2025-07-30 17:27:20,702 - gcsBot - INFO - Escrevendo 68 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-30 17:27:20,877 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-30 17:27:20,880 - gcsBot - INFO - Buscando dados de fluxo de ordens de 2023-07-27 a 2023-08-27
+2025-07-30 17:27:20,880 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2023-07-27 00:48:00+00:00 até 2023-08-27 00:48:00+00:00...
+2025-07-30 17:27:49,319 - gcsBot - INFO - Escrevendo 86 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-30 17:27:49,500 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-30 17:27:49,503 - gcsBot - INFO - Buscando dados de fluxo de ordens de 2023-08-27 a 2023-09-27
+2025-07-30 17:27:49,504 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2023-08-27 00:48:00+00:00 até 2023-09-27 00:48:00+00:00...
+2025-07-30 17:28:17,741 - gcsBot - INFO - Escrevendo 75 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-30 17:28:17,936 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-30 17:28:17,937 - gcsBot - INFO - Buscando dados de fluxo de ordens de 2023-09-27 a 2023-10-27
+2025-07-30 17:28:17,938 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2023-09-27 00:48:00+00:00 até 2023-10-27 00:48:00+00:00...
+2025-07-30 17:28:45,579 - gcsBot - INFO - Escrevendo 48 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-30 17:28:45,751 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-30 17:28:45,755 - gcsBot - INFO - Buscando dados de fluxo de ordens de 2023-10-27 a 2023-11-27
+2025-07-30 17:28:45,756 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2023-10-27 00:48:00+00:00 até 2023-11-27 00:48:00+00:00...
+2025-07-30 17:29:14,244 - gcsBot - INFO - Escrevendo 50 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-30 17:29:14,425 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-30 17:29:14,425 - gcsBot - INFO - Buscando dados de fluxo de ordens de 2023-11-27 a 2023-12-27
+2025-07-30 17:29:14,426 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2023-11-27 00:48:00+00:00 até 2023-12-27 00:48:00+00:00...
+2025-07-30 17:29:42,224 - gcsBot - INFO - Escrevendo 45 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-30 17:29:42,393 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-30 17:29:42,394 - gcsBot - INFO - Buscando dados de fluxo de ordens de 2023-12-27 a 2024-01-27
+2025-07-30 17:29:42,394 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2023-12-27 00:48:00+00:00 até 2024-01-27 00:48:00+00:00...
+2025-07-30 17:30:11,025 - gcsBot - INFO - Escrevendo 46 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-30 17:30:11,194 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-30 17:30:11,195 - gcsBot - INFO - Buscando dados de fluxo de ordens de 2024-01-27 a 2024-02-27
+2025-07-30 17:30:11,196 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2024-01-27 00:48:00+00:00 até 2024-02-27 00:48:00+00:00...
+2025-07-30 17:30:39,495 - gcsBot - INFO - Escrevendo 48 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-30 17:30:39,676 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-30 17:30:39,677 - gcsBot - INFO - Buscando dados de fluxo de ordens de 2024-02-27 a 2024-03-27
+2025-07-30 17:30:39,678 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2024-02-27 00:48:00+00:00 até 2024-03-27 00:48:00+00:00...
+2025-07-30 17:31:06,146 - gcsBot - INFO - Escrevendo 30 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-30 17:31:06,312 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-30 17:31:06,316 - gcsBot - INFO - Buscando dados de fluxo de ordens de 2024-03-27 a 2024-04-27
+2025-07-30 17:31:06,316 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2024-03-27 00:48:00+00:00 até 2024-04-27 00:48:00+00:00...
+2025-07-30 17:31:35,045 - gcsBot - INFO - Escrevendo 42 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-30 17:31:35,224 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-30 17:31:35,227 - gcsBot - INFO - Buscando dados de fluxo de ordens de 2024-04-27 a 2024-05-27
+2025-07-30 17:31:35,228 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2024-04-27 00:48:00+00:00 até 2024-05-27 00:48:00+00:00...
+2025-07-30 17:32:02,876 - gcsBot - INFO - Escrevendo 54 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-30 17:32:03,045 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-30 17:32:03,046 - gcsBot - INFO - Buscando dados de fluxo de ordens de 2024-05-27 a 2024-06-27
+2025-07-30 17:32:03,046 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2024-05-27 00:48:00+00:00 até 2024-06-27 00:48:00+00:00...
+2025-07-30 17:32:31,338 - gcsBot - INFO - Escrevendo 61 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-30 17:32:31,509 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-30 17:32:31,514 - gcsBot - INFO - Buscando dados de fluxo de ordens de 2024-06-27 a 2024-07-27
+2025-07-30 17:32:31,514 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2024-06-27 00:48:00+00:00 até 2024-07-27 00:48:00+00:00...
+2025-07-30 17:32:59,027 - gcsBot - INFO - Escrevendo 45 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-30 17:32:59,206 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-30 17:32:59,210 - gcsBot - INFO - Buscando dados de fluxo de ordens de 2024-07-27 a 2024-08-27
+2025-07-30 17:32:59,210 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2024-07-27 00:48:00+00:00 até 2024-08-27 00:48:00+00:00...
+2025-07-30 17:33:28,301 - gcsBot - INFO - Escrevendo 44 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-30 17:33:28,476 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-30 17:33:28,477 - gcsBot - INFO - Buscando dados de fluxo de ordens de 2024-08-27 a 2024-09-27
+2025-07-30 17:33:28,477 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2024-08-27 00:48:00+00:00 até 2024-09-27 00:48:00+00:00...
+2025-07-30 17:33:57,259 - gcsBot - INFO - Escrevendo 43 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-30 17:33:57,434 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-30 17:33:57,437 - gcsBot - INFO - Buscando dados de fluxo de ordens de 2024-09-27 a 2024-10-27
+2025-07-30 17:33:57,438 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2024-09-27 00:48:00+00:00 até 2024-10-27 00:48:00+00:00...
+2025-07-30 17:34:24,635 - gcsBot - INFO - Escrevendo 41 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-30 17:34:24,856 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-30 17:34:24,859 - gcsBot - INFO - Buscando dados de fluxo de ordens de 2024-10-27 a 2024-11-27
+2025-07-30 17:34:24,861 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2024-10-27 00:48:00+00:00 até 2024-11-27 00:48:00+00:00...
+2025-07-30 17:34:52,674 - gcsBot - INFO - Escrevendo 37 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-30 17:34:52,879 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-30 17:34:52,883 - gcsBot - INFO - Buscando dados de fluxo de ordens de 2024-11-27 a 2024-12-27
+2025-07-30 17:34:52,884 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2024-11-27 00:48:00+00:00 até 2024-12-27 00:48:00+00:00...
+2025-07-30 17:35:20,937 - gcsBot - INFO - Escrevendo 32 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-30 17:35:21,139 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-30 17:35:21,142 - gcsBot - INFO - Buscando dados de fluxo de ordens de 2024-12-27 a 2025-01-27
+2025-07-30 17:35:21,143 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2024-12-27 00:48:00+00:00 até 2025-01-27 00:48:00+00:00...
+2025-07-30 17:35:50,228 - gcsBot - INFO - Escrevendo 39 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-30 17:35:50,420 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-30 17:35:50,423 - gcsBot - INFO - Buscando dados de fluxo de ordens de 2025-01-27 a 2025-02-27
+2025-07-30 17:35:50,423 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2025-01-27 00:48:00+00:00 até 2025-02-27 00:48:00+00:00...
+2025-07-30 17:36:18,941 - gcsBot - INFO - Escrevendo 47 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-30 17:36:19,117 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-30 17:36:19,118 - gcsBot - INFO - Buscando dados de fluxo de ordens de 2025-02-27 a 2025-03-27
+2025-07-30 17:36:19,118 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2025-02-27 00:48:00+00:00 até 2025-03-27 00:48:00+00:00...
+2025-07-30 17:36:44,939 - gcsBot - INFO - Escrevendo 40 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-30 17:36:45,141 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-30 17:36:45,142 - gcsBot - INFO - Buscando dados de fluxo de ordens de 2025-03-27 a 2025-04-27
+2025-07-30 17:36:45,142 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2025-03-27 00:48:00+00:00 até 2025-04-27 00:48:00+00:00...
+2025-07-30 17:37:13,768 - gcsBot - INFO - Escrevendo 43 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-30 17:37:13,956 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-30 17:37:13,959 - gcsBot - INFO - Buscando dados de fluxo de ordens de 2025-04-27 a 2025-05-27
+2025-07-30 17:37:13,960 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2025-04-27 00:48:00+00:00 até 2025-05-27 00:48:00+00:00...
+2025-07-30 17:37:41,743 - gcsBot - INFO - Escrevendo 42 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-30 17:37:41,931 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-30 17:37:41,935 - gcsBot - INFO - Buscando dados de fluxo de ordens de 2025-05-27 a 2025-06-27
+2025-07-30 17:37:41,935 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2025-05-27 00:48:00+00:00 até 2025-06-27 00:48:00+00:00...
+2025-07-30 17:38:11,114 - gcsBot - INFO - Escrevendo 51 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-30 17:38:11,292 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-30 17:38:11,295 - gcsBot - INFO - --- ✅ BACKFILL DE FLUXO DE ORDENS CONCLUÍDO ---
+2025-07-30 17:38:11,312 - gcsBot - INFO - Buscando novos dados de 2025-06-27 00:49:00 até 2025-07-30 17:05:00...
+2025-07-30 17:38:11,313 - gcsBot - INFO - Baixando dados de velas (OHLCV) para BTCUSDT de 2025-06-27 00:49:00+00:00 até 2025-07-30 17:05:00+00:00...
+2025-07-30 17:38:47,641 - gcsBot - INFO - Buscando dados de Fluxo de Ordens para BTCUSDT de 2025-06-27 00:49:00+00:00 até 2025-07-30 17:05:00+00:00...
+2025-07-30 17:39:19,195 - gcsBot - INFO - Buscando dados de Derivativos para BTCUSDT de 2025-06-27 00:49:00+00:00 a 2025-07-30 17:05:00+00:00...
+2025-07-30 17:39:19,196 - gcsBot - ERROR - Erro ao buscar dados de derivativos: 'Client' object has no attribute 'get_funding_rate_history'
+Traceback (most recent call last):
+  File "/app/scripts/data_pipeline.py", line 488, in _get_derivatives_data
+    funding_rates = self.binance_client.get_funding_rate_history(symbol=symbol.replace('/', ''), startTime=int(start_dt.timestamp() * 1000), limit=1000)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'Client' object has no attribute 'get_funding_rate_history'
+2025-07-30 17:39:19,215 - gcsBot - INFO - Escrevendo 48497 registos para 'btc_btcusdt_1m' em 49 lotes...
+2025-07-30 17:39:28,300 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-30 17:39:28,388 - gcsBot - INFO - --- 🌐 INICIANDO PIPELINE DE DADOS MACRO (FONTE: YFINANCE) 🌐 ---
+2025-07-30 17:39:28,400 - gcsBot - INFO - Processando ativo macro: DXY
+2025-07-30 17:39:28,403 - gcsBot - DEBUG - Ficheiro CSV encontrado para DXY. Lendo dados históricos.
+2025-07-30 17:39:28,433 - gcsBot - INFO - Dados para DXY já estão atualizados. Nenhum download necessário.
+2025-07-30 17:39:28,489 - gcsBot - DEBUG - CSV para DXY salvo/atualizado com sucesso em data/input/macro/DXY.csv.
+2025-07-30 17:39:28,489 - gcsBot - INFO - Processando ativo macro: VIX
+2025-07-30 17:39:28,494 - gcsBot - DEBUG - Ficheiro CSV encontrado para VIX. Lendo dados históricos.
+2025-07-30 17:39:28,528 - gcsBot - INFO - Dados para VIX já estão atualizados. Nenhum download necessário.
+2025-07-30 17:39:28,580 - gcsBot - DEBUG - CSV para VIX salvo/atualizado com sucesso em data/input/macro/VIX.csv.
+2025-07-30 17:39:28,581 - gcsBot - INFO - Processando ativo macro: GOLD
+2025-07-30 17:39:28,585 - gcsBot - DEBUG - Ficheiro CSV encontrado para GOLD. Lendo dados históricos.
+2025-07-30 17:39:28,615 - gcsBot - INFO - Dados para GOLD já estão atualizados. Nenhum download necessário.
+2025-07-30 17:39:28,671 - gcsBot - DEBUG - CSV para GOLD salvo/atualizado com sucesso em data/input/macro/GOLD.csv.
+2025-07-30 17:39:28,672 - gcsBot - INFO - Processando ativo macro: TNX
+2025-07-30 17:39:28,676 - gcsBot - DEBUG - Ficheiro CSV encontrado para TNX. Lendo dados históricos.
+2025-07-30 17:39:28,707 - gcsBot - INFO - Dados para TNX já estão atualizados. Nenhum download necessário.
+2025-07-30 17:39:28,756 - gcsBot - DEBUG - CSV para TNX salvo/atualizado com sucesso em data/input/macro/TNX.csv.
+2025-07-30 17:39:28,758 - gcsBot - INFO - Processando ativo macro: SPX
+2025-07-30 17:39:28,764 - gcsBot - DEBUG - Ficheiro CSV encontrado para SPX. Lendo dados históricos.
+2025-07-30 17:39:28,794 - gcsBot - INFO - Dados para SPX já estão atualizados. Nenhum download necessário.
+2025-07-30 17:39:28,841 - gcsBot - DEBUG - CSV para SPX salvo/atualizado com sucesso em data/input/macro/SPX.csv.
+2025-07-30 17:39:28,842 - gcsBot - INFO - Processando ativo macro: NDX
+2025-07-30 17:39:28,849 - gcsBot - DEBUG - Ficheiro CSV encontrado para NDX. Lendo dados históricos.
+2025-07-30 17:39:28,880 - gcsBot - INFO - Dados para NDX já estão atualizados. Nenhum download necessário.
+2025-07-30 17:39:28,931 - gcsBot - DEBUG - CSV para NDX salvo/atualizado com sucesso em data/input/macro/NDX.csv.
+2025-07-30 17:39:28,932 - gcsBot - INFO - Processando ativo macro: USO
+2025-07-30 17:39:28,936 - gcsBot - DEBUG - Ficheiro CSV encontrado para USO. Lendo dados históricos.
+2025-07-30 17:39:28,966 - gcsBot - INFO - Dados para USO já estão atualizados. Nenhum download necessário.
+2025-07-30 17:39:29,020 - gcsBot - DEBUG - CSV para USO salvo/atualizado com sucesso em data/input/macro/USO.csv.
+2025-07-30 17:39:29,021 - gcsBot - INFO - Combinando todos os dados macro para análise...
+2025-07-30 17:39:29,053 - gcsBot - INFO - Nenhum dado macro encontrado no DB. Processando todo o histórico diário.
+2025-07-30 17:39:29,054 - gcsBot - INFO - Reamostrando 1907 registos diários para 1 minuto...
+2025-07-30 17:39:31,253 - gcsBot - INFO - Dados macro combinados e reamostrados. Preparando para escrever 3983041 registos no DB...
+2025-07-30 17:39:32,430 - gcsBot - INFO - Escrevendo 3983041 registos para 'macro_data_1m' em 3984 lotes...
+2025-07-30 17:55:54,226 - gcsBot - INFO - ✅ Escrita para 'macro_data_1m' concluída com sucesso.
+2025-07-30 17:55:54,467 - gcsBot - INFO - --- 🧠 Carregando o modelo de diagnóstico de regimes pré-treinado... ---
+2025-07-30 17:55:54,470 - gcsBot - ERROR - Arquivo do modelo de SituationalAwareness não encontrado em data/models/situational_awareness.joblib
+2025-07-30 17:55:54,471 - gcsBot - ERROR - Modelo de SituationalAwareness não pôde ser carregado. O pipeline não pode continuar com a classificação de regimes.
+2025-07-30 18:21:14,996 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 18:21:15,011 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-30 18:36:06,409 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 18:36:06,416 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-30 18:36:07,680 - gcsBot - INFO - Carregando dados da Tabela Mestre para o Otimizador...
+2025-07-30 18:37:06,567 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 18:37:06,571 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-30 18:37:07,653 - gcsBot - INFO - Carregando dados da Tabela Mestre para o Otimizador...
+2025-07-30 18:37:07,668 - gcsBot - ERROR - Nenhuma feature foi carregada. Execute o data_pipeline primeiro.
+2025-07-30 18:38:09,679 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 18:38:09,689 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-30 18:38:10,809 - gcsBot - INFO - Carregando dados da Tabela Mestre para o Otimizador...
+2025-07-30 18:38:10,817 - gcsBot - ERROR - Nenhuma feature foi carregada. Execute o data_pipeline primeiro.
+2025-07-30 18:39:52,029 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 18:39:52,033 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-30 18:39:53,127 - gcsBot - INFO - Carregando dados da Tabela Mestre para o Otimizador...
+2025-07-30 18:39:53,136 - gcsBot - ERROR - Nenhuma feature foi carregada. Execute o data_pipeline primeiro.
+2025-07-30 18:52:36,375 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 18:52:37,020 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-30 18:52:37,020 - gcsBot - INFO - Carregando dados da Tabela Mestre para o Otimizador...
+2025-07-30 18:52:37,031 - gcsBot - ERROR - Nenhuma feature foi carregada. Execute o data_pipeline primeiro.
+2025-07-30 18:53:04,435 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 18:53:05,137 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-30 18:53:05,137 - gcsBot - INFO - Carregando dados da Tabela Mestre para o Otimizador...
+2025-07-30 18:53:05,146 - gcsBot - ERROR - Nenhuma feature foi carregada. Execute o data_pipeline primeiro.
+2025-07-30 18:57:46,074 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 18:57:46,477 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-30 18:57:46,477 - gcsBot - INFO - Carregando dados da Tabela Mestre para o Otimizador...
+2025-07-30 18:57:46,478 - gcsBot - INFO - Executando consulta ao InfluxDB (range: -1y)...
+2025-07-30 18:57:46,487 - gcsBot - INFO - Consulta concluída.
+2025-07-30 18:57:46,487 - gcsBot - ERROR - A consulta não retornou dados. Verifique se o pipeline foi executado com sucesso e se há dados no último ano.
+2025-07-30 18:57:46,488 - gcsBot - ERROR - Causas possíveis: (1) O 'data_pipeline' não foi executado após o 'reset-db'. (2) Ocorreu um erro durante o pipeline que o impediu de salvar a 'features_master_table'. (3) Não há dados no período de 1 ano.
+2025-07-30 18:58:44,614 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 18:58:45,028 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-30 18:58:45,029 - gcsBot - INFO - Carregando dados da Tabela Mestre para o Otimizador...
+2025-07-30 18:58:45,029 - gcsBot - INFO - Executando consulta ao InfluxDB (range: -1y)...
+2025-07-30 18:58:45,037 - gcsBot - INFO - Consulta concluída.
+2025-07-30 18:58:45,038 - gcsBot - ERROR - A consulta não retornou dados. Verifique se o pipeline foi executado com sucesso e se há dados no último ano.
+2025-07-30 18:58:45,039 - gcsBot - ERROR - Causas possíveis: (1) O 'data_pipeline' não foi executado após o 'reset-db'. (2) Ocorreu um erro durante o pipeline que o impediu de salvar a 'features_master_table'. (3) Não há dados no período de 1 ano.
+2025-07-30 18:59:34,930 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 18:59:34,934 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-30 18:59:35,977 - gcsBot - INFO - Carregando dados da Tabela Mestre para o Otimizador...
+2025-07-30 18:59:49,141 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 18:59:49,150 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-30 18:59:50,332 - gcsBot - INFO - Carregando dados da Tabela Mestre para o Otimizador...
+2025-07-30 18:59:50,342 - gcsBot - ERROR - Nenhuma feature foi carregada. Execute o data_pipeline primeiro.
+2025-07-30 19:02:16,486 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 19:02:17,649 - gcsBot - INFO - Carregando dados da Tabela Mestre para o Otimizador...
+2025-07-30 19:02:18,418 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-30 19:02:28,573 - gcsBot - WARNING - ❌ FALHA NA CONEXÃO com a Binance: HTTPSConnectionPool(host='api.binance.com', port=443): Read timed out. (read timeout=10).
+2025-07-30 19:02:28,576 - gcsBot - DEBUG - Lendo dados de 'features_master_table' de 2023-07-31T19:02:28.576222+00:00 a 2025-07-30T19:02:28.576291+00:00
+2025-07-30 19:02:28,592 - gcsBot - ERROR - Nenhuma feature foi carregada. Verifique se o pipeline foi executado com sucesso e se há dados no período de treino.
+2025-07-30 19:05:47,443 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 19:05:47,652 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-30 19:05:48,963 - gcsBot - INFO - Carregando dados da Tabela Mestre para o Otimizador...
+2025-07-30 19:05:48,964 - gcsBot - INFO - Executando consulta ao InfluxDB (range: -1y)...
+2025-07-30 19:05:48,978 - gcsBot - INFO - Consulta concluída.
+2025-07-30 19:05:48,978 - gcsBot - ERROR - A consulta não retornou dados. Verifique se o pipeline foi executado com sucesso e se há dados no último ano.
+2025-07-30 19:07:41,272 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 19:07:41,436 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-30 19:07:42,575 - gcsBot - INFO - Carregando dados da Tabela Mestre para o Otimizador...
+2025-07-30 19:07:42,576 - gcsBot - INFO - Executando consulta ao InfluxDB (range: -1y)...
+2025-07-30 19:07:42,591 - gcsBot - INFO - Consulta concluída.
+2025-07-30 19:07:42,592 - gcsBot - ERROR - A consulta não retornou dados. Verifique se o `update-db` foi executado com sucesso.
+2025-07-30 19:09:33,675 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 19:09:33,839 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-30 19:09:35,022 - gcsBot - INFO - Carregando dados da Tabela Mestre para o Otimizador...
+2025-07-30 19:09:35,023 - gcsBot - INFO - Executando consulta ao InfluxDB (range: -1y)...
+2025-07-30 19:09:35,035 - gcsBot - INFO - Consulta concluída.
+2025-07-30 19:09:35,036 - gcsBot - ERROR - A consulta não retornou dados. Verifique se o `update-db` foi executado com sucesso e se há dados no último ano.
+2025-07-30 19:13:48,561 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 19:13:48,728 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-30 19:13:49,919 - gcsBot - INFO - --- 🧠 INICIANDO TREINAMENTO DO MODELO DE REGIMES (Passo Único) 🧠 ---
+2025-07-30 19:14:00,582 - gcsBot - WARNING - ❌ FALHA NA CONEXÃO com a Binance: HTTPSConnectionPool(host='api.binance.com', port=443): Read timed out. (read timeout=10).
+2025-07-30 19:14:00,583 - gcsBot - DEBUG - Lendo dados de 'btc_btcusdt_1m' de 2023-07-31T19:14:00.583271+00:00 a 2025-07-30T19:14:00.583306+00:00
+2025-07-30 19:14:31,707 - gcsBot - DEBUG - Lendo dados de 'macro_data_1m' de 2023-07-31T19:14:00.583271+00:00 a 2025-07-30T19:14:00.583306+00:00
+2025-07-30 19:35:05,177 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 19:35:05,488 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-30 19:35:07,130 - gcsBot - INFO - Carregando dados da Tabela Mestre para o Otimizador...
+2025-07-30 19:35:07,131 - gcsBot - INFO - Executando consulta ao InfluxDB (range: -1y)...
+2025-07-30 19:35:07,176 - gcsBot - INFO - Consulta concluída.
+2025-07-30 19:35:07,177 - gcsBot - ERROR - A consulta não retornou dados. Causas prováveis: (1) O 'update-db' não foi executado ou falhou. (2) Não existem dados no último ano.
+2025-07-30 19:35:32,233 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 19:35:32,404 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-30 19:35:33,609 - gcsBot - INFO - Carregando dados da Tabela Mestre para o Otimizador...
+2025-07-30 19:35:33,610 - gcsBot - INFO - Executando consulta ao InfluxDB (range: -1y)...
+2025-07-30 19:35:33,625 - gcsBot - INFO - Consulta concluída.
+2025-07-30 19:35:33,625 - gcsBot - ERROR - A consulta não retornou dados. Causas prováveis: (1) O 'update-db' não foi executado ou falhou. (2) Não existem dados no último ano.
+2025-07-30 19:36:37,251 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-30 19:36:37,421 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-30 19:36:38,601 - gcsBot - INFO - Carregando dados da Tabela Mestre para o Otimizador...
+2025-07-30 19:36:38,602 - gcsBot - INFO - Executando consulta ao InfluxDB (range: -1y)...
+2025-07-30 19:36:38,619 - gcsBot - INFO - Consulta concluída.
+2025-07-30 19:36:38,620 - gcsBot - ERROR - A consulta não retornou dados. Causas prováveis: (1) O pipeline 'update-db' não foi executado ou falhou. (2) Não existem dados no último ano na sua base de dados.

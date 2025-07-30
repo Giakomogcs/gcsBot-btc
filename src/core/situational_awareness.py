@@ -1,70 +1,74 @@
 import pandas as pd
+import joblib
+import os
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from src.logger import logger
+from src.config_manager import settings
 
 class SituationalAwareness:
-    """
-    Analisa a tabela de features para identificar e rotular diferentes
-    regimes de mercado usando clustering.
-    """
     def __init__(self, n_regimes: int = 4):
-        """
-        Inicializa o módulo.
-        
-        Args:
-            n_regimes (int): O número de diferentes "situações" de mercado
-                             que queremos que o modelo identifique.
-        """
         self.n_regimes = n_regimes
-        # Usaremos KMeans para agrupar as características do mercado em regimes
-        self.cluster_model = KMeans(n_clusters=self.n_regimes, random_state=42, n_init=10)
+        self.cluster_model = KMeans(n_clusters=self.n_regimes, random_state=42, n_init='auto')
         self.scaler = StandardScaler()
+        self.is_fitted = False
 
-    def determine_regimes(self, features_df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Adiciona a coluna 'market_regime' ao DataFrame.
-
-        Args:
-            features_df (pd.DataFrame): O DataFrame completo da features_master_table.
-
-        Returns:
-            pd.DataFrame: O mesmo DataFrame com a coluna 'market_regime' adicionada.
-        """
-        logger.info(f"Iniciando a determinação de {self.n_regimes} regimes de mercado...")
-
-        # Selecionamos as características que definem um "regime".
-        # Volatilidade (atr) e tendência (usando a diferença entre médias) são bons começos.
-        # Sinta-se à vontade para adicionar outras, como 'volume_delta' ou 'momentum_10m'.
-        regime_features = ['atr', 'macd_diff', 'rsi'] # Exemplo inicial
+    def fit(self, features_df: pd.DataFrame):
+        logger.info(f"Treinando o modelo de {self.n_regimes} regimes de mercado...")
+        regime_features = settings.data_pipeline.regime_features
         
-        df = features_df.copy()
-
-        # Garante que as features existem
-        for feature in regime_features:
-            if feature not in df.columns:
-                logger.error(f"Feature '{feature}' para determinação de regime não encontrada no DataFrame. Abortando.")
-                # Retorna o DF original sem a coluna de regime
-                return features_df
-
-        # Removemos valores nulos que podem ter sido gerados no cálculo das features
-        df.dropna(subset=regime_features, inplace=True)
+        df = features_df.dropna(subset=regime_features).copy()
         if df.empty:
-            logger.error("Após remover NaNs, não restaram dados para determinar regimes. Verifique o data_pipeline.")
-            return features_df
+            logger.error("Não há dados suficientes para treinar o modelo de regimes.")
+            return
 
-        # Normalizamos os dados para que o KMeans funcione corretamente
         scaled_features = self.scaler.fit_transform(df[regime_features])
+        self.cluster_model.fit(scaled_features)
+        self.is_fitted = True
+        logger.info("✅ Modelo de regimes de mercado treinado com sucesso.")
 
-        # Treina o modelo de clustering e atribui um regime a cada linha
-        regime_labels = self.cluster_model.fit_predict(scaled_features)
-
-        # Adiciona os rótulos de regime de volta ao DataFrame
-        df['market_regime'] = regime_labels
+    def transform(self, features_df: pd.DataFrame) -> pd.DataFrame:
+        if not self.is_fitted:
+            raise RuntimeError("O modelo de SituationalAwareness deve ser treinado (.fit()) antes de ser usado (.transform()).")
         
-        logger.info("Análise de regimes de mercado concluída.")
-        # Exibe um resumo de quantos pontos de dados caíram em cada regime
-        logger.info(f"Distribuição dos regimes:\n{df['market_regime'].value_counts().sort_index()}")
+        logger.debug("Aplicando rótulos de regime de mercado...")
+        regime_features = settings.data_pipeline.regime_features
+        df = features_df.copy()
+        
+        # Garante que as colunas existam
+        valid_rows = df.dropna(subset=regime_features)
+        if valid_rows.empty:
+            df['market_regime'] = -1
+            return df
 
-        # Retorna o DataFrame original com a nova coluna, preenchendo com -1 onde não foi possível calcular
-        return features_df.join(df[['market_regime']]).fillna({'market_regime': -1})
+        scaled_features = self.scaler.transform(valid_rows[regime_features])
+        regime_labels = self.cluster_model.predict(scaled_features)
+        
+        df['market_regime'] = -1
+        df.loc[valid_rows.index, 'market_regime'] = regime_labels
+        
+        return df
+
+    def save_model(self, path: str):
+        """Salva o modelo treinado e o scaler."""
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        joblib.dump({'cluster_model': self.cluster_model, 'scaler': self.scaler}, path)
+        logger.info(f"Modelo de SituationalAwareness salvo em: {path}")
+
+    @classmethod
+    def load_model(cls, path: str):
+        """Carrega um modelo e scaler pré-treinados."""
+        if not os.path.exists(path):
+            logger.error(f"Arquivo do modelo de SituationalAwareness não encontrado em {path}")
+            return None
+            
+        artefacts = joblib.load(path)
+        n_clusters = artefacts['cluster_model'].n_clusters
+        
+        instance = cls(n_regimes=n_clusters)
+        instance.cluster_model = artefacts['cluster_model']
+        instance.scaler = artefacts['scaler']
+        instance.is_fitted = True
+        
+        logger.info(f"Modelo de SituationalAwareness carregado de: {path}")
+        return instance

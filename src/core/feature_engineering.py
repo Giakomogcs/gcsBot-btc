@@ -120,17 +120,52 @@ def add_order_flow_features(df: pd.DataFrame) -> pd.DataFrame:
 
 def add_all_features(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Função principal que aplica todas as etapas de engenharia de features.
+    Função central que adiciona todas as features, agora com um foco
+    em análise de correlação macroeconômica.
     """
-    df_with_features = df.copy()
+    df_copy = df.copy()
+
+    # --- Pilar 1: Análise Técnica e Fluxo de Ordens (sem alterações) ---
+    df_copy.ta.rsi(length=14, append=True)
+    df_copy.ta.macd(fast=12, slow=26, signal=9, append=True)
+    df_copy.ta.bbands(length=20, std=2, append=True)
+    df_copy.ta.atr(length=14, append=True)
+    df_copy['volume_delta'] = df_copy['taker_buy_volume'] - df_copy['taker_sell_volume']
+    df_copy['cvd'] = df_copy['volume_delta'].cumsum()
+
+    # --- Pilar 2: Derivativos e Sentimento (sem alterações) ---
+    if 'funding_rate' in df_copy.columns:
+        df_copy['funding_rate_mean_24h'] = df_copy['funding_rate'].rolling(window=1440).mean()
+    if 'open_interest' in df_copy.columns:
+        df_copy['open_interest_pct_change_4h'] = df_copy['open_interest'].pct_change(periods=240)
+    if 'fear_and_greed' in df_copy.columns:
+        df_copy['fng_change_3d'] = df_copy['fear_and_greed'].diff(periods=1440*3)
+
+    # --- Pilar 3: Análise Macro Avançada ---
+    logger.debug("Calculando features macroeconômicas avançadas...")
     
-    df_with_features = add_technical_indicators(df_with_features)
-    df_with_features = add_order_flow_features(df_with_features)
-    df_with_features = add_macro_economic_features(df_with_features)
+    # Primeiro, calculamos os retornos diários do Bitcoin
+    # Usamos 1440 minutos para representar 1 dia
+    df_copy['btc_returns'] = df_copy['close'].pct_change(periods=1440)
+
+    macro_assets = ["dxy", "vix", "gold", "tnx", "spx", "ndx", "uso"]
     
-    logger.info("Limpando e preenchendo valores nulos restantes...")
-    df_with_features = df_with_features.bfill().ffill()
-    df_with_features.fillna(0, inplace=True)
+    for asset in macro_assets:
+        close_col = f"{asset}_close"
+        if close_col in df_copy.columns:
+            # Calcula os retornos diários do ativo macro
+            asset_returns = df_copy[close_col].pct_change(periods=1440)
+            
+            # Calcula a correlação móvel de 30 dias entre os retornos do BTC e do ativo macro
+            corr_col_name = f"btc_{asset}_corr_30d"
+            # Usamos 1440 (minutos por dia) * 30 (dias) = 43200
+            df_copy[corr_col_name] = df_copy['btc_returns'].rolling(window=43200).corr(asset_returns)
+            logger.debug(f" -> Feature de correlação '{corr_col_name}' calculada.")
+
+    # Remove a coluna de retornos do BTC que foi apenas um passo intermediário
+    df_copy.drop(columns=['btc_returns'], inplace=True)
     
-    logger.info("✅ Engenharia de features concluída.")
-    return df_with_features
+    # Limpa nomes de colunas gerados pelo pandas_ta
+    df_copy.columns = [col.lower().replace('-', '_').replace(' ', '_').replace('.', '_') for col in df_copy.columns]
+
+    return df_copy
