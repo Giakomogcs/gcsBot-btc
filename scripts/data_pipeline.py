@@ -136,6 +136,65 @@ class DataPipeline:
             logger.error(f"Erro ao buscar o último timestamp do InfluxDB: {e}")
             return None
 
+    def _find_gaps_in_db(self, measurement: str, start_date: pd.Timestamp, end_date: pd.Timestamp) -> list[tuple[pd.Timestamp, pd.Timestamp]]:
+        """
+        Encontra lacunas de dados em uma medição do InfluxDB, verificando dia a dia.
+        Retorna uma lista de tuplas, onde cada tupla representa o início e o fim de uma lacuna.
+        """
+        logger.info(f"Iniciando verificação de lacunas no banco de dados para '{measurement}' de {start_date.date()} a {end_date.date()}.")
+        query_api = db_manager.get_query_api()
+        if not query_api:
+            logger.error("API de consulta do InfluxDB indisponível. Não é possível encontrar lacunas.")
+            return []
+
+        all_missing_timestamps = []
+        
+        # Itera dia a dia para evitar sobrecarga de memória
+        for day in tqdm(pd.date_range(start=start_date, end=end_date, freq='D'), desc="Verificando Lacunas no DB"):
+            day_start = day.isoformat()
+            day_end = (day + pd.Timedelta(days=1)).isoformat()
+            
+            query = f'''
+            import "date"
+            
+            timestamps = from(bucket: "{settings.database.bucket}")
+                |> range(start: {day_start}, stop: {day_end})
+                |> filter(fn: (r) => r._measurement == "{measurement}")
+                |> aggregateWindow(every: 1m, fn: count)
+                |> filter(fn: (r) => r._value == 0)
+                |> keep(columns: ["_time"])
+
+            timestamps
+            '''
+            try:
+                result = query_api.query(query)
+                for table in result:
+                    for record in table.records:
+                        all_missing_timestamps.append(record.get_time())
+            except Exception as e:
+                logger.error(f"Erro ao consultar lacunas para o dia {day.date()}: {e}")
+        
+        if not all_missing_timestamps:
+            logger.info("Nenhuma lacuna encontrada no banco de dados.")
+            return []
+
+        logger.warning(f"Encontrados {len(all_missing_timestamps)} minutos faltantes. Consolidando em blocos...")
+        
+        all_missing_timestamps.sort()
+        
+        # Consolida os timestamps faltantes em blocos contíguos
+        missing_blocks = []
+        if all_missing_timestamps:
+            start_block = all_missing_timestamps[0]
+            for i in range(1, len(all_missing_timestamps)):
+                if (all_missing_timestamps[i] - all_missing_timestamps[i-1]) > pd.Timedelta(minutes=1):
+                    missing_blocks.append((start_block, all_missing_timestamps[i-1]))
+                    start_block = all_missing_timestamps[i]
+            missing_blocks.append((start_block, all_missing_timestamps[-1]))
+            
+        logger.info(f"Consolidado em {len(missing_blocks)} blocos de dados faltantes.")
+        return missing_blocks
+
     # Ficheiro: scripts/data_pipeline.py
 
     def read_data_in_range(self, measurement: str, start_date: str, end_date: str) -> pd.DataFrame:
@@ -186,6 +245,10 @@ class DataPipeline:
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms', utc=True)
             df.set_index('timestamp', inplace=True)
             df = df[['open','high','low','close','volume']].astype(float)
+            if df.index.tz is None:
+                df = df.tz_localize('UTC')
+            else:
+                df = df.tz_convert('UTC')
             return df
         except Exception as e:
             logger.error(f"Erro ao baixar dados da Binance: {e}", exc_info=True)
@@ -284,62 +347,190 @@ class DataPipeline:
 
     def run_btc_pipeline(self, symbol: str, interval: str = '1m'):
         """
-        Pipeline principal para dados de BTC, agora com lógica de bootstrap e atualização separada.
+        Pipeline principal para dados de BTC, com lógica de atualização, preenchimento de lacunas e persistência em CSV.
         """
         measurement_name = f"btc_{symbol.lower().replace('/', '_')}_{interval}"
-        end_utc = datetime.datetime.now(datetime.timezone.utc).replace(second=0, microsecond=0)
-        last_timestamp_in_db = self._query_last_timestamp(measurement_name)
+        csv_path = settings.data_paths.historical_data_file
+        
+        # Lista para armazenar todos os dataframes (histórico, lacunas, novos)
+        all_dfs = []
 
-        # FASE DE BOOTSTRAP: Ocorre apenas se o banco de dados estiver vazio
-        if not last_timestamp_in_db:
-            logger.info(f"Nenhum dado encontrado para '{measurement_name}'. Iniciando bootstrap de OHLCV.")
-            csv_path = settings.data_paths.historical_data_file
-            if os.path.exists(csv_path):
-                df_csv = pd.read_csv(csv_path, low_memory=False, on_bad_lines='skip')
-                df_ohlcv_history = self._preprocess_kaggle_data(df_csv)
-                if not df_ohlcv_history.empty:
-                    logger.info(f"{len(df_ohlcv_history)} velas históricas (OHLCV) carregadas. Escrevendo no DB...")
-                    self._write_dataframe_to_influx(df_ohlcv_history, measurement_name)
-                    # Agora, chamamos o backfill para enriquecer os dados que acabamos de inserir
-                    self.run_order_flow_backfill(symbol, measurement_name, months_to_backfill=24) # Ex: 24 meses
+        # Carrega dados históricos do CSV, se existir
+        if os.path.exists(csv_path):
+            logger.info(f"Lendo histórico de BTC de {csv_path}...")
+            historical_data = pd.read_csv(csv_path, index_col='timestamp', parse_dates=True)
+            if not historical_data.empty:
+                if historical_data.index.tz is None:
+                    historical_data.index = historical_data.index.tz_localize('UTC')
                 else:
-                    logger.error("Ficheiro de bootstrap CSV vazio ou inválido.")
-            else:
-                logger.error(f"Ficheiro de bootstrap não encontrado em {csv_path}. Bootstrap impossível.")
-                return
-
-        # FASE DE ATUALIZAÇÃO: Busca apenas os dados mais recentes
-        start_utc = (self._query_last_timestamp(measurement_name) or pd.to_datetime('2018-01-01', utc=True)) + pd.Timedelta(minutes=1)
-        if self.binance_client and start_utc < end_utc:
-            logger.info(f"Buscando novos dados de {start_utc.strftime('%Y-%m-%d %H:%M:%S')} até {end_utc.strftime('%Y-%m-%d %H:%M:%S')}...")
-            
-            df_ohlcv_new = self._get_historical_klines_binance(symbol, interval, start_utc, end_utc)
-            if not df_ohlcv_new.empty:
-                df_orderflow_new = self._get_historical_agg_trades(symbol, start_utc, end_utc)
-                df_derivatives_new = self._get_derivatives_data(symbol, start_utc, end_utc)
-                
-                df_combined = df_ohlcv_new.join(df_orderflow_new, how='left')
-                if not df_derivatives_new.empty:
-                    df_combined = df_combined.join(df_derivatives_new, how='outer')
-
-                # Preenche valores que podem faltar (ex: funding rate só aparece de 8 em 8 horas)
-                df_combined.ffill(inplace=True) 
-                df_combined.fillna(0, inplace=True) # Garante que não há NaNs antes de salvar
-
-                self._write_dataframe_to_influx(df_combined, measurement_name)
-            else:
-                logger.info("Nenhum dado novo de velas (OHLCV) encontrado.")
+                    historical_data.index = historical_data.index.tz_convert('UTC')
+                all_dfs.append(historical_data)
         else:
-            logger.info("Dados de BTC no DB já estão atualizados ou cliente offline.")
+            historical_data = pd.DataFrame()
+
+        # Identifica e preenche lacunas nos dados históricos
+        if not historical_data.empty and self.binance_client:
+            full_range = pd.date_range(start=historical_data.index.min(), end=historical_data.index.max(), freq='1min', tz='UTC')
+            missing_timestamps = full_range.difference(historical_data.index)
+            
+            if not missing_timestamps.empty:
+                logger.warning(f"Encontradas {len(missing_timestamps)} lacunas nos dados históricos. Preenchendo...")
+                missing_blocks = []
+                if len(missing_timestamps) > 0:
+                    start_block = missing_timestamps[0]
+                    for i in range(1, len(missing_timestamps)):
+                        if missing_timestamps[i] - missing_timestamps[i-1] > pd.Timedelta(minutes=1):
+                            missing_blocks.append((start_block, missing_timestamps[i-1]))
+                            start_block = missing_timestamps[i]
+                    missing_blocks.append((start_block, missing_timestamps[-1]))
+
+                for start_gap, end_gap in missing_blocks:
+                    logger.info(f"Preenchendo lacuna de {start_gap} a {end_gap}")
+                    gap_data = self._get_historical_klines_binance(symbol, interval, start_gap, end_gap)
+                    if not gap_data.empty:
+                        all_dfs.append(gap_data)
+
+        # Determina a data de início para buscar novos dados
+        # Usa o dataframe combinado até agora para encontrar o último timestamp
+        temp_combined_df = pd.concat(all_dfs) if all_dfs else pd.DataFrame()
+        start_utc = (temp_combined_df.index.max() + pd.Timedelta(minutes=1)) if not temp_combined_df.empty else pd.to_datetime(settings.data_pipeline.start_date_ingestion, utc=True)
+        end_utc = datetime.datetime.now(datetime.timezone.utc).replace(second=0, microsecond=0)
+
+        # Busca novos dados se necessário
+        df_new = pd.DataFrame()
+        if self.binance_client and start_utc < end_utc:
+            logger.info(f"Buscando novos dados de BTC de {start_utc.strftime('%Y-%m-%d %H:%M:%S')} até {end_utc.strftime('%Y-%m-%d %H:%M:%S')}...")
+            df_new = self._get_historical_klines_binance(symbol, interval, start_utc, end_utc)
+            if not df_new.empty:
+                all_dfs.append(df_new)
+            else:
+                logger.info("Nenhum dado novo de BTC encontrado na Binance.")
+        else:
+            logger.info("Dados de BTC no CSV e DB já estão atualizados ou cliente offline.")
+
+        # Combina todos os dataframes (histórico, lacunas, novos) e salva o CSV
+        if all_dfs:
+            df_combined = pd.concat(all_dfs)
+            df_combined = df_combined[~df_combined.index.duplicated(keep='last')]
+            df_combined.sort_index(inplace=True)
+            df_combined.to_csv(csv_path)
+            logger.info(f"✅ CSV de histórico do BTC atualizado com {len(df_combined)} registros em {csv_path}")
+        else:
+            df_combined = pd.DataFrame() # Garante que df_combined exista
+
+        # Lógica de escrita no InfluxDB consolidada
+        if not df_combined.empty:
+            last_timestamp_in_db = self._query_last_timestamp(measurement_name)
+            
+            if last_timestamp_in_db is None:
+                # Bootstrap: DB está vazio, escreve tudo
+                logger.info(f"Nenhum dado encontrado em '{measurement_name}'. Fazendo bootstrap com {len(df_combined)} registros...")
+                self._write_dataframe_to_influx(df_combined, measurement_name)
+                self.run_order_flow_backfill(symbol, measurement_name, months_to_backfill=24)
+            else:
+                # Incremental: Escreve apenas dados mais recentes que os existentes no DB
+                data_to_write = df_combined[df_combined.index > last_timestamp_in_db]
+                if not data_to_write.empty:
+                    logger.info(f"Escrevendo {len(data_to_write)} novos pontos de dados no InfluxDB...")
+                    self._write_dataframe_to_influx(data_to_write, measurement_name)
+                else:
+                    logger.info("Nenhum dado novo para escrever no InfluxDB.")
             
 
     def run_macro_pipeline(self):
         """
-        Busca e atualiza dados macroeconômicos do Yahoo Finance, usando CSVs como
-        cache local resiliente antes de escrever no banco de dados.
+        Pipeline de dados macroeconômicos robusto e profissional, usando o DB como fonte da verdade.
         """
-        logger.info("--- 🌐 INICIANDO PIPELINE DE DADOS MACRO (FONTE: YFINANCE) 🌐 ---")
-        macro_assets = {
+        logger.info("--- 🌐 INICIANDO PIPELINE DE DADOS MACRO (DB-CENTRIC) 🌐 ---")
+        measurement_name = "macro_data_1m"
+        
+        # 1. VERIFICAÇÃO DE BOOTSTRAP
+        last_ts_in_db = self._query_last_timestamp(measurement_name)
+        if last_ts_in_db is None:
+            logger.warning(f"Banco de dados para '{measurement_name}' está vazio. Tentando bootstrap a partir dos CSVs.")
+            # Lógica para ler todos os CSVs de macro e fazer um bootstrap inicial
+            # (Esta parte mantém a lógica original de leitura dos CSVs, mas apenas para o bootstrap)
+            bootstrap_data = self._bootstrap_macro_from_csvs()
+            if not bootstrap_data.empty:
+                logger.info(f"Reamostrando {len(bootstrap_data)} registros diários de bootstrap para 1 minuto...")
+                df_to_write = bootstrap_data.resample('1min').ffill()
+                df_to_write.index.name = 'timestamp'
+                self._write_dataframe_to_influx(df_to_write, measurement_name)
+                logger.info(f"✅ Bootstrap de dados macroeconômicos concluído.")
+            else:
+                logger.error("Nenhum dado encontrado nos CSVs para o bootstrap. Pipeline macro não pode continuar.")
+                return
+        
+        # 2. LÓGICA DE ATUALIZAÇÃO INCREMENTAL
+        last_ts_in_db = self._query_last_timestamp(measurement_name) # Re-query para obter o timestamp mais recente
+        start_date_for_download = (last_ts_in_db.date() + pd.Timedelta(days=1)) if last_ts_in_db else pd.to_datetime('2018-01-01', utc=True)
+        end_date_for_download = pd.to_datetime(datetime.date.today() + datetime.timedelta(days=1), utc=True)
+
+        if start_date_for_download >= end_date_for_download.date():
+            logger.info("✅ Dados macroeconômicos no DB já estão atualizados.")
+            return
+
+        logger.info(f"Buscando novos dados macro de {start_date_for_download} até {end_date_for_download.date()}.")
+        new_daily_data = self._fetch_all_macro_assets(start_date_for_download, end_date_for_download)
+
+        if not new_daily_data.empty:
+            logger.info(f"Reamostrando {len(new_daily_data)} novos registros diários para 1 minuto...")
+            df_to_write = new_daily_data.resample('1min').ffill()
+            df_to_write.index.name = 'timestamp'
+            self._write_dataframe_to_influx(df_to_write, measurement_name)
+            logger.info(f"✅ Novos dados macroeconômicos escritos no DB.")
+        else:
+            logger.info("Nenhum dado macro novo encontrado para o período.")
+
+    def _bootstrap_macro_from_csvs(self) -> pd.DataFrame:
+        """Lê todos os CSVs de macro e os combina em um único dataframe para bootstrap."""
+        all_macro_data = []
+        macro_assets = self._get_macro_asset_info()
+        os.makedirs(settings.data_paths.macro_data_dir, exist_ok=True)
+
+        for name, asset_info in macro_assets.items():
+            if os.path.exists(asset_info["path"]):
+                df = pd.read_csv(asset_info["path"], index_col='date', parse_dates=True)
+                if not df.empty:
+                    if df.index.tz is None: df.index = df.index.tz_localize('UTC')
+                    df.columns = [f"{name}_{col.lower()}" for col in df.columns]
+                    all_macro_data.append(df)
+        
+        if not all_macro_data: return pd.DataFrame()
+        
+        df_combined = pd.concat(all_macro_data, axis=1)
+        df_combined.ffill(inplace=True)
+        df_combined.dropna(how='all', inplace=True)
+        return df_combined
+
+    def _fetch_all_macro_assets(self, start_date, end_date) -> pd.DataFrame:
+        """Busca todos os ativos macro do yfinance e os combina em um único dataframe."""
+        all_macro_data = []
+        macro_assets = self._get_macro_asset_info()
+
+        for name, asset_info in macro_assets.items():
+            try:
+                new_data = yf.download(asset_info["ticker"], start=start_date, end=end_date, progress=False, auto_adjust=False)
+                if not new_data.empty:
+                    if new_data.index.tz is None: new_data.index = new_data.index.tz_localize('UTC')
+                    
+                    final_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+                    new_data.columns = [col.capitalize() for col in new_data.columns]
+                    data_to_process = new_data[[c for c in final_cols if c in new_data.columns]].copy()
+                    data_to_process.columns = [f"{name}_{col.lower()}" for col in data_to_process.columns]
+                    all_macro_data.append(data_to_process)
+            except Exception as e:
+                logger.error(f"❌ Falha no download de dados para {name.upper()} via yfinance: {e}")
+
+        if not all_macro_data: return pd.DataFrame()
+
+        df_combined = pd.concat(all_macro_data, axis=1)
+        df_combined.ffill(inplace=True)
+        return df_combined
+    
+    def _get_macro_asset_info(self) -> dict:
+        """Retorna um dicionário com informações dos ativos macroeconômicos."""
+        return {
             "dxy": {"ticker": "DX-Y.NYB", "path": os.path.join(settings.data_paths.macro_data_dir, "DXY.csv")},
             "vix": {"ticker": "^VIX", "path": os.path.join(settings.data_paths.macro_data_dir, "VIX.csv")},
             "gold": {"ticker": "GC=F", "path": os.path.join(settings.data_paths.macro_data_dir, "GOLD.csv")},
@@ -348,117 +539,6 @@ class DataPipeline:
             "ndx": {"ticker": "^IXIC", "path": os.path.join(settings.data_paths.macro_data_dir, "NDX.csv")},
             "uso": {"ticker": "USO", "path": os.path.join(settings.data_paths.macro_data_dir, "USO.csv")}
         }
-
-        os.makedirs(settings.data_paths.macro_data_dir, exist_ok=True)
-        all_macro_data_for_db = []
-
-        for name, asset_info in macro_assets.items():
-            logger.info(f"Processando ativo macro: {name.upper()}")
-            historical_data = pd.DataFrame()
-            
-            try:
-                if os.path.exists(asset_info["path"]):
-                    logger.debug(f"Ficheiro CSV encontrado para {name.upper()}. Lendo dados históricos.")
-                    temp_df = pd.read_csv(asset_info["path"], index_col='date', parse_dates=True)
-                    if temp_df.index.tz is None:
-                        temp_df.index = temp_df.index.tz_localize('UTC')
-                    else:
-                        temp_df.index = temp_df.index.tz_convert('UTC')
-                    historical_data = temp_df
-            except Exception as e:
-                logger.warning(f"Não foi possível ler o CSV {asset_info['path']}. Ele será recriado do zero. Erro: {e}")
-
-            start_date_for_download = (historical_data.index.max() + pd.Timedelta(days=1)) if not historical_data.empty else pd.to_datetime('2018-01-01', utc=True)
-            end_date_for_download = pd.to_datetime(datetime.date.today() + datetime.timedelta(days=1), utc=True)
-
-            new_data = pd.DataFrame()
-            if start_date_for_download < end_date_for_download:
-                logger.info(f"Buscando dados para {name.upper()} de {start_date_for_download.date()} até {end_date_for_download.date()}.")
-                try:
-                    # --- CORREÇÃO CRÍTICA FINAL ---
-                    # Removido o parâmetro 'group_by' para evitar colunas multi-nível indesejadas
-                    new_data = yf.download(asset_info["ticker"], 
-                                        start=start_date_for_download, 
-                                        end=end_date_for_download, 
-                                        progress=False,
-                                        auto_adjust=False)
-                    if not new_data.empty:
-                        if new_data.index.tz is None:
-                            new_data.index = new_data.index.tz_localize('UTC')
-                        else:
-                            new_data.index = new_data.index.tz_convert('UTC')
-                        logger.info(f"✅ {len(new_data)} novos registos baixados para {name.upper()}.")
-                    else:
-                        logger.info(f"Nenhum dado novo encontrado para {name.upper()} no período solicitado.")
-
-                except Exception as e:
-                    logger.error(f"❌ Falha no download de dados para {name.upper()} via yfinance: {e}")
-            else:
-                logger.info(f"Dados para {name.upper()} já estão atualizados. Nenhum download necessário.")
-
-            combined_data = pd.concat([historical_data, new_data])
-            combined_data = combined_data[~combined_data.index.duplicated(keep='last')]
-            combined_data.sort_index(inplace=True)
-            
-            if not combined_data.empty:
-                combined_data.columns = [(col[0] if isinstance(col, tuple) else col).lower() for col in combined_data.columns]
-                
-                if 'adj close' in combined_data.columns:
-                    combined_data.drop(columns=['adj close'], inplace=True)
-                if 'volume' not in combined_data.columns: 
-                    combined_data['volume'] = 0
-
-                # Para depuração, caso o erro persista (o que é improvável agora):
-                # logger.debug(f"Colunas de {name.upper()} após limpeza: {combined_data.columns.tolist()}")
-
-                final_cols = ['open', 'high', 'low', 'close', 'volume']
-                data_to_save = combined_data[final_cols]
-                data_to_save.index.name = 'date'
-                data_to_save.to_csv(asset_info["path"])
-                logger.debug(f"CSV para {name.upper()} salvo/atualizado com sucesso em {asset_info['path']}.")
-                
-                data_for_db = data_to_save.copy()
-                data_for_db.columns = [f"{name}_{col.lower()}" for col in data_for_db.columns]
-                all_macro_data_for_db.append(data_for_db)
-            else:
-                logger.warning(f"Nenhum dado (nem histórico, nem novo) disponível para {name.upper()}.")
-
-   
-        if all_macro_data_for_db:
-            logger.info("Combinando todos os dados macro para análise...")
-            df_macro_combined = pd.concat(all_macro_data_for_db, axis=1)
-            # Preenche para a frente os valores em dias não úteis (finais de semana, feriados)
-            df_macro_combined.ffill(inplace=True)
-            df_macro_combined.dropna(how='all', inplace=True) # Remove linhas onde todos os dados são nulos
-
-            # --- LÓGICA DE PERFORMANCE CRÍTICA OTIMIZADA ---
-            # 1. Primeiro, descobrimos o que precisa ser atualizado no DB.
-            measurement_name = "macro_data_1m"
-            last_ts_in_db = self._query_last_timestamp(measurement_name)
-
-            # 2. Filtramos APENAS OS DADOS NOVOS do DataFrame DIÁRIO.
-            #    Isso resulta em um DataFrame muito pequeno e leve.
-            if last_ts_in_db:
-                logger.info(f"Último registro macro no DB é de {last_ts_in_db}. Filtrando para processar apenas dados diários novos.")
-                df_to_process = df_macro_combined[df_macro_combined.index > last_ts_in_db]
-            else:
-                logger.info("Nenhum dado macro encontrado no DB. Processando todo o histórico diário.")
-                df_to_process = df_macro_combined
-
-            if df_to_process.empty:
-                logger.info("✅ Dados macro já estão sincronizados com o banco de dados. Nenhuma ação necessária.")
-                return
-
-            # 3. SÓ AGORA aplicamos o 'resample' no conjunto PEQUENO e FILTRADO de dados.
-            #    Esta operação agora é leve e extremamente rápida.
-            logger.info(f"Reamostrando {len(df_to_process)} registos diários para 1 minuto...")
-            df_to_write = df_to_process.resample('1min').ffill()
-            df_to_write.index.name = 'timestamp'
-
-            logger.info(f"Dados macro combinados e reamostrados. Preparando para escrever {len(df_to_write)} registos no DB...")
-            self._write_dataframe_to_influx(df_to_write, measurement_name)
-        else:
-            logger.warning("Nenhum dado macro foi processado para ser enviado ao banco de dados.")
 
     def validate_data(self, df: pd.DataFrame) -> bool:
         """

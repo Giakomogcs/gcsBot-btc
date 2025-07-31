@@ -5925,3 +5925,109 @@ HTTP response body: {"code":"unprocessable entity","message":"failure writing po
 2025-07-31 11:58:07,135 - gcsBot - DEBUG - Pré-processando dados do ficheiro CSV...
 2025-07-31 11:58:12,012 - gcsBot - INFO - 3972924 velas históricas (OHLCV) carregadas. Escrevendo no DB...
 2025-07-31 11:58:12,043 - gcsBot - INFO - Escrevendo 3972924 registos para 'btc_btcusdt_1m' em 3973 lotes...
+2025-07-31 12:07:07,079 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-31 12:07:07,106 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-31 12:07:08,943 - gcsBot - INFO - ✅ Cliente Binance inicializado em modo REAL.
+2025-07-31 12:07:08,944 - gcsBot - INFO - --- ❤️ INICIANDO PIPELINE DE SENTIMENTO (FONTE: ALTERNATIVE.ME) ❤️ ---
+2025-07-31 12:07:09,578 - gcsBot - INFO - Escrevendo 1051201 registos para 'sentiment_fear_and_greed' em 1052 lotes...
+2025-07-31 12:10:13,983 - gcsBot - INFO - ✅ Escrita para 'sentiment_fear_and_greed' concluída com sucesso.
+2025-07-31 12:10:13,997 - gcsBot - INFO - Nenhum dado encontrado para 'btc_btcusdt_1m'. Iniciando bootstrap de OHLCV.
+2025-07-31 12:10:21,426 - gcsBot - DEBUG - Pré-processando dados do ficheiro CSV...
+2025-07-31 12:10:25,717 - gcsBot - INFO - 3972924 velas históricas (OHLCV) carregadas. Escrevendo no DB...
+2025-07-31 12:10:25,747 - gcsBot - INFO - Escrevendo 3972924 registos para 'btc_btcusdt_1m' em 3973 lotes...
+2025-07-31 13:00:36,582 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-31 13:00:36,607 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-31 13:00:47,757 - gcsBot - WARNING - ❌ FALHA NA CONEXÃO com a Binance: HTTPSConnectionPool(host='api.binance.com', port=443): Read timed out. (read timeout=10).
+2025-07-31 13:00:47,762 - gcsBot - INFO - Lendo histórico de BTC de data/input/history/BTCUSDT-1m-data.csv...
+2025-07-31 13:01:14,312 - gcsBot - INFO - Dados de BTC no CSV e DB já estão atualizados ou cliente offline.
+2025-07-31 13:01:14,367 - gcsBot - INFO - Nenhum dado encontrado em 'btc_btcusdt_1m'. Fazendo bootstrap a partir do CSV completo...
+2025-07-31 13:01:40,293 - gcsBot - INFO - Escrevendo 3972924 registos para 'btc_btcusdt_1m' em 3973 lotes...
+2025-07-31 13:03:56,929 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-31 13:03:56,957 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-31 13:03:58,576 - gcsBot - INFO - ✅ Cliente Binance inicializado em modo REAL.
+2025-07-31 13:03:58,581 - gcsBot - INFO - Lendo histórico de BTC de data/input/history/BTCUSDT-1m-data.csv...
+2025-07-31 13:04:26,255 - gcsBot - WARNING - Encontradas 1160 lacunas nos dados históricos. Preenchendo...
+2025-07-31 13:04:26,272 - gcsBot - INFO - Preenchendo lacuna de 2025-03-15 00:01:00+00:00 a 2025-03-15 19:20:00+00:00
+2025-07-31 13:04:26,273 - gcsBot - INFO - Baixando dados de velas (OHLCV) para BTCUSDT de 2025-03-15 00:01:00+00:00 até 2025-03-15 19:20:00+00:00...
+2025-07-31 13:04:28,582 - gcsBot - INFO - Buscando novos dados de BTC de 2025-07-22 18:44:00 até 2025-07-31 13:04:00...
+2025-07-31 13:04:28,582 - gcsBot - INFO - Baixando dados de velas (OHLCV) para BTCUSDT de 2025-07-22 18:44:00+00:00 até 2025-07-31 13:04:00+00:00...
+2025-07-31 13:04:39,372 - gcsBot - INFO - Escrevendo 12621 registos para 'btc_btcusdt_1m' em 13 lotes...
+2025-07-31 13:04:41,663 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-31 13:05:19,225 - gcsBot - INFO - ✅ CSV de histórico do BTC atualizado em data/input/history/BTCUSDT-1m-data.csv
+2025-07-31 13:05:19,279 - gcsBot - INFO - --- 🌐 INICIANDO PIPELINE DE DADOS MACRO (FONTE: YFINANCE) 🌐 ---
+2025-07-31 13:05:19,282 - gcsBot - INFO - Processando ativo macro: DXY
+2025-07-31 13:05:19,285 - gcsBot - INFO - Buscando dados para DXY de 2018-01-01 até 2025-08-01.
+2025-07-31 13:05:28,557 - gcsBot - INFO - ✅ 1907 novos registos baixados para DXY.
+2025-07-31 13:05:28,586 - gcsBot - DEBUG - CSV para DXY salvo/atualizado com sucesso em data/input/macro/DXY.csv.
+2025-07-31 13:05:28,587 - gcsBot - INFO - Processando ativo macro: VIX
+2025-07-31 13:05:28,590 - gcsBot - INFO - Buscando dados para VIX de 2018-01-01 até 2025-08-01.
+2025-07-31 13:05:31,550 - gcsBot - INFO - ✅ 1905 novos registos baixados para VIX.
+2025-07-31 13:05:31,579 - gcsBot - DEBUG - CSV para VIX salvo/atualizado com sucesso em data/input/macro/VIX.csv.
+2025-07-31 13:05:31,579 - gcsBot - INFO - Processando ativo macro: GOLD
+2025-07-31 13:05:31,582 - gcsBot - INFO - Buscando dados para GOLD de 2018-01-01 até 2025-08-01.
+2025-07-31 13:05:34,920 - gcsBot - INFO - ✅ 1906 novos registos baixados para GOLD.
+2025-07-31 13:05:34,948 - gcsBot - DEBUG - CSV para GOLD salvo/atualizado com sucesso em data/input/macro/GOLD.csv.
+2025-07-31 13:05:34,949 - gcsBot - INFO - Processando ativo macro: TNX
+2025-07-31 13:05:34,953 - gcsBot - INFO - Buscando dados para TNX de 2018-01-01 até 2025-08-01.
+2025-07-31 13:05:37,969 - gcsBot - INFO - ✅ 1905 novos registos baixados para TNX.
+2025-07-31 13:05:37,998 - gcsBot - DEBUG - CSV para TNX salvo/atualizado com sucesso em data/input/macro/TNX.csv.
+2025-07-31 13:05:37,998 - gcsBot - INFO - Processando ativo macro: SPX
+2025-07-31 13:05:38,002 - gcsBot - INFO - Buscando dados para SPX de 2018-01-01 até 2025-08-01.
+2025-07-31 13:05:42,276 - gcsBot - INFO - ✅ 1904 novos registos baixados para SPX.
+2025-07-31 13:05:42,304 - gcsBot - DEBUG - CSV para SPX salvo/atualizado com sucesso em data/input/macro/SPX.csv.
+2025-07-31 13:05:42,305 - gcsBot - INFO - Processando ativo macro: NDX
+2025-07-31 13:05:42,308 - gcsBot - INFO - Buscando dados para NDX de 2018-01-01 até 2025-08-01.
+2025-07-31 13:05:45,275 - gcsBot - INFO - ✅ 1904 novos registos baixados para NDX.
+2025-07-31 13:05:45,309 - gcsBot - DEBUG - CSV para NDX salvo/atualizado com sucesso em data/input/macro/NDX.csv.
+2025-07-31 13:05:45,310 - gcsBot - INFO - Processando ativo macro: USO
+2025-07-31 13:05:45,313 - gcsBot - INFO - Buscando dados para USO de 2018-01-01 até 2025-08-01.
+2025-07-31 13:05:48,209 - gcsBot - INFO - ✅ 1904 novos registos baixados para USO.
+2025-07-31 13:05:48,238 - gcsBot - DEBUG - CSV para USO salvo/atualizado com sucesso em data/input/macro/USO.csv.
+2025-07-31 13:05:48,239 - gcsBot - INFO - Combinando todos os dados macro para análise...
+2025-07-31 13:05:48,251 - gcsBot - INFO - Nenhum dado macro encontrado no DB. Processando todo o histórico diário.
+2025-07-31 13:05:48,252 - gcsBot - INFO - Reamostrando 1908 registos diários para 1 minuto...
+2025-07-31 13:05:49,050 - gcsBot - INFO - Dados macro combinados e reamostrados. Preparando para escrever 3984481 registos no DB...
+2025-07-31 13:05:50,169 - gcsBot - INFO - Escrevendo 3984481 registos para 'macro_data_1m' em 3985 lotes...
+2025-07-31 13:15:33,710 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-31 13:15:33,747 - gcsBot - INFO - ✅ Conexão com InfluxDB estabelecida com sucesso!
+2025-07-31 13:15:35,909 - gcsBot - INFO - ✅ Cliente Binance inicializado em modo REAL.
+2025-07-31 13:15:35,912 - gcsBot - INFO - Lendo histórico de BTC de data/input/history/BTCUSDT-1m-data.csv...
+2025-07-31 13:16:03,495 - gcsBot - INFO - Buscando novos dados de BTC de 2025-07-31 13:05:00 até 2025-07-31 13:16:00...
+2025-07-31 13:16:03,495 - gcsBot - INFO - Baixando dados de velas (OHLCV) para BTCUSDT de 2025-07-31 13:05:00+00:00 até 2025-07-31 13:16:00+00:00...
+2025-07-31 13:16:04,288 - gcsBot - INFO - Escrevendo 12 registos para 'btc_btcusdt_1m' em 1 lotes...
+2025-07-31 13:16:04,525 - gcsBot - INFO - ✅ Escrita para 'btc_btcusdt_1m' concluída com sucesso.
+2025-07-31 13:16:43,269 - gcsBot - INFO - ✅ CSV de histórico do BTC atualizado com 3986717 registros em data/input/history/BTCUSDT-1m-data.csv
+2025-07-31 13:16:43,305 - gcsBot - INFO - --- 🌐 INICIANDO PIPELINE DE DADOS MACRO (FONTE: YFINANCE) 🌐 ---
+2025-07-31 13:16:43,308 - gcsBot - INFO - Processando ativo macro: DXY
+2025-07-31 13:16:43,311 - gcsBot - INFO - Buscando dados para DXY de 2018-01-01 até 2025-08-01.
+2025-07-31 13:16:51,758 - gcsBot - INFO - ✅ 1907 novos registos baixados para DXY.
+2025-07-31 13:16:51,789 - gcsBot - DEBUG - CSV para DXY salvo/atualizado com sucesso em data/input/macro/DXY.csv.
+2025-07-31 13:16:51,790 - gcsBot - INFO - Processando ativo macro: VIX
+2025-07-31 13:16:51,793 - gcsBot - INFO - Buscando dados para VIX de 2018-01-01 até 2025-08-01.
+2025-07-31 13:16:54,786 - gcsBot - INFO - ✅ 1905 novos registos baixados para VIX.
+2025-07-31 13:16:54,815 - gcsBot - DEBUG - CSV para VIX salvo/atualizado com sucesso em data/input/macro/VIX.csv.
+2025-07-31 13:16:54,815 - gcsBot - INFO - Processando ativo macro: GOLD
+2025-07-31 13:16:54,819 - gcsBot - INFO - Buscando dados para GOLD de 2018-01-01 até 2025-08-01.
+2025-07-31 13:16:57,820 - gcsBot - INFO - ✅ 1906 novos registos baixados para GOLD.
+2025-07-31 13:16:57,848 - gcsBot - DEBUG - CSV para GOLD salvo/atualizado com sucesso em data/input/macro/GOLD.csv.
+2025-07-31 13:16:57,848 - gcsBot - INFO - Processando ativo macro: TNX
+2025-07-31 13:16:57,851 - gcsBot - INFO - Buscando dados para TNX de 2018-01-01 até 2025-08-01.
+2025-07-31 13:17:00,900 - gcsBot - INFO - ✅ 1905 novos registos baixados para TNX.
+2025-07-31 13:17:00,928 - gcsBot - DEBUG - CSV para TNX salvo/atualizado com sucesso em data/input/macro/TNX.csv.
+2025-07-31 13:17:00,929 - gcsBot - INFO - Processando ativo macro: SPX
+2025-07-31 13:17:00,932 - gcsBot - INFO - Buscando dados para SPX de 2018-01-01 até 2025-08-01.
+2025-07-31 13:17:03,924 - gcsBot - INFO - ✅ 1904 novos registos baixados para SPX.
+2025-07-31 13:17:03,953 - gcsBot - DEBUG - CSV para SPX salvo/atualizado com sucesso em data/input/macro/SPX.csv.
+2025-07-31 13:17:03,953 - gcsBot - INFO - Processando ativo macro: NDX
+2025-07-31 13:17:03,957 - gcsBot - INFO - Buscando dados para NDX de 2018-01-01 até 2025-08-01.
+2025-07-31 13:17:06,873 - gcsBot - INFO - ✅ 1904 novos registos baixados para NDX.
+2025-07-31 13:17:06,902 - gcsBot - DEBUG - CSV para NDX salvo/atualizado com sucesso em data/input/macro/NDX.csv.
+2025-07-31 13:17:06,902 - gcsBot - INFO - Processando ativo macro: USO
+2025-07-31 13:17:06,905 - gcsBot - INFO - Buscando dados para USO de 2018-01-01 até 2025-08-01.
+2025-07-31 13:17:09,906 - gcsBot - INFO - ✅ 1904 novos registos baixados para USO.
+2025-07-31 13:17:09,934 - gcsBot - DEBUG - CSV para USO salvo/atualizado com sucesso em data/input/macro/USO.csv.
+2025-07-31 13:17:09,935 - gcsBot - INFO - Combinando todos os dados macro para análise...
+2025-07-31 13:17:09,954 - gcsBot - INFO - Nenhum dado macro encontrado no DB. Processando todo o histórico diário.
+2025-07-31 13:17:09,955 - gcsBot - INFO - Reamostrando 1908 registos diários para 1 minuto...
+2025-07-31 13:17:10,669 - gcsBot - INFO - Dados macro combinados e reamostrados. Preparando para escrever 3984481 registos no DB...
+2025-07-31 13:17:11,367 - gcsBot - INFO - Escrevendo 3984481 registos para 'macro_data_1m' em 3985 lotes...
