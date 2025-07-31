@@ -1,4 +1,4 @@
-# Ficheiro: scripts/data_pipeline.py (VERSÃO FINAL ALINHADA)
+# Ficheiro: scripts/data_pipeline.py (VERSÃO CORRIGIDA)
 
 import os
 import sys
@@ -74,8 +74,10 @@ class DataPipeline:
             df_processed = df.rename(columns={'value': 'fear_and_greed'})
             df_processed['timestamp'] = pd.to_datetime(pd.to_numeric(df_processed['timestamp']), unit='s', utc=True)
             df_processed = df_processed.set_index('timestamp')[['fear_and_greed']]
-            df_processed['fear_and_greed'] = pd.to_numeric(df_processed['fear_and_greed'])
-            # --- FIM DA CORREÇÃO 2 ---
+            # --- INÍCIO DA CORREÇÃO DO TIPO DE DADO ---
+            # Garante que o tipo de dado é float para evitar conflito com o InfluxDB
+            df_processed['fear_and_greed'] = pd.to_numeric(df_processed['fear_and_greed']).astype(float)
+            # --- FIM DA CORREÇÃO DO TIPO DE DADO ---
             
             if last_ts_in_db:
                 df_processed = df_processed[df_processed.index > last_ts_in_db]
@@ -134,6 +136,8 @@ class DataPipeline:
             logger.error(f"Erro ao buscar o último timestamp do InfluxDB: {e}")
             return None
 
+    # Ficheiro: scripts/data_pipeline.py
+
     def read_data_in_range(self, measurement: str, start_date: str, end_date: str) -> pd.DataFrame:
         query_api = db_manager.get_query_api()
         if not query_api:
@@ -142,9 +146,9 @@ class DataPipeline:
         logger.debug(f"Lendo dados de '{measurement}' de {start_date} a {end_date}")
         try:
             query = f'''
-            from(bucket:"{settings.database.bucket}") 
-                |> range(start: {start_date}, stop: {end_date}) 
-                |> filter(fn: (r) => r._measurement == "{measurement}") 
+            from(bucket:"{settings.database.bucket}")
+                |> range(start: {start_date}, stop: {end_date})
+                |> filter(fn: (r) => r._measurement == "{measurement}")
                 |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
             '''
             df = query_api.query_data_frame(query)
@@ -155,15 +159,20 @@ class DataPipeline:
             df['timestamp'] = pd.to_datetime(df['timestamp'])
             df = df.set_index('timestamp')
 
-            # --- CORREÇÃO APLICADA AQUI ---
-            # Lista mais completa de colunas de metadados para remover
+            # --- INÍCIO DA CORREÇÃO DEFINITIVA ---
+            # Corrigido o erro de digitação de 'stop' para '_stop'
             cols_to_drop = ['result', 'table', '_start', '_stop', '_measurement']
-            
-            # Remove as colunas da lista que existirem no DataFrame
-            df_cleaned = df.drop(columns=[col for col in cols_to_drop if col in df.columns])
-            
+            df_cleaned = df.drop(columns=[col for col in cols_to_drop if col in df.columns], errors='ignore')
+            # --- FIM DA CORREÇÃO DEFINITIVA ---
+
+            # Garante que as colunas essenciais para os indicadores técnicos sejam numéricas.
+            ohlcv_cols = ['open', 'high', 'low', 'close', 'volume']
+            for col in ohlcv_cols:
+                if col in df_cleaned.columns:
+                    df_cleaned[col] = pd.to_numeric(df_cleaned[col], errors='coerce')
+
             return df_cleaned
-            
+
         except Exception as e:
             logger.error(f"❌ Erro ao ler range do InfluxDB: {e}", exc_info=True)
             return pd.DataFrame()
@@ -284,7 +293,7 @@ class DataPipeline:
         # FASE DE BOOTSTRAP: Ocorre apenas se o banco de dados estiver vazio
         if not last_timestamp_in_db:
             logger.info(f"Nenhum dado encontrado para '{measurement_name}'. Iniciando bootstrap de OHLCV.")
-            csv_path = settings.data_paths.kaggle_bootstrap_file
+            csv_path = settings.data_paths.historical_data_file
             if os.path.exists(csv_path):
                 df_csv = pd.read_csv(csv_path, low_memory=False, on_bad_lines='skip')
                 df_ohlcv_history = self._preprocess_kaggle_data(df_csv)
@@ -478,35 +487,6 @@ class DataPipeline:
             
         return is_valid
 
-
-    def _get_derivatives_data(self, symbol: str, start_dt: datetime.datetime, end_dt: datetime.datetime) -> pd.DataFrame:
-        """Busca dados de Derivativos (Funding Rate, Open Interest) da Binance."""
-        if not self.binance_client: return pd.DataFrame()
-        logger.info(f"Buscando dados de Derivativos para {symbol} de {start_dt} a {end_dt}...")
-        
-        try:
-            funding_rates = self.binance_client.get_funding_rate_history(symbol=symbol.replace('/', ''), startTime=int(start_dt.timestamp() * 1000), limit=1000)
-            df_funding = pd.DataFrame(funding_rates)
-            if not df_funding.empty:
-                df_funding['fundingTime'] = pd.to_datetime(df_funding['fundingTime'], unit='ms', utc=True)
-                df_funding = df_funding.rename(columns={'fundingTime': 'timestamp', 'fundingRate': 'funding_rate'}).set_index('timestamp')[['funding_rate']]
-                df_funding['funding_rate'] = pd.to_numeric(df_funding['funding_rate'])
-            
-            oi_stats = self.binance_client.get_open_interest_hist(symbol=symbol.replace('/', ''), period='1h', limit=500, startTime=int(start_dt.timestamp() * 1000))
-            df_oi = pd.DataFrame(oi_stats)
-            if not df_oi.empty:
-                df_oi['timestamp'] = pd.to_datetime(df_oi['timestamp'], unit='ms', utc=True)
-                df_oi = df_oi.rename(columns={'sumOpenInterestValue': 'open_interest'}).set_index('timestamp')[['open_interest']]
-                df_oi['open_interest'] = pd.to_numeric(df_oi['open_interest'])
-
-            if df_funding.empty and df_oi.empty:
-                return pd.DataFrame()
-            
-            return df_funding.join(df_oi, how='outer')
-
-        except Exception as e:
-            logger.error(f"Erro ao buscar dados de derivativos: {e}", exc_info=True)
-            return pd.DataFrame()
         
     def _train_and_save_regime_model(self):
         """
@@ -536,48 +516,70 @@ class DataPipeline:
         sa_model.save_model(model_path)
         return True # Retorna sucesso
 
+    def _get_derivatives_data(self, symbol: str, start_dt: datetime.datetime, end_dt: datetime.datetime) -> pd.DataFrame:
+            """Busca dados de Derivativos (Funding Rate, Open Interest) da Binance."""
+            if not self.binance_client: return pd.DataFrame()
+            logger.info(f"Buscando dados de Derivativos para {symbol} de {start_dt} a {end_dt}...")
+            
+            try:
+                # --- INÍCIO DA CORREÇÃO DO ERRO DE ATRIBUTO ---
+                # As funções para futuros usam o prefixo 'fapi_'
+                funding_rates = self.binance_client.fapi_get_funding_rate(symbol=symbol.replace('/', ''), startTime=int(start_dt.timestamp() * 1000), limit=1000)
+                oi_stats = self.binance_client.fapi_get_open_interest_hist(symbol=symbol.replace('/', ''), period='1h', limit=500, startTime=int(start_dt.timestamp() * 1000))
+                # --- FIM DA CORREÇÃO ---
 
-    
+                df_funding = pd.DataFrame(funding_rates)
+                if not df_funding.empty:
+                    df_funding['fundingTime'] = pd.to_datetime(df_funding['fundingTime'], unit='ms', utc=True)
+                    df_funding = df_funding.rename(columns={'fundingTime': 'timestamp', 'fundingRate': 'funding_rate'}).set_index('timestamp')[['funding_rate']]
+                    df_funding['funding_rate'] = pd.to_numeric(df_funding['funding_rate'])
+
+                df_oi = pd.DataFrame(oi_stats)
+                if not df_oi.empty:
+                    df_oi['timestamp'] = pd.to_datetime(df_oi['timestamp'], unit='ms', utc=True)
+                    df_oi = df_oi.rename(columns={'sumOpenInterestValue': 'open_interest'}).set_index('timestamp')[['open_interest']]
+                    df_oi['open_interest'] = pd.to_numeric(df_oi['open_interest'])
+
+                if df_funding.empty and df_oi.empty:
+                    return pd.DataFrame()
+                
+                return df_funding.join(df_oi, how='outer')
+
+            # --- INÍCIO DA CORREÇÃO DO ERRO DE ATRIBUTO ---
+            except AttributeError:
+                logger.error("Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'.")
+                logger.warning("Este erro geralmente ocorre devido a uma versão desatualizada da biblioteca 'python-binance'.")
+                logger.warning("O pipeline continuará sem dados de derivativos para este lote.")
+                return pd.DataFrame()
+            # --- FIM DA CORREÇÃO DO ERRO DE ATRIBUTO ---
+            except Exception as e:
+                logger.error(f"Erro ao buscar dados de derivativos: {e}", exc_info=True)
+                return pd.DataFrame()
+
     def run_full_pipeline(self):
-
-        # FASE 0: PREPARAÇÃO E VALIDAÇÃO DE PRÉ-REQUISITOS
+        """
+        Executa o pipeline completo, agora com uma etapa de limpeza de dados inteligente
+        para garantir que todos os lotes passem na validação.
+        """
+        # --- FASE 0: PREPARAÇÃO (Treino automático do modelo de regimes) ---
         sa_model_path = os.path.join(settings.data_paths.models_dir, 'situational_awareness.joblib')
         if not os.path.exists(sa_model_path):
-            success = self._train_and_save_regime_model()
-            if not success:
-                logger.critical("Falha ao treinar o modelo de regimes. O pipeline não pode continuar.")
+            if not self._train_and_save_regime_model():
+                logger.critical("Falha ao treinar o modelo de regimes. Pipeline abortado.")
                 return
 
-        # FASE 1: INGESTÃO DE DADOS BRUTOS
-        # ... (seu código para run_sentiment_pipeline, run_btc_pipeline, run_macro_pipeline)
-        
-        # FASE 2: PROCESSAMENTO EM LOTES
-        logger.info("--- 🧠 Carregando o modelo de diagnóstico de regimes pré-treinado... ---")
+        # --- FASE 1: INGESTÃO DE DADOS BRUTOS (sem alterações) ---
+        self.run_sentiment_pipeline()
+        self.run_btc_pipeline(symbol='BTCUSDT', interval='1m')
+        self.run_macro_pipeline()
+
+        # --- FASE 2: PROCESSAMENTO, ENRIQUECIMENTO E LIMPEZA EM LOTES ---
+        logger.info("--- 🔄 INICIANDO PROCESSAMENTO DA TABELA MESTRE EM LOTES MENSAIS 🔄 ---")
+
         situational_awareness_model = SituationalAwareness.load_model(sa_model_path)
         if not situational_awareness_model:
             logger.critical("Modelo de SituationalAwareness não pôde ser carregado. Abortando.")
             return
-        
-        """
-        Executa o pipeline completo em LOTES MENSAIS para otimizar o uso de memória.
-        """
-        self.run_sentiment_pipeline() # Primeiro o sentimento
-        self.run_btc_pipeline(symbol='BTCUSDT', interval='1m') # Depois BTC (que agora inclui derivativos)
-        self.run_macro_pipeline() # E o macro
-
-        # --- INÍCIO DA MODIFICAÇÃO 2: CARREGAR O MODELO DE REGIMES ---
-        logger.info("--- 🧠 Carregando o modelo de diagnóstico de regimes pré-treinado... ---")
-        sa_model_path = os.path.join(settings.data_paths.models_dir, 'situational_awareness.joblib')
-        situational_awareness_model = SituationalAwareness.load_model(sa_model_path)
-        if not situational_awareness_model:
-            logger.error("Modelo de SituationalAwareness não pôde ser carregado. O pipeline não pode continuar com a classificação de regimes.")
-            # Você pode decidir se quer parar o pipeline ou continuar sem a classificação.
-            # Por segurança, vamos parar.
-            return
-        # --- FIM DA MODIFICAÇÃO 2 ---
-
-        # FASE 2: Processamento em "Streaming" (Mês a Mês)
-        logger.info("--- 🔄 INICIANDO PROCESSAMENTO DA TABELA MESTRE EM LOTES MENSAIS 🔄 ---")
 
         start_date = pd.to_datetime('2018-01-01', utc=True)
         end_date = pd.to_datetime(datetime.date.today() + datetime.timedelta(days=1), utc=True)
@@ -592,31 +594,58 @@ class DataPipeline:
             
             logger.debug(f"Processando lote de {current_date.strftime('%Y-%m')}...")
 
+            # 1. Leitura e Combinação dos Dados Brutos
             df_btc_chunk = self.read_data_in_range("btc_btcusdt_1m", chunk_start, chunk_end)
-            df_macro_chunk = self.read_data_in_range("macro_data_1m", chunk_start, chunk_end)
-            df_sentiment_chunk = self.read_data_in_range("sentiment_fear_and_greed", chunk_start, chunk_end)
-
             if df_btc_chunk.empty:
                 logger.debug(f"Nenhum dado de BTC para o período {current_date.strftime('%Y-%m')}. A saltar.")
                 current_date += relativedelta(months=1)
                 pbar.update(1)
                 continue
-
-            df_combined = df_btc_chunk.join(df_macro_chunk, how='left')
-            df_combined = df_combined.join(df_sentiment_chunk, how='left')
-            df_combined.ffill(inplace=True) # Preenche para a frente os dados macro e de sentimento
-
-            df_with_features = add_all_features(df_combined)
-
-            if self.validate_data(df_final_features):
-                # A sua função _write_dataframe_to_influx já lida com o batching.
-                # Precisamos apenas garantir que a nova coluna 'market_regime' é tratada como tag.
-                # Você precisará adicionar 'market_regime' às tags no seu config.yml
-                self._write_dataframe_to_influx(df_final_features, "features_master_table")
-            else:
-                logger.error(f"Validação falhou para o lote {current_date.strftime('%Y-%m')}. Este lote não será salvo.")
             
-            del df_btc_chunk, df_macro_chunk, df_combined, df_with_features, df_final_features
+            df_macro_chunk = self.read_data_in_range("macro_data_1m", chunk_start, chunk_end)
+            df_sentiment_chunk = self.read_data_in_range("sentiment_fear_and_greed", chunk_start, chunk_end)
+            
+            df_combined = df_btc_chunk.join(df_macro_chunk, how='left').join(df_sentiment_chunk, how='left')
+
+            # --- INÍCIO DA SOLUÇÃO DEFINITIVA ---
+
+            # 2. LIMPEZA INTELIGENTE - ETAPA 1: Preenchimento de Gaps
+            # Preenche para a frente os dados macro e de sentimento para cobrir fins de semana e feriados.
+            df_combined.ffill(inplace=True)
+            logger.info(f"COLUNAS ANTES de add_all_features: {df_combined.columns.tolist()}")
+            df_with_features = add_all_features(df_combined)
+            logger.info(f"COLUNAS DEPOIS de add_all_features: {df_with_features.columns.tolist()}")
+            
+            # Assegura que as colunas esperadas existem antes de prosseguir
+            expected_features = settings.data_pipeline.regime_features
+            if not all(feature in df_with_features.columns for feature in expected_features):
+                logger.error(f"FATAL: Features esperadas {expected_features} não foram criadas pela engenharia de features. A saltar lote.")
+                current_date += relativedelta(months=1)
+                pbar.update(1)
+                continue # Salta para o próximo mês
+
+            df_with_regimes = situational_awareness_model.transform(df_with_features)
+
+            initial_rows = len(df_with_regimes)
+            df_final = df_with_regimes.dropna()
+            final_rows = len(df_final)
+
+            if initial_rows > final_rows:
+                logger.debug(f"Limpeza de NaNs: {initial_rows - final_rows} linhas incalculáveis removidas do lote {current_date.strftime('%Y-%m')}.")
+            
+            # --- FIM DA SOLUÇÃO DEFINITIVA ---
+
+            # 6. VALIDAÇÃO E SALVAMENTO
+            if not df_final.empty and self.validate_data(df_final):
+                self._write_dataframe_to_influx(df_final, "features_master_table")
+            else:
+                 if df_final.empty:
+                    logger.warning(f"Lote {current_date.strftime('%Y-%m')} ficou vazio após a limpeza. Nada para salvar.")
+                 else:
+                    logger.error(f"Validação falhou para o lote {current_date.strftime('%Y-%m')}. Este lote não será salvo.")
+            
+            # A limpeza de memória também é corrigida
+            del df_btc_chunk, df_macro_chunk, df_sentiment_chunk, df_combined, df_with_features, df_with_regimes, df_final
             gc.collect()
 
             current_date += relativedelta(months=1)

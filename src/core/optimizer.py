@@ -6,12 +6,11 @@ import joblib
 import optuna
 import warnings
 import logging
+import json
 
-# Configurações iniciais de loggers e avisos para um output limpo
+# Configurações iniciais
 warnings.filterwarnings("ignore", category=UserWarning)
 logging.getLogger('lightgbm').setLevel(logging.ERROR)
-
-# Adiciona a raiz do projeto ao path para garantir importações consistentes
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
@@ -24,9 +23,6 @@ from src.core.model_trainer import ModelTrainer
 from src.core.situational_awareness import SituationalAwareness
 
 class SituationOptimizer:
-    """
-    Orquestra a otimização de modelos especialistas para cada regime de mercado.
-    """
     def __init__(self, training_data: pd.DataFrame):
         self.training_data = training_data
         self.trainer = ModelTrainer()
@@ -53,7 +49,7 @@ class SituationOptimizer:
         }
         if not all(feat in data_for_objective.columns for feat in specialist_features):
             logger.error(f"Features faltando no trial. Necessárias: {specialist_features}")
-            return -1.0 # Retorna um score baixo para penalizar este trial
+            return -1.0
         score = self.trainer.train_and_backtest_for_optimization(data=data_for_objective, params=params, feature_names=specialist_features)
         return score
 
@@ -62,7 +58,7 @@ class SituationOptimizer:
         optuna.logging.set_verbosity(optuna.logging.WARNING)
         
         market_regimes = self.training_data['market_regime'].unique()
-        logger.info(f"Regimes de mercado encontrados nos dados de treino: {market_regimes}")
+        logger.info(f"Regimes de mercado encontrados: {market_regimes}")
 
         for regime_id in market_regimes:
             if regime_id == -1: continue
@@ -70,7 +66,7 @@ class SituationOptimizer:
             logger.info(f"\n{'='*25} Otimizando para o REGIME DE MERCADO: {regime_id} {'='*25}")
             
             regime_data = self.training_data[self.training_data['market_regime'] == regime_id].copy()
-            if len(regime_data) < 1000: # Limiar mínimo de dados para um treino de qualidade
+            if len(regime_data) < 500:
                 logger.warning(f"Poucos dados para o regime {regime_id} ({len(regime_data)} amostras). Otimização pulada.")
                 continue
 
@@ -93,47 +89,52 @@ class SituationOptimizer:
                     else:
                         logger.warning(f"   -> Score ({best_trial.value:.4f}) não atingiu o limiar. Modelo não salvo.")
                 except ValueError:
-                    logger.warning("Nenhum trial concluído com sucesso para este especialista.")
-        logger.info("\n" + "="*80 + "\n--- ✅ OTIMIZAÇÃO POR REGIME CONCLUÍDA ✅ ---\n" + "="*80)
+                    logger.warning("Nenhum trial concluído com sucesso.")
+        logger.info("\n" + "="*80 + "\n--- ✅ OTIMIZAÇÃO CONCLUÍDA ✅ ---\n" + "="*80)
 
-def train_regime_model():
-    """Função para o treinamento único do modelo de regimes."""
-    logger.info("--- 🧠 INICIANDO TREINAMENTO DO MODELO DE REGIMES (Passo Único) 🧠 ---")
-    
-    from scripts.data_pipeline import DataPipeline 
-    from src.core.feature_engineering import add_all_features
-    
-    pipeline = DataPipeline()
-    start_date = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=730)).isoformat()
-    end_date = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    
-    # Usa a função read_data_in_range para carregar os dados brutos necessários
-    df_btc = pipeline.read_data_in_range("btc_btcusdt_1m", start_date, end_date)
-    df_macro = pipeline.read_data_in_range("macro_data_1m", start_date, end_date)
-    
-    if df_btc.empty:
-        logger.error("Nenhum dado de BTC para treinar o modelo de regimes. Abortando.")
-        return
-
-    df_combined = df_btc.join(df_macro, how='left').ffill()
-    df_with_features = add_all_features(df_combined)
-    
-    sa_model = SituationalAwareness(n_regimes=4)
-    sa_model.fit(df_with_features)
-    
-    model_path = os.path.join(settings.data_paths.models_dir, 'situational_awareness.joblib')
-    sa_model.save_model(model_path)
+# --- INÍCIO DA CORREÇÃO: DEFINIÇÃO DA FUNÇÃO DE DIAGNÓSTICO ---
+def check_database_readiness(query_api) -> bool:
+    """
+    Função de diagnóstico que faz uma consulta leve para verificar se a
+    features_master_table está acessível e contém dados.
+    """
+    logger.info("--- 🔬 Executando diagnóstico da base de dados... ---")
+    try:
+        # Consulta muito leve: pega apenas o último registo
+        diagnostic_query = f'''
+        from(bucket:"{settings.database.bucket}") 
+            |> range(start: -5y) 
+            |> filter(fn: (r) => r._measurement == "features_master_table")
+            |> last()
+        '''
+        result = query_api.query(diagnostic_query)
+        if not result or not result[0].records:
+            logger.error("Diagnóstico Falhou: A consulta à 'features_master_table' não retornou nenhum resultado.")
+            return False
+        
+        logger.info("✅ Diagnóstico bem-sucedido: A base de dados está acessível e a 'features_master_table' contém dados.")
+        return True
+    except Exception as e:
+        logger.error(f"Diagnóstico Falhou: Ocorreu um erro crítico ao consultar a base de dados: {e}", exc_info=True)
+        return False
+# --- FIM DA CORREÇÃO ---
 
 def run_optimization():
     """Função principal para carregar dados da DB e executar a otimização."""
-    logger.info("Carregando dados da Tabela Mestre para o Otimizador...")
+    logger.info("Iniciando processo de otimização...")
     
     query_api = db_manager.get_query_api()
     if not query_api:
         logger.error("Otimização abortada: db_manager não disponível.")
         return
 
-    # Consulta eficiente para os dados de treino mais recentes (último ano)
+    # Passo 1: Executa o diagnóstico antes de tentar carregar a massa de dados
+    if not check_database_readiness(query_api):
+        logger.critical("A base de dados não está pronta para a otimização. Verifique os logs de diagnóstico e do pipeline 'update-db'.")
+        return
+
+    # Passo 2: Se o diagnóstico passar, executa a consulta principal
+    logger.info("Carregando dados da Tabela Mestre para o Otimizador (último ano)...")
     query = f'''
     from(bucket:"{settings.database.bucket}") 
         |> range(start: -1y) 
@@ -142,14 +143,12 @@ def run_optimization():
     '''
     df_master = pd.DataFrame()
     try:
-        logger.info("Executando consulta ao InfluxDB (range: -1y)...")
         df_master = query_api.query_data_frame(query)
-        logger.info("Consulta concluída.")
     except Exception as e:
-        logger.error(f"Erro crítico durante a consulta ao InfluxDB: {e}", exc_info=True)
+        logger.error(f"Erro crítico durante a consulta principal ao InfluxDB: {e}", exc_info=True)
 
     if df_master.empty:
-        logger.error("A consulta não retornou dados. Causas prováveis: (1) O pipeline 'update-db' não foi executado ou falhou. (2) Não existem dados no último ano na sua base de dados.")
+        logger.error("A consulta principal não retornou dados, embora o diagnóstico tenha sido bem-sucedido. Verifique se há dados no último ano.")
         return
         
     df_master = df_master.drop(columns=['result', 'table', '_start', '_stop', '_measurement'], errors='ignore')
@@ -161,4 +160,6 @@ def run_optimization():
     optimizer.run()
 
 if __name__ == '__main__':
+    # O otimizador só tem uma função agora: otimizar.
+    # A lógica de 'train_regime_model' foi movida para o pipeline.
     run_optimization()

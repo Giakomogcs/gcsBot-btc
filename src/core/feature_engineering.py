@@ -1,9 +1,8 @@
 # src/core/feature_engineering.py
 import pandas as pd
 import numpy as np
-from ta.volatility import BollingerBands, AverageTrueRange
-from ta.trend import MACD, ADXIndicator, CCIIndicator
-from ta.momentum import StochasticOscillator, RSIIndicator, WilliamsRIndicator
+import pandas_ta as ta
+
 import yfinance as yf
 import os
 import sys
@@ -90,25 +89,56 @@ def add_macro_economic_features(df: pd.DataFrame) -> pd.DataFrame:
 def add_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     logger.info("Calculando indicadores técnicos...")
     df = df.sort_index()
-    df['atr'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=14).average_true_range()
-    bb = BollingerBands(close=df['close'], window=20, window_dev=2)
-    df['bb_width'] = bb.bollinger_wband()
-    df['bb_pband'] = bb.bollinger_pband()
-    macd = MACD(close=df['close'])
-    df['macd_diff'] = macd.macd_diff()
-    adx = ADXIndicator(high=df['high'], low=df['low'], close=df['close'], window=14)
-    df['adx'] = adx.adx()
-    df['adx_power'] = adx.adx_pos() - adx.adx_neg()
-    df['rsi'] = RSIIndicator(close=df['close'], window=14).rsi()
-    df['stoch_osc'] = StochasticOscillator(high=df['high'], low=df['low'], close=df['close']).stoch()
-    df['price_change_1m'] = df['close'].pct_change(1, fill_method=None)
-    df['price_change_5m'] = df['close'].pct_change(5, fill_method=None)
-    df['momentum_10m'] = df['close'].pct_change(10, fill_method=None)
+
+    # Anexa todos os indicadores usando a extensão 'ta' do pandas_ta
+    df.ta.atr(length=14, append=True)
+    df.ta.bbands(length=20, std=2, append=True)
+    df.ta.macd(append=True)
+    df.ta.adx(length=14, append=True)
+    df.ta.rsi(length=14, append=True)
+    df.ta.stoch(append=True)
+    df.ta.cci(length=20, append=True)
+    df.ta.willr(length=14, append=True)
+
+    # Renomeia colunas para corresponder aos nomes originais e calcula features derivadas
+    df.rename(columns={
+        'ATRr_14': 'atr',
+        'BBL_20_2.0': 'bb_lower',
+        'BBM_20_2.0': 'bb_middle',
+        'BBU_20_2.0': 'bb_upper',
+        'BBB_20_2.0': 'bb_width', # Bollinger Band Width
+        'BBP_20_2.0': 'bb_pband', # Bollinger Band Percentage
+        'MACD_12_26_9': 'macd',
+        'MACDh_12_26_9': 'macd_hist',
+        'MACDs_12_26_9': 'macd_signal',
+        'ADX_14': 'adx',
+        'DMP_14': 'adx_pos',
+        'DMN_14': 'adx_neg',
+        'RSI_14': 'rsi',
+        'STOCHk_14_3_3': 'stoch_k',
+        'STOCHd_14_3_3': 'stoch_d',
+        'WILLR_14': 'williams_r',
+        'CCI_20_0.015': 'cci'
+    }, inplace=True)
+
+    # Calcula as features que dependem dos indicadores base
+    df['adx_power'] = df['adx_pos'] - df['adx_neg']
+    df['stoch_osc'] = df['stoch_k'] # O oscilador estocástico é a linha %K
+    df['price_change_1m'] = df['close'].pct_change(1)
+    df['price_change_5m'] = df['close'].pct_change(5)
+    df['momentum_10m'] = df['close'].pct_change(10)
+    
     atr_short = df['atr'].rolling(window=5).mean()
     atr_long = df['atr'].rolling(window=100).mean()
-    df['volatility_ratio'] = atr_short / (atr_long + 1e-10) 
-    df['cci'] = CCIIndicator(high=df['high'], low=df['low'], close=df['close'], window=20).cci()
-    df['williams_r'] = WilliamsRIndicator(high=df['high'], low=df['low'], close=df['close'], lbp=14).williams_r()
+    df['volatility_ratio'] = atr_short / (atr_long + 1e-10)
+
+    # O 'macd_diff' original é o histograma no pandas-ta
+    if 'macd_hist' in df.columns:
+        df.rename(columns={'macd_hist': 'macd_diff'}, inplace=True)
+    
+    # Remove colunas auxiliares se não forem necessárias
+    # df.drop(columns=[...], inplace=True)
+    
     return df
 
 def add_order_flow_features(df: pd.DataFrame) -> pd.DataFrame:
@@ -118,22 +148,47 @@ def add_order_flow_features(df: pd.DataFrame) -> pd.DataFrame:
     df['cvd_short_term'] = df['volume_delta'].rolling(window=20).sum()
     return df
 
+
 def add_all_features(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Função central que adiciona todas as features, agora com um foco
-    em análise de correlação macroeconômica.
+    Função central que adiciona todas as features, garantindo nomes consistentes e previsíveis
+    para honrar o "contrato" definido no config.yml.
     """
+    logger.debug("Iniciando a adição de todas as features de engenharia...")
     df_copy = df.copy()
 
-    # --- Pilar 1: Análise Técnica e Fluxo de Ordens (sem alterações) ---
-    df_copy.ta.rsi(length=14, append=True)
-    df_copy.ta.macd(fast=12, slow=26, signal=9, append=True)
-    df_copy.ta.bbands(length=20, std=2, append=True)
-    df_copy.ta.atr(length=14, append=True)
+    required_cols = ['open', 'high', 'low', 'close', 'volume']
+    if not all(col in df_copy.columns for col in required_cols):
+        logger.error(f"DataFrame de entrada para 'add_all_features' não contém as colunas necessárias: {required_cols}")
+        return df_copy
+
+    # --- INÍCIO DO BLOCO DE DEPURAÇÃO ---
+    logger.debug("Calculando RSI...")
+    df_copy.ta.rsi(length=14, append=True, col_names=('rsi_14',))
+    logger.info(f"Coluna 'rsi_14' existe? {'rsi_14' in df_copy.columns}")
+
+    logger.debug("Calculando MACD...")
+    df_copy.ta.macd(fast=12, slow=26, signal=9, append=True, col_names=('macd_12_26_9', 'macd_hist_12_26_9', 'macd_signal_12_26_9'))
+    logger.info(f"Coluna 'macd_hist_12_26_9' existe? {'macd_hist_12_26_9' in df_copy.columns}")
+
+    logger.debug("Calculando ATR...")
+    df_copy.ta.atr(length=14, append=True, col_names=('atr_14',))
+    logger.info(f"Coluna 'atr_14' existe? {'atr_14' in df_copy.columns}")
+    # --- FIM DO BLOCO DE DEPURAÇÃO ---
+    
+    df_copy.ta.bbands(length=20, std=2, append=True, col_names=('bbl_20_2.0', 'bbm_20_2.0', 'bbu_20_2.0', 'bbb_20_2.0', 'bbp_20_2.0'))
+
+    if 'macd_hist_12_26_9' in df_copy.columns:
+        df_copy.rename(columns={'macd_hist_12_26_9': 'macd_diff_12_26_9'}, inplace=True)
+        logger.info(f"Coluna 'macd_diff_12_26_9' existe? {'macd_diff_12_26_9' in df_copy.columns}")
+    
+    df_copy.columns = [str(col).lower().replace('-', '_').replace(' ', '_').replace('.', '_') for col in df_copy.columns]
+    
+    if 'taker_buy_volume' not in df_copy.columns: df_copy['taker_buy_volume'] = 0.0
+    if 'taker_sell_volume' not in df_copy.columns: df_copy['taker_sell_volume'] = 0.0
     df_copy['volume_delta'] = df_copy['taker_buy_volume'] - df_copy['taker_sell_volume']
     df_copy['cvd'] = df_copy['volume_delta'].cumsum()
 
-    # --- Pilar 2: Derivativos e Sentimento (sem alterações) ---
     if 'funding_rate' in df_copy.columns:
         df_copy['funding_rate_mean_24h'] = df_copy['funding_rate'].rolling(window=1440).mean()
     if 'open_interest' in df_copy.columns:
@@ -141,31 +196,16 @@ def add_all_features(df: pd.DataFrame) -> pd.DataFrame:
     if 'fear_and_greed' in df_copy.columns:
         df_copy['fng_change_3d'] = df_copy['fear_and_greed'].diff(periods=1440*3)
 
-    # --- Pilar 3: Análise Macro Avançada ---
-    logger.debug("Calculando features macroeconômicas avançadas...")
-    
-    # Primeiro, calculamos os retornos diários do Bitcoin
-    # Usamos 1440 minutos para representar 1 dia
     df_copy['btc_returns'] = df_copy['close'].pct_change(periods=1440)
-
     macro_assets = ["dxy", "vix", "gold", "tnx", "spx", "ndx", "uso"]
-    
     for asset in macro_assets:
         close_col = f"{asset}_close"
         if close_col in df_copy.columns:
-            # Calcula os retornos diários do ativo macro
             asset_returns = df_copy[close_col].pct_change(periods=1440)
-            
-            # Calcula a correlação móvel de 30 dias entre os retornos do BTC e do ativo macro
             corr_col_name = f"btc_{asset}_corr_30d"
-            # Usamos 1440 (minutos por dia) * 30 (dias) = 43200
             df_copy[corr_col_name] = df_copy['btc_returns'].rolling(window=43200).corr(asset_returns)
-            logger.debug(f" -> Feature de correlação '{corr_col_name}' calculada.")
 
-    # Remove a coluna de retornos do BTC que foi apenas um passo intermediário
-    df_copy.drop(columns=['btc_returns'], inplace=True)
+    df_copy.drop(columns=['btc_returns'], inplace=True, errors='ignore')
     
-    # Limpa nomes de colunas gerados pelo pandas_ta
-    df_copy.columns = [col.lower().replace('-', '_').replace(' ', '_').replace('.', '_') for col in df_copy.columns]
-
+    logger.debug("✅ Adição de features de engenharia concluída.")
     return df_copy

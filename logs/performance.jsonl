@@ -2660,3 +2660,682 @@
 {"timestamp": "2025-07-30 19:35:07,177", "level": "ERROR", "message": "A consulta n\u00e3o retornou dados. Causas prov\u00e1veis: (1) O 'update-db' n\u00e3o foi executado ou falhou. (2) N\u00e3o existem dados no \u00faltimo ano."}
 {"timestamp": "2025-07-30 19:35:33,625", "level": "ERROR", "message": "A consulta n\u00e3o retornou dados. Causas prov\u00e1veis: (1) O 'update-db' n\u00e3o foi executado ou falhou. (2) N\u00e3o existem dados no \u00faltimo ano."}
 {"timestamp": "2025-07-30 19:36:38,620", "level": "ERROR", "message": "A consulta n\u00e3o retornou dados. Causas prov\u00e1veis: (1) O pipeline 'update-db' n\u00e3o foi executado ou falhou. (2) N\u00e3o existem dados no \u00faltimo ano na sua base de dados."}
+{"timestamp": "2025-07-30 21:31:22,855", "level": "ERROR", "message": "Diagn\u00f3stico Falhou: A consulta \u00e0 'features_master_table' n\u00e3o retornou nenhum resultado."}
+{"timestamp": "2025-07-30 21:31:22,856", "level": "CRITICAL", "message": "A base de dados n\u00e3o est\u00e1 pronta para a otimiza\u00e7\u00e3o. Verifique os logs de diagn\u00f3stico e do pipeline 'update-db'."}
+{"timestamp": "2025-07-30 22:05:31,815", "level": "ERROR", "message": "Erro ao buscar dados de derivativos: 'Client' object has no attribute 'get_funding_rate_history'"}
+{"timestamp": "2025-07-30 22:09:51,448", "level": "ERROR", "message": "Erro ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get_funding_rate'"}
+{"timestamp": "2025-07-30 22:12:28,614", "level": "ERROR", "message": "Erro ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get_funding_rate'"}
+{"timestamp": "2025-07-30 22:24:03,562", "level": "ERROR", "message": "Erro ao buscar dados de derivativos: 'Client' object has no attribute 'get_funding_rate_history'"}
+{"timestamp": "2025-07-30 22:26:11,442", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:11,443", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:11,443", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:11,444", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2018-01. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:11,553", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:11,554", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:11,555", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:11,555", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2018-02. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:11,661", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:11,662", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:11,662", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:11,663", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2018-03. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:11,773", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:11,774", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:11,774", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:11,775", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2018-04. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:11,880", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:11,882", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:11,882", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:11,883", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2018-05. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:11,990", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:11,991", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:11,991", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:11,992", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2018-06. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:12,100", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:12,101", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:12,101", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:12,102", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2018-07. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:12,207", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:12,208", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:12,208", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:12,209", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2018-08. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:12,315", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:12,316", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:12,317", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:12,317", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2018-09. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:12,421", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:12,422", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:12,423", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:12,423", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2018-10. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:12,530", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:12,532", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:12,532", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:12,533", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2018-11. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:12,638", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:12,640", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:12,640", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:12,641", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2018-12. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:12,745", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:12,746", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:12,747", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:12,748", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2019-01. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:12,858", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:12,859", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:12,860", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:12,860", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2019-02. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:12,967", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:12,968", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:12,969", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:12,969", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2019-03. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:13,074", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:13,075", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:13,075", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:13,076", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2019-04. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:13,187", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:13,188", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:13,188", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:13,189", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2019-05. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:13,295", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:13,296", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:13,296", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:13,297", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2019-06. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:13,399", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:13,400", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:13,400", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:13,401", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2019-07. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:13,507", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:13,508", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:13,509", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:13,510", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2019-08. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:13,619", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:13,619", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:13,620", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:13,620", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2019-09. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:13,726", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:13,727", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:13,727", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:13,728", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2019-10. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:13,835", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:13,836", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:13,836", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:13,837", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2019-11. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:13,941", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:13,942", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:13,943", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:13,943", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2019-12. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:14,050", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:14,051", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:14,051", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:14,052", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2020-01. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:14,158", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:14,159", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:14,160", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:14,160", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2020-02. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:14,268", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:14,269", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:14,270", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:14,270", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2020-03. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:14,377", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:14,378", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:14,378", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:14,379", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2020-04. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:14,485", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:14,485", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:14,486", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:14,486", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2020-05. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:14,591", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:14,592", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:14,592", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:14,593", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2020-06. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:14,700", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:14,701", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:14,702", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:14,702", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2020-07. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:14,808", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:14,809", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:14,810", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:14,810", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2020-08. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:14,920", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:14,921", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:14,921", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:14,922", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2020-09. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:15,029", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:15,030", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:15,031", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:15,031", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2020-10. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:15,135", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:15,136", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:15,137", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:15,137", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2020-11. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:15,239", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:15,240", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:15,241", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:15,241", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2020-12. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:15,346", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:15,347", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:15,348", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:15,348", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2021-01. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:15,452", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:15,453", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:15,453", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:15,454", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2021-02. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:15,557", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:15,558", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:15,559", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:15,559", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2021-03. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:15,658", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:15,659", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:15,660", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:15,660", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2021-04. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:15,759", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:15,760", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:15,761", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:15,761", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2021-05. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:15,865", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:15,866", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:15,866", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:15,867", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2021-06. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:15,979", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:15,980", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:15,980", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:15,981", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2021-07. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:16,083", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:16,084", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:16,085", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:16,085", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2021-08. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:16,186", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:16,187", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:16,188", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:16,188", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2021-09. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:16,291", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:16,292", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:16,293", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:16,293", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2021-10. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:16,395", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:16,396", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:16,396", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:16,397", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2021-11. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:16,495", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:16,496", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:16,496", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:16,497", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2021-12. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:16,598", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:16,599", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:16,599", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:16,600", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2022-01. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:16,704", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:16,705", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:16,706", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:16,706", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2022-02. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:16,811", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:16,812", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:16,812", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:16,813", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2022-03. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:16,917", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:16,917", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:16,918", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:16,918", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2022-04. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:17,027", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:17,028", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:17,028", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:17,029", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2022-05. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:17,130", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:17,131", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:17,131", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:17,132", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2022-06. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:17,235", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:17,236", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:17,237", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:17,237", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2022-07. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:17,338", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:17,339", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:17,340", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:17,340", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2022-08. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:17,442", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:17,443", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:17,444", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:17,444", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2022-09. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:17,545", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:17,546", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:17,546", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:17,547", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2022-10. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:17,652", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:17,653", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:17,653", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:17,654", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2022-11. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:17,757", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:17,758", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:17,759", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:17,759", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2022-12. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:17,867", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:17,867", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:17,868", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:17,868", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2023-01. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:17,974", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:17,976", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:17,976", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:17,977", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2023-02. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:18,081", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:18,082", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:18,082", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:18,083", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2023-03. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:18,187", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:18,188", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:18,188", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:18,189", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2023-04. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:18,294", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:18,295", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:18,296", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:18,296", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2023-05. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:18,405", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:18,406", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:18,407", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:18,407", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2023-06. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:18,526", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:18,527", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:18,527", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:18,528", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2023-07. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:18,634", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:18,635", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:18,636", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:18,636", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2023-08. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:18,743", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:18,744", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:18,744", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:18,745", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2023-09. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:18,858", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:18,859", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:18,859", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:18,860", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2023-10. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:18,970", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:18,971", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:18,971", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:18,972", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2023-11. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:19,085", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:19,086", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:19,087", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:19,087", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2023-12. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:19,194", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:19,195", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:19,196", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:19,196", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2024-01. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:19,307", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:19,309", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:19,309", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:19,310", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2024-02. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:19,416", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:19,417", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:19,418", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:19,418", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2024-03. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:19,525", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:19,526", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:19,527", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:19,527", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2024-04. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:19,633", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:19,634", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:19,635", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:19,635", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2024-05. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:19,746", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:19,747", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:19,747", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:19,748", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2024-06. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:19,854", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:19,855", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:19,855", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:19,856", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2024-07. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:19,964", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:19,965", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:19,966", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:19,966", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2024-08. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:20,081", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:20,082", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:20,082", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:20,083", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2024-09. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:20,198", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:20,199", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:20,199", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:20,200", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2024-10. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:20,318", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:20,319", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:20,320", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:20,320", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2024-11. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:20,429", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:20,430", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:20,430", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:20,431", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2024-12. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:20,538", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:20,539", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:20,540", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:20,540", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2025-01. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:20,653", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:20,654", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:20,654", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:20,655", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2025-02. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:20,763", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:20,764", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:20,764", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:20,764", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2025-03. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:20,870", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:20,871", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:20,871", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:20,872", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2025-04. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:20,981", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:20,982", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:20,983", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:20,983", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2025-05. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:21,090", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:21,091", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:21,092", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:21,093", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2025-06. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:26:21,222", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-30 22:26:21,223", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 7 days 16:28:20.002000."}
+{"timestamp": "2025-07-30 22:26:21,223", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-30 22:26:21,224", "level": "ERROR", "message": "Valida\u00e7\u00e3o falhou para o lote 2025-07. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-07-30 22:29:14,452", "level": "ERROR", "message": "Erro ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get_funding_rate'"}
+{"timestamp": "2025-07-30 22:30:17,528", "level": "ERROR", "message": "Erro ao buscar dados de derivativos: 'Client' object has no attribute 'get_funding_rate_history'"}
+{"timestamp": "2025-07-30 22:32:48,284", "level": "ERROR", "message": "Erro ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get_funding_rate'"}
+{"timestamp": "2025-07-30 22:36:10,643", "level": "ERROR", "message": "Erro ao buscar dados de derivativos: 'Client' object has no attribute 'get_funding_rate_history'"}
+{"timestamp": "2025-07-30 22:37:13,267", "level": "ERROR", "message": "Erro ao buscar dados de derivativos: 'Client' object has no attribute 'get_funding_rate_history'"}
+{"timestamp": "2025-07-30 22:39:14,198", "level": "ERROR", "message": "Erro ao buscar dados de derivativos: 'Client' object has no attribute 'funding_rate_history'"}
+{"timestamp": "2025-07-30 23:22:07,756", "level": "ERROR", "message": "Erro ao buscar dados de derivativos: 'Client' object has no attribute 'get_funding_rate_history'"}
+{"timestamp": "2025-07-30 23:40:45,161", "level": "ERROR", "message": "Erro ao buscar dados de derivativos: 'Client' object has no attribute 'get_funding_rate_history'"}
+{"timestamp": "2025-07-30 23:50:12,787", "level": "ERROR", "message": "Erro ao buscar dados de derivativos: 'Client' object has no attribute 'get_funding_rate_history'"}
+{"timestamp": "2025-07-30 23:56:24,347", "level": "ERROR", "message": "Erro ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_funding_rate_history'"}
+{"timestamp": "2025-07-30 23:59:14,723", "level": "ERROR", "message": "Erro ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get_funding_rate'"}
+{"timestamp": "2025-07-31 00:01:23,331", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Thu, 31 Jul 2025 00:01:23 GMT', 'Content-Length': '246'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"fear_and_greed\\\" on measurement \\\"sentiment_fear_and_greed\\\" is type integer, already exists as type float dropped=1\"}\n"}
+{"timestamp": "2025-07-31 00:01:24,749", "level": "ERROR", "message": "Erro ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get_funding_rate'"}
+{"timestamp": "2025-07-31 00:04:35,140", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Thu, 31 Jul 2025 00:04:35 GMT', 'Content-Length': '246'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"fear_and_greed\\\" on measurement \\\"sentiment_fear_and_greed\\\" is type integer, already exists as type float dropped=1\"}\n"}
+{"timestamp": "2025-07-31 00:04:36,546", "level": "ERROR", "message": "Erro ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get_funding_rate'"}
+{"timestamp": "2025-07-31 00:09:54,223", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-07-31 00:09:54,223", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-07-31 00:09:54,224", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-07-31 00:12:32,771", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-07-31 00:12:32,772", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-07-31 00:12:32,772", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-07-31 00:14:26,822", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-07-31 00:14:26,823", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-07-31 00:14:26,823", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-07-31 00:18:30,943", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-07-31 00:18:30,943", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-07-31 00:18:30,944", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-07-31 00:18:44,009", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:44,057", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:44,104", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:44,149", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:44,196", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:44,242", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:44,290", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:44,339", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:44,389", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:44,438", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:44,487", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:44,533", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:44,579", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:44,627", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:44,674", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:44,723", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:44,771", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:44,818", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:44,869", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:44,921", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:44,970", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:45,028", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:45,082", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:45,135", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:45,189", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:45,241", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:45,290", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:45,337", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:45,385", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:45,434", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:45,481", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:45,530", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:45,578", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:45,626", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:45,674", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:45,724", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:45,775", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:45,826", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:45,875", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:45,925", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:45,974", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:46,020", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:46,070", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:46,118", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:46,167", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:46,219", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:46,273", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:46,328", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:46,380", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:46,434", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:46,482", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:46,533", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:46,583", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:46,636", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:46,688", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:46,740", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:46,789", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:46,839", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:46,890", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:46,948", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:47,014", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:47,065", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:47,114", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:47,161", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:47,208", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:47,254", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:47,304", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:47,353", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:47,404", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:47,456", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:47,508", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:47,560", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:47,621", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:47,681", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:47,741", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:47,802", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:47,858", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:47,912", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:47,965", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:48,018", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:48,069", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:48,124", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:48,179", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:48,236", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:48,291", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:48,346", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:48,397", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:48,450", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:48,502", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:48,553", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:18:48,642", "level": "WARNING", "message": "Lote 2025-07 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 00:20:06,982", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:07,032", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:07,083", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:07,134", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:07,180", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:07,229", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:07,277", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:07,331", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:07,391", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:07,440", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:07,493", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:07,542", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:07,591", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:07,639", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:07,687", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:07,734", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:07,783", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:07,832", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:07,880", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:07,927", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:07,978", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:08,097", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:08,158", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:08,207", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:08,270", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:08,324", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:08,374", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:08,423", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:08,476", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:08,530", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:08,585", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:08,658", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:08,717", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:08,773", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:08,832", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:08,907", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:08,965", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:09,017", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:09,080", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:09,138", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:09,192", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:09,252", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:09,313", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:09,365", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:09,417", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:09,470", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:09,531", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:09,586", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:09,637", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:09,685", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:09,742", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:09,799", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:09,849", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:09,895", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:09,965", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:10,024", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:10,073", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:10,123", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:10,174", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:10,223", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:10,273", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:10,327", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:10,377", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:10,425", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:10,474", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:10,529", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:10,582", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:10,641", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:10,695", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:10,747", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:10,797", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:10,854", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:10,906", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:10,958", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:11,015", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:11,068", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:11,121", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:11,174", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:11,228", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:11,279", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:11,335", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:11,393", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:11,446", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:11,502", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:11,554", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:11,610", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:11,668", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:11,732", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:11,788", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:11,842", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:20:11,935", "level": "WARNING", "message": "Lote 2025-07 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 00:21:05,124", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-07-31 00:21:05,125", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-07-31 00:21:05,125", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-07-31 00:22:23,834", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-07-31 00:22:23,834", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-07-31 00:22:23,835", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-07-31 00:23:24,664", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-07-31 00:23:24,665", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-07-31 00:23:24,665", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-07-31 00:23:27,026", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:27,072", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:27,120", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:27,165", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:27,213", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:27,261", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:27,308", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:27,355", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:27,404", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:27,450", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:27,495", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:27,542", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:27,591", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:27,642", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:27,688", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:27,737", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:27,782", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:27,828", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:27,874", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:27,921", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:27,966", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:28,013", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:28,058", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:28,107", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:28,165", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:28,217", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:28,265", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:28,313", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:28,359", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:28,405", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:28,454", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:28,500", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:28,550", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:28,599", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:28,654", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:28,701", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:28,748", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:28,795", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:28,841", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:28,888", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:28,933", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:28,979", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:29,025", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:29,070", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:29,116", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:29,162", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:29,211", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:29,258", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:29,305", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:29,355", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:29,404", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:29,452", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:29,501", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:29,548", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:29,596", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:29,646", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:29,699", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:29,747", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:29,795", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:29,845", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:29,894", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:29,942", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:29,991", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:30,041", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:30,107", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:30,186", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:30,242", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:30,295", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:30,347", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:30,401", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:30,453", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:30,507", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:30,570", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:30,625", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:30,698", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:30,765", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:30,831", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:30,898", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:30,960", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:31,024", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:31,097", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:31,198", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:31,262", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:31,333", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:31,422", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:31,491", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:31,547", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:31,601", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:31,657", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:31,710", "level": "ERROR", "message": "FATAL: Features esperadas ['atr_14', 'macd_diff_12_26_9', 'rsi_14'] n\u00e3o foram criadas pela engenharia de features. A saltar lote."}
+{"timestamp": "2025-07-31 00:23:31,801", "level": "WARNING", "message": "Lote 2025-07 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}

@@ -1,4 +1,4 @@
-# config.yml (VERSÃO ALINHADA)
+# config.yml (VERSÃO CORRIGIDA)
 
 database:
   influxdb:
@@ -27,11 +27,14 @@ data_paths:
 # Configurações do pipeline de dados
 data_pipeline:
   start_date_ingestion: "-5y"
-  regime_features: ["atr_14", "macd_12_26_9_diff", "rsi_14"]
+  # --- INÍCIO DA CORREÇÃO DOS NOMES DAS FEATURES ---
+  # Alinhados com os nomes gerados em 'feature_engineering.py'
+  regime_features: ["atr_14", "macd_diff_12_26_9", "rsi_14"]
+  # --- FIM DA CORREÇÃO ---
   tags_for_master_table: ["target", "market_regime"]
   target:
     future_periods: 60
-    profit_mult: 1.5
+    profit_mult: 4.0
     stop_mult: 1.5
 
 # Estratégia de Trading: o cérebro da tomada de decisão
