@@ -1,3 +1,5 @@
+# src/config_manager.py (Corrected Version)
+
 import yaml
 from pathlib import Path
 from typing import Any
@@ -54,13 +56,25 @@ class OptimizerConfig(BaseModel):
 
 class LoggingConfig(BaseModel):
     level: str
-    
+
 class BacktestConfig(BaseModel):
     start_date: str
     initial_capital: int
     commission_rate: float
 
-# --- Modelos para Variáveis de Ambiente (.env) ---
+class PositionManagementConfig(BaseModel):
+    profit_target_percent: float
+    max_concurrent_trades: int
+    capital_per_trade_percent: float
+
+class DynamicSizingConfig(BaseModel):
+    enabled: bool
+    performance_window_trades: int
+    profit_factor_threshold: float
+    performance_upscale_factor: float
+    performance_downscale_factor: float
+
+# --- Modelos para o .env ---
 class InfluxDBConfig(BaseSettings):
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
     url: str = Field(..., alias='INFLUXDB_URL')
@@ -87,19 +101,28 @@ class Settings(BaseSettings):
     position_sizing: PositionSizingConfig
     optimizer: OptimizerConfig
     logging: LoggingConfig
-    backtest: BacktestConfig # <-- ADICIONADO O CAMPO QUE FALTAVA
+    backtest: BacktestConfig
+    position_management: PositionManagementConfig
+    dynamic_sizing: DynamicSizingConfig
 
     @classmethod
     def settings_customise_sources(
         cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings
     ):
         def yaml_config_source() -> dict[str, Any]:
-            yaml_file = Path('config.yml')
-            if not yaml_file.is_file():
-                raise FileNotFoundError("Ficheiro 'config.yml' não encontrado!")
-            return yaml.safe_load(yaml_file.read_text())
+            try:
+                with open('config.yml', 'r') as f:
+                    return yaml.safe_load(f)
+            except FileNotFoundError:
+                return {}
+        
+        # Retornamos a FUNÇÃO, não o resultado dela.
+        return (
+            init_settings,
+            yaml_config_source, # <--- Parênteses removidos
+            env_settings,
+            dotenv_settings,
+            file_secret_settings,
+        )
 
-        return (yaml_config_source,)
-
-# --- Instância Final ---
 settings = Settings()

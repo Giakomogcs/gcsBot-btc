@@ -90,6 +90,18 @@ optimizer:
   quality_threshold: 0.55 # Limiar de qualidade para salvar um modelo
   objective_metric: "Profit Factor"
 
+position_management:
+  profit_target_percent: 4.0
+  max_concurrent_trades: 15
+  capital_per_trade_percent: 1.5
+
+dynamic_sizing:
+  enabled: true
+  performance_window_trades: 20 # A cada 20 trades, o bot reavalia a sua performance
+  profit_factor_threshold: 1.6 # Se o Profit Factor for > 1.6, considera-se sucesso
+  performance_upscale_factor: 1.2 # Se sucesso, multiplica o próximo risco por 1.2 (arrisca 20% a mais)
+  performance_downscale_factor: 0.8 # Se falha, multiplica o próximo risco por 0.8 (arrisca 20% a menos)
+
 # Configuração do logger
 logging:
   level: "INFO"

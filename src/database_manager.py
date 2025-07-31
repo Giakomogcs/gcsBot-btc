@@ -1,56 +1,93 @@
-from influxdb_client import InfluxDBClient
+# src/database_manager.py (VERSÃO FINAL COMPATÍVEL)
+
+import pandas as pd
+from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import SYNCHRONOUS
 from src.config_manager import settings
 from src.logger import logger
 
 class DatabaseManager:
-    """
-    Gerencia todas as interações com o banco de dados InfluxDB.
-    """
     def __init__(self):
-        # Acessando a configuração diretamente do objeto 'database'
         self.url = settings.database.url
         self.token = settings.database.token
         self.org = settings.database.org
-        self._client = None
-        self.connect()
+        self._client = InfluxDBClient(url=self.url, token=self.token, org=self.org, timeout=30_000)
+        # Mantemos os métodos antigos para não quebrar o data_pipeline
+        self.query_api = self._client.query_api()
+        self.write_api = self._client.write_api(write_options=SYNCHRONOUS)
 
-    def connect(self):
-        """Estabelece a conexão com o InfluxDB."""
+    def get_write_api(self): # Função mantida para compatibilidade
+        return self.write_api
+
+    def get_query_api(self): # Função mantida para compatibilidade
+        return self.query_api
+
+    def write_trade(self, trade_data: dict):
+        """Escreve um único registo de trade no InfluxDB."""
         try:
-            self._client = InfluxDBClient(url=self.url, token=self.token, org=self.org, timeout=300_000)
-            if self._client.health().status == "pass":
-                logger.info("✅ Conexão com InfluxDB estabelecida com sucesso!")
-            else:
-                logger.error("❌ Falha ao conectar com InfluxDB. Verifique a saúde do serviço.")
-                self._client = None
+            point = Point("trades") \
+                .tag("status", trade_data["status"]) \
+                .tag("trade_id", trade_data["trade_id"]) \
+                .field("entry_price", float(trade_data["entry_price"])) \
+                .field("profit_target_price", float(trade_data.get("profit_target_price", 0.0))) \
+                .field("quantity_btc", float(trade_data.get("quantity_btc", 0.0))) \
+                .field("realized_pnl_usdt", float(trade_data.get("realized_pnl_usdt", 0.0))) \
+                .time(trade_data["timestamp"])
+            
+            self.write_api.write(bucket=settings.database.bucket, org=self.org, record=point)
+            logger.info(f"Trade {trade_data['trade_id']} escrito no DB com status {trade_data['status']}.")
         except Exception as e:
-            logger.error(f"❌ Erro crítico ao conectar com InfluxDB: {e}", exc_info=True)
-            self._client = None
+            logger.error(f"Falha ao escrever trade no DB: {e}", exc_info=True)
 
-    def get_write_api(self):
-        """Retorna a API de escrita para inserir dados."""
-        if not self._client:
-            logger.warning("Não há conexão com o InfluxDB. Tentando reconectar...")
-            self.connect()
-            if not self._client:
-                return None
-        return self._client.write_api(write_options=SYNCHRONOUS)
+    def get_open_positions(self) -> pd.DataFrame:
+        """Busca todas as posições com status 'OPEN'."""
+        try:
+            query = f'''
+            from(bucket: "{settings.database.bucket}")
+                |> range(start: -30d) 
+                |> filter(fn: (r) => r._measurement == "trades")
+                |> filter(fn: (r) => r.status == "OPEN")
+                |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+                |> sort(columns: ["_time"], desc: false)
+            '''
+            df = self.query_api.query_data_frame(query, org=self.org)
+            if isinstance(df, list): df = pd.concat(df, ignore_index=True) if df else pd.DataFrame()
+            if df.empty: return pd.DataFrame()
+            
+            df = df.rename(columns={"_time": "timestamp"})
+            cols_to_drop = ['result', 'table', '_start', '_stop', '_measurement', 'symbol', 'status']
+            df.drop(columns=[col for col in cols_to_drop if col in df.columns], inplace=True, errors='ignore')
+            df.set_index('trade_id', inplace=True)
+            return df
+        except Exception as e:
+            logger.error(f"Falha ao buscar posições abertas do DB: {e}", exc_info=True)
+            return pd.DataFrame()
+        
+    def get_last_n_trades(self, n: int):
+        """Busca os últimos N trades com status 'CLOSED' para análise de performance."""
+        try:
+            # Esta query busca os trades fechados, pega o PnL e ordena pelos mais recentes.
+            query = f'''
+            from(bucket: "{self.bucket}")
+                |> range(start: -90d) // Procura nos últimos 90 dias
+                |> filter(fn: (r) => r._measurement == "trades")
+                |> filter(fn: (r) => r.status == "CLOSED")
+                |> filter(fn: (r) => r._field == "realized_pnl_usdt")
+                |> sort(columns: ["_time"], desc: true)
+                |> limit(n: {n})
+            '''
+            df = self.query_api.query_data_frame(query, org=self.org)
+            if isinstance(df, list):
+                df = pd.concat(df, ignore_index=True) if df else pd.DataFrame()
 
-    def get_query_api(self):
-        """Retorna a API de consulta para buscar dados."""
-        if not self._client:
-            logger.warning("Não há conexão com o InfluxDB. Tentando reconectar...")
-            self.connect()
-            if not self._client:
-                return None
-        return self._client.query_api()
+            if df.empty:
+                return pd.DataFrame()
 
-    def close(self):
-        """Fecha a conexão com o banco de dados."""
-        if self._client:
-            self._client.close()
-            logger.info("Conexão com InfluxDB fechada.")
+            # Renomeia a coluna de valor para clareza
+            return df.rename(columns={'_value': 'pnl'})
 
-# Instância única para ser usada em outros módulos
+        except Exception as e:
+            logger.error(f"Falha ao buscar os últimos {n} trades do DB: {e}", exc_info=True)
+            return pd.DataFrame()
+
 db_manager = DatabaseManager()

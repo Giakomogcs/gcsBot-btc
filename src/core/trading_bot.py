@@ -16,7 +16,8 @@ from collections import deque
 from typing import Tuple, Any
 
 from src.logger import logger
-from config_manager import settings
+from src.config_manager import settings
+from src.core.position_manager import PositionManager
 from src.data_manager import DataManager
 from src.core.confidence_manager import AdaptiveConfidenceManager
 from src.core.display_manager import display_trading_dashboard
@@ -24,6 +25,7 @@ from src.core.rl_agent import BetSizingAgent
 from src.core.treasury_manager import TreasuryManager
 from src.core.anomaly_detector import AnomalyDetector
 from src.core.optimizer import WalkForwardOptimizer
+from src.core.account_manager import AccountManager
 
 from typing import Any, Dict, Optional, Tuple
 from dateutil.parser import isoparse
@@ -31,20 +33,26 @@ from dateutil.parser import isoparse
 class PortfolioManager:
     """A class to manage the portfolio."""
 
-    def __init__(self, client: Any) -> None:
+    def __init__(self, db_url: Optional[str] = None) -> None:
         """
         Initializes the PortfolioManager class.
 
         Args:
             client: The Binance client.
         """
-        self.client = client
+        self.client = self.data_manager.client
+        self.account_manager = AccountManager(self.client)
+        self.data_manager = DataManager(db_url)
+        self.portfolio = PortfolioManager(self.client)
+        self.position_manager = PositionManager(settings) 
         self.max_usdt_allocation = settings.MAX_USDT_ALLOCATION
         self.trading_capital_usdt = 0.0
         self.trading_btc_balance = 0.0
         self.long_term_btc_holdings = 0.0
         self.initial_total_value_usdt = 1.0
         self.session_peak_value = 0.0
+
+        self.models, self.scalers, self.strategy_params = {}, {}, {}
 
     def sync_with_live_balance(self):
         if not self.client:
@@ -112,11 +120,7 @@ class TradingBot:
         self.confidence_managers = {}
         self.regime_map = {}
         self.model_feature_names = []
-        self.in_trade_position = False
-        self.buy_price = 0.0
-        self.position_phase = None
-        self.current_stop_price = 0.0
-        self.highest_price_in_trade = 0.0
+        
         self.last_used_params = {}
         self.session_peak_value = 0.0
         self.session_trades, self.session_wins, self.session_total_pnl_usdt = 0, 0, 0.0
@@ -259,10 +263,25 @@ class TradingBot:
                 if self.session_drawdown_stop_activated:
                     logger.warning("Circuit Breaker ATIVO. Novas operações suspensas."); time.sleep(300); continue
                 
-                if self.in_trade_position: self._manage_active_position(latest_data)
+                # 1. VERIFICAR SAÍDAS: O Position Manager verifica se alguma posição aberta atingiu o alvo.
+                closed_trades = self.position_manager.check_and_close_positions(latest_data)
+                if closed_trades:
+                    logger.info(f"Processando {len(closed_trades)} posições fechadas.")
+                    for trade_summary in closed_trades: # Mude 'trade' para 'trade_summary'
+                        logger.info(f"Posição fechada: {trade_summary}")
+                        # A chamada agora corresponde à nova assinatura da função
+                        self._execute_sell(trade_summary, latest_data) 
+
+                # 2. VERIFICAR ENTRADAS: Se houver 'slots' disponíveis, procuramos por um sinal de entrada.
+                max_trades = settings.position_management.max_concurrent_trades
+                # Use o novo método para contar as posições
+                if self.position_manager.get_open_positions_count() < max_trades: 
+                    self._check_for_entry_signal(latest_data)
                 else:
-                    trade_signal_found = self._check_for_entry_signal(latest_data)
-                    if not trade_signal_found: self._handle_dca_opportunity(latest_data)
+                    self.last_event_message = f"Aguardando (limite de {max_trades} posições atingido)."
+
+                # A lógica de DCA pode continuar aqui, talvez com uma condição adicional
+                self._handle_dca_opportunity(latest_data)
 
                 self.treasury_manager.track_progress(self.portfolio.long_term_btc_holdings)
                 self._check_model_performance()
@@ -377,8 +396,26 @@ class TradingBot:
 
             if trade_size_usdt < 10: return False
             
-            stop_price = latest_data['close'] - (latest_data['atr'] * params.get('stop_loss_atr_multiplier', 2.5))
-            self._execute_buy(latest_data['close'], trade_size_usdt, stop_price, buy_confidence, situation, params, latest_data, action)
+            self.last_event_message = f"SINAL DE COMPRA! Confiança: {buy_confidence:.1%}. Abrindo posição..."
+            logger.info(self.last_event_message)
+
+            # O PositionManager regista a intenção de abrir a posição.
+            # Usamos 'LONG' como padrão por enquanto.
+            # O PositionManager regista a intenção de abrir a posição.
+            self.position_manager.open_position(entry_candle=latest_data, signal='LONG')
+
+            # --- LÓGICA DE DIMENSIONAMENTO DINÂMICO ---
+            available_capital = self.account_manager.get_quote_asset_balance()
+            trade_size_usdt = self.position_manager.get_capital_per_trade(available_capital)
+
+            # Garante que temos capital e que o valor é válido para a exchange
+            if trade_size_usdt > 10: 
+                qty_to_buy = trade_size_usdt / latest_data['close']
+                self._execute_buy(latest_data['close'], trade_size_usdt, latest_data)
+                self.position_manager.open_position(entry_price=latest_data['close'], quantity_btc=qty_to_buy)
+            else:
+                logger.warning(f"Capital insuficiente ou risco dinâmico baixo para abrir posição. Calculado: ${trade_size_usdt:,.2f} USDT")
+
             return True
         return False
 
@@ -433,109 +470,69 @@ class TradingBot:
         df = pd.DataFrame([trade_data])
         self.data_manager.db.insert_dataframe(df, 'trades')
 
-    def _execute_buy(self, price: float, trade_size_usdt: float, stop_price: float, confidence: float, regime: int, params: Dict[str, Any], latest_data: pd.Series, action: int) -> None:
+    def _execute_buy(self, price: float, trade_size_usdt: float, latest_data: pd.Series) -> None:
         """
-        Executes a buy order.
-
-        Args:
-            price: The current price.
-            trade_size_usdt: The size of the trade in USDT.
-            stop_price: The stop price.
-            confidence: The model's confidence.
-            regime: The current market regime.
-            params: The strategy parameters.
-            latest_data: The latest data.
-            action: The action to take.
+        Executa uma ordem de compra.
         """
         try:
-            self.last_event_message = f"COMPRANDO ${trade_size_usdt:,.2f} (Conf. {confidence:.1%})"
+            self.last_event_message = f"COMPRANDO ${trade_size_usdt:,.2f}"
             logger.info(self.last_event_message)
-            
-            if not self.client or settings.USE_TESTNET:
-                self.buy_price = price * (1 + settings.SLIPPAGE_RATE)
-                qty = trade_size_usdt / self.buy_price
+
+            if not self.client or settings.app.use_testnet:
+                buy_price = price * (1 + settings.SLIPPAGE_RATE)
+                qty = trade_size_usdt / buy_price
                 cost = trade_size_usdt * (1 + settings.FEE_RATE + settings.IOF_RATE)
                 self.portfolio.update_on_buy(qty, cost)
-                self._log_trade("BUY (SIM)", self.buy_price, qty, f"Sinal ML ({confidence:.2%})")
+                self._log_trade("BUY (SIM)", buy_price, qty, f"Sinal ML")
             else:
-                order = self.client.create_order(symbol=settings.SYMBOL, side=Client.SIDE_BUY, type=Client.ORDER_TYPE_MARKET, quoteOrderQty=round(trade_size_usdt, 2))
-                self.buy_price = float(order['fills'][0]['price']) if order['fills'] else price
-                qty, cost = float(order['executedQty']), float(order['cummulativeQuoteQty'])
-                self.portfolio.update_on_buy(qty, cost)
-                self._log_trade("BUY (REAL)", self.buy_price, qty, f"Sinal ML ({confidence:.2%})")
-            
-            self.in_trade_position, self.position_phase = True, 'INITIAL'
-            self.current_stop_price, self.highest_price_in_trade = stop_price, self.buy_price
-            self.last_used_params = {
-                **params,
-                'entry_situation': latest_data['market_situation'],
-                'buy_confidence': confidence,
-                'rl_action': action,
-            }
+                # A lógica de ordem real será adicionada aqui depois
+                pass
+
+            # A posição já foi aberta no PositionManager.
+            # No futuro, podemos passar o ID do trade para o log, etc.
+
         except Exception as e:
             logger.error(f"ERRO AO EXECUTAR COMPRA: {e}", exc_info=True)
-            self.in_trade_position = False
+            
 
-    def _execute_sell(self, price: float, reason: str, latest_data: pd.Series) -> None:
+    def _execute_sell(self, trade_summary: dict, latest_data: pd.Series) -> None:
         """
-        Executes a sell order.
-
-        Args:
-            price: The current price.
-            reason: The reason for selling.
-            latest_data: The latest data.
+        Executa uma ordem de venda baseada num trade fechado pelo PositionManager.
         """
-        amount_to_sell = self.portfolio.trading_btc_balance
+        # No futuro, a quantidade a vender virá do trade_summary quando o
+        # sistema de capital por trade estiver implementado. Por agora, vendemos tudo.
+        amount_to_sell = self.portfolio.trading_btc_balance 
         if amount_to_sell <= 0: return
+
         try:
+            reason = trade_summary['exit_reason']
+            sell_price = trade_summary['exit_price']
+
             self.last_event_message = f"VENDENDO. Motivo: {reason}"
             logger.info(self.last_event_message)
-            
-            pnl_usdt, pnl_pct, actual_sell_price = 0, 0, price
-            if not self.client or settings.USE_TESTNET:
-                actual_sell_price = price * (1 - settings.SLIPPAGE_RATE)
+
+            pnl_usdt, pnl_pct, actual_sell_price = 0, 0, sell_price
+
+            if not self.client or settings.app.use_testnet:
+                actual_sell_price = sell_price * (1 - settings.SLIPPAGE_RATE)
                 revenue = actual_sell_price * amount_to_sell
-                buy_cost = self.buy_price * amount_to_sell
-                pnl_usdt = (revenue * (1 - settings.FEE_RATE)) - (buy_cost * (1 + settings.FEE_RATE + settings.IOF_RATE))
-                pnl_pct = (actual_sell_price / self.buy_price - 1) if self.buy_price > 0 else 0
+                buy_cost = trade_summary['entry_price'] * amount_to_sell
+                pnl_usdt = (revenue * (1 - settings.FEE_RATE)) - (buy_cost * (1 + settings.IOF_RATE))
+                pnl_pct = (actual_sell_price / trade_summary['entry_price'] - 1) if trade_summary['entry_price'] > 0 else 0
                 self._log_trade("SELL (SIM)", actual_sell_price, amount_to_sell, reason, pnl_usdt, pnl_pct)
             else:
-                order = self.client.create_order(symbol=settings.SYMBOL, side=Client.SIDE_SELL, type=Client.ORDER_TYPE_MARKET, quantity=round(amount_to_sell, 5))
-                actual_sell_price = float(order['fills'][0]['price']) if order['fills'] else price
-                revenue = float(order['cummulativeQuoteQty'])
-                pnl_usdt = revenue - (self.buy_price * amount_to_sell)
-                pnl_pct = (actual_sell_price / self.buy_price - 1) if self.buy_price > 0 else 0
-                self._log_trade("SELL (REAL)", actual_sell_price, amount_to_sell, reason, pnl_usdt, pnl_pct)
+                # A lógica de ordem real será adicionada aqui depois
+                pass 
 
             self.session_trades += 1
             if pnl_usdt > 0: self.session_wins += 1
             self.session_total_pnl_usdt += pnl_usdt
-            self.last_used_params['last_pnl_pct'] = pnl_pct
 
-            situation_name = f"SITUATION_{self.last_used_params.get('entry_situation')}"
-            if situation_name and situation_name in self.confidence_managers:
-                confidence_manager = self.confidence_managers[situation_name]
-                confidence_before = confidence_manager.get_confidence()
-                confidence_manager.update(pnl_pct)
-                confidence_after = confidence_manager.get_confidence()
-                
-                log_payload = {
-                    'event_type': 'TRADE_CLOSE', 'situation': situation_name, 'pnl_usd': pnl_usdt,
-                    'pnl_pct': pnl_pct, 'reason': reason, 'buy_price': self.buy_price,
-                    'sell_price': actual_sell_price, 'quantity_btc': amount_to_sell,
-                    'confidence_threshold_before': confidence_before, 'confidence_threshold_after': confidence_after,
-                }
-                logger.performance("Trade fechado", extra_data=log_payload)
-                self._update_specialist_stats(situation_name, pnl_usdt)
+            # Aqui atualizamos o portfólio
+            # self.portfolio.update_on_sell(...)
 
-                # Update performance history
-                if situation_name not in self.performance_history:
-                    self.performance_history[situation_name] = deque(maxlen=100)
-                self.performance_history[situation_name].append(pnl_usdt)
-
-            self.portfolio.update_on_sell(amount_to_sell, revenue, pnl_usdt, actual_sell_price, self.last_used_params)
-            self.in_trade_position, self.position_phase = False, None
-        except Exception as e: logger.error(f"ERRO AO EXECUTAR VENDA: {e}", exc_info=True)
+        except Exception as e: 
+            logger.error(f"ERRO AO EXECUTAR VENDA: {e}", exc_info=True)
 
 
     def _update_specialist_stats(self, specialist_name: str, pnl_usdt: float) -> None:

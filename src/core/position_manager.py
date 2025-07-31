@@ -1,102 +1,114 @@
-# src/core/position_manager.py (VERSÃO FINAL E CORRETA)
+# src/core/position_manager.py (VERSÃO COM INTELIGÊNCIA FINANCEIRA)
 
 import pandas as pd
+import uuid
+from datetime import datetime, timezone
 from src.logger import logger
+from src.database_manager import db_manager
 
 class PositionManager:
     def __init__(self, config):
-        self.strategy_config = config.trading_strategy
-        self.sizing_config = config.position_sizing
-        
-        self.profit_mult = self.strategy_config.triple_barrier.profit_mult
-        self.stop_mult = self.strategy_config.triple_barrier.stop_mult
-        self.time_limit_candles = self.strategy_config.triple_barrier.time_limit_candles
-        
-        self.open_positions = []
+        self.position_config = config.position_management
+        self.sizing_config = config.dynamic_sizing # Carrega a nova secção do config
 
-    def is_position_open(self):
-        """Verifica se existe alguma posição aberta."""
-        return len(self.open_positions) > 0
+        self.profit_target_percent = self.position_config.profit_target_percent / 100
+        self.performance_factor = 1.0 # Começa neutro (sem ajuste)
 
-    def open_position(self, entry_candle, signal):
-        """Abre uma nova posição baseada no sinal e na vela de entrada."""
-        entry_price = entry_candle['close']
-        atr = entry_candle['atr'] 
-
-        if atr is None or atr == 0:
-            logger.warning("ATR é zero ou nulo. Posição não aberta.")
+    def _update_performance_factor(self):
+        """
+        Calcula o Profit Factor dos últimos N trades e ajusta o fator de performance.
+        Este é o coração do ciclo de feedback.
+        """
+        if not self.sizing_config.enabled:
+            self.performance_factor = 1.0
             return
 
-        if signal == 'LONG':
-            take_profit_price = entry_price + (atr * self.profit_mult)
-            stop_loss_price = entry_price - (atr * self.stop_mult)
-        elif signal == 'SHORT':
-            take_profit_price = entry_price - (atr * self.profit_mult)
-            stop_loss_price = entry_price + (atr * self.stop_mult)
+        n_trades = self.sizing_config.performance_window_trades
+        trades_df = db_manager.get_last_n_trades(n=n_trades)
+
+        if trades_df.empty or len(trades_df) < n_trades:
+            # Se não houver trades suficientes, mantém o fator neutro
+            self.performance_factor = 1.0
+            return
+
+        gross_profit = trades_df[trades_df['pnl'] > 0]['pnl'].sum()
+        gross_loss = abs(trades_df[trades_df['pnl'] < 0]['pnl'].sum())
+
+        if gross_loss == 0:
+            # Se não houver perdas, o profit factor é considerado altíssimo (sucesso)
+            profit_factor = float('inf')
         else:
-            return
+            profit_factor = gross_profit / gross_loss
 
-        position = {
-            'entry_price': entry_price,
-            'entry_time': entry_candle.name,
-            'signal': signal,
-            'take_profit_price': take_profit_price,
-            'stop_loss_price': stop_loss_price,
-            # --- CORREÇÃO DO FUTUREWARNING ---
-            'time_limit': entry_candle.name + pd.to_timedelta(self.time_limit_candles, unit='h'),
-            'entry_candle_index': entry_candle.name,
-            'status': 'OPEN'
-        }
-        self.open_positions.append(position)
+        logger.info(f"Análise de Performance: Últimos {len(trades_df)} trades. Gross Profit: ${gross_profit:,.2f}, Gross Loss: ${gross_loss:,.2f}, Profit Factor: {profit_factor:.2f}")
 
-    def check_and_close_positions(self, current_candle):
-        """Verifica as posições abertas contra a vela atual para ver se alguma deve ser fechada."""
-        closed_trades_summary = []
-        
-        for position in self.open_positions[:]:
-            exit_reason = None
-            exit_price = None
+        # Ajusta o fator de performance baseado no limiar
+        if profit_factor > self.sizing_config.profit_factor_threshold:
+            self.performance_factor = self.sizing_config.performance_upscale_factor
+            logger.info(f"Performance ALTA. Ajustando fator para: {self.performance_factor}")
+        else:
+            self.performance_factor = self.sizing_config.performance_downscale_factor
+            logger.info(f"Performance BAIXA. Ajustando fator para: {self.performance_factor}")
 
-            if position['signal'] == 'LONG':
-                if current_candle['high'] >= position['take_profit_price']:
-                    exit_reason = 'TAKE_PROFIT'
-                    exit_price = position['take_profit_price']
-                elif current_candle['low'] <= position['stop_loss_price']:
-                    exit_reason = 'STOP_LOSS'
-                    exit_price = position['stop_loss_price']
+    def get_capital_per_trade(self, available_capital: float) -> float:
+        """
+        Calcula o montante de capital a ser usado no próximo trade,
+        ajustado pelo fator de performance.
+        """
+        self._update_performance_factor() # Reavalia a performance a cada nova oportunidade de trade
 
-            elif position['signal'] == 'SHORT':
-                if current_candle['low'] <= position['take_profit_price']:
-                    exit_reason = 'TAKE_PROFIT'
-                    exit_price = position['take_profit_price']
-                elif current_candle['high'] >= position['stop_loss_price']:
-                    exit_reason = 'STOP_LOSS'
-                    exit_price = position['stop_loss_price']
+        base_risk_percent = self.position_config.capital_per_trade_percent / 100
+        dynamic_risk_percent = base_risk_percent * self.performance_factor
 
-            # --- CORREÇÃO DO KEYERROR ---
-            # O timestamp agora é o NOME (índice) da vela, não uma coluna.
-            if not exit_reason and current_candle.name >= position['time_limit']:
-                exit_reason = 'TIME_LIMIT'
-                exit_price = current_candle['close']
+        # Limita o risco máximo para não exceder um valor sensato (ex: 10%)
+        final_risk_percent = min(dynamic_risk_percent, 0.10)
 
-            if exit_reason:
-                pnl = (exit_price - position['entry_price']) if position['signal'] == 'LONG' else (position['entry_price'] - exit_price)
-                
-                trade_summary = {
-                    'entry_time': position['entry_time'],
-                    'exit_time': current_candle.name, 
-                    'signal': position['signal'],
-                    'entry_price': position['entry_price'],
-                    'exit_price': exit_price,
-                    'pnl': pnl,
-                    'exit_reason': exit_reason
+        trade_size_usdt = available_capital * final_risk_percent
+        logger.info(f"Cálculo de capital: {available_capital:,.2f} * ({base_risk_percent:.2%} * {self.performance_factor}) = ${trade_size_usdt:,.2f}")
+        return trade_size_usdt
+
+    # Os métodos open_position e check_and_close_positions permanecem os mesmos da versão anterior.
+    # Cole-os aqui se precisar, ou apenas adicione os novos acima.
+    def open_position(self, entry_price: float, quantity_btc: float):
+        """Abre uma nova posição e a regista na base de dados."""
+        try:
+            profit_target_price = entry_price * (1 + self.profit_target_percent)
+            trade_data = {
+                "trade_id": str(uuid.uuid4()),
+                "status": "OPEN",
+                "entry_price": entry_price,
+                "profit_target_price": profit_target_price,
+                "quantity_btc": quantity_btc,
+                "timestamp": datetime.now(timezone.utc)
+            }
+            db_manager.write_trade(trade_data)
+        except Exception as e:
+            logger.error(f"Erro ao tentar abrir posição: {e}", exc_info=True)
+
+    def check_and_close_positions(self, current_candle: pd.Series):
+        """Verifica as posições abertas (lidas do DB) para ver se alguma deve ser fechada."""
+        closed_trades_summaries = []
+        current_price = current_candle['close']
+        open_positions_df = db_manager.get_open_positions()
+        if open_positions_df.empty:
+            return []
+        for trade_id, position in open_positions_df.iterrows():
+            if current_price >= position['profit_target_price']:
+                pnl = (current_price - position['entry_price']) * position['quantity_btc']
+                close_trade_data = {
+                    "trade_id": trade_id, "status": "CLOSED",
+                    "entry_price": position['entry_price'], "realized_pnl_usdt": pnl,
+                    "timestamp": datetime.now(timezone.utc)
                 }
-                closed_trades_summary.append(trade_summary)
-                
-                self.open_positions.remove(position)
+                db_manager.write_trade(close_trade_data)
+                summary = {
+                    'entry_price': position['entry_price'], 'exit_price': current_price,
+                    'quantity_btc': position['quantity_btc'], 'pnl_usdt': pnl,
+                    'exit_reason': 'TAKE_PROFIT'
+                }
+                closed_trades_summaries.append(summary)
+        return closed_trades_summaries
 
-        return closed_trades_summary
-        
-    def update_open_positions(self, current_candle):
-        """Mantido para compatibilidade e futuras implementações (ex: trailing stop)."""
-        pass
+    def get_open_positions_count(self) -> int:
+        """Retorna o número de posições abertas diretamente do banco de dados."""
+        return len(db_manager.get_open_positions())

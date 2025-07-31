@@ -18,9 +18,9 @@ class DataManager:
     def __init__(self):
         try:
             self.client = influxdb_client.InfluxDBClient(
-                url=settings.database.influxdb.url,
-                token=settings.database.influxdb.token,
-                org=settings.database.influxdb.org,
+                url=settings.database.url,
+                token=settings.database.token,
+                org=settings.database.org,
                 timeout=300_000 
             )
             self.query_api = self.client.query_api()

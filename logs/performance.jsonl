@@ -3398,3 +3398,267 @@
 {"timestamp": "2025-07-31 11:56:59,030", "level": "ERROR", "message": "Ficheiro de bootstrap n\u00e3o encontrado em data/input/history/BTCUSDT-1m-data.csv. Bootstrap imposs\u00edvel."}
 {"timestamp": "2025-07-31 13:00:47,757", "level": "WARNING", "message": "\u274c FALHA NA CONEX\u00c3O com a Binance: HTTPSConnectionPool(host='api.binance.com', port=443): Read timed out. (read timeout=10)."}
 {"timestamp": "2025-07-31 13:04:26,255", "level": "WARNING", "message": "Encontradas 1160 lacunas nos dados hist\u00f3ricos. Preenchendo..."}
+{"timestamp": "2025-07-31 13:46:07,980", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: ('Connection aborted.', ConnectionResetError(104, 'Connection reset by peer'))"}
+{"timestamp": "2025-07-31 13:46:08,000", "level": "ERROR", "message": "Erro ao buscar o \u00faltimo timestamp do InfluxDB: <urllib3.connection.HTTPConnection object at 0x7449e5925610>: Failed to establish a new connection: [Errno 111] Connection refused"}
+{"timestamp": "2025-07-31 14:11:14,704", "level": "WARNING", "message": "Banco de dados para 'macro_data_1m' est\u00e1 vazio. Tentando bootstrap a partir dos CSVs."}
+{"timestamp": "2025-07-31 14:11:14,728", "level": "ERROR", "message": "Nenhum dado encontrado nos CSVs para o bootstrap. Pipeline macro n\u00e3o pode continuar."}
+{"timestamp": "2025-07-31 14:15:10,676", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:15:22,004", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:15:32,852", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:15:44,178", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:15:55,243", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:16:06,582", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:16:18,445", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:16:31,146", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:16:43,765", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:16:57,441", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:17:09,089", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:17:19,847", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:17:31,176", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:17:42,145", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:17:53,029", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:18:03,938", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:18:14,999", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:18:27,217", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:18:38,445", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:18:50,205", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:19:01,655", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:19:13,193", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:19:25,574", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:19:36,736", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:19:48,720", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:19:59,780", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:20:09,965", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:20:21,433", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:20:31,925", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:20:42,802", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:20:53,639", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:21:04,561", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:21:15,521", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:21:25,977", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:21:36,920", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:21:48,494", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:21:59,667", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:22:10,745", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:22:20,696", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:22:31,369", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:22:42,789", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:22:53,857", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:23:04,588", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:23:16,759", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:23:29,300", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:23:40,492", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:23:52,145", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:24:03,684", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:24:16,379", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:24:28,495", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:24:39,861", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:24:51,553", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:25:03,316", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:25:15,236", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:25:27,436", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:25:40,171", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:25:52,055", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:26:04,870", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:26:17,569", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:26:30,230", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:26:43,006", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:26:54,966", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:27:06,896", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:27:18,901", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:27:31,236", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:27:44,368", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:27:56,254", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:27:58,325", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:28:10,368", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:28:10,550", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Thu, 31 Jul 2025 14:28:10 GMT', 'Content-Length': '245'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"fear_and_greed\\\" on measurement \\\"features_master_table\\\" is type integer, already exists as type float dropped=200\"}\n"}
+{"timestamp": "2025-07-31 14:28:12,820", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:28:25,327", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:28:36,880", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:28:48,444", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:29:00,221", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:29:11,724", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:29:24,117", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:29:35,889", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:29:47,412", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:29:59,025", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:30:11,759", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:30:24,797", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:30:37,324", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:30:49,709", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:31:01,231", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:31:13,801", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:31:25,474", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:31:37,167", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:31:48,334", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:31:59,820", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:32:12,215", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:32:23,648", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 14:32:23,703", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Thu, 31 Jul 2025 14:32:23 GMT', 'Content-Length': '246'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"fear_and_greed\\\" on measurement \\\"features_master_table\\\" is type float, already exists as type integer dropped=1000\"}\n"}
+{"timestamp": "2025-07-31 14:34:11,622", "level": "WARNING", "message": "Banco de dados para 'macro_data_1m' est\u00e1 vazio. Tentando bootstrap a partir dos CSVs."}
+{"timestamp": "2025-07-31 14:34:28,486", "level": "WARNING", "message": "Nenhum dado (nem hist\u00f3rico, nem novo) dispon\u00edvel para DXY."}
+{"timestamp": "2025-07-31 14:34:32,139", "level": "WARNING", "message": "Nenhum dado (nem hist\u00f3rico, nem novo) dispon\u00edvel para VIX."}
+{"timestamp": "2025-07-31 14:34:43,170", "level": "WARNING", "message": "Nenhum dado (nem hist\u00f3rico, nem novo) dispon\u00edvel para GOLD."}
+{"timestamp": "2025-07-31 14:35:00,425", "level": "WARNING", "message": "Nenhum dado (nem hist\u00f3rico, nem novo) dispon\u00edvel para TNX."}
+{"timestamp": "2025-07-31 15:24:40,549", "level": "WARNING", "message": "Banco de dados para 'macro_data_1m' est\u00e1 vazio. Tentando bootstrap a partir dos CSVs."}
+{"timestamp": "2025-07-31 15:24:40,558", "level": "WARNING", "message": "CSV para DXY n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 15:24:54,195", "level": "WARNING", "message": "CSV para VIX n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 15:25:05,990", "level": "WARNING", "message": "CSV para GOLD n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 15:25:11,744", "level": "ERROR", "message": "\u274c Falha ao baixar o hist\u00f3rico para GOLD: 'tuple' object has no attribute 'lower'"}
+{"timestamp": "2025-07-31 15:25:11,748", "level": "WARNING", "message": "CSV para TNX n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 15:31:22,405", "level": "WARNING", "message": "Banco de dados para 'macro_data_1m' est\u00e1 vazio. Tentando bootstrap a partir dos CSVs."}
+{"timestamp": "2025-07-31 15:31:22,417", "level": "WARNING", "message": "CSV para DXY n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 15:31:34,290", "level": "WARNING", "message": "CSV para VIX n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 15:31:46,196", "level": "WARNING", "message": "CSV para GOLD n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 15:31:58,116", "level": "WARNING", "message": "CSV para TNX n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 15:32:08,368", "level": "WARNING", "message": "CSV para SPX n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 15:32:11,841", "level": "WARNING", "message": "CSV para NDX n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 15:32:28,868", "level": "WARNING", "message": "CSV para USO n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 15:39:34,348", "level": "ERROR", "message": "\u274c Falha no download de dados para DXY via yfinance: 'tuple' object has no attribute 'capitalize'"}
+{"timestamp": "2025-07-31 15:39:40,304", "level": "ERROR", "message": "\u274c Falha no download de dados para VIX via yfinance: 'tuple' object has no attribute 'capitalize'"}
+{"timestamp": "2025-07-31 15:39:44,125", "level": "ERROR", "message": "\u274c Falha no download de dados para GOLD via yfinance: 'tuple' object has no attribute 'capitalize'"}
+{"timestamp": "2025-07-31 15:39:47,306", "level": "ERROR", "message": "\u274c Falha no download de dados para TNX via yfinance: 'tuple' object has no attribute 'capitalize'"}
+{"timestamp": "2025-07-31 15:39:53,438", "level": "ERROR", "message": "\u274c Falha no download de dados para NDX via yfinance: 'tuple' object has no attribute 'capitalize'"}
+{"timestamp": "2025-07-31 15:39:56,630", "level": "ERROR", "message": "\u274c Falha no download de dados para USO via yfinance: 'tuple' object has no attribute 'capitalize'"}
+{"timestamp": "2025-07-31 15:39:59,072", "level": "WARNING", "message": "Lote 2018-01 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 15:40:00,109", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 15:40:09,523", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Colunas macro essenciais (DXY, SPX) est\u00e3o em falta."}
+{"timestamp": "2025-07-31 16:01:42,553", "level": "WARNING", "message": "Cache para DXY n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 16:01:54,069", "level": "ERROR", "message": "\u274c Falha ao baixar ou salvar dados para DXY: 'tuple' object has no attribute 'lower'"}
+{"timestamp": "2025-07-31 16:01:54,072", "level": "WARNING", "message": "Cache para VIX n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 16:02:00,010", "level": "ERROR", "message": "\u274c Falha ao baixar ou salvar dados para VIX: 'tuple' object has no attribute 'lower'"}
+{"timestamp": "2025-07-31 16:02:00,012", "level": "WARNING", "message": "Cache para GOLD n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 16:03:08,664", "level": "WARNING", "message": "Cache para DXY n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 16:03:15,075", "level": "WARNING", "message": "Cache para VIX n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 16:03:22,467", "level": "WARNING", "message": "Nenhum dado retornado para VIX no per\u00edodo."}
+{"timestamp": "2025-07-31 16:03:22,474", "level": "WARNING", "message": "Cache para GOLD n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 16:03:28,137", "level": "WARNING", "message": "Cache para TNX n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 16:03:41,266", "level": "WARNING", "message": "Nenhum dado retornado para TNX no per\u00edodo."}
+{"timestamp": "2025-07-31 16:03:41,271", "level": "WARNING", "message": "Cache para SPX n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 16:03:50,469", "level": "WARNING", "message": "Nenhum dado retornado para SPX no per\u00edodo."}
+{"timestamp": "2025-07-31 16:03:50,477", "level": "WARNING", "message": "Cache para NDX n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 16:03:53,526", "level": "WARNING", "message": "Cache para USO n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 16:03:59,416", "level": "WARNING", "message": "Nenhum dado retornado para DXY no per\u00edodo."}
+{"timestamp": "2025-07-31 16:03:59,424", "level": "ERROR", "message": "Falha ao tentar atualizar o cache de VIX: No columns to parse from file"}
+{"timestamp": "2025-07-31 16:04:02,544", "level": "WARNING", "message": "Nenhum dado retornado para GOLD no per\u00edodo."}
+{"timestamp": "2025-07-31 16:04:02,551", "level": "ERROR", "message": "Falha ao tentar atualizar o cache de TNX: No columns to parse from file"}
+{"timestamp": "2025-07-31 16:04:02,554", "level": "ERROR", "message": "Falha ao tentar atualizar o cache de SPX: No columns to parse from file"}
+{"timestamp": "2025-07-31 16:04:10,165", "level": "WARNING", "message": "Nenhum dado retornado para NDX no per\u00edodo."}
+{"timestamp": "2025-07-31 16:04:12,866", "level": "WARNING", "message": "Nenhum dado retornado para USO no per\u00edodo."}
+{"timestamp": "2025-07-31 16:07:35,528", "level": "WARNING", "message": "\u274c FALHA NA CONEX\u00c3O com a Binance: HTTPSConnectionPool(host='api.binance.com', port=443): Read timed out. (read timeout=10)."}
+{"timestamp": "2025-07-31 16:07:35,559", "level": "WARNING", "message": "Cache para VIX n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 16:07:44,067", "level": "WARNING", "message": "Nenhum dado retornado para VIX no per\u00edodo."}
+{"timestamp": "2025-07-31 16:07:44,076", "level": "WARNING", "message": "Cache para TNX n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 16:07:47,099", "level": "WARNING", "message": "Nenhum dado retornado para TNX no per\u00edodo."}
+{"timestamp": "2025-07-31 16:07:47,107", "level": "WARNING", "message": "Cache para SPX n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 16:07:52,841", "level": "WARNING", "message": "Nenhum dado retornado para DXY no per\u00edodo."}
+{"timestamp": "2025-07-31 16:07:52,851", "level": "ERROR", "message": "Falha ao tentar atualizar o cache de VIX: No columns to parse from file"}
+{"timestamp": "2025-07-31 16:07:54,170", "level": "WARNING", "message": "Nenhum dado retornado para GOLD no per\u00edodo."}
+{"timestamp": "2025-07-31 16:07:54,176", "level": "ERROR", "message": "Falha ao tentar atualizar o cache de TNX: No columns to parse from file"}
+{"timestamp": "2025-07-31 16:07:57,746", "level": "WARNING", "message": "Nenhum dado retornado para SPX no per\u00edodo."}
+{"timestamp": "2025-07-31 16:07:58,042", "level": "WARNING", "message": "Nenhum dado retornado para NDX no per\u00edodo."}
+{"timestamp": "2025-07-31 16:07:58,917", "level": "WARNING", "message": "Nenhum dado retornado para USO no per\u00edodo."}
+{"timestamp": "2025-07-31 16:08:41,381", "level": "WARNING", "message": "Nenhum dado retornado para DXY no per\u00edodo."}
+{"timestamp": "2025-07-31 16:08:41,388", "level": "ERROR", "message": "Falha ao tentar atualizar o cache de VIX: No columns to parse from file"}
+{"timestamp": "2025-07-31 16:08:52,040", "level": "WARNING", "message": "Nenhum dado retornado para GOLD no per\u00edodo."}
+{"timestamp": "2025-07-31 16:08:52,047", "level": "ERROR", "message": "Falha ao tentar atualizar o cache de TNX: No columns to parse from file"}
+{"timestamp": "2025-07-31 16:08:58,926", "level": "WARNING", "message": "Nenhum dado retornado para SPX no per\u00edodo."}
+{"timestamp": "2025-07-31 16:09:09,205", "level": "WARNING", "message": "Nenhum dado retornado para NDX no per\u00edodo."}
+{"timestamp": "2025-07-31 16:09:15,220", "level": "WARNING", "message": "Nenhum dado retornado para USO no per\u00edodo."}
+{"timestamp": "2025-07-31 16:10:37,384", "level": "WARNING", "message": "Cache para DXY n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 16:10:45,309", "level": "WARNING", "message": "Nenhum dado retornado para DXY no per\u00edodo."}
+{"timestamp": "2025-07-31 16:10:45,315", "level": "WARNING", "message": "Cache para VIX n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 16:10:48,137", "level": "WARNING", "message": "Cache para GOLD n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 16:10:51,338", "level": "WARNING", "message": "Cache para TNX n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 16:10:59,557", "level": "WARNING", "message": "Nenhum dado retornado para TNX no per\u00edodo."}
+{"timestamp": "2025-07-31 16:10:59,563", "level": "WARNING", "message": "Cache para SPX n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 16:11:02,914", "level": "WARNING", "message": "Nenhum dado retornado para SPX no per\u00edodo."}
+{"timestamp": "2025-07-31 16:11:02,921", "level": "WARNING", "message": "Cache para NDX n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 16:11:06,034", "level": "WARNING", "message": "Cache para USO n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 16:11:14,535", "level": "WARNING", "message": "Nenhum dado retornado para USO no per\u00edodo."}
+{"timestamp": "2025-07-31 16:11:14,545", "level": "WARNING", "message": "Cache para DXY est\u00e1 vazio ou ausente. Tentando download completo para autocorrigir."}
+{"timestamp": "2025-07-31 16:11:14,562", "level": "WARNING", "message": "Nenhum dado retornado para DXY no per\u00edodo."}
+{"timestamp": "2025-07-31 16:11:17,113", "level": "WARNING", "message": "Nenhum dado retornado para VIX no per\u00edodo."}
+{"timestamp": "2025-07-31 16:11:23,439", "level": "WARNING", "message": "Nenhum dado retornado para GOLD no per\u00edodo."}
+{"timestamp": "2025-07-31 16:11:23,449", "level": "WARNING", "message": "Cache para TNX est\u00e1 vazio ou ausente. Tentando download completo para autocorrigir."}
+{"timestamp": "2025-07-31 16:11:23,469", "level": "WARNING", "message": "Nenhum dado retornado para TNX no per\u00edodo."}
+{"timestamp": "2025-07-31 16:11:23,484", "level": "WARNING", "message": "Cache para SPX est\u00e1 vazio ou ausente. Tentando download completo para autocorrigir."}
+{"timestamp": "2025-07-31 16:11:23,503", "level": "WARNING", "message": "Nenhum dado retornado para SPX no per\u00edodo."}
+{"timestamp": "2025-07-31 16:11:26,301", "level": "WARNING", "message": "Nenhum dado retornado para NDX no per\u00edodo."}
+{"timestamp": "2025-07-31 16:11:26,307", "level": "WARNING", "message": "Cache para USO est\u00e1 vazio ou ausente. Tentando download completo para autocorrigir."}
+{"timestamp": "2025-07-31 16:11:26,327", "level": "WARNING", "message": "Nenhum dado retornado para USO no per\u00edodo."}
+{"timestamp": "2025-07-31 16:11:46,757", "level": "WARNING", "message": "Cache para DXY n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 16:11:58,115", "level": "WARNING", "message": "Nenhum dado retornado para DXY no per\u00edodo."}
+{"timestamp": "2025-07-31 16:11:58,131", "level": "WARNING", "message": "Cache para TNX n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 16:12:00,994", "level": "WARNING", "message": "Cache para SPX n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 16:12:03,887", "level": "WARNING", "message": "Cache para USO n\u00e3o encontrado. Baixando hist\u00f3rico completo..."}
+{"timestamp": "2025-07-31 16:12:06,720", "level": "WARNING", "message": "Cache para DXY est\u00e1 vazio ou ausente. Tentando download completo para autocorrigir."}
+{"timestamp": "2025-07-31 16:12:06,738", "level": "WARNING", "message": "Nenhum dado retornado para DXY no per\u00edodo."}
+{"timestamp": "2025-07-31 16:12:09,505", "level": "WARNING", "message": "Nenhum dado retornado para VIX no per\u00edodo."}
+{"timestamp": "2025-07-31 16:12:19,540", "level": "WARNING", "message": "Nenhum dado retornado para GOLD no per\u00edodo."}
+{"timestamp": "2025-07-31 16:12:22,123", "level": "WARNING", "message": "Nenhum dado retornado para TNX no per\u00edodo."}
+{"timestamp": "2025-07-31 16:12:32,995", "level": "WARNING", "message": "Nenhum dado retornado para SPX no per\u00edodo."}
+{"timestamp": "2025-07-31 16:12:42,779", "level": "WARNING", "message": "Nenhum dado retornado para NDX no per\u00edodo."}
+{"timestamp": "2025-07-31 16:13:07,515", "level": "WARNING", "message": "Cache para DXY est\u00e1 vazio ou ausente. Tentando download completo para autocorrigir."}
+{"timestamp": "2025-07-31 16:13:19,279", "level": "WARNING", "message": "Nenhum dado retornado para DXY no per\u00edodo."}
+{"timestamp": "2025-07-31 16:13:21,983", "level": "WARNING", "message": "Nenhum dado retornado para VIX no per\u00edodo."}
+{"timestamp": "2025-07-31 16:13:24,687", "level": "WARNING", "message": "Nenhum dado retornado para GOLD no per\u00edodo."}
+{"timestamp": "2025-07-31 16:13:27,538", "level": "WARNING", "message": "Nenhum dado retornado para TNX no per\u00edodo."}
+{"timestamp": "2025-07-31 16:13:33,276", "level": "WARNING", "message": "Nenhum dado retornado para SPX no per\u00edodo."}
+{"timestamp": "2025-07-31 16:13:40,872", "level": "WARNING", "message": "Nenhum dado retornado para NDX no per\u00edodo."}
+{"timestamp": "2025-07-31 16:13:43,723", "level": "WARNING", "message": "Nenhum dado retornado para USO no per\u00edodo."}
+{"timestamp": "2025-07-31 17:00:39,446", "level": "WARNING", "message": "Lote 2018-01 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:00:44,430", "level": "WARNING", "message": "Lote 2018-02 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:00:55,160", "level": "WARNING", "message": "Lote 2018-04 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:01:06,383", "level": "WARNING", "message": "Lote 2018-06 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:01:21,339", "level": "WARNING", "message": "Lote 2018-09 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:01:30,222", "level": "WARNING", "message": "Lote 2018-11 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:01:43,232", "level": "WARNING", "message": "Lote 2019-02 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:01:51,777", "level": "WARNING", "message": "Lote 2019-04 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:02:00,542", "level": "WARNING", "message": "Lote 2019-06 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:02:13,774", "level": "WARNING", "message": "Lote 2019-09 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:02:22,672", "level": "WARNING", "message": "Lote 2019-11 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:02:35,947", "level": "WARNING", "message": "Lote 2020-02 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:02:44,974", "level": "WARNING", "message": "Lote 2020-04 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:02:54,868", "level": "WARNING", "message": "Lote 2020-06 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:03:09,644", "level": "WARNING", "message": "Lote 2020-09 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:03:18,289", "level": "WARNING", "message": "Lote 2020-11 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:03:30,959", "level": "WARNING", "message": "Lote 2021-02 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:03:39,670", "level": "WARNING", "message": "Lote 2021-04 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:03:48,661", "level": "WARNING", "message": "Lote 2021-06 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:04:02,964", "level": "WARNING", "message": "Lote 2021-09 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:04:12,595", "level": "WARNING", "message": "Lote 2021-11 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:04:25,230", "level": "WARNING", "message": "Lote 2022-02 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:04:33,661", "level": "WARNING", "message": "Lote 2022-04 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:04:42,314", "level": "WARNING", "message": "Lote 2022-06 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:04:56,430", "level": "WARNING", "message": "Lote 2022-09 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:05:05,385", "level": "WARNING", "message": "Lote 2022-11 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:05:18,736", "level": "WARNING", "message": "Lote 2023-02 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:05:27,514", "level": "WARNING", "message": "Lote 2023-04 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:05:36,198", "level": "WARNING", "message": "Lote 2023-06 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:05:51,244", "level": "WARNING", "message": "Lote 2023-09 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:06:02,024", "level": "WARNING", "message": "Lote 2023-11 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:06:21,029", "level": "WARNING", "message": "Lote 2024-02 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:06:32,790", "level": "WARNING", "message": "Lote 2024-04 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:06:44,691", "level": "WARNING", "message": "Lote 2024-06 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:07:00,579", "level": "WARNING", "message": "Lote 2024-09 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:07:10,300", "level": "WARNING", "message": "Lote 2024-11 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:07:25,676", "level": "WARNING", "message": "Lote 2025-02 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:07:36,031", "level": "WARNING", "message": "Lote 2025-04 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:07:46,140", "level": "WARNING", "message": "Lote 2025-06 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:07:50,856", "level": "WARNING", "message": "Lote 2025-07 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:10:04,497", "level": "WARNING", "message": "Lote 2018-01 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:16:37,842", "level": "WARNING", "message": "Lote 2018-01 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:16:46,027", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Thu, 31 Jul 2025 17:16:46 GMT', 'Content-Length': '246'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"market_regime\\\" on measurement \\\"features_master_table\\\" is type string, already exists as type integer dropped=1000\"}\n"}
+{"timestamp": "2025-07-31 17:16:55,138", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Thu, 31 Jul 2025 17:16:55 GMT', 'Content-Length': '246'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"market_regime\\\" on measurement \\\"features_master_table\\\" is type string, already exists as type integer dropped=1000\"}\n"}
+{"timestamp": "2025-07-31 17:17:05,109", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Thu, 31 Jul 2025 17:17:05 GMT', 'Content-Length': '246'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"market_regime\\\" on measurement \\\"features_master_table\\\" is type string, already exists as type integer dropped=1000\"}\n"}
+{"timestamp": "2025-07-31 17:17:15,276", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Thu, 31 Jul 2025 17:17:15 GMT', 'Content-Length': '246'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"market_regime\\\" on measurement \\\"features_master_table\\\" is type string, already exists as type integer dropped=1000\"}\n"}
+{"timestamp": "2025-07-31 17:17:25,225", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Thu, 31 Jul 2025 17:17:25 GMT', 'Content-Length': '246'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"market_regime\\\" on measurement \\\"features_master_table\\\" is type string, already exists as type integer dropped=1000\"}\n"}
+{"timestamp": "2025-07-31 17:17:50,341", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Thu, 31 Jul 2025 17:17:50 GMT', 'Content-Length': '245'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"market_regime\\\" on measurement \\\"features_master_table\\\" is type string, already exists as type integer dropped=240\"}\n"}
+{"timestamp": "2025-07-31 17:18:01,960", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Thu, 31 Jul 2025 17:18:01 GMT', 'Content-Length': '246'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"market_regime\\\" on measurement \\\"features_master_table\\\" is type string, already exists as type integer dropped=1000\"}\n"}
+{"timestamp": "2025-07-31 17:18:11,349", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Thu, 31 Jul 2025 17:18:11 GMT', 'Content-Length': '246'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"market_regime\\\" on measurement \\\"features_master_table\\\" is type string, already exists as type integer dropped=1000\"}\n"}
+{"timestamp": "2025-07-31 17:21:15,446", "level": "WARNING", "message": "Lote 2018-01 ficou vazio ap\u00f3s a limpeza. Nada para salvar."}
+{"timestamp": "2025-07-31 17:22:58,372", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Thu, 31 Jul 2025 17:22:58 GMT', 'Content-Length': '245'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"market_regime\\\" on measurement \\\"features_master_table\\\" is type integer, already exists as type string dropped=440\"}\n"}
+{"timestamp": "2025-07-31 17:23:08,712", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Thu, 31 Jul 2025 17:23:08 GMT', 'Content-Length': '246'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"market_regime\\\" on measurement \\\"features_master_table\\\" is type integer, already exists as type string dropped=1000\"}\n"}
+{"timestamp": "2025-07-31 17:46:01,104", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Thu, 31 Jul 2025 17:46:01 GMT', 'Content-Length': '246'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"fear_and_greed\\\" on measurement \\\"features_master_table\\\" is type integer, already exists as type float dropped=1000\"}\n"}
+{"timestamp": "2025-07-31 17:54:13,492", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Thu, 31 Jul 2025 17:54:13 GMT', 'Content-Length': '246'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"fear_and_greed\\\" on measurement \\\"features_master_table\\\" is type float, already exists as type integer dropped=1000\"}\n"}
