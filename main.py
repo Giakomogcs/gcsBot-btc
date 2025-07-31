@@ -3,7 +3,7 @@
 import sys
 import os
 import pandas as pd
-from config_manager import settings
+from src.config_manager import settings
 from src.logger import logger
 
 def main():

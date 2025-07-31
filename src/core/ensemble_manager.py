@@ -1,105 +1,99 @@
-import pandas as pd
+# src/core/ensemble_manager.py (VERSÃO CORRIGIDA E COMPLETA)
+
 import joblib
 import os
-from src.config_manager import settings
+import json
+import pandas as pd
+from typing import Tuple, Dict, Any, Optional
+
 from src.logger import logger
+from src.config_manager import settings
 
 class EnsembleManager:
+    """
+    Gerencia o carregamento e a utilização de múltiplos modelos de IA (especialistas)
+    para gerar um sinal de trading consolidado.
+    """
     def __init__(self):
-        # O manager agora começa "vazio", sem modelos pré-carregados.
+        logger.info("EnsembleManager inicializado.")
+        # --- INÍCIO DA CORREÇÃO ---
+        # Inicializa os atributos e chama o método de carregamento
+        self.models: Dict[str, Any] = {}
+        self.scalers: Dict[str, Any] = {}
+        self.features: Dict[str, list[str]] = {}
         self.weights = settings.trading_strategy.ensemble_weights
-        self.specialists_config = settings.trading_strategy.models.specialists
-        
-        # O caminho base para todos os modelos vem da ÚNICA fonte da verdade
-        self.base_models_path = settings.data_paths.models_dir
-        
-        # Cache para guardar os modelos de cada regime já carregados, evitando leituras de disco repetidas
-        self._loaded_models_cache = {}
-        logger.info("EnsembleManager inicializado em modo dinâmico (camaleão).")
 
-    def _load_models_for_regime(self, regime_id: int) -> dict:
-        """
-        Carrega (e guarda em cache) a equipa de especialistas para um regime específico.
-        """
-        regime_id = int(regime_id)
-        if regime_id in self._loaded_models_cache:
-            return self._loaded_models_cache[regime_id]
+        self._load_all_models()
+        # --- FIM DA CORREÇÃO ---
 
-        logger.debug(f"Carregando equipa de especialistas para o regime {regime_id}...")
-        
-        # Constrói o caminho para a pasta do regime específico
-        regime_path = os.path.join(self.base_models_path, f"regime_{regime_id}")
-        
-        models = {}
-        if not os.path.isdir(regime_path):
-            logger.warning(f"Diretório de modelos não encontrado para o regime {regime_id} em: {regime_path}. Usando modelos 'all_data'.")
-            regime_path = os.path.join(self.base_models_path, "all_data") # Fallback para modelos genéricos
-
-        for model_name in self.specialists_config.keys():
-            # O nome do ficheiro é padronizado
-            model_file = os.path.join(regime_path, f"model_{model_name}.joblib")
-            if os.path.exists(model_file):
-                models[model_name] = joblib.load(model_file)
-            else:
-                logger.warning(f"Modelo para '{model_name}' não encontrado no regime {regime_id}.")
-        
-        if models:
-            self._loaded_models_cache[regime_id] = models
-        
-        return models
-
-    def get_prediction(self, data_slice: pd.DataFrame):
+    def _load_all_models(self):
         """
-        Gera uma previsão baseada no regime de mercado da vela mais recente.
+        Carrega todos os modelos de especialistas, scalers e listas de features
+        definidos no arquivo de configuração.
         """
-        latest_candle = data_slice.iloc[-1]
+        logger.info("Carregando modelos de especialistas do Ensemble...")
+        models_dir = settings.data_paths.models_dir
         
-        # 1. Diagnosticar o regime da situação atual
-        if 'market_regime' not in latest_candle or latest_candle['market_regime'] == -1:
-            logger.debug("Regime de mercado não identificado. Nenhuma previsão será feita.")
-            return 0.0, {'signal': 'HOLD', 'details': {}}
+        # Itera sobre cada especialista definido no config.yml
+        for specialist_name, specialist_config in settings.trading_strategy.models.specialists.items():
+            model_path = os.path.join(models_dir, f"{specialist_name}_model.joblib")
+            scaler_path = os.path.join(models_dir, f"{specialist_name}_scaler.joblib")
             
-        current_regime = int(latest_candle['market_regime'])
+            # Verifica se os arquivos do modelo e do scaler existem
+            if os.path.exists(model_path) and os.path.exists(scaler_path):
+                try:
+                    self.models[specialist_name] = joblib.load(model_path)
+                    self.scalers[specialist_name] = joblib.load(scaler_path)
+                    self.features[specialist_name] = specialist_config.features
+                    logger.info(f"✅ Modelo especialista '{specialist_name}' carregado com sucesso.")
+                except Exception as e:
+                    logger.error(f"❌ Falha ao carregar o modelo '{specialist_name}': {e}")
+            else:
+                logger.warning(f"Arquivos de modelo/scaler para o especialista '{specialist_name}' não encontrados.")
+        
+        if not self.models:
+            logger.error("Nenhum modelo de IA foi carregado. Execute o otimizador primeiro.")
 
-        # 2. Carregar a equipa de especialistas correta para o regime
-        regime_models = self._load_models_for_regime(current_regime)
+    def get_prediction(self, candle_data: pd.Series) -> Tuple[float, Dict[str, Any]]:
+        """
+        Obtém a predição de todos os especialistas, combina-as usando os pesos
+        configurados e retorna um sinal consolidado e a confiança.
+        """
+        if not self.models:
+            return 0.0, {"signal": "HOLD", "reason": "Nenhum modelo carregado"}
 
-        if not regime_models:
-            logger.warning(f"Nenhum modelo disponível para o regime {current_regime}. Nenhuma previsão será feita.")
-            return 0.0, {'signal': 'HOLD', 'details': {}}
+        weighted_confidences = []
+        individual_predictions = {}
 
-        # 3. Gerar a previsão usando a equipa carregada
-        total_weighted_confidence = 0
-        total_weights = 0
-        specialist_predictions = {}
-
-        for model_name, model in regime_models.items():
-            specialist_info = self.specialists_config.get(model_name)
-            if not specialist_info: continue
-
-            features_for_model = specialist_info.features
-            if not all(feature in latest_candle.index for feature in features_for_model):
-                logger.warning(f"Features faltando para '{model_name}' no regime {current_regime}.")
+        # Obtém a predição de cada especialista
+        for name, model in self.models.items():
+            scaler = self.scalers[name]
+            features = self.features[name]
+            
+            # Garante que todas as features necessárias estão presentes nos dados da vela
+            if not all(feature in candle_data for feature in features):
+                logger.warning(f"Faltam features para o modelo '{name}'. A saltar a predição.")
                 continue
 
-            prediction_proba = model.predict_proba(latest_candle[features_for_model].values.reshape(1, -1))[0]
-            confidence = prediction_proba.max()
-            predicted_class = prediction_proba.argmax()
+            # Prepara os dados para o modelo
+            input_data = pd.DataFrame([candle_data[features]])
+            scaled_data = scaler.transform(input_data)
             
-            specialist_predictions[model_name] = {'confidence': confidence, 'predicted_class': predicted_class}
-            weight = self.weights.get(model_name, 0)
+            # Obtém a probabilidade de compra (classe 1)
+            confidence = model.predict_proba(scaled_data)[0][1]
             
-            if predicted_class == 1:
-                total_weighted_confidence += confidence * weight
-            else: # Inclui a classe 0 (não-compra)
-                total_weighted_confidence -= confidence * weight
-            total_weights += weight
+            weight = self.weights.get(name, 0)
+            weighted_confidences.append(confidence * weight)
+            individual_predictions[name] = confidence
 
-        if total_weights == 0:
-            return 0.0, {'signal': 'HOLD', 'details': specialist_predictions}
+        # Calcula a confiança final ponderada
+        final_confidence = sum(weighted_confidences) / sum(self.weights.values()) if self.weights else 0
 
-        final_confidence = abs(total_weighted_confidence / total_weights)
-        signal = 'LONG' if total_weighted_confidence > 0 else 'SHORT'
-            
-        prediction_details = {'signal': signal, 'details': specialist_predictions}
-        return final_confidence, prediction_details
+        details = {
+            "signal": "LONG" if final_confidence > settings.trading_strategy.confidence_threshold else "HOLD",
+            "final_confidence": final_confidence,
+            "individual_predictions": individual_predictions,
+            "reason": f"Confiança ponderada {final_confidence:.2f} vs Limiar {settings.trading_strategy.confidence_threshold}"
+        }
+
+        return final_confidence, details

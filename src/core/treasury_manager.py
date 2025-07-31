@@ -2,7 +2,7 @@
 
 import pandas as pd
 from src.logger import logger
-from config_manager import settings
+from src.config_manager import settings
 
 class TreasuryManager:
     def __init__(self, btc_goal=0.1):

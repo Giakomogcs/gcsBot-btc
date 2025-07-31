@@ -49,7 +49,7 @@ class DataManager:
             return pd.DataFrame()
         
         flux_query = f'''
-            from(bucket:"{settings.database.influxdb.bucket}") 
+            from(bucket:"{settings.database.bucket}") 
                 |> range(start: {start_date}, stop: {end_date}) 
                 |> filter(fn: (r) => r._measurement == "{measurement}") 
                 |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")

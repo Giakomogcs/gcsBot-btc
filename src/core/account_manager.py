@@ -1,4 +1,4 @@
-# src/core/account_manager.py (NOVO ARQUIVO)
+# src/core/account_manager.py (Final Version)
 
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
@@ -9,17 +9,16 @@ class AccountManager:
     def __init__(self, binance_client: Client):
         self.client = binance_client
         # Define o ativo de cotação (ex: USDT) a partir das configurações
-        self.quote_asset = settings.SYMBOL.replace("BTC", "")
+        self.quote_asset = settings.app.symbol.replace("BTC", "")
 
     def get_quote_asset_balance(self) -> float:
         """
         Busca o saldo livre do ativo de cotação (ex: USDT) na conta da Binance.
-        Retorna 0.0 se o cliente não estiver disponível ou em caso de erro.
         """
-        if not self.client:
-            logger.warning("Cliente Binance não disponível. Retornando saldo 0.")
-            # Em modo de simulação, poderíamos retornar um valor fixo se quiséssemos.
-            return 0.0
+        if not self.client or settings.app.use_testnet:
+            logger.debug("Cliente Binance não disponível ou em modo testnet. Usando capital do portfólio de simulação.")
+            # This is a placeholder for backtesting; the actual capital is managed by PortfolioManager
+            return settings.backtest.initial_capital
 
         try:
             account_info = self.client.get_account()
@@ -27,7 +26,7 @@ class AccountManager:
                 (item for item in account_info['balances'] if item['asset'] == self.quote_asset),
                 None
             )
-
+            
             if usdt_balance:
                 free_balance = float(usdt_balance['free'])
                 logger.debug(f"Saldo de {self.quote_asset} consultado: {free_balance}")

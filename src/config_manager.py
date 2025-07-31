@@ -10,6 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class AppConfig(BaseModel):
     use_testnet: bool
     force_offline_mode: bool
+    symbol: str
 
 class DataPathsConfig(BaseModel):
     macro_data_dir: str

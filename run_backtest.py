@@ -1,26 +1,38 @@
-# run_backtest.py
+# run_backtest.py (VERSÃO FINAL COM IA)
 
 import pandas as pd
-from src.core.backtester import Backtester
 from src.logger import logger
+from src.config_manager import settings
+from src.data_manager import DataManager
+from src.core.ensemble_manager import EnsembleManager
+from src.core.backtester import Backtester
+import sys
 
 def main():
-    logger.info("--- INICIANDO PROCESSO DE BACKTEST ---")
+    logger.info("--- INICIANDO LABORATÓRIO DE BACKTEST COM IA ---")
+    
+    data_manager = DataManager()
+    df_features = data_manager.read_data_from_influx(
+        measurement="features_master_table",
+        start_date=settings.backtest.start_date
+    )
 
-    # Carrega a tabela mestre, que contém todos os dados e features
-    # NOTA: O ideal é ter a tabela salva em um formato mais rápido como Parquet ou Feather.
-    try:
-        # Substitua 'features_master_table.csv' pelo caminho real se for diferente
-        master_table_path = "data/features_master_table.csv" 
-        df = pd.read_csv(master_table_path, index_col='timestamp', parse_dates=True)
-        logger.info(f"Tabela mestre carregada com {len(df)} registros.")
-    except FileNotFoundError:
-        logger.error(f"ERRO: A tabela mestre '{master_table_path}' não foi encontrada.")
-        logger.error("Por favor, execute o data_pipeline.py primeiro para gerar os dados.")
+    if df_features.empty:
+        logger.error("A 'features_master_table' está vazia ou não pôde ser carregada.")
         return
 
-    # Instancia e executa o backtester
-    backtester = Backtester(data=df)
+    # 1. Carrega o EnsembleManager, que por sua vez carrega os modelos de IA
+    ensemble_manager = EnsembleManager()
+    if not ensemble_manager.models: # Verifica se algum modelo foi carregado
+        logger.error("Nenhum modelo de IA foi carregado pelo EnsembleManager. Execute o otimizador primeiro.")
+        return
+
+    # 2. Instancia o Backtester, agora passando o ensemble_manager
+    backtester = Backtester(
+        data=df_features, 
+        ensemble_manager=ensemble_manager
+    )
+    
     backtester.run()
 
 if __name__ == "__main__":

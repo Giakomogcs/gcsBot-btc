@@ -13758,3 +13758,65 @@ HTTP response body: {"code":"unprocessable entity","message":"failure writing po
 2025-07-31 19:40:43,432 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
 2025-07-31 19:42:17,033 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
 2025-07-31 19:43:10,551 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-31 21:48:32,336 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-31 21:50:40,190 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-31 21:53:25,271 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-31 21:53:26,275 - gcsBot - INFO - --- INICIANDO PROCESSO DE BACKTEST ---
+2025-07-31 21:53:26,276 - gcsBot - ERROR - ERRO: A tabela mestre 'data/features_master_table.csv' não foi encontrada.
+2025-07-31 21:53:26,276 - gcsBot - ERROR - Por favor, execute o data_pipeline.py primeiro para gerar os dados.
+2025-07-31 21:55:41,221 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-31 21:55:42,201 - gcsBot - INFO - --- INICIANDO PROCESSO DE BACKTEST ---
+2025-07-31 21:55:42,201 - gcsBot - INFO - Carregando a 'features_master_table' do InfluxDB...
+2025-07-31 21:55:42,407 - gcsBot - INFO - Tabela mestre carregada com 347 registros do banco de dados.
+2025-07-31 21:57:22,627 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-31 21:57:24,991 - gcsBot - INFO - --- INICIANDO PROCESSO DE BACKTEST ---
+2025-07-31 21:57:24,991 - gcsBot - INFO - Carregando a 'features_master_table' do InfluxDB...
+2025-07-31 21:57:25,300 - gcsBot - INFO - Tabela mestre carregada com 347 registros do banco de dados.
+2025-07-31 21:57:44,785 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-31 21:57:45,878 - gcsBot - INFO - --- INICIANDO PROCESSO DE BACKTEST ---
+2025-07-31 21:57:45,878 - gcsBot - INFO - Carregando a 'features_master_table' do InfluxDB...
+2025-07-31 21:57:46,113 - gcsBot - INFO - Tabela mestre carregada com 347 registros do banco de dados.
+2025-07-31 21:59:17,987 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-31 21:59:20,013 - gcsBot - INFO - --- INICIANDO PROCESSO DE BACKTEST ---
+2025-07-31 21:59:20,014 - gcsBot - INFO - Carregando a 'features_master_table' do InfluxDB...
+2025-07-31 21:59:20,332 - gcsBot - INFO - Tabela mestre carregada com 347 registros do banco de dados.
+2025-07-31 22:03:57,829 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-31 22:03:58,652 - gcsBot - INFO - --- INICIANDO PROCESSO DE BACKTEST ---
+2025-07-31 22:03:58,652 - gcsBot - INFO - Carregando a 'features_master_table' do InfluxDB...
+2025-07-31 22:03:58,944 - gcsBot - INFO - Tabela mestre carregada com 347 registros do banco de dados.
+2025-07-31 22:03:58,944 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-31 22:03:58,997 - gcsBot - INFO - Conexão com o InfluxDB fechada.
+2025-07-31 22:05:55,447 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-31 22:05:55,946 - gcsBot - INFO - --- INICIANDO PROCESSO DE BACKTEST ---
+2025-07-31 22:05:55,946 - gcsBot - INFO - Carregando a 'features_master_table' do InfluxDB...
+2025-07-31 22:05:56,111 - gcsBot - INFO - Tabela mestre carregada com 347 registros do banco de dados.
+2025-07-31 22:05:56,111 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-31 22:05:56,112 - gcsBot - INFO - Portfólio inicializado com $100.00 USDT.
+2025-07-31 22:05:56,112 - gcsBot - INFO - Iniciando backtest com Capital Inicial de $100.00
+2025-07-31 22:05:58,977 - gcsBot - INFO - Backtest concluído. Gerando relatório de performance...
+2025-07-31 22:05:58,977 - gcsBot - WARNING - Nenhum trade foi executado no backtest.
+2025-07-31 22:05:58,980 - gcsBot - INFO - Conexão com o InfluxDB fechada.
+2025-07-31 22:07:25,345 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-31 22:07:26,257 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST COM IA ---
+2025-07-31 22:07:26,257 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-31 22:07:26,303 - gcsBot - INFO - Conexão com o InfluxDB fechada.
+2025-07-31 22:08:30,549 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-31 22:08:31,090 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST COM IA ---
+2025-07-31 22:08:31,090 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-31 22:08:31,091 - gcsBot - INFO - Executando query na measurement 'features_master_table' de -180d até now()...
+2025-07-31 22:08:31,141 - gcsBot - INFO - 21 registros carregados da measurement 'features_master_table'.
+2025-07-31 22:08:31,142 - gcsBot - INFO - EnsembleManager inicializado em modo dinâmico (camaleão).
+2025-07-31 22:08:31,187 - gcsBot - INFO - Conexão com o InfluxDB fechada.
+2025-07-31 22:10:49,595 - gcsBot - INFO - Logger configurado para o modo: 'OPTIMIZE'. Logs de console a partir do nível INFO.
+2025-07-31 22:10:50,270 - gcsBot - INFO - --- INICIANDO LABORATÓRIO DE BACKTEST COM IA ---
+2025-07-31 22:10:50,271 - gcsBot - INFO - Conexão com o InfluxDB estabelecida com sucesso.
+2025-07-31 22:10:50,271 - gcsBot - INFO - Executando query na measurement 'features_master_table' de -180d até now()...
+2025-07-31 22:10:50,310 - gcsBot - INFO - 21 registros carregados da measurement 'features_master_table'.
+2025-07-31 22:10:50,310 - gcsBot - INFO - EnsembleManager inicializado.
+2025-07-31 22:10:50,311 - gcsBot - INFO - Carregando modelos de especialistas do Ensemble...
+2025-07-31 22:10:50,312 - gcsBot - WARNING - Arquivos de modelo/scaler para o especialista 'price_action' não encontrados.
+2025-07-31 22:10:50,314 - gcsBot - WARNING - Arquivos de modelo/scaler para o especialista 'market_dynamics' não encontrados.
+2025-07-31 22:10:50,316 - gcsBot - WARNING - Arquivos de modelo/scaler para o especialista 'intermarket_analyst' não encontrados.
+2025-07-31 22:10:50,316 - gcsBot - ERROR - Nenhum modelo de IA foi carregado. Execute o otimizador primeiro.
+2025-07-31 22:10:50,317 - gcsBot - ERROR - Nenhum modelo de IA foi carregado pelo EnsembleManager. Execute o otimizador primeiro.
+2025-07-31 22:10:50,317 - gcsBot - INFO - Conexão com o InfluxDB fechada.

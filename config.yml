@@ -16,6 +16,7 @@ backtest:
 app:
   use_testnet: false
   force_offline_mode: false
+  symbol: "BTCUSDT"
 
 # Caminhos para dados e modelos
 data_paths:
