@@ -75,8 +75,8 @@ class DataPipeline:
             df_processed['timestamp'] = pd.to_datetime(pd.to_numeric(df_processed['timestamp']), unit='s', utc=True)
             df_processed = df_processed.set_index('timestamp')[['fear_and_greed']]
             # --- INÍCIO DA CORREÇÃO DO TIPO DE DADO ---
-            # Garante que o tipo de dado é float para evitar conflito com o InfluxDB
-            df_processed['fear_and_greed'] = pd.to_numeric(df_processed['fear_and_greed']).astype(float)
+            # Garante que o tipo de dado é int para evitar conflito com o InfluxDB
+            df_processed['fear_and_greed'] = pd.to_numeric(df_processed['fear_and_greed']).astype(int)
             # --- FIM DA CORREÇÃO DO TIPO DE DADO ---
             
             if last_ts_in_db:
@@ -561,17 +561,18 @@ class DataPipeline:
         Executa o pipeline completo, agora com uma etapa de limpeza de dados inteligente
         para garantir que todos os lotes passem na validação.
         """
-        # --- FASE 0: PREPARAÇÃO (Treino automático do modelo de regimes) ---
+        # --- FASE 0: INGESTÃO DE DADOS BRUTOS (sem alterações) ---
+        self.run_btc_pipeline(symbol='BTCUSDT', interval='1m')
+        self.run_macro_pipeline()
+
+        # --- FASE 1: PREPARAÇÃO (Treino automático do modelo de regimes) ---
         sa_model_path = os.path.join(settings.data_paths.models_dir, 'situational_awareness.joblib')
         if not os.path.exists(sa_model_path):
             if not self._train_and_save_regime_model():
                 logger.critical("Falha ao treinar o modelo de regimes. Pipeline abortado.")
                 return
 
-        # --- FASE 1: INGESTÃO DE DADOS BRUTOS (sem alterações) ---
         self.run_sentiment_pipeline()
-        self.run_btc_pipeline(symbol='BTCUSDT', interval='1m')
-        self.run_macro_pipeline()
 
         # --- FASE 2: PROCESSAMENTO, ENRIQUECIMENTO E LIMPEZA EM LOTES ---
         logger.info("--- 🔄 INICIANDO PROCESSAMENTO DA TABELA MESTRE EM LOTES MENSAIS 🔄 ---")
@@ -588,11 +589,19 @@ class DataPipeline:
         total_months = (end_date.year - start_date.year) * 12 + end_date.month - start_date.month
         pbar = tqdm(total=total_months, desc="Processando Tabela Mestre")
 
+        warmup_period = pd.Timedelta(minutes=200)  # Período de warmup para cálculo de indicadores
+
         while current_date < end_date:
-            chunk_start = current_date.isoformat()
-            chunk_end = (current_date + relativedelta(months=1)).isoformat()
+            # Define o período de processamento real e o período de busca de dados (com warmup)
+            processing_start_date = current_date
+            fetch_start_date = processing_start_date - warmup_period
+            chunk_end_date = (current_date + relativedelta(months=1))
+
+            chunk_start = fetch_start_date.isoformat()
+            chunk_end = chunk_end_date.isoformat()
             
-            logger.debug(f"Processando lote de {current_date.strftime('%Y-%m')}...")
+            logger.debug(f"Processando lote de {processing_start_date.strftime('%Y-%m')}...")
+            logger.info(f"Período de fetch (com warmup): {chunk_start} a {chunk_end}")
 
             # 1. Leitura e Combinação dos Dados Brutos
             df_btc_chunk = self.read_data_in_range("btc_btcusdt_1m", chunk_start, chunk_end)
@@ -616,6 +625,10 @@ class DataPipeline:
             df_with_features = add_all_features(df_combined)
             logger.info(f"COLUNAS DEPOIS de add_all_features: {df_with_features.columns.tolist()}")
             
+            # Remove os dados de warmup, mantendo apenas os dados do mês corrente para processamento.
+            logger.debug(f"Removendo dados de warmup anteriores a {processing_start_date.isoformat()}")
+            df_with_features = df_with_features[df_with_features.index >= processing_start_date]
+
             # Assegura que as colunas esperadas existem antes de prosseguir
             expected_features = settings.data_pipeline.regime_features
             if not all(feature in df_with_features.columns for feature in expected_features):
