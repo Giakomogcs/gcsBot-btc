@@ -11,6 +11,7 @@ class DatabaseManager:
         self.url = settings.database.url
         self.token = settings.database.token
         self.org = settings.database.org
+        self.bucket = settings.database.bucket
         self._client = InfluxDBClient(url=self.url, token=self.token, org=self.org, timeout=30_000)
         # Mantemos os métodos antigos para não quebrar o data_pipeline
         self.query_api = self._client.query_api()
@@ -23,27 +24,17 @@ class DatabaseManager:
         return self.query_api
 
     def write_trade(self, trade_data: dict):
-        """Escreve um único registo de trade no InfluxDB."""
         try:
-            point = Point("trades") \
-                .tag("status", trade_data["status"]) \
-                .tag("trade_id", trade_data["trade_id"]) \
-                .field("entry_price", float(trade_data["entry_price"])) \
-                .field("profit_target_price", float(trade_data.get("profit_target_price", 0.0))) \
-                .field("quantity_btc", float(trade_data.get("quantity_btc", 0.0))) \
-                .field("realized_pnl_usdt", float(trade_data.get("realized_pnl_usdt", 0.0))) \
-                .time(trade_data["timestamp"])
-            
-            self.write_api.write(bucket=settings.database.bucket, org=self.org, record=point)
+            point = Point("trades").tag("status", trade_data["status"]).tag("trade_id", trade_data["trade_id"]).field("entry_price", float(trade_data["entry_price"])).field("profit_target_price", float(trade_data.get("profit_target_price", 0.0))).field("quantity_btc", float(trade_data.get("quantity_btc", 0.0))).field("realized_pnl_usdt", float(trade_data.get("realized_pnl_usdt", 0.0))).time(trade_data["timestamp"])
+            self.write_api.write(bucket=self.bucket, org=self.org, record=point)
             logger.info(f"Trade {trade_data['trade_id']} escrito no DB com status {trade_data['status']}.")
         except Exception as e:
             logger.error(f"Falha ao escrever trade no DB: {e}", exc_info=True)
 
     def get_open_positions(self) -> pd.DataFrame:
-        """Busca todas as posições com status 'OPEN'."""
         try:
             query = f'''
-            from(bucket: "{settings.database.bucket}")
+            from(bucket: "{self.bucket}")
                 |> range(start: -30d) 
                 |> filter(fn: (r) => r._measurement == "trades")
                 |> filter(fn: (r) => r.status == "OPEN")
@@ -55,36 +46,40 @@ class DatabaseManager:
             if df.empty: return pd.DataFrame()
             
             df = df.rename(columns={"_time": "timestamp"})
-            cols_to_drop = ['result', 'table', '_start', '_stop', '_measurement', 'symbol', 'status']
+            cols_to_drop = ['result', 'table', '_start', '_stop', '_measurement', 'status']
             df.drop(columns=[col for col in cols_to_drop if col in df.columns], inplace=True, errors='ignore')
             df.set_index('trade_id', inplace=True)
             return df
         except Exception as e:
             logger.error(f"Falha ao buscar posições abertas do DB: {e}", exc_info=True)
             return pd.DataFrame()
-        
+
     def get_last_n_trades(self, n: int):
         """Busca os últimos N trades com status 'CLOSED' para análise de performance."""
         try:
-            # Esta query busca os trades fechados, pega o PnL e ordena pelos mais recentes.
+            # --- INÍCIO DA CORREÇÃO ---
+            # Adicionada a função pivot() no final, como sugerido pelo warning.
             query = f'''
             from(bucket: "{self.bucket}")
-                |> range(start: -90d) // Procura nos últimos 90 dias
+                |> range(start: -90d)
                 |> filter(fn: (r) => r._measurement == "trades")
                 |> filter(fn: (r) => r.status == "CLOSED")
                 |> filter(fn: (r) => r._field == "realized_pnl_usdt")
                 |> sort(columns: ["_time"], desc: true)
                 |> limit(n: {n})
+                |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
             '''
+            # --- FIM DA CORREÇÃO ---
             df = self.query_api.query_data_frame(query, org=self.org)
             if isinstance(df, list):
                 df = pd.concat(df, ignore_index=True) if df else pd.DataFrame()
 
             if df.empty:
                 return pd.DataFrame()
-
-            # Renomeia a coluna de valor para clareza
-            return df.rename(columns={'_value': 'pnl'})
+            
+            # Como o pivot() já formata bem as colunas, podemos simplificar o retorno
+            df = df.rename(columns={"_time": "timestamp", "realized_pnl_usdt": "pnl"})
+            return df[['timestamp', 'pnl']]
 
         except Exception as e:
             logger.error(f"Falha ao buscar os últimos {n} trades do DB: {e}", exc_info=True)

@@ -56,9 +56,24 @@ switch ($command) {
         # Chama a lógica do comando 'update-db'
         docker-compose exec app python scripts/data_pipeline.py
     }
+    "reset-trades" {
+        Write-Host "${Yellow}--- Apagando todos os registos de trades da base de dados...${Reset}"
+        docker-compose exec app python scripts/db_utils.py trades
+        Write-Host "${Green}--- Histórico de trades limpo. Pode executar o bot novamente. ---${Reset}"
+    }
+    "reset-sentiment" {
+        Write-Host "${Yellow}--- Apagando dados de Sentimento (Fear & Greed)...${Reset}"
+        docker-compose exec app python scripts/db_utils.py sentiment_fear_and_greed
+        Write-Host "${Green}--- Histórico de Sentimento limpo. ---${Reset}"
+    }
     "analyze" {
         Write-Host "${Cyan}--- Executando script de análise de resultados DENTRO do container...${Reset}"
         docker-compose exec app python scripts/analyze_results.py
+    }
+    "run-live" {
+        Write-Host "${Green}--- 🚀 INICIANDO O BOT EM MODO DE OPERAÇÃO (LOOP PRINCIPAL) 🚀 ---${Reset}"
+        Write-Host "${Yellow}Use Ctrl+C para parar o bot.${Reset}"
+        docker-compose exec app python main.py
     }
     default {
         Write-Host "${Yellow}GCS-Bot - Painel de Controle${Reset}"
@@ -69,11 +84,15 @@ switch ($command) {
         Write-Host "  ${Green}start-services${Reset}  - Inicia os containers Docker (app, db)."
         Write-Host "  ${Green}stop-services${Reset}   - Para os containers Docker."
         Write-Host "  ${Red}reset-db${Reset}        - PARA e APAGA o banco de dados. Começa do zero."
+        Write-Host "  ${Red}clean-master${Reset}      - APAGA apenas a tabela Master, mantendo os dados das demais tabelas." 
+        Write-Host "  ${Red}reset-trades${Reset}      - APAGA apenas o histórico de trades, mantendo os dados de mercado." 
+        Write-Host "  ${Red}reset-sentiment${Reset}      - APAGA apenas o histórico de sentiment, mantendo os dados de mercado." 
         Write-Host ""
         Write-Host " Operações do Bot:"
         Write-Host "  ${Green}optimize${Reset}        - Executa a otimização para treinar os modelos."
         Write-Host "  ${Green}backtest${Reset}        - Executa um backtest com os modelos treinados."
         Write-Host "  ${Green}update-db${Reset}       - Executa o pipeline ETL completo para popular e atualizar o DB."
         Write-Host "  ${Cyan}analyze${Reset}         - Analisa os resultados do último backtest."
+        Write-Host "  ${Red}run-live${Reset}          - Inicia o bot para operação em tempo real/paper trading." # Adicionar esta linha na ajuda
     }
 }

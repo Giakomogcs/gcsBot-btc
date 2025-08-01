@@ -1,4 +1,4 @@
-# src/core/feature_engineering.py (VERSÃO MELHORADA COM LOGGING)
+# src/core/feature_engineering.py (VERSÃO FINAL E COMPLETA)
 
 import pandas as pd
 import numpy as np
@@ -10,37 +10,28 @@ from src.config_manager import settings
 
 def add_all_features(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Função central e única que adiciona todas as features de forma robusta,
-    usando a lógica de 'col_names' para garantir a consistência.
+    Função central e única que adiciona todas as features de forma robusta.
     """
     logger.debug("Iniciando a adição de todas as features de engenharia...")
     df_copy = df.copy()
 
     # --- GARANTIA DE DADOS DE ENTRADA ---
-    # Assegura que as colunas essenciais para os cálculos são numéricas
     ohlc_cols = ['open', 'high', 'low', 'close', 'volume']
     for col in ohlc_cols:
         if col in df_copy.columns:
             df_copy[col] = pd.to_numeric(df_copy[col], errors='coerce')
-    
-    # Remove quaisquer linhas onde os dados OHLC fundamentais sejam nulos ANTES de calcular
-    initial_rows = len(df_copy)
     df_copy.dropna(subset=ohlc_cols, inplace=True)
-    if initial_rows > len(df_copy):
-        logger.warning(f"Removidas {initial_rows - len(df_copy)} linhas com dados OHLC nulos antes da engenharia de features.")
 
     if df_copy.empty:
-        logger.error("DataFrame ficou vazio após limpeza de OHLC. Abortando engenharia de features para este lote.")
+        logger.error("DataFrame vazio após limpeza de OHLC. Abortando features.")
         return pd.DataFrame()
 
-    # --- 1. INDICADORES TÉCNICOS (usando a sua lógica 'col_names') ---
-    logger.debug("Calculando indicadores técnicos com nomenclatura explícita...")
+    # --- 1. INDICADORES TÉCNICOS ---
+    logger.debug("Calculando indicadores técnicos...")
     df_copy.ta.rsi(length=14, append=True, col_names=('rsi_14',))
     df_copy.ta.macd(fast=12, slow=26, signal=9, append=True, col_names=('macd_12_26_9', 'macd_hist_12_26_9', 'macd_signal_12_26_9'))
     df_copy.ta.atr(length=14, append=True, col_names=('atr_14',))
     df_copy.ta.bbands(length=20, std=2, append=True, col_names=('bbl_20_2_0', 'bbm_20_2_0', 'bbu_20_2_0', 'bbb_20_2_0', 'bbp_20_2_0'))
-
-    # Renomeia o 'macd_hist' para 'macd_diff' para consistência com o plano
     if 'macd_hist_12_26_9' in df_copy.columns:
         df_copy.rename(columns={'macd_hist_12_26_9': 'macd_diff_12_26_9'}, inplace=True)
 
@@ -50,37 +41,59 @@ def add_all_features(df: pd.DataFrame) -> pd.DataFrame:
     if 'taker_sell_volume' not in df_copy.columns: df_copy['taker_sell_volume'] = 0.0
     df_copy['volume_delta'] = df_copy['taker_buy_volume'] - df_copy['taker_sell_volume']
     df_copy['cvd'] = df_copy['volume_delta'].cumsum()
-
-    # --- 3. CORRELAÇÕES DE MERCADO ---
-    logger.debug("Calculando correlações de intermercado...")
-    # Garante que as colunas de correlação existem antes de tentar usá-las
-    if 'dxy_close' in df_copy.columns and 'close' in df_copy.columns:
-        corr_window = '30D'
-        df_copy['btc_dxy_corr_30d'] = df_copy['close'].rolling(window=corr_window).corr(df_copy['dxy_close']).ffill().bfill()
-        df_copy['btc_vix_corr_30d'] = df_copy['close'].rolling(window=corr_window).corr(df_copy['vix_close']).ffill().bfill()
+    
+    # --- 3. FEATURES DE SENTIMENTO E DERIVATIVOS ---
+    logger.debug("Calculando features de Sentimento e Derivativos...")
+    
+    # Fear & Greed
+    if 'fear_and_greed' in df_copy.columns:
+        df_copy['fng_change_3d'] = df_copy['fear_and_greed'].diff(periods=3 * 1440).ffill().bfill()
     else:
-        logger.warning("Colunas 'dxy_close' ou 'vix_close' não encontradas. Features de correlação não serão criadas.")
-        df_copy['btc_dxy_corr_30d'] = 0.0
-        df_copy['btc_vix_corr_30d'] = 0.0
+        logger.warning("Coluna 'fear_and_greed' não encontrada. Feature 'fng_change_3d' será nula.")
+        df_copy['fng_change_3d'] = 0.0
+        
+    # Funding Rate
+    if 'funding_rate' in df_copy.columns:
+        df_copy['funding_rate_mean_24h'] = df_copy['funding_rate'].rolling(window=24 * 60).mean().ffill().bfill()
+    else:
+        logger.warning("Coluna 'funding_rate' não encontrada. Feature 'funding_rate_mean_24h' será nula.")
+        df_copy['funding_rate_mean_24h'] = 0.0
+        
+    # Open Interest
+    if 'open_interest' in df_copy.columns:
+        df_copy['open_interest_pct_change_4h'] = df_copy['open_interest'].pct_change(periods=4 * 60).ffill().bfill()
+    else:
+        logger.warning("Coluna 'open_interest' não encontrada. Feature 'open_interest_pct_change_4h' será nula.")
+        df_copy['open_interest_pct_change_4h'] = 0.0
 
+    # --- 4. CORRELAÇÕES DE MERCADO ---
+    logger.debug("Calculando correlações de intermercado...")
+    for asset in ['dxy', 'vix', 'spx', 'ndx', 'gold']:
+        col_name = f"{asset}_close"
+        corr_col_name = f"btc_{asset}_corr_30d"
+        if col_name in df_copy.columns and 'close' in df_copy.columns:
+            corr_window = '30D'
+            df_copy[corr_col_name] = df_copy['close'].rolling(window=corr_window).corr(df_copy[col_name]).ffill().bfill()
+        else:
+            logger.warning(f"Coluna '{col_name}' não encontrada. Feature de correlação '{corr_col_name}' será nula.")
+            df_copy[corr_col_name] = 0.0
 
-    # --- 4. CÁLCULO DO ALVO (TARGET) ---
+    # --- 5. CÁLCULO DO ALVO (TARGET) ---
+    # Esta lógica permanece a mesma, pois é fundamental
     logger.info("Calculando o alvo com o método da Barreira Tripla...")
     cfg = settings.data_pipeline.target
     future_periods, profit_mult, stop_mult = cfg.future_periods, cfg.profit_mult, cfg.stop_mult
 
-    # Esta verificação agora vai funcionar, pois garantimos que a entrada é válida.
     if 'atr_14' not in df_copy.columns or df_copy['atr_14'].isnull().all():
-        logger.error("A coluna 'atr_14' não pôde ser calculada. Impossível criar o target. Abortando para este lote.")
-        return df_copy # Retorna o dataframe sem o target para análise do erro
+        logger.error("A coluna 'atr_14' não pôde ser calculada. Impossível criar o target.")
+        return df_copy
 
-    atr = df_copy['atr_14'].ffill().bfill() # Preenchemos possíveis NaNs no ATR para robustez
+    atr = df_copy['atr_14'].ffill().bfill()
     take_profit_levels = df_copy['close'] + (atr * profit_mult)
     stop_loss_levels = df_copy['close'] - (atr * stop_mult)
     target = pd.Series(np.nan, index=df_copy.index)
 
     for i in tqdm(range(len(df_copy) - future_periods), desc="Calculando Target"):
-        # Garante que os níveis de TP/SL são válidos antes de usar
         if pd.isna(take_profit_levels.iloc[i]) or pd.isna(stop_loss_levels.iloc[i]):
             continue
 
@@ -98,15 +111,7 @@ def add_all_features(df: pd.DataFrame) -> pd.DataFrame:
             target.iloc[i] = 0
             
     df_copy['target'] = target
-    
-    # --- LOG DE DIAGNÓSTICO CRÍTICO ---
-    total_rows_before_drop = len(df_copy)
-    nan_targets = df_copy['target'].isnull().sum()
-    logger.info(f"Diagnóstico do Target: {total_rows_before_drop} linhas totais. {nan_targets} targets não puderam ser calculados (normal para o final do período).")
-
     df_copy.dropna(subset=['target'], inplace=True)
-    logger.info(f"Após remoção de targets nulos, restaram {len(df_copy)} linhas.")
-
     if not df_copy.empty:
         df_copy['target'] = df_copy['target'].astype(int)
 

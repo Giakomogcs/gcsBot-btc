@@ -52,7 +52,7 @@ trading_strategy:
       price_action:
         features:
           - "atr_14"
-          - "bbands_20_2_0_bbp" # Percent-band é mais informativo que as bandas brutas
+          - "bbp_20_2_0"
           - "volume_delta"
           - "cvd"
 

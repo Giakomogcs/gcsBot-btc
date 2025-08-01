@@ -88,7 +88,7 @@ class DataPipeline:
             logger.error(f"❌ Falha no pipeline de Sentimento: {e}", exc_info=True)
 
 
-    def _write_dataframe_to_influx(self, df: pd.DataFrame, measurement: str, batch_size: int = 500):
+    def _write_dataframe_to_influx(self, df: pd.DataFrame, measurement: str, batch_size: int = 2000):
         write_api = db_manager.get_write_api()
         if not write_api:
             logger.error(f"API de escrita do InfluxDB indisponível. Escrita para '{measurement}' abortada.")
@@ -472,7 +472,7 @@ class DataPipeline:
                     historical_data = pd.DataFrame() # Garante que o dataframe está vazio
             
             # Determina a data de início para o download
-            start_date_for_download = (historical_data.index.max() + pd.Timedelta(days=1)) if not historical_data.empty else pd.to_datetime('2018-01-01')
+            start_date_for_download = (historical_data.index.max() + pd.Timedelta(days=1)) if not historical_data.empty else pd.to_datetime('2022-01-01')
             end_date_for_download = pd.to_datetime(datetime.date.today() + datetime.timedelta(days=1))
 
             new_data = pd.DataFrame()
@@ -577,60 +577,97 @@ class DataPipeline:
         return True # Retorna sucesso
 
     def _get_derivatives_data(self, symbol: str, start_dt: datetime.datetime, end_dt: datetime.datetime) -> pd.DataFrame:
-            """Busca dados de Derivativos (Funding Rate, Open Interest) da Binance."""
-            if not self.binance_client: return pd.DataFrame()
-            logger.info(f"Buscando dados de Derivativos para {symbol} de {start_dt} a {end_dt}...")
-            
+        """
+        Busca dados de Derivativos de forma robusta, quebrando os pedidos em lotes de 30 dias
+        e validando a estrutura dos dados recebidos da API da Binance.
+        """
+        logger.info(f"Buscando dados de Derivativos para {symbol} de {start_dt.date()} a {end_dt.date()} (Método Direto e Robusto)...")
+        
+        session = requests.Session()
+        base_url = "https://fapi.binance.com"
+        symbol_clean = symbol.replace('/', '')
+        
+        # Lógica de Funding Rate (permanece a mesma)
+        all_funding = []
+        try:
+            params = { "symbol": symbol_clean, "startTime": int(start_dt.timestamp() * 1000), "endTime": int(end_dt.timestamp() * 1000), "limit": 1000 }
+            response = session.get(f"{base_url}/fapi/v1/fundingRate", params=params, timeout=15)
+            response.raise_for_status()
+            all_funding = response.json()
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Erro de rede ao buscar Funding Rate: {e}")
+        
+        df_funding = pd.DataFrame()
+        if all_funding:
+            temp_df = pd.DataFrame(all_funding)
+            if not temp_df.empty and 'fundingTime' in temp_df.columns:
+                df_funding = temp_df.rename(columns={'fundingTime': 'timestamp', 'fundingRate': 'funding_rate'})
+                df_funding['timestamp'] = pd.to_datetime(df_funding['timestamp'], unit='ms', utc=True)
+                df_funding = df_funding.set_index('timestamp')[['funding_rate']]
+                df_funding['funding_rate'] = pd.to_numeric(df_funding['funding_rate'])
+            else:
+                logger.warning(f"API de Funding Rate retornou dados em formato inesperado (sem 'fundingTime'). Dados: {str(all_funding)[:200]}")
+
+        # Lógica de Open Interest com o loop corrigido
+        all_oi = []
+        loop_start_dt = start_dt
+        logger.info("Iniciando busca de Open Interest em lotes de 30 dias...")
+        while loop_start_dt < end_dt:
+            loop_end_dt = loop_start_dt + datetime.timedelta(days=30)
+            if loop_end_dt > end_dt:
+                loop_end_dt = end_dt
             try:
-                # --- INÍCIO DA CORREÇÃO DO ERRO DE ATRIBUTO ---
-                # As funções para futuros usam o prefixo 'fapi_'
-                funding_rates = self.binance_client.fapi_get_funding_rate(symbol=symbol.replace('/', ''), startTime=int(start_dt.timestamp() * 1000), limit=1000)
-                oi_stats = self.binance_client.fapi_get_open_interest_hist(symbol=symbol.replace('/', ''), period='1h', limit=500, startTime=int(start_dt.timestamp() * 1000))
-                # --- FIM DA CORREÇÃO ---
+                params = { "symbol": symbol_clean, "period": "1h", "startTime": int(loop_start_dt.timestamp() * 1000), "endTime": int(loop_end_dt.timestamp() * 1000), "limit": 500 }
+                response = session.get(f"{base_url}/futures/data/openInterestHist", params=params, timeout=15)
+                if response.status_code != 200:
+                     logger.error(f"Erro {response.status_code} ao buscar Open Interest para o período {loop_start_dt.date()} - {loop_end_dt.date()}. Detalhes: {response.text}")
+                response.raise_for_status()
+                all_oi.extend(response.json())
+                logger.debug(f"Lote de OI de {loop_start_dt.date()} a {loop_end_dt.date()} obtido.")
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Falha no lote de OI de {loop_start_dt.date()} a {loop_end_dt.date()}: {e}")
+                break # Se um lote falhar, para o loop para evitar mais erros.
+            
+            # --- INÍCIO DA CORREÇÃO DO LOOP ---
+            # A próxima busca começa exatamente onde a anterior terminou.
+            loop_start_dt = loop_end_dt
+            # --- FIM DA CORREÇÃO DO LOOP ---
+            time.sleep(0.5)
 
-                df_funding = pd.DataFrame(funding_rates)
-                if not df_funding.empty:
-                    df_funding['fundingTime'] = pd.to_datetime(df_funding['fundingTime'], unit='ms', utc=True)
-                    df_funding = df_funding.rename(columns={'fundingTime': 'timestamp', 'fundingRate': 'funding_rate'}).set_index('timestamp')[['funding_rate']]
-                    df_funding['funding_rate'] = pd.to_numeric(df_funding['funding_rate'])
+        # O resto do processamento de df_oi e a combinação final permanecem os mesmos...
+        df_oi = pd.DataFrame()
+        if all_oi:
+            temp_df_oi = pd.DataFrame(all_oi)
+            if not temp_df_oi.empty and 'timestamp' in temp_df_oi.columns:
+                 df_oi = temp_df_oi.rename(columns={'sumOpenInterestValue': 'open_interest'})
+                 df_oi['timestamp'] = pd.to_datetime(df_oi['timestamp'], unit='ms', utc=True)
+                 df_oi = df_oi.set_index('timestamp')[['open_interest']]
+                 df_oi['open_interest'] = pd.to_numeric(df_oi['open_interest'])
+                 df_oi = df_oi[~df_oi.index.duplicated(keep='first')]
+            else:
+                logger.warning(f"API de Open Interest retornou dados em formato inesperado (sem 'timestamp'). Dados: {str(all_oi)[:200]}")
 
-                df_oi = pd.DataFrame(oi_stats)
-                if not df_oi.empty:
-                    df_oi['timestamp'] = pd.to_datetime(df_oi['timestamp'], unit='ms', utc=True)
-                    df_oi = df_oi.rename(columns={'sumOpenInterestValue': 'open_interest'}).set_index('timestamp')[['open_interest']]
-                    df_oi['open_interest'] = pd.to_numeric(df_oi['open_interest'])
-
-                if df_funding.empty and df_oi.empty:
-                    return pd.DataFrame()
-                
-                return df_funding.join(df_oi, how='outer')
-
-            # --- INÍCIO DA CORREÇÃO DO ERRO DE ATRIBUTO ---
-            except AttributeError:
-                logger.error("Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'.")
-                logger.warning("Este erro geralmente ocorre devido a uma versão desatualizada da biblioteca 'python-binance'.")
-                logger.warning("O pipeline continuará sem dados de derivativos para este lote.")
-                return pd.DataFrame()
-            # --- FIM DA CORREÇÃO DO ERRO DE ATRIBUTO ---
-            except Exception as e:
-                logger.error(f"Erro ao buscar dados de derivativos: {e}", exc_info=True)
-                return pd.DataFrame()
-
-    # Ficheiro: scripts/data_pipeline.py (SUBSTITUA ESTA FUNÇÃO)
-
-    # Ficheiro: scripts/data_pipeline.py (SUBSTITUA ESTA FUNÇÃO PELA VERSÃO FINAL)
+        if df_funding.empty and df_oi.empty:
+            return pd.DataFrame()
+        
+        df_combined = df_funding.join(df_oi, how='outer')
+        logger.info(f"✅ Busca de derivativos concluída. {len(df_funding)} regs de funding, {len(df_oi)} regs de OI.")
+        return df_combined
+    
 
     def run_full_pipeline(self):
         """
-        Executa o pipeline completo com a arquitetura corrigida:
+        Executa o pipeline completo com a arquitetura finalizada:
         1. Garante que os dados brutos existem (Ingestão).
-        2. Processa os dados brutos para criar a tabela mestre (Processamento).
+        2. Processa os dados brutos, JUNTANDO TODAS AS FONTES, para criar a tabela mestre.
         """
         # --- FASE 0: INGESTÃO E VALIDAÇÃO DE DADOS BRUTOS ---
         logger.info("--- FASE 0: Garantindo a existência e atualização dos dados brutos ---")
         self.run_btc_pipeline(symbol='BTCUSDT', interval='1m')
         self.run_macro_pipeline()
         self.run_sentiment_pipeline()
+        # Adicionar aqui a ingestão de dados de derivativos se ainda não existir um pipeline robusto para eles
+        # No seu caso, a função _get_derivatives_data já existe, vamos usá-la de forma inteligente.
         
         # --- FASE 1: PREPARAÇÃO DE MODELOS E DEPENDÊNCIAS ---
         logger.info("--- FASE 1: Preparando modelos e dependências ---")
@@ -648,7 +685,7 @@ class DataPipeline:
             logger.critical("Modelo de SituationalAwareness não pôde ser carregado. Abortando.")
             return
 
-        start_date = pd.to_datetime('2018-01-01', utc=True)
+        start_date = pd.to_datetime(datetime.date.today() - relativedelta(years=2), utc=True)
         end_date = pd.to_datetime(datetime.date.today() + datetime.timedelta(days=1), utc=True)
         
         current_date = start_date
@@ -666,11 +703,9 @@ class DataPipeline:
             
             logger.info(f"Processando lote de {processing_start_date.strftime('%Y-%m')} (Fetch de {fetch_start_date.date()} a {chunk_end_date.date()})")
 
+            # --- LÓGICA DE JUNÇÃO MELHORADA ---
             df_btc_chunk = self.read_data_in_range("btc_btcusdt_1m", chunk_start, chunk_end)
             
-            # --- VERIFICAÇÃO DE ROBUSTEZ ---
-            # O lote precisa de ter dados suficientes para o warmup e o processamento.
-            # 35 dias * 1440 minutos/dia = ~50400 minutos. Usamos um limiar seguro.
             if len(df_btc_chunk) < 50000:
                 logger.warning(f"Dados de BTC insuficientes ou inexistentes ({len(df_btc_chunk)} linhas) para o período {processing_start_date.strftime('%Y-%m')}. A saltar lote.")
                 current_date += relativedelta(months=1)
@@ -680,27 +715,38 @@ class DataPipeline:
             df_macro_chunk = self.read_data_in_range("macro_data_1m", chunk_start, chunk_end)
             df_sentiment_chunk = self.read_data_in_range("sentiment_fear_and_greed", chunk_start, chunk_end)
             
-            df_combined = df_btc_chunk.join(df_macro_chunk, how='left').join(df_sentiment_chunk, how='left')
+            # --- INÍCIO DA ALTERAÇÃO CRÍTICA ---
+            # Busca os dados de derivativos para o mesmo período e os junta.
+            # Assumindo que você não tem uma tabela raw para derivativos, buscamos via API.
+            # Numa próxima versão, poderíamos criar um pipeline de ingestão para eles também.
+            df_derivatives_chunk = self._get_derivatives_data(settings.app.symbol, fetch_start_date, chunk_end_date)
+            if not df_derivatives_chunk.empty:
+                df_derivatives_chunk = df_derivatives_chunk.resample('1min').ffill()
+
+            # Junta todas as fontes de dados
+            df_combined = df_btc_chunk.join(df_macro_chunk, how='left')
+            df_combined = df_combined.join(df_sentiment_chunk, how='left')
+            if not df_derivatives_chunk.empty:
+                df_combined = df_combined.join(df_derivatives_chunk, how='left')
+            # --- FIM DA ALTERAÇÃO CRÍTICA ---
+
             df_combined.ffill(inplace=True)
             
+            # O resto do processo continua igual, mas agora com os dados completos
             df_with_features = add_all_features(df_combined)
             df_with_features = df_with_features[df_with_features.index >= processing_start_date]
 
-            # --- LÓGICA DE LIMPEZA E SALVAMENTO ---
-            # Removemos a verificação de 'expected_features' e o 'dropna()' agressivo,
-            # confiando que o add_all_features e o target labeling já limparam o necessário.
             if df_with_features.empty:
                 logger.warning(f"Lote {current_date.strftime('%Y-%m')} ficou vazio após a engenharia de features. Nada para salvar.")
             else:
                 df_with_regimes = situational_awareness_model.transform(df_with_features)
                 
-                # A validação final agora verifica um subconjunto de colunas críticas
                 if self.validate_data(df_with_regimes):
                     self._write_dataframe_to_influx(df_with_regimes, "features_master_table")
                 else:
                     logger.error(f"Validação final falhou ou lote vazio para {current_date.strftime('%Y-%m')}. Este lote não será salvo.")
             
-            del df_btc_chunk, df_macro_chunk, df_sentiment_chunk, df_combined, df_with_features
+            del df_btc_chunk, df_macro_chunk, df_sentiment_chunk, df_derivatives_chunk, df_combined, df_with_features
             if 'df_with_regimes' in locals(): del df_with_regimes
             gc.collect()
 
@@ -709,6 +755,7 @@ class DataPipeline:
         
         pbar.close()
         logger.info("🎉🎉🎉 PIPELINE INDUSTRIAL CONCLUÍDO! A FONTE DA VERDADE ESTÁ PRONTA. 🎉🎉🎉")
+
 
     def validate_data(self, df: pd.DataFrame) -> bool:
         """

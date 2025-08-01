@@ -4070,3 +4070,1016 @@
 {"timestamp": "2025-08-01 00:10:33,960", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2025-06. A saltar lote."}
 {"timestamp": "2025-08-01 00:10:34,000", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (1776 linhas) para o per\u00edodo 2025-07. A saltar lote."}
 {"timestamp": "2025-08-01 00:10:34,038", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (1782 linhas) para o per\u00edodo 2025-08. A saltar lote."}
+{"timestamp": "2025-08-01 10:45:49,338", "level": "WARNING", "message": "\u274c FALHA NA CONEX\u00c3O com a Binance: HTTPSConnectionPool(host='api.binance.com', port=443): Read timed out. (read timeout=10)."}
+{"timestamp": "2025-08-01 10:47:01,514", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Fri, 01 Aug 2025 10:47:01 GMT', 'Content-Length': '246'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"fear_and_greed\\\" on measurement \\\"sentiment_fear_and_greed\\\" is type float, already exists as type integer dropped=1\"}\n"}
+{"timestamp": "2025-08-01 10:47:02,387", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (44640 linhas) para o per\u00edodo 2018-01. A saltar lote."}
+{"timestamp": "2025-08-01 12:13:59,449", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Fri, 01 Aug 2025 12:13:59 GMT', 'Content-Length': '245'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"fear_and_greed\\\" on measurement \\\"features_master_table\\\" is type integer, already exists as type float dropped=500\"}\n"}
+{"timestamp": "2025-08-01 12:41:36,984", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Fri, 01 Aug 2025 12:41:36 GMT', 'Content-Length': '245'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"fear_and_greed\\\" on measurement \\\"features_master_table\\\" is type float, already exists as type integer dropped=500\"}\n"}
+{"timestamp": "2025-08-01 12:42:03,479", "level": "WARNING", "message": "Lote 2025-08 ficou vazio ap\u00f3s a engenharia de features. Nada para salvar."}
+{"timestamp": "2025-08-01 13:08:24,354", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:24,802", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:25,190", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:25,584", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:25,986", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:26,409", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:26,788", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:27,183", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:27,568", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:27,941", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:28,372", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:28,780", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:29,186", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:29,831", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:30,556", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:31,250", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:31,947", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:32,590", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:33,200", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:33,821", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:34,434", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:35,036", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:35,629", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:36,322", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:36,940", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:37,576", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:38,257", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:39,040", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:39,635", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:40,197", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:40,899", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:41,592", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:42,257", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:42,965", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:43,622", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:44,230", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:44,873", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:45,515", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:46,123", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:46,770", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:47,390", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:48,039", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:48,640", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:49,282", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:49,846", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:50,519", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:51,161", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:51,882", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:52,621", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:53,307", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:54,048", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:54,735", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:55,704", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:56,573", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:57,311", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:58,004", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:58,686", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:08:59,469", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:00,132", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:00,857", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:01,552", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:02,231", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:02,964", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:03,611", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:04,231", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:04,894", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:05,372", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:05,780", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:06,190", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:06,613", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:07,031", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:07,433", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:07,844", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:08,319", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:08,766", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:09,278", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:09,711", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:10,256", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:10,667", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:11,080", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:11,500", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:11,919", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:12,342", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:12,745", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:13,160", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:13,714", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:14,125", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:14,550", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:14,982", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:15,396", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:15,812", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:16,239", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:16,674", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:17,090", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:17,505", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:17,961", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:18,402", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:18,832", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:19,252", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:09:19,656", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 13:20:10,630", "level": "ERROR", "message": "Erro no processo de verifica\u00e7\u00e3o de entrada: module 'src.core.exchange_manager' has no attribute 'get_account_balance'"}
+{"timestamp": "2025-08-01 13:25:32,624", "level": "ERROR", "message": "Erro na API da Binance ao buscar saldo de USDT: APIError(code=-2014): API-key format invalid."}
+{"timestamp": "2025-08-01 13:25:32,639", "level": "WARNING", "message": "Saldo insuficiente em USDT (0.0) para abrir nova posi\u00e7\u00e3o."}
+{"timestamp": "2025-08-01 13:30:34,406", "level": "ERROR", "message": "Erro na API da Binance ao buscar saldo de USDT: APIError(code=-2014): API-key format invalid."}
+{"timestamp": "2025-08-01 13:30:34,412", "level": "WARNING", "message": "Saldo insuficiente em USDT (0.0) para abrir nova posi\u00e7\u00e3o."}
+{"timestamp": "2025-08-01 13:35:36,246", "level": "ERROR", "message": "Erro na API da Binance ao buscar saldo de USDT: APIError(code=-2014): API-key format invalid."}
+{"timestamp": "2025-08-01 13:35:36,249", "level": "WARNING", "message": "Saldo insuficiente em USDT (0.0) para abrir nova posi\u00e7\u00e3o."}
+{"timestamp": "2025-08-01 13:40:38,512", "level": "ERROR", "message": "Erro na API da Binance ao buscar saldo de USDT: APIError(code=-2014): API-key format invalid."}
+{"timestamp": "2025-08-01 13:40:38,520", "level": "WARNING", "message": "Saldo insuficiente em USDT (0.0) para abrir nova posi\u00e7\u00e3o."}
+{"timestamp": "2025-08-01 13:45:40,301", "level": "ERROR", "message": "Erro na API da Binance ao buscar saldo de USDT: APIError(code=-2014): API-key format invalid."}
+{"timestamp": "2025-08-01 13:45:40,306", "level": "WARNING", "message": "Saldo insuficiente em USDT (0.0) para abrir nova posi\u00e7\u00e3o."}
+{"timestamp": "2025-08-01 13:50:42,296", "level": "ERROR", "message": "Erro na API da Binance ao buscar saldo de USDT: APIError(code=-2014): API-key format invalid."}
+{"timestamp": "2025-08-01 13:50:42,300", "level": "WARNING", "message": "Saldo insuficiente em USDT (0.0) para abrir nova posi\u00e7\u00e3o."}
+{"timestamp": "2025-08-01 13:55:20,926", "level": "ERROR", "message": "Erro na API da Binance ao buscar saldo de USDT: APIError(code=-2014): API-key format invalid."}
+{"timestamp": "2025-08-01 13:55:20,939", "level": "WARNING", "message": "Saldo insuficiente em USDT (0.0) para abrir nova posi\u00e7\u00e3o."}
+{"timestamp": "2025-08-01 14:00:22,810", "level": "ERROR", "message": "Erro na API da Binance ao buscar saldo de USDT: APIError(code=-2014): API-key format invalid."}
+{"timestamp": "2025-08-01 14:00:22,813", "level": "WARNING", "message": "Saldo insuficiente em USDT (0.0) para abrir nova posi\u00e7\u00e3o."}
+{"timestamp": "2025-08-01 14:05:25,245", "level": "ERROR", "message": "Erro na API da Binance ao buscar saldo de USDT: APIError(code=-2014): API-key format invalid."}
+{"timestamp": "2025-08-01 14:05:25,249", "level": "WARNING", "message": "Saldo insuficiente em USDT (0.0) para abrir nova posi\u00e7\u00e3o."}
+{"timestamp": "2025-08-01 14:10:27,846", "level": "ERROR", "message": "Erro na API da Binance ao buscar saldo de USDT: APIError(code=-2014): API-key format invalid."}
+{"timestamp": "2025-08-01 14:10:27,850", "level": "WARNING", "message": "Saldo insuficiente em USDT (0.0) para abrir nova posi\u00e7\u00e3o."}
+{"timestamp": "2025-08-01 14:14:10,020", "level": "ERROR", "message": "Erro na API da Binance ao buscar saldo de USDT: APIError(code=-2014): API-key format invalid."}
+{"timestamp": "2025-08-01 14:14:10,029", "level": "WARNING", "message": "Saldo insuficiente em USDT (0.0) para abrir nova posi\u00e7\u00e3o."}
+{"timestamp": "2025-08-01 14:16:11,652", "level": "ERROR", "message": "Erro na API da Binance ao buscar saldo de USDT: APIError(code=-2014): API-key format invalid."}
+{"timestamp": "2025-08-01 14:16:11,655", "level": "WARNING", "message": "Saldo insuficiente em USDT (0.0) para abrir nova posi\u00e7\u00e3o."}
+{"timestamp": "2025-08-01 14:18:12,609", "level": "ERROR", "message": "Erro na API da Binance ao buscar saldo de USDT: APIError(code=-2014): API-key format invalid."}
+{"timestamp": "2025-08-01 14:18:12,613", "level": "WARNING", "message": "Saldo insuficiente em USDT (0.0) para abrir nova posi\u00e7\u00e3o."}
+{"timestamp": "2025-08-01 14:20:28,167", "level": "ERROR", "message": "Falha ao buscar os \u00faltimos 20 trades do DB: 'DatabaseManager' object has no attribute 'bucket'"}
+{"timestamp": "2025-08-01 14:20:28,179", "level": "WARNING", "message": "--- MODO TESTNET ---"}
+{"timestamp": "2025-08-01 14:20:28,180", "level": "WARNING", "message": "Ordem de BUY BTCUSDT com quantidade 150.0 foi criada, mas n\u00e3o executada."}
+{"timestamp": "2025-08-01 14:22:29,246", "level": "ERROR", "message": "Falha ao buscar os \u00faltimos 20 trades do DB: 'DatabaseManager' object has no attribute 'bucket'"}
+{"timestamp": "2025-08-01 14:22:29,267", "level": "WARNING", "message": "--- MODO TESTNET ---"}
+{"timestamp": "2025-08-01 14:22:29,268", "level": "WARNING", "message": "Ordem de BUY BTCUSDT com quantidade 150.0 foi criada, mas n\u00e3o executada."}
+{"timestamp": "2025-08-01 14:22:38,223", "level": "ERROR", "message": "Falha ao buscar os \u00faltimos 20 trades do DB: 'DatabaseManager' object has no attribute 'bucket'"}
+{"timestamp": "2025-08-01 14:22:38,236", "level": "WARNING", "message": "--- MODO TESTNET ---"}
+{"timestamp": "2025-08-01 14:22:38,237", "level": "WARNING", "message": "Ordem de BUY BTCUSDT com quantidade 150.0 foi criada, mas n\u00e3o executada."}
+{"timestamp": "2025-08-01 16:00:56,378", "level": "ERROR", "message": "Falha ao buscar os \u00faltimos 20 trades do DB: 'DatabaseManager' object has no attribute 'bucket'"}
+{"timestamp": "2025-08-01 16:00:56,383", "level": "WARNING", "message": "--- MODO TESTNET ---"}
+{"timestamp": "2025-08-01 16:00:56,384", "level": "WARNING", "message": "Ordem de BUY BTCUSDT com quantidade 150.0 foi criada, mas n\u00e3o executada."}
+{"timestamp": "2025-08-01 16:02:13,712", "level": "WARNING", "message": "--- MODO TESTNET ---"}
+{"timestamp": "2025-08-01 16:02:13,713", "level": "WARNING", "message": "Ordem de BUY BTCUSDT com quantidade 150.0 foi criada, mas n\u00e3o executada."}
+{"timestamp": "2025-08-01 16:04:14,622", "level": "WARNING", "message": "--- MODO TESTNET ---"}
+{"timestamp": "2025-08-01 16:04:14,622", "level": "WARNING", "message": "Ordem de BUY BTCUSDT com quantidade 150.0 foi criada, mas n\u00e3o executada."}
+{"timestamp": "2025-08-01 16:06:19,020", "level": "WARNING", "message": "--- MODO TESTNET ---"}
+{"timestamp": "2025-08-01 16:06:19,021", "level": "WARNING", "message": "Ordem de BUY BTCUSDT com quantidade 150.0 foi criada, mas n\u00e3o executada."}
+{"timestamp": "2025-08-01 16:08:19,930", "level": "WARNING", "message": "--- MODO TESTNET ---"}
+{"timestamp": "2025-08-01 16:08:19,931", "level": "WARNING", "message": "Ordem de BUY BTCUSDT com quantidade 150.0 foi criada, mas n\u00e3o executada."}
+{"timestamp": "2025-08-01 16:23:37,702", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:38,086", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:38,607", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:39,065", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:39,441", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:39,796", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:40,163", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:40,525", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:40,926", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:41,306", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:41,758", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:42,162", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:42,612", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:43,011", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:43,414", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:43,829", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:44,220", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:44,622", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:45,036", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:45,445", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:45,820", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:46,358", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:46,816", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:47,288", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:47,708", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:48,219", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:48,664", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:49,148", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:49,628", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:50,103", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:50,560", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:50,963", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:51,400", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:51,946", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:52,527", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:53,059", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:53,429", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:53,804", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:54,182", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:54,557", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:54,941", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:55,330", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:55,703", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:56,082", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:56,456", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:56,858", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:57,269", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:57,637", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:58,005", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:58,372", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:58,741", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:59,131", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:59,502", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:23:59,878", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:00,257", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:00,644", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:01,024", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:01,410", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:01,791", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:02,170", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:02,559", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:02,944", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:03,321", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:03,690", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:04,063", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:04,437", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:04,812", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:05,200", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:05,578", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:05,951", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:06,334", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:06,712", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:07,085", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:07,489", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:07,873", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:08,252", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:08,626", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:09,003", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:09,389", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:09,767", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:10,150", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:10,530", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:10,919", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:11,313", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:11,698", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:12,078", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:12,467", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:12,879", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:13,267", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:13,677", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:14,068", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:14,462", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:14,848", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:15,245", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:15,644", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:16,043", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:16,483", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:16,902", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:17,305", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:24:17,687", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2_0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:46,403", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:46,799", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:47,184", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:47,547", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:47,924", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:48,304", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:48,687", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:49,058", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:49,437", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:49,831", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:50,304", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:50,728", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:51,206", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:51,637", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:52,058", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:52,460", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:52,906", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:53,314", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:53,710", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:54,121", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:54,555", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:54,977", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:55,411", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:55,807", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:56,196", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:56,635", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:57,056", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:57,613", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:58,099", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:58,516", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:58,932", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:59,347", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:30:59,751", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:00,146", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:00,569", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:00,967", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:01,366", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:01,767", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:02,187", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:02,612", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:03,017", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:03,417", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:03,828", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:04,261", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:04,729", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:05,158", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:05,610", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:06,131", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:06,629", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:07,128", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:07,532", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:08,134", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:08,592", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:09,042", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:09,524", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:10,007", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:10,487", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:10,976", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:11,491", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:11,929", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:12,337", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:12,780", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:13,185", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:13,618", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:14,047", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:14,455", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:14,886", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:15,385", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:15,847", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:16,348", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:16,816", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:17,235", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:17,649", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:18,228", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:18,721", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:19,137", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:19,564", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:19,972", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:20,378", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:20,885", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:21,496", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:22,035", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:22,612", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:23,084", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:23,682", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:24,151", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:24,602", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:25,121", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:25,617", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:26,197", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:26,688", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:27,107", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:27,567", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:28,042", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:28,595", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:29,090", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:29,504", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:29,997", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:30,425", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 16:31:30,850", "level": "ERROR", "message": "Trial falhou: \"['bbands_20_2.0_bbp'] not in index\""}
+{"timestamp": "2025-08-01 17:02:37,792", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:38,154", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:38,521", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:38,893", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:39,261", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:39,614", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:39,957", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:40,301", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:40,649", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:40,989", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:41,363", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:41,742", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:42,095", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:42,458", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:42,831", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:43,185", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:43,592", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:43,965", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:44,335", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:44,693", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:45,064", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:45,438", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:45,806", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:46,180", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:46,553", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:46,920", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:47,287", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:47,658", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:48,033", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:48,396", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:48,760", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:49,125", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:49,526", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:50,021", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:50,475", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:50,966", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:51,353", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:51,738", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:52,114", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:52,500", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:52,898", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:53,260", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:53,651", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:54,031", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:54,410", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:54,787", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:55,169", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:55,566", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:55,948", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:56,331", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:56,767", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:57,330", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:57,910", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:58,294", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:58,685", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:59,058", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:59,436", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:02:59,809", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:00,205", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:00,585", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:00,982", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:01,366", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:01,749", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:02,132", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:02,519", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:03,084", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:03,479", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:03,859", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:04,251", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:04,659", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:05,050", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:05,437", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:05,858", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:06,260", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:06,635", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:07,002", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:07,401", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:07,835", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:08,257", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:08,664", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:09,066", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:09,461", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:09,849", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:10,234", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:10,613", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:10,996", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:11,375", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:11,752", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:12,133", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:12,522", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:12,908", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:13,293", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:13,684", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:14,075", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:14,451", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:14,828", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:15,215", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:15,585", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:15,968", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:03:16,354", "level": "ERROR", "message": "Trial falhou: \"['funding_rate_mean_24h', 'open_interest_pct_change_4h', 'fng_change_3d'] not in index\""}
+{"timestamp": "2025-08-01 17:20:06,472", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Fri, 01 Aug 2025 17:20:06 GMT', 'Content-Length': '246'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"fear_and_greed\\\" on measurement \\\"sentiment_fear_and_greed\\\" is type float, already exists as type integer dropped=1\"}\n"}
+{"timestamp": "2025-08-01 17:20:07,373", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (44640 linhas) para o per\u00edodo 2018-01. A saltar lote."}
+{"timestamp": "2025-08-01 17:20:15,453", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:20:15,453", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:20:15,454", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:20:15,603", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:20:15,604", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:20:15,606", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:21:33,737", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:21:33,737", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:21:33,738", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:21:33,898", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:21:33,899", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:21:33,900", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:22:54,112", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:22:54,113", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:22:54,114", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:22:54,251", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:22:54,252", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:22:54,252", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:24:11,802", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:24:11,803", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:24:11,803", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:24:11,965", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:24:11,966", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:24:11,967", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:25:27,594", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:25:27,595", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:25:27,595", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:25:27,725", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:25:27,726", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:25:27,727", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:26:42,164", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:26:42,165", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:26:42,165", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:26:42,286", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:26:42,287", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:26:42,288", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:28:01,213", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:28:01,214", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:28:01,215", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:28:01,394", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:28:01,396", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:28:01,397", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:29:38,542", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:29:38,543", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:29:38,544", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:29:38,692", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:29:38,693", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:29:38,694", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:31:04,968", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:31:04,969", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:31:04,969", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:31:05,144", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:31:05,146", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:31:05,148", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:32:27,941", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:32:27,942", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:32:27,943", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:32:28,077", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:32:28,078", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:32:28,080", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:33:49,891", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:33:49,892", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:33:49,893", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:33:50,034", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:33:50,035", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:33:50,037", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:35:12,877", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:35:12,878", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:35:12,879", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:35:13,006", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:35:13,007", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:35:13,008", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:36:32,571", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:36:32,571", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:36:32,572", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:36:32,698", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:36:32,699", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:36:32,700", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:37:44,998", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:37:44,999", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:37:44,999", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:37:45,145", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:37:45,145", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:37:45,146", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:39:03,101", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:39:03,102", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:39:03,103", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:39:03,207", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:39:03,208", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:39:03,208", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:40:19,852", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:40:19,853", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:40:19,854", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:40:20,061", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:40:20,062", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:40:20,063", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:41:41,357", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:41:41,358", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:41:41,359", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:41:41,469", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:41:41,470", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:41:41,471", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:42:56,822", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:42:56,823", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:42:56,823", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:42:56,975", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:42:56,976", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:42:56,977", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:44:15,956", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:44:15,956", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:44:15,957", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:44:16,098", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:44:16,103", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:44:16,104", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:45:33,241", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:45:33,242", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:45:33,242", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:45:33,395", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:45:33,396", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:45:33,397", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:46:46,228", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:46:46,229", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:46:46,229", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:46:46,360", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:46:46,362", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:46:46,363", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:48:01,289", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:48:01,290", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:48:01,290", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:48:01,403", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:48:01,404", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:48:01,405", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:49:14,325", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:49:14,326", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:49:14,327", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:49:14,481", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:49:14,482", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:49:14,483", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:50:27,627", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:50:27,628", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:50:27,629", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:50:27,785", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:50:27,786", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:50:27,787", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:51:41,924", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:51:41,925", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:51:41,925", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:51:42,050", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:51:42,051", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:51:42,051", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:52:53,748", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:52:53,749", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:52:53,749", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:52:53,927", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:52:53,928", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:52:53,929", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:54:10,456", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:54:10,457", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:54:10,458", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:54:10,593", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:54:10,594", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:54:10,595", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:55:26,646", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:55:26,647", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:55:26,647", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:55:26,787", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:55:26,788", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:55:26,789", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:56:42,496", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:56:42,497", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:56:42,497", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:56:42,609", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:56:42,610", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:56:42,611", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:57:55,547", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:57:55,547", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:57:55,548", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:57:55,702", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:57:55,703", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:57:55,704", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:59:10,107", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 17:59:10,107", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 17:59:10,108", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 17:59:10,266", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:59:10,267", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 17:59:10,268", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:00:25,471", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 18:00:25,472", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 18:00:25,472", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 18:00:25,618", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:00:25,619", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:00:25,620", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:01:39,486", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 18:01:39,487", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 18:01:39,487", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 18:01:39,608", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:01:39,608", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:01:39,609", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:02:55,027", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 18:02:55,027", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 18:02:55,028", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 18:02:55,135", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:02:55,136", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:02:55,136", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:04:15,411", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 18:04:15,412", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 18:04:15,412", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 18:04:15,568", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:04:15,569", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:04:15,570", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:05:36,593", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 18:05:36,594", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 18:05:36,594", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 18:05:36,721", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:05:36,722", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:05:36,723", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:06:57,368", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 18:06:57,369", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 18:06:57,369", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 18:06:57,500", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:06:57,501", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:06:57,502", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:08:13,666", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 18:08:13,666", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 18:08:13,667", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 18:08:13,825", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:08:13,825", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:08:13,826", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:09:32,843", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 18:09:32,843", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 18:09:32,844", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 18:09:32,993", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:09:32,994", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:09:32,995", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:10:52,848", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 18:10:52,849", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 18:10:52,850", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 18:10:53,000", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:10:53,001", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:10:53,002", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:12:09,581", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 18:12:09,581", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 18:12:09,582", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 18:12:09,703", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:12:09,704", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:12:09,705", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:13:25,672", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 18:13:25,673", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 18:13:25,673", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 18:13:25,824", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:13:25,825", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:13:25,826", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:32:29,086", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (44640 linhas) para o per\u00edodo 2018-01. A saltar lote."}
+{"timestamp": "2025-08-01 18:32:36,803", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 18:32:36,803", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 18:32:36,804", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 18:32:36,953", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:32:36,954", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:32:36,955", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:33:47,703", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 18:33:47,704", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 18:33:47,705", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 18:33:47,893", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:33:47,894", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:33:47,895", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:35:05,213", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 18:35:05,214", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 18:35:05,215", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 18:35:05,368", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:35:05,369", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:35:05,370", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:36:19,048", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 18:36:19,049", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 18:36:19,050", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 18:36:19,198", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:36:19,199", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:36:19,200", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:37:38,094", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 18:37:38,096", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 18:37:38,097", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 18:37:38,291", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:37:38,292", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:37:38,294", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:38:53,934", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 18:38:53,934", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 18:38:53,935", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 18:38:54,163", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:38:54,164", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:38:54,166", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:40:14,101", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 18:40:14,102", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 18:40:14,102", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 18:40:14,225", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:40:14,225", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:40:14,226", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:41:34,336", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 18:41:34,337", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 18:41:34,338", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 18:41:34,946", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:41:34,947", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:41:34,949", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:43:05,775", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 18:43:05,776", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 18:43:05,777", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 18:43:05,903", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:43:05,903", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:43:05,904", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:44:29,309", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 18:44:29,310", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 18:44:29,310", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 18:44:29,660", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:44:29,661", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:44:29,662", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:45:19,333", "level": "ERROR", "message": "\u274c FALHA NA CONEX\u00c3O com a Binance: Session.request() got an unexpected keyword argument 'api_url'."}
+{"timestamp": "2025-08-01 18:46:43,492", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (44640 linhas) para o per\u00edodo 2018-01. A saltar lote."}
+{"timestamp": "2025-08-01 18:46:51,757", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:46:51,758", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:46:51,759", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:48:03,403", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:48:03,404", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:48:03,405", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:49:21,726", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:49:21,727", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:49:21,728", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:51:43,852", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (44640 linhas) para o per\u00edodo 2018-01. A saltar lote."}
+{"timestamp": "2025-08-01 18:51:52,269", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 18:51:52,270", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 18:51:52,271", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 18:51:52,468", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:51:52,469", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:51:52,470", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:53:01,196", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 18:53:01,196", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 18:53:01,197", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 18:53:01,358", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:53:01,360", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:53:01,361", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:54:17,431", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 18:54:17,432", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 18:54:17,432", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 18:54:17,545", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:54:17,546", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:54:17,547", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:55:34,249", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 18:55:34,249", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 18:55:34,250", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 18:55:34,387", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:55:34,388", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:55:34,389", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:59:03,723", "level": "ERROR", "message": "Erro ao buscar o \u00faltimo timestamp do InfluxDB: (500)\nReason: Internal Server Error\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'Vary': 'Accept-Encoding', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'internal error', 'Date': 'Fri, 01 Aug 2025 18:59:03 GMT', 'Transfer-Encoding': 'chunked'})\nHTTP response body: b'{\"code\":\"internal error\",\"message\":\"panic: unreachable: \\\\u003cnil\\\\u003e\"}'\n"}
+{"timestamp": "2025-08-01 18:59:04,386", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Fri, 01 Aug 2025 18:59:04 GMT', 'Content-Length': '248'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"fear_and_greed\\\" on measurement \\\"sentiment_fear_and_greed\\\" is type float, already exists as type integer dropped=500\"}\n"}
+{"timestamp": "2025-08-01 18:59:05,383", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (44640 linhas) para o per\u00edodo 2018-01. A saltar lote."}
+{"timestamp": "2025-08-01 18:59:15,305", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 18:59:15,306", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 18:59:15,307", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 18:59:15,545", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:59:15,546", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 18:59:15,548", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:00:57,237", "level": "ERROR", "message": "Erro ao buscar o \u00faltimo timestamp do InfluxDB: (500)\nReason: Internal Server Error\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'Vary': 'Accept-Encoding', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'internal error', 'Date': 'Fri, 01 Aug 2025 19:00:57 GMT', 'Transfer-Encoding': 'chunked'})\nHTTP response body: b'{\"code\":\"internal error\",\"message\":\"panic: unreachable: \\\\u003cnil\\\\u003e\"}'\n"}
+{"timestamp": "2025-08-01 19:00:57,879", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Fri, 01 Aug 2025 19:00:57 GMT', 'Content-Length': '248'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"fear_and_greed\\\" on measurement \\\"sentiment_fear_and_greed\\\" is type float, already exists as type integer dropped=500\"}\n"}
+{"timestamp": "2025-08-01 19:00:58,756", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (44640 linhas) para o per\u00edodo 2018-01. A saltar lote."}
+{"timestamp": "2025-08-01 19:01:06,780", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 19:01:06,781", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 19:01:06,781", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 19:01:06,930", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:01:06,930", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:01:06,931", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:02:17,288", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 19:02:17,288", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 19:02:17,289", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 19:02:17,452", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:02:17,453", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:02:17,454", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:03:40,426", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 19:03:40,426", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 19:03:40,427", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 19:03:40,567", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:03:40,568", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:03:40,569", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:05:02,617", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 19:05:02,617", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 19:05:02,618", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 19:05:02,768", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:05:02,769", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:05:02,769", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:06:19,863", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 19:06:19,864", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 19:06:19,864", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 19:06:19,986", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:06:19,987", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:06:19,988", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:07:22,610", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Fri, 01 Aug 2025 19:07:22 GMT', 'Content-Length': '245'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"market_regime\\\" on measurement \\\"features_master_table\\\" is type integer, already exists as type string dropped=490\"}\n"}
+{"timestamp": "2025-08-01 19:07:31,294", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 19:07:31,295", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 19:07:31,296", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 19:07:31,419", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:07:31,420", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:07:31,420", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:08:11,970", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Fri, 01 Aug 2025 19:08:11 GMT', 'Content-Length': '245'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"market_regime\\\" on measurement \\\"features_master_table\\\" is type integer, already exists as type string dropped=500\"}\n"}
+{"timestamp": "2025-08-01 19:10:25,464", "level": "ERROR", "message": "Erro ao buscar o \u00faltimo timestamp do InfluxDB: (500)\nReason: Internal Server Error\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'Vary': 'Accept-Encoding', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'internal error', 'Date': 'Fri, 01 Aug 2025 19:10:25 GMT', 'Transfer-Encoding': 'chunked'})\nHTTP response body: b'{\"code\":\"internal error\",\"message\":\"panic: unreachable: \\\\u003cnil\\\\u003e\"}'\n"}
+{"timestamp": "2025-08-01 19:10:26,082", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Fri, 01 Aug 2025 19:10:26 GMT', 'Content-Length': '248'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"fear_and_greed\\\" on measurement \\\"sentiment_fear_and_greed\\\" is type float, already exists as type integer dropped=500\"}\n"}
+{"timestamp": "2025-08-01 19:10:26,871", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (44640 linhas) para o per\u00edodo 2018-01. A saltar lote."}
+{"timestamp": "2025-08-01 19:10:34,556", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 19:10:34,556", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 19:10:34,557", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 19:10:34,696", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:10:34,697", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:10:34,698", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:11:44,890", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 19:11:44,890", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 19:11:44,891", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 19:11:45,046", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:11:45,047", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:11:45,047", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:14:17,081", "level": "ERROR", "message": "Erro ao buscar o \u00faltimo timestamp do InfluxDB: (500)\nReason: Internal Server Error\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'Vary': 'Accept-Encoding', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'internal error', 'Date': 'Fri, 01 Aug 2025 19:14:17 GMT', 'Transfer-Encoding': 'chunked'})\nHTTP response body: b'{\"code\":\"internal error\",\"message\":\"panic: unreachable: \\\\u003cnil\\\\u003e\"}'\n"}
+{"timestamp": "2025-08-01 19:14:17,726", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Fri, 01 Aug 2025 19:14:17 GMT', 'Content-Length': '248'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"fear_and_greed\\\" on measurement \\\"sentiment_fear_and_greed\\\" is type float, already exists as type integer dropped=500\"}\n"}
+{"timestamp": "2025-08-01 19:14:26,360", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 19:14:26,361", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 19:14:26,362", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 19:14:26,543", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:14:26,543", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:14:26,544", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:15:46,008", "level": "ERROR", "message": "Falha ao buscar dados de derivativos: 'Client' object has no attribute 'fapi_get...'."}
+{"timestamp": "2025-08-01 19:15:46,008", "level": "WARNING", "message": "Este erro geralmente ocorre devido a uma vers\u00e3o desatualizada da biblioteca 'python-binance'."}
+{"timestamp": "2025-08-01 19:15:46,009", "level": "WARNING", "message": "O pipeline continuar\u00e1 sem dados de derivativos para este lote."}
+{"timestamp": "2025-08-01 19:15:46,182", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:15:46,184", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:15:46,185", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:17:30,161", "level": "ERROR", "message": "Erro ao buscar o \u00faltimo timestamp do InfluxDB: (500)\nReason: Internal Server Error\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'Vary': 'Accept-Encoding', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'internal error', 'Date': 'Fri, 01 Aug 2025 19:17:30 GMT', 'Transfer-Encoding': 'chunked'})\nHTTP response body: b'{\"code\":\"internal error\",\"message\":\"panic: unreachable: \\\\u003cnil\\\\u003e\"}'\n"}
+{"timestamp": "2025-08-01 19:17:30,810", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Fri, 01 Aug 2025 19:17:30 GMT', 'Content-Length': '248'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"fear_and_greed\\\" on measurement \\\"sentiment_fear_and_greed\\\" is type float, already exists as type integer dropped=500\"}\n"}
+{"timestamp": "2025-08-01 19:17:40,510", "level": "ERROR", "message": "Erro de rede ao buscar Open Interest: 404 Client Error: Not Found for url: https://fapi.binance.com/fapi/v1/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1669507200000&endTime=1675209600000&limit=500"}
+{"timestamp": "2025-08-01 19:17:40,715", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:17:40,719", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:19:05,735", "level": "ERROR", "message": "Erro de rede ao buscar Open Interest: 404 Client Error: Not Found for url: https://fapi.binance.com/fapi/v1/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1672185600000&endTime=1677628800000&limit=500"}
+{"timestamp": "2025-08-01 19:19:05,905", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:19:05,908", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:21:49,661", "level": "ERROR", "message": "Erro ao buscar o \u00faltimo timestamp do InfluxDB: (500)\nReason: Internal Server Error\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'Vary': 'Accept-Encoding', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'internal error', 'Date': 'Fri, 01 Aug 2025 19:21:49 GMT', 'Transfer-Encoding': 'chunked'})\nHTTP response body: b'{\"code\":\"internal error\",\"message\":\"panic: unreachable: \\\\u003cnil\\\\u003e\"}'\n"}
+{"timestamp": "2025-08-01 19:21:50,277", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Fri, 01 Aug 2025 19:21:50 GMT', 'Content-Length': '248'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"fear_and_greed\\\" on measurement \\\"sentiment_fear_and_greed\\\" is type float, already exists as type integer dropped=500\"}\n"}
+{"timestamp": "2025-08-01 19:22:00,167", "level": "ERROR", "message": "Erro de rede ao buscar Open Interest: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1669507200000&endTime=1675209600000&limit=500"}
+{"timestamp": "2025-08-01 19:22:00,370", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:22:00,373", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:23:19,099", "level": "ERROR", "message": "Erro de rede ao buscar Open Interest: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1672185600000&endTime=1677628800000&limit=500"}
+{"timestamp": "2025-08-01 19:23:19,255", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:23:19,259", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:24:46,559", "level": "ERROR", "message": "Erro de rede ao buscar Open Interest: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1674604800000&endTime=1680307200000&limit=500"}
+{"timestamp": "2025-08-01 19:24:46,707", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:24:46,711", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:26:07,037", "level": "ERROR", "message": "Erro de rede ao buscar Open Interest: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1677283200000&endTime=1682899200000&limit=500"}
+{"timestamp": "2025-08-01 19:26:07,198", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:26:07,201", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:28:35,517", "level": "ERROR", "message": "Erro ao buscar o \u00faltimo timestamp do InfluxDB: (500)\nReason: Internal Server Error\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'Vary': 'Accept-Encoding', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'internal error', 'Date': 'Fri, 01 Aug 2025 19:28:35 GMT', 'Transfer-Encoding': 'chunked'})\nHTTP response body: b'{\"code\":\"internal error\",\"message\":\"panic: unreachable: \\\\u003cnil\\\\u003e\"}'\n"}
+{"timestamp": "2025-08-01 19:28:36,155", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Fri, 01 Aug 2025 19:28:36 GMT', 'Content-Length': '249'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"fear_and_greed\\\" on measurement \\\"sentiment_fear_and_greed\\\" is type float, already exists as type integer dropped=1000\"}\n"}
+{"timestamp": "2025-08-01 19:31:42,425", "level": "ERROR", "message": "Erro ao buscar o \u00faltimo timestamp do InfluxDB: (500)\nReason: Internal Server Error\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'Vary': 'Accept-Encoding', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'internal error', 'Date': 'Fri, 01 Aug 2025 19:31:42 GMT', 'Transfer-Encoding': 'chunked'})\nHTTP response body: b'{\"code\":\"internal error\",\"message\":\"panic: unreachable: \\\\u003cnil\\\\u003e\"}'\n"}
+{"timestamp": "2025-08-01 19:31:43,076", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Fri, 01 Aug 2025 19:31:43 GMT', 'Content-Length': '249'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"fear_and_greed\\\" on measurement \\\"sentiment_fear_and_greed\\\" is type float, already exists as type integer dropped=1000\"}\n"}
+{"timestamp": "2025-08-01 19:31:52,950", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2021-11-27 - 2021-12-27. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:31:52,953", "level": "ERROR", "message": "Falha no lote de OI de 2021-11-27 a 2021-12-27: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1637971200000&endTime=1640563200000&limit=500"}
+{"timestamp": "2025-08-01 19:31:58,917", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2021-12-27 - 2022-01-26. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:31:58,920", "level": "ERROR", "message": "Falha no lote de OI de 2021-12-27 a 2022-01-26: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1640563201000&endTime=1643155201000&limit=500"}
+{"timestamp": "2025-08-01 19:32:04,839", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2022-01-26 - 2022-02-01. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:32:04,841", "level": "ERROR", "message": "Falha no lote de OI de 2022-01-26 a 2022-02-01: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1643155202000&endTime=1643673600000&limit=500"}
+{"timestamp": "2025-08-01 19:32:10,520", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:32:10,524", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:33:23,960", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2021-12-28 - 2022-01-27. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:33:23,960", "level": "ERROR", "message": "Falha no lote de OI de 2021-12-28 a 2022-01-27: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1640649600000&endTime=1643241600000&limit=500"}
+{"timestamp": "2025-08-01 19:33:29,920", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2022-01-27 - 2022-02-26. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:33:29,921", "level": "ERROR", "message": "Falha no lote de OI de 2022-01-27 a 2022-02-26: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1643241601000&endTime=1645833601000&limit=500"}
+{"timestamp": "2025-08-01 19:33:35,881", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2022-02-26 - 2022-03-01. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:33:35,884", "level": "ERROR", "message": "Falha no lote de OI de 2022-02-26 a 2022-03-01: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1645833602000&endTime=1646092800000&limit=500"}
+{"timestamp": "2025-08-01 19:33:41,519", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:33:41,522", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:35:47,550", "level": "ERROR", "message": "Erro ao buscar o \u00faltimo timestamp do InfluxDB: (500)\nReason: Internal Server Error\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'Vary': 'Accept-Encoding', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'internal error', 'Date': 'Fri, 01 Aug 2025 19:35:47 GMT', 'Transfer-Encoding': 'chunked'})\nHTTP response body: b'{\"code\":\"internal error\",\"message\":\"panic: unreachable: \\\\u003cnil\\\\u003e\"}'\n"}
+{"timestamp": "2025-08-01 19:35:48,351", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Fri, 01 Aug 2025 19:35:48 GMT', 'Content-Length': '249'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"fear_and_greed\\\" on measurement \\\"sentiment_fear_and_greed\\\" is type float, already exists as type integer dropped=1000\"}\n"}
+{"timestamp": "2025-08-01 19:35:57,909", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2023-06-27 - 2023-07-27. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:35:57,912", "level": "ERROR", "message": "Falha no lote de OI de 2023-06-27 a 2023-07-27: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1687824000000&endTime=1690416000000&limit=500"}
+{"timestamp": "2025-08-01 19:35:58,093", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:35:58,097", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:37:04,795", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2023-07-28 - 2023-08-27. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:37:04,797", "level": "ERROR", "message": "Falha no lote de OI de 2023-07-28 a 2023-08-27: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1690502400000&endTime=1693094400000&limit=500"}
+{"timestamp": "2025-08-01 19:37:04,951", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:37:04,954", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:38:15,194", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2023-08-27 - 2023-09-26. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:38:15,196", "level": "ERROR", "message": "Falha no lote de OI de 2023-08-27 a 2023-09-26: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1693094400000&endTime=1695686400000&limit=500"}
+{"timestamp": "2025-08-01 19:38:15,342", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:38:15,346", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:40:29,367", "level": "ERROR", "message": "Erro ao buscar o \u00faltimo timestamp do InfluxDB: (500)\nReason: Internal Server Error\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'Vary': 'Accept-Encoding', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'internal error', 'Date': 'Fri, 01 Aug 2025 19:40:29 GMT', 'Transfer-Encoding': 'chunked'})\nHTTP response body: b'{\"code\":\"internal error\",\"message\":\"panic: unreachable: \\\\u003cnil\\\\u003e\"}'\n"}
+{"timestamp": "2025-08-01 19:40:30,018", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Fri, 01 Aug 2025 19:40:30 GMT', 'Content-Length': '249'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"fear_and_greed\\\" on measurement \\\"sentiment_fear_and_greed\\\" is type float, already exists as type integer dropped=2000\"}\n"}
+{"timestamp": "2025-08-01 19:40:40,154", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2023-06-27 - 2023-07-27. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:40:40,157", "level": "ERROR", "message": "Falha no lote de OI de 2023-06-27 a 2023-07-27: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1687824000000&endTime=1690416000000&limit=500"}
+{"timestamp": "2025-08-01 19:40:40,333", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:40:40,336", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:41:41,477", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2023-07-28 - 2023-08-27. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:41:41,481", "level": "ERROR", "message": "Falha no lote de OI de 2023-07-28 a 2023-08-27: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1690502400000&endTime=1693094400000&limit=500"}
+{"timestamp": "2025-08-01 19:41:41,630", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:41:41,633", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:42:43,673", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2023-08-27 - 2023-09-26. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:42:43,674", "level": "ERROR", "message": "Falha no lote de OI de 2023-08-27 a 2023-09-26: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1693094400000&endTime=1695686400000&limit=500"}
+{"timestamp": "2025-08-01 19:42:43,863", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:42:43,867", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:43:48,137", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2023-09-27 - 2023-10-27. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:43:48,138", "level": "ERROR", "message": "Falha no lote de OI de 2023-09-27 a 2023-10-27: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1695772800000&endTime=1698364800000&limit=500"}
+{"timestamp": "2025-08-01 19:43:48,272", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:43:48,276", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:44:49,718", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2023-10-27 - 2023-11-26. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:44:49,719", "level": "ERROR", "message": "Falha no lote de OI de 2023-10-27 a 2023-11-26: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1698364800000&endTime=1700956800000&limit=500"}
+{"timestamp": "2025-08-01 19:44:49,901", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:44:49,904", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:45:52,153", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2023-11-27 - 2023-12-27. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:45:52,155", "level": "ERROR", "message": "Falha no lote de OI de 2023-11-27 a 2023-12-27: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1701043200000&endTime=1703635200000&limit=500"}
+{"timestamp": "2025-08-01 19:45:52,454", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:45:52,461", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:46:58,704", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2023-12-28 - 2024-01-27. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:46:58,705", "level": "ERROR", "message": "Falha no lote de OI de 2023-12-28 a 2024-01-27: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1703721600000&endTime=1706313600000&limit=500"}
+{"timestamp": "2025-08-01 19:46:58,912", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:46:58,916", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:48:04,305", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2024-01-26 - 2024-02-25. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:48:04,307", "level": "ERROR", "message": "Falha no lote de OI de 2024-01-26 a 2024-02-25: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1706227200000&endTime=1708819200000&limit=500"}
+{"timestamp": "2025-08-01 19:48:04,452", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:48:04,455", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:49:09,792", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2024-02-26 - 2024-03-27. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:49:09,794", "level": "ERROR", "message": "Falha no lote de OI de 2024-02-26 a 2024-03-27: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1708905600000&endTime=1711497600000&limit=500"}
+{"timestamp": "2025-08-01 19:49:09,954", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:49:09,957", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:50:15,846", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2024-03-27 - 2024-04-26. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:50:15,847", "level": "ERROR", "message": "Falha no lote de OI de 2024-03-27 a 2024-04-26: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1711497600000&endTime=1714089600000&limit=500"}
+{"timestamp": "2025-08-01 19:50:16,048", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:50:16,051", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:51:21,750", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2024-04-27 - 2024-05-27. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:51:21,752", "level": "ERROR", "message": "Falha no lote de OI de 2024-04-27 a 2024-05-27: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1714176000000&endTime=1716768000000&limit=500"}
+{"timestamp": "2025-08-01 19:51:22,043", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:51:22,046", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:52:27,823", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2024-05-27 - 2024-06-26. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:52:27,824", "level": "ERROR", "message": "Falha no lote de OI de 2024-05-27 a 2024-06-26: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1716768000000&endTime=1719360000000&limit=500"}
+{"timestamp": "2025-08-01 19:52:27,992", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:52:27,996", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:53:36,628", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2024-06-27 - 2024-07-27. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:53:36,629", "level": "ERROR", "message": "Falha no lote de OI de 2024-06-27 a 2024-07-27: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1719446400000&endTime=1722038400000&limit=500"}
+{"timestamp": "2025-08-01 19:53:36,887", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:53:36,891", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:54:44,113", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2024-07-28 - 2024-08-27. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:54:44,116", "level": "ERROR", "message": "Falha no lote de OI de 2024-07-28 a 2024-08-27: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1722124800000&endTime=1724716800000&limit=500"}
+{"timestamp": "2025-08-01 19:54:44,254", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:54:44,257", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:55:48,075", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2024-08-27 - 2024-09-26. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:55:48,077", "level": "ERROR", "message": "Falha no lote de OI de 2024-08-27 a 2024-09-26: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1724716800000&endTime=1727308800000&limit=500"}
+{"timestamp": "2025-08-01 19:55:48,274", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:55:48,277", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:56:52,252", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2024-09-27 - 2024-10-27. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:56:52,253", "level": "ERROR", "message": "Falha no lote de OI de 2024-09-27 a 2024-10-27: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1727395200000&endTime=1729987200000&limit=500"}
+{"timestamp": "2025-08-01 19:56:52,513", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:56:52,517", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:57:54,828", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2024-10-27 - 2024-11-26. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:57:54,829", "level": "ERROR", "message": "Falha no lote de OI de 2024-10-27 a 2024-11-26: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1729987200000&endTime=1732579200000&limit=500"}
+{"timestamp": "2025-08-01 19:57:55,004", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:57:55,008", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:59:01,714", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2024-11-27 - 2024-12-27. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-01 19:59:01,716", "level": "ERROR", "message": "Falha no lote de OI de 2024-11-27 a 2024-12-27: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1732665600000&endTime=1735257600000&limit=500"}
+{"timestamp": "2025-08-01 19:59:02,144", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-01 19:59:02,147", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
