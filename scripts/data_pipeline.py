@@ -88,7 +88,7 @@ class DataPipeline:
             logger.error(f"❌ Falha no pipeline de Sentimento: {e}", exc_info=True)
 
 
-    def _write_dataframe_to_influx(self, df: pd.DataFrame, measurement: str, batch_size: int = 1000):
+    def _write_dataframe_to_influx(self, df: pd.DataFrame, measurement: str, batch_size: int = 500):
         write_api = db_manager.get_write_api()
         if not write_api:
             logger.error(f"API de escrita do InfluxDB indisponível. Escrita para '{measurement}' abortada.")
@@ -115,7 +115,7 @@ class DataPipeline:
                 )
                 del batch
                 gc.collect()
-                time.sleep(0.1)
+                time.sleep(0.2)
 
             logger.info(f"✅ Escrita para '{measurement}' concluída com sucesso.")
         except Exception as e:
