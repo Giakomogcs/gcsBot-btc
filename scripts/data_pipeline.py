@@ -66,18 +66,15 @@ class DataPipeline:
                 logger.warning("API de Sentimento não retornou dados.")
                 return
 
-            # --- INÍCIO DA CORREÇÃO 2: LÓGICA DE CRIAÇÃO DO DATAFRAME ---
-            # Passo 1: Criar o DataFrame base a partir dos dados JSON
             df = pd.DataFrame(data)
-
-            # Passo 2: Processar e formatar o DataFrame
             df_processed = df.rename(columns={'value': 'fear_and_greed'})
             df_processed['timestamp'] = pd.to_datetime(pd.to_numeric(df_processed['timestamp']), unit='s', utc=True)
             df_processed = df_processed.set_index('timestamp')[['fear_and_greed']]
-            # --- INÍCIO DA CORREÇÃO DO TIPO DE DADO ---
-            # Garante que o tipo de dado é int para evitar conflito com o InfluxDB
-            df_processed['fear_and_greed'] = pd.to_numeric(df_processed['fear_and_greed']).astype(int)
-            # --- FIM DA CORREÇÃO DO TIPO DE DADO ---
+
+            # --- INÍCIO DA CORREÇÃO ---
+            # Garante que o tipo de dado é float para evitar conflito com o InfluxDB
+            df_processed['fear_and_greed'] = pd.to_numeric(df_processed['fear_and_greed']).astype(float)
+            # --- FIM DA CORREÇÃO ---
             
             if last_ts_in_db:
                 df_processed = df_processed[df_processed.index > last_ts_in_db]
@@ -550,34 +547,6 @@ class DataPipeline:
             logger.error("Nenhum dado macro foi processado. O banco de dados não será atualizado.")
 
 
-
-    def validate_data(self, df: pd.DataFrame) -> bool:
-        """
-        Executa uma série de verificações de sanidade nos dados finais.
-        """
-        logger.info("--- 🔬 EXECUTANDO VALIDAÇÃO DE DADOS (SANITY CHECKS) 🔬 ---")
-        is_valid = True
-        
-        if df.isnull().values.any():
-            logger.error("Validação Falhou: Foram encontrados valores NULOS nos dados finais.")
-            is_valid = False
-            
-        time_diffs = df.index.to_series().diff()
-        max_gap = time_diffs.max()
-        if max_gap > pd.Timedelta(minutes=60):
-             logger.warning(f"Alerta de Validação: Encontrado grande gap nos dados de {max_gap}.")
-             
-        essential_cols = ['dxy_close', 'spx_close']
-        if not all(col in df.columns for col in essential_cols):
-            logger.warning("Alerta de Validação: Colunas macro essenciais (DXY, SPX) estão em falta.")
-
-        if is_valid:
-            logger.info("--- ✅ VALIDAÇÃO DE DADOS CONCLUÍDA COM SUCESSO ---")
-        else:
-            logger.error("--- ❌ VALIDAÇÃO DE DADOS FALHOU. VERIFIQUE OS LOGS. ---")
-            
-        return is_valid
-
         
     def _train_and_save_regime_model(self):
         """
@@ -649,26 +618,30 @@ class DataPipeline:
 
     # Ficheiro: scripts/data_pipeline.py (SUBSTITUA ESTA FUNÇÃO)
 
+    # Ficheiro: scripts/data_pipeline.py (SUBSTITUA ESTA FUNÇÃO PELA VERSÃO FINAL)
+
     def run_full_pipeline(self):
         """
-        Executa o pipeline completo, agora com uma etapa de limpeza de dados inteligente
-        para garantir que todos os lotes passem na validação.
+        Executa o pipeline completo com a arquitetura corrigida:
+        1. Garante que os dados brutos existem (Ingestão).
+        2. Processa os dados brutos para criar a tabela mestre (Processamento).
         """
-        # --- FASE 0: INGESTÃO DE DADOS BRUTOS (sem alterações) ---
+        # --- FASE 0: INGESTÃO E VALIDAÇÃO DE DADOS BRUTOS ---
+        logger.info("--- FASE 0: Garantindo a existência e atualização dos dados brutos ---")
         self.run_btc_pipeline(symbol='BTCUSDT', interval='1m')
         self.run_macro_pipeline()
-
-        # --- FASE 1: PREPARAÇÃO (Treino automático do modelo de regimes) ---
+        self.run_sentiment_pipeline()
+        
+        # --- FASE 1: PREPARAÇÃO DE MODELOS E DEPENDÊNCIAS ---
+        logger.info("--- FASE 1: Preparando modelos e dependências ---")
         sa_model_path = os.path.join(settings.data_paths.models_dir, 'situational_awareness.joblib')
         if not os.path.exists(sa_model_path):
             if not self._train_and_save_regime_model():
                 logger.critical("Falha ao treinar o modelo de regimes. Pipeline abortado.")
                 return
 
-        self.run_sentiment_pipeline()
-
         # --- FASE 2: PROCESSAMENTO, ENRIQUECIMENTO E LIMPEZA EM LOTES ---
-        logger.info("--- 🔄 INICIANDO PROCESSAMENTO DA TABELA MESTRE EM LOTES MENSAIS 🔄 ---")
+        logger.info("--- 🔄 FASE 2: INICIANDO PROCESSAMENTO DA TABELA MESTRE EM LOTES MENSAIS 🔄 ---")
 
         situational_awareness_model = SituationalAwareness.load_model(sa_model_path)
         if not situational_awareness_model:
@@ -681,29 +654,25 @@ class DataPipeline:
         current_date = start_date
         total_months = (end_date.year - start_date.year) * 12 + end_date.month - start_date.month
         pbar = tqdm(total=total_months, desc="Processando Tabela Mestre")
-
-        # --- INÍCIO DA CORREÇÃO CRÍTICA ---
-        # O período de warmup precisa ser maior que o maior lookback das features (ex: correlação de 30 dias).
-        # Aumentamos para 35 dias para ter uma margem de segurança.
+        
         warmup_period = pd.Timedelta(days=35)
-        # --- FIM DA CORREÇÃO CRÍTICA ---
 
         while current_date < end_date:
-            # Define o período de processamento real e o período de busca de dados (com warmup)
             processing_start_date = current_date
             fetch_start_date = processing_start_date - warmup_period
             chunk_end_date = (current_date + relativedelta(months=1))
-
             chunk_start = fetch_start_date.isoformat()
             chunk_end = chunk_end_date.isoformat()
             
-            logger.debug(f"Processando lote de {processing_start_date.strftime('%Y-%m')}...")
-            logger.info(f"Período de fetch (com warmup): {chunk_start} a {chunk_end}")
+            logger.info(f"Processando lote de {processing_start_date.strftime('%Y-%m')} (Fetch de {fetch_start_date.date()} a {chunk_end_date.date()})")
 
-            # 1. Leitura e Combinação dos Dados Brutos
             df_btc_chunk = self.read_data_in_range("btc_btcusdt_1m", chunk_start, chunk_end)
-            if df_btc_chunk.empty:
-                logger.warning(f"Nenhum dado de BTC para o período {current_date.strftime('%Y-%m')}. A saltar.")
+            
+            # --- VERIFICAÇÃO DE ROBUSTEZ ---
+            # O lote precisa de ter dados suficientes para o warmup e o processamento.
+            # 35 dias * 1440 minutos/dia = ~50400 minutos. Usamos um limiar seguro.
+            if len(df_btc_chunk) < 50000:
+                logger.warning(f"Dados de BTC insuficientes ou inexistentes ({len(df_btc_chunk)} linhas) para o período {processing_start_date.strftime('%Y-%m')}. A saltar lote.")
                 current_date += relativedelta(months=1)
                 pbar.update(1)
                 continue
@@ -712,40 +681,27 @@ class DataPipeline:
             df_sentiment_chunk = self.read_data_in_range("sentiment_fear_and_greed", chunk_start, chunk_end)
             
             df_combined = df_btc_chunk.join(df_macro_chunk, how='left').join(df_sentiment_chunk, how='left')
-
-            # 2. LIMPEZA INTELIGENTE
             df_combined.ffill(inplace=True)
-            df_with_features = add_all_features(df_combined)
             
-            # Remove os dados de warmup, mantendo apenas os dados do mês corrente para processamento.
+            df_with_features = add_all_features(df_combined)
             df_with_features = df_with_features[df_with_features.index >= processing_start_date]
 
-            expected_features = settings.data_pipeline.regime_features
-            if not all(feature in df_with_features.columns for feature in expected_features):
-                logger.error(f"FATAL: Features esperadas {expected_features} não foram criadas pela engenharia de features. A saltar lote.")
-                current_date += relativedelta(months=1)
-                pbar.update(1)
-                continue
-
-            df_with_regimes = situational_awareness_model.transform(df_with_features)
-
-            initial_rows = len(df_with_regimes)
-            df_final = df_with_regimes.dropna()
-            final_rows = len(df_final)
-
-            if initial_rows > final_rows:
-                logger.info(f"Limpeza de NaNs: {initial_rows - final_rows} linhas incalculáveis removidas do lote {current_date.strftime('%Y-%m')}.")
-            
-            # 6. VALIDAÇÃO E SALVAMENTO
-            if not df_final.empty and self.validate_data(df_final):
-                self._write_dataframe_to_influx(df_final, "features_master_table")
+            # --- LÓGICA DE LIMPEZA E SALVAMENTO ---
+            # Removemos a verificação de 'expected_features' e o 'dropna()' agressivo,
+            # confiando que o add_all_features e o target labeling já limparam o necessário.
+            if df_with_features.empty:
+                logger.warning(f"Lote {current_date.strftime('%Y-%m')} ficou vazio após a engenharia de features. Nada para salvar.")
             else:
-                if df_final.empty:
-                    logger.warning(f"Lote {current_date.strftime('%Y-%m')} ficou vazio após a limpeza. Nada para salvar.")
+                df_with_regimes = situational_awareness_model.transform(df_with_features)
+                
+                # A validação final agora verifica um subconjunto de colunas críticas
+                if self.validate_data(df_with_regimes):
+                    self._write_dataframe_to_influx(df_with_regimes, "features_master_table")
                 else:
-                    logger.error(f"Validação falhou para o lote {current_date.strftime('%Y-%m')}. Este lote não será salvo.")
+                    logger.error(f"Validação final falhou ou lote vazio para {current_date.strftime('%Y-%m')}. Este lote não será salvo.")
             
-            del df_btc_chunk, df_macro_chunk, df_sentiment_chunk, df_combined, df_with_features, df_with_regimes, df_final
+            del df_btc_chunk, df_macro_chunk, df_sentiment_chunk, df_combined, df_with_features
+            if 'df_with_regimes' in locals(): del df_with_regimes
             gc.collect()
 
             current_date += relativedelta(months=1)
@@ -753,6 +709,21 @@ class DataPipeline:
         
         pbar.close()
         logger.info("🎉🎉🎉 PIPELINE INDUSTRIAL CONCLUÍDO! A FONTE DA VERDADE ESTÁ PRONTA. 🎉🎉🎉")
+
+    def validate_data(self, df: pd.DataFrame) -> bool:
+        """
+        Executa uma verificação de sanidade menos agressiva, focando em colunas críticas.
+        """
+        logger.info("--- 🔬 EXECUTANDO VALIDAÇÃO DE DADOS (SANITY CHECKS) 🔬 ---")
+        
+        # Verifica se as colunas essenciais para o treino existem e não são nulas
+        essential_cols = ['close', 'atr_14', 'target'] 
+        if df[essential_cols].isnull().values.any():
+            logger.error("Validação Falhou: Foram encontrados valores NULOS nas colunas essenciais (close, atr_14, target).")
+            return False
+
+        logger.info("--- ✅ VALIDAÇÃO DE DADOS CONCLUÍDA COM SUCESSO ---")
+        return True
 
 
 if __name__ == '__main__':

@@ -3670,3 +3670,403 @@
 {"timestamp": "2025-07-31 22:10:50,316", "level": "WARNING", "message": "Arquivos de modelo/scaler para o especialista 'intermarket_analyst' n\u00e3o encontrados."}
 {"timestamp": "2025-07-31 22:10:50,316", "level": "ERROR", "message": "Nenhum modelo de IA foi carregado. Execute o otimizador primeiro."}
 {"timestamp": "2025-07-31 22:10:50,317", "level": "ERROR", "message": "Nenhum modelo de IA foi carregado pelo EnsembleManager. Execute o otimizador primeiro."}
+{"timestamp": "2025-07-31 22:21:00,933", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:00,936", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:00,938", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:00,940", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:00,942", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:00,944", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:00,946", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:00,949", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:00,951", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:00,953", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:00,979", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,003", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,027", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,056", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,085", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,115", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,139", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,165", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,189", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,214", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,240", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,266", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,292", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,319", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,346", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,374", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,402", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,429", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,463", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,494", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,525", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,553", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,583", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,611", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,639", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,667", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,696", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,724", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,752", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,781", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,810", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,839", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,868", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,898", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,934", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:01,974", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,011", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,044", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,074", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,106", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,137", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,170", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,214", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,253", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,285", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,317", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,349", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,382", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,415", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,448", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,485", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,580", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,615", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,647", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,681", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,715", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,750", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,784", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,819", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,855", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,889", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,922", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,955", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:02,990", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:03,023", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:03,057", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:03,090", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:03,124", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:03,158", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:03,193", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:03,228", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:03,263", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:03,297", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:03,331", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:03,367", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:03,404", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:03,450", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:03,492", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:03,534", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:03,575", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:03,623", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:03,675", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:03,723", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:03,771", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:03,821", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:03,863", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:03,901", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:03,942", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:03,982", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:21:04,023", "level": "ERROR", "message": "Trial falhou: A coluna 'target' \u00e9 necess\u00e1ria para o treinamento."}
+{"timestamp": "2025-07-31 22:26:04,065", "level": "ERROR", "message": "\u274c Falha ao tentar excluir a measurement 'features_master_table': 'InfluxDBConfig' object has no attribute 'influxdb'"}
+{"timestamp": "2025-07-31 22:27:15,960", "level": "ERROR", "message": "\u274c Falha ao tentar excluir a measurement 'features_master_table': HTTPConnectionPool(host='db', port=8086): Read timed out. (read timeout=9.997874603000128)"}
+{"timestamp": "2025-07-31 22:28:44,656", "level": "WARNING", "message": "Encontradas 1160 lacunas nos dados hist\u00f3ricos. Preenchendo..."}
+{"timestamp": "2025-07-31 22:34:26,231", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: (422)\nReason: Unprocessable Entity\nHTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unprocessable entity', 'Date': 'Thu, 31 Jul 2025 22:34:26 GMT', 'Content-Length': '246'})\nHTTP response body: {\"code\":\"unprocessable entity\",\"message\":\"failure writing points to database: partial write: field type conflict: input field \\\"fear_and_greed\\\" on measurement \\\"sentiment_fear_and_greed\\\" is type integer, already exists as type float dropped=1\"}\n"}
+{"timestamp": "2025-07-31 23:32:38,354", "level": "ERROR", "message": "LOG: FALHA CR\u00cdTICA! A coluna 'atr_14' N\u00c3O foi criada."}
+{"timestamp": "2025-07-31 23:32:38,359", "level": "ERROR", "message": "LOG: ERRO FATAL na Esta\u00e7\u00e3o 4. Colunas dispon\u00edveis: ['close', 'high', 'low', 'open', 'volume', 'dxy_close', 'dxy_high', 'dxy_low', 'dxy_open', 'dxy_volume', 'gold_close', 'gold_high', 'gold_low', 'gold_open', 'gold_volume', 'ndx_close', 'ndx_high', 'ndx_low', 'ndx_open', 'ndx_volume', 'spx_close', 'spx_high', 'spx_low', 'spx_open', 'spx_volume', 'tnx_close', 'tnx_high', 'tnx_low', 'tnx_open', 'tnx_volume', 'uso_close', 'uso_high', 'uso_low', 'uso_open', 'uso_volume', 'vix_close', 'vix_high', 'vix_low', 'vix_open', 'vix_volume', 'taker_buy_volume', 'taker_sell_volume', 'volume_delta', 'cvd', 'btc_dxy_corr_30d', 'btc_vix_corr_30d']"}
+{"timestamp": "2025-07-31 23:34:36,001", "level": "ERROR", "message": "LOG: FALHA CR\u00cdTICA! A coluna 'atr_14' N\u00c3O foi criada."}
+{"timestamp": "2025-07-31 23:48:32,733", "level": "ERROR", "message": "A coluna 'atr_14' n\u00e3o p\u00f4de ser calculada. Imposs\u00edvel criar o target. Abortando para este lote."}
+{"timestamp": "2025-07-31 23:56:47,048", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (3 linhas) para o per\u00edodo 2018-01. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,063", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (7 linhas) para o per\u00edodo 2018-02. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,078", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2018-03. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,096", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2018-04. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,112", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2018-05. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,126", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2018-06. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,141", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2018-07. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,156", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2018-08. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,171", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2018-09. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,186", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2018-10. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,201", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2018-11. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,216", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2018-12. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,230", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2019-01. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,246", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2019-02. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,263", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2019-03. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,279", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2019-04. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,294", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2019-05. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,309", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2019-06. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,323", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2019-07. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,338", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2019-08. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,353", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2019-09. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,368", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2019-10. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,381", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2019-11. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,396", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2019-12. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,410", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-01. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,425", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-02. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,439", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-03. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,453", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-04. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,468", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-05. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,482", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-06. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,496", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-07. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,510", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-08. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,526", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-09. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,540", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2020-10. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,556", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-11. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,571", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2020-12. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,586", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-01. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,600", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-02. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,614", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-03. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,628", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-04. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,642", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-05. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,656", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-06. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,671", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-07. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,685", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-08. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,699", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-09. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,714", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-10. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,728", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2021-11. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,742", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-12. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,757", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2022-01. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,772", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-02. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,787", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-03. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,802", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-04. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,816", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-05. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,831", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-06. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,845", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-07. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,859", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-08. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,873", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-09. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,887", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2022-10. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,901", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-11. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,915", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2022-12. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,929", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-01. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,943", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-02. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,957", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-03. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,971", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-04. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,985", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-05. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:47,998", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-06. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:48,013", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-07. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:48,027", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-08. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:48,042", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-09. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:48,057", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-10. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:48,072", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2023-11. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:48,087", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2023-12. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:48,103", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2024-01. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:48,117", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-02. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:48,137", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-03. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:48,157", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-04. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:48,174", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-05. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:48,189", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-06. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:48,207", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-07. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:48,224", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-08. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:48,243", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-09. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:48,262", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-10. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:48,278", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-11. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:48,300", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-12. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:48,317", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2025-01. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:48,334", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2025-02. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:48,353", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2025-03. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:48,369", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2025-04. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:48,387", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2025-05. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:48,413", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2025-06. A saltar lote."}
+{"timestamp": "2025-07-31 23:56:49,104", "level": "ERROR", "message": "Valida\u00e7\u00e3o Falhou: Foram encontrados valores NULOS nos dados finais."}
+{"timestamp": "2025-07-31 23:56:49,105", "level": "WARNING", "message": "Alerta de Valida\u00e7\u00e3o: Encontrado grande gap nos dados de 15 days 08:56:40.004000."}
+{"timestamp": "2025-07-31 23:56:49,105", "level": "ERROR", "message": "--- \u274c VALIDA\u00c7\u00c3O DE DADOS FALHOU. VERIFIQUE OS LOGS. ---"}
+{"timestamp": "2025-07-31 23:56:49,106", "level": "ERROR", "message": "Valida\u00e7\u00e3o final falhou ou lote vazio para 2025-07. Este lote n\u00e3o ser\u00e1 salvo."}
+{"timestamp": "2025-08-01 00:00:54,805", "level": "WARNING", "message": "Nenhum dado novo retornado pelo yfinance para DXY."}
+{"timestamp": "2025-08-01 00:00:55,518", "level": "WARNING", "message": "Nenhum dado novo retornado pelo yfinance para VIX."}
+{"timestamp": "2025-08-01 00:00:56,948", "level": "WARNING", "message": "Nenhum dado novo retornado pelo yfinance para GOLD."}
+{"timestamp": "2025-08-01 00:00:57,707", "level": "WARNING", "message": "Nenhum dado novo retornado pelo yfinance para TNX."}
+{"timestamp": "2025-08-01 00:00:58,390", "level": "WARNING", "message": "Nenhum dado novo retornado pelo yfinance para SPX."}
+{"timestamp": "2025-08-01 00:00:59,353", "level": "WARNING", "message": "Nenhum dado novo retornado pelo yfinance para NDX."}
+{"timestamp": "2025-08-01 00:01:00,064", "level": "WARNING", "message": "Nenhum dado novo retornado pelo yfinance para USO."}
+{"timestamp": "2025-08-01 00:01:00,899", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (3 linhas) para o per\u00edodo 2018-01. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:00,911", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (7 linhas) para o per\u00edodo 2018-02. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:00,924", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2018-03. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:00,936", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2018-04. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:00,949", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2018-05. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:00,964", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2018-06. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:00,978", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2018-07. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:00,990", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2018-08. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,003", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2018-09. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,016", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2018-10. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,029", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2018-11. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,042", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2018-12. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,055", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2019-01. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,067", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2019-02. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,080", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2019-03. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,093", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2019-04. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,106", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2019-05. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,119", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2019-06. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,131", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2019-07. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,144", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2019-08. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,157", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2019-09. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,169", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2019-10. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,182", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2019-11. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,195", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2019-12. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,207", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-01. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,220", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-02. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,233", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-03. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,245", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-04. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,258", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-05. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,271", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-06. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,283", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-07. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,295", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-08. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,308", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-09. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,321", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2020-10. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,334", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-11. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,346", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2020-12. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,358", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-01. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,371", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-02. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,383", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-03. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,395", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-04. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,408", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-05. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,421", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-06. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,433", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-07. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,446", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-08. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,459", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-09. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,471", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-10. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,483", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2021-11. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,495", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-12. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,508", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2022-01. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,520", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-02. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,533", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-03. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,546", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-04. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,558", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-05. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,571", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-06. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,583", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-07. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,596", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-08. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,608", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-09. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,621", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2022-10. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,634", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-11. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,647", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2022-12. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,659", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-01. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,672", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-02. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,685", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-03. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,698", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-04. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,711", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-05. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,723", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-06. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,738", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-07. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,752", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-08. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,766", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-09. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,779", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-10. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,796", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2023-11. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,809", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2023-12. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,823", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2024-01. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,837", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-02. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,850", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-03. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,866", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-04. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,880", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-05. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,895", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-06. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,909", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-07. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,922", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-08. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,936", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-09. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,949", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-10. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,962", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-11. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,976", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-12. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:01,989", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2025-01. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:02,002", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2025-02. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:02,015", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2025-03. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:02,029", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2025-04. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:02,042", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2025-05. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:02,055", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2025-06. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:02,093", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (1776 linhas) para o per\u00edodo 2025-07. A saltar lote."}
+{"timestamp": "2025-08-01 00:01:02,130", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (1773 linhas) para o per\u00edodo 2025-08. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:27,444", "level": "WARNING", "message": "Nenhum dado novo retornado pelo yfinance para DXY."}
+{"timestamp": "2025-08-01 00:10:28,183", "level": "WARNING", "message": "Nenhum dado novo retornado pelo yfinance para VIX."}
+{"timestamp": "2025-08-01 00:10:28,853", "level": "WARNING", "message": "Nenhum dado novo retornado pelo yfinance para GOLD."}
+{"timestamp": "2025-08-01 00:10:29,567", "level": "WARNING", "message": "Nenhum dado novo retornado pelo yfinance para TNX."}
+{"timestamp": "2025-08-01 00:10:30,264", "level": "WARNING", "message": "Nenhum dado novo retornado pelo yfinance para SPX."}
+{"timestamp": "2025-08-01 00:10:30,975", "level": "WARNING", "message": "Nenhum dado novo retornado pelo yfinance para NDX."}
+{"timestamp": "2025-08-01 00:10:31,723", "level": "WARNING", "message": "Nenhum dado novo retornado pelo yfinance para USO."}
+{"timestamp": "2025-08-01 00:10:32,804", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (3 linhas) para o per\u00edodo 2018-01. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:32,817", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (7 linhas) para o per\u00edodo 2018-02. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:32,830", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2018-03. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:32,843", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2018-04. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:32,856", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2018-05. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:32,869", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2018-06. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:32,881", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2018-07. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:32,894", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2018-08. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:32,908", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2018-09. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:32,920", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2018-10. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:32,934", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2018-11. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:32,947", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2018-12. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:32,960", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2019-01. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:32,972", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2019-02. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:32,984", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2019-03. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:32,996", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2019-04. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,011", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2019-05. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,024", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2019-06. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,036", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2019-07. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,049", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2019-08. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,061", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2019-09. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,073", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2019-10. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,087", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2019-11. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,101", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2019-12. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,114", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-01. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,126", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-02. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,140", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-03. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,154", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-04. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,168", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-05. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,181", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-06. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,194", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-07. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,207", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-08. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,219", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-09. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,236", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2020-10. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,250", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2020-11. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,264", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2020-12. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,277", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-01. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,289", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-02. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,302", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-03. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,314", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-04. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,327", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-05. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,339", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-06. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,351", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-07. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,363", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-08. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,376", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-09. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,388", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-10. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,401", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2021-11. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,414", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2021-12. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,426", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2022-01. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,438", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-02. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,451", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-03. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,463", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-04. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,475", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-05. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,487", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-06. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,500", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-07. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,512", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-08. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,524", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-09. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,536", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2022-10. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,549", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2022-11. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,560", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2022-12. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,574", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-01. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,586", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-02. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,600", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-03. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,612", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-04. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,625", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-05. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,638", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-06. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,651", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-07. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,664", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-08. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,678", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-09. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,691", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2023-10. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,704", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2023-11. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,717", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2023-12. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,731", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2024-01. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,745", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-02. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,760", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-03. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,774", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-04. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,788", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-05. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,801", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-06. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,815", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-07. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,827", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-08. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,840", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-09. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,852", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-10. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,867", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-11. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,880", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2024-12. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,893", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2025-01. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,907", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (8 linhas) para o per\u00edodo 2025-02. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,920", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2025-03. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,933", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2025-04. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,946", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2025-05. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:33,960", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (9 linhas) para o per\u00edodo 2025-06. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:34,000", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (1776 linhas) para o per\u00edodo 2025-07. A saltar lote."}
+{"timestamp": "2025-08-01 00:10:34,038", "level": "WARNING", "message": "Dados de BTC insuficientes ou inexistentes (1782 linhas) para o per\u00edodo 2025-08. A saltar lote."}

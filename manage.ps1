@@ -39,9 +39,7 @@ switch ($command) {
     }
     "optimize" {
         Write-Host "${Yellow}--- Iniciando a Fábrica de IAs (Otimizador) DENTRO do container...${Reset}"
-        # Permite passar argumentos como 'train_regime_model'
-        $extraArgs = $args[1..($args.Length-1)]
-        docker-compose exec app python src/core/optimizer.py $extraArgs
+        docker-compose exec app python run_optimizer.py
     }
     "backtest" {
          Write-Host "${Yellow}--- Iniciando o Laboratório de Simulação (Backtester) DENTRO do container...${Reset}"
@@ -49,6 +47,13 @@ switch ($command) {
     }
     "update-db" {
         Write-Host "${Yellow}--- Iniciando Pipeline de Ingestão de Dados (ETL)...${Reset}"
+        docker-compose exec app python scripts/data_pipeline.py
+    }
+    "clean-master" {
+        Write-Host "${Yellow}--- Limpando a 'features_master_table' antiga...${Reset}"
+        docker-compose exec app python scripts/db_utils.py features_master_table
+        Write-Host "${Yellow}--- Tabela limpa. Executando 'update-db' para recriar com o novo schema...${Reset}"
+        # Chama a lógica do comando 'update-db'
         docker-compose exec app python scripts/data_pipeline.py
     }
     "analyze" {
