@@ -1,5 +1,6 @@
 # src/database_manager.py (VERSÃO FINAL COMPATÍVEL)
 
+import json
 import pandas as pd
 from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import SYNCHRONOUS
@@ -24,8 +25,18 @@ class DatabaseManager:
         return self.query_api
 
     def write_trade(self, trade_data: dict):
+        """Escreve um único registo de trade no InfluxDB."""
         try:
-            point = Point("trades").tag("status", trade_data["status"]).tag("trade_id", trade_data["trade_id"]).field("entry_price", float(trade_data["entry_price"])).field("profit_target_price", float(trade_data.get("profit_target_price", 0.0))).field("quantity_btc", float(trade_data.get("quantity_btc", 0.0))).field("realized_pnl_usdt", float(trade_data.get("realized_pnl_usdt", 0.0))).time(trade_data["timestamp"])
+            point = Point("trades") \
+                .tag("status", trade_data["status"]) \
+                .tag("trade_id", trade_data["trade_id"]) \
+                .field("entry_price", float(trade_data["entry_price"])) \
+                .field("profit_target_price", float(trade_data.get("profit_target_price", 0.0))) \
+                .field("quantity_btc", float(trade_data.get("quantity_btc", 0.0))) \
+                .field("realized_pnl_usdt", float(trade_data.get("realized_pnl_usdt", 0.0))) \
+                .field("decision_data", json.dumps(trade_data.get("decision_data", {}))) \
+                .time(trade_data["timestamp"])
+            
             self.write_api.write(bucket=self.bucket, org=self.org, record=point)
             logger.info(f"Trade {trade_data['trade_id']} escrito no DB com status {trade_data['status']}.")
         except Exception as e:

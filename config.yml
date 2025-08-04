@@ -9,7 +9,7 @@ database:
 
 # Configurações do backtest (parâmetros da simulação)
 backtest:
-  start_date: "-180d"
+  start_date: "-60d"
   initial_capital: 100
   commission_rate: 0.001
 
@@ -61,10 +61,8 @@ trading_strategy:
         features:
           - "funding_rate_mean_24h"
           - "open_interest_pct_change_4h"
-          - "fear_and_greed"
           - "fng_change_3d"
 
-      # --- INÍCIO DA MODIFICAÇÃO: O NOVO ESPECIALISTA ---
       # Especialista em correlações e ambiente macro
       intermarket_analyst:
         features:
@@ -73,7 +71,6 @@ trading_strategy:
           - "btc_gold_corr_30d" # Correlação com o ouro (ativo de refúgio)
           - "btc_dxy_corr_30d" # Correlação com a força do dólar
           - "btc_vix_corr_30d" # Correlação com a volatilidade/medo
-      # --- FIM DA MODIFICAÇÃO ---
 
   ensemble_weights:
     price_action: 0.4
