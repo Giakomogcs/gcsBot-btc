@@ -1,6 +1,14 @@
 # Ficheiro: run_backtest.py (VERSÃO FINAL INTEGRADA)
 
 import pandas as pd
+import sys
+import os
+
+# Adiciona a raiz do projeto ao path para que o gcs_bot seja encontrável
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 from gcs_bot.utils.logger import logger
 from gcs_bot.utils.config_manager import settings
 from gcs_bot.data.data_manager import DataManager
@@ -12,36 +20,42 @@ import sys
 
 def main():
     logger.info("--- INICIANDO LABORATÓRIO DE BACKTEST (MODO ALTA FIDELIDADE) ---")
-    
+
     logger.info("Limpando o histórico de trades antigos do banco de dados para um backtest limpo...")
     start = "1970-01-01T00:00:00Z"
     stop = pd.Timestamp.now(tz='UTC').isoformat()
     db_manager._client.delete_api().delete(start, stop, '_measurement="trades"', bucket=settings.database.bucket, org=settings.database.org)
     logger.info("✅ Histórico de trades limpo.")
-    
-    data_manager = DataManager()
+
+    # --- Master Builder: Instanciando e Injetando Dependências ---
+    logger.info("Construindo o ambiente do backtest com injeção de dependências...")
+
+    data_manager = DataManager(db_manager=db_manager, config=settings, logger=logger)
+
     df_features = data_manager.read_data_from_influx(
         measurement="features_master_table",
         start_date=settings.backtest.start_date
     )
 
     if df_features.empty:
-        logger.error("A 'features_master_table' está vazia ou não pôde ser carregada.")
+        logger.error("A 'features_master_table' está vazia ou não pôde ser carregada. Abortando backtest.")
         return
 
-    ensemble_manager = EnsembleManager()
+    ensemble_manager = EnsembleManager(config=settings, logger=logger)
     if not ensemble_manager.models:
-        logger.error("Nenhum modelo de IA foi carregado. Execute o otimizador primeiro.")
+        logger.error("Nenhum modelo de IA foi carregado. Execute o otimizador primeiro. Abortando backtest.")
         return
 
-    position_manager = PositionManager(settings)
+    position_manager = PositionManager(config=settings, db_manager=db_manager, logger=logger)
 
     backtester = Backtester(
-        data=df_features, 
+        data=df_features,
         ensemble_manager=ensemble_manager,
-        position_manager=position_manager
+        position_manager=position_manager,
+        config=settings,
+        logger=logger
     )
-    
+
     backtester.run()
 
 if __name__ == "__main__":

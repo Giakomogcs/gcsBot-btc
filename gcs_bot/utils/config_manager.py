@@ -63,7 +63,9 @@ class TripleBarrierConfig(BaseModel):
     time_limit_candles: int
 
 class TradingStrategyConfig(BaseModel):
-    confidence_threshold: float
+    static_confidence_threshold: float
+    first_entry_confidence_factor: float
+    dca_grid_spacing_percent: float
     triple_barrier: TripleBarrierConfig
     models: ModelsConfig
     ensemble_weights: dict[str, float]
