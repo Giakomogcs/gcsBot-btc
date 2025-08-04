@@ -20,7 +20,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from src.config_manager import settings
-from src.database_manager import db_manager
+from database.database_manager import db_manager
 from src.logger import logger
 from src.core.feature_engineering import add_all_features
 from src.core.situational_awareness import SituationalAwareness

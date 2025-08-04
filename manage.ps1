@@ -75,19 +75,6 @@ switch ($command) {
         Write-Host "${Yellow}Use Ctrl+C para parar o bot.${Reset}"
         docker-compose exec app python main.py
     }
-    "analyze-decision" {
-        # $args é uma variável automática que contém todos os outros argumentos
-        if ($args.Count -ne 2) {
-            Write-Host "${Red}Uso: .\manage.ps1 analyze-decision <nome_do_modelo> \"AAAA-MM-DD HH:MM:SS\"${Reset}"
-            Write-Host "${Yellow}Exemplo: .\manage.ps1 analyze-decision price_action \"2024-08-01 10:30:00\"${Reset}"
-            return
-        }
-        $model = $args[0]
-        $datetime = $args[1]
-        
-        Write-Host "${Cyan}--- Analisando a decisão do modelo '$model' para o momento '$datetime'...${Reset}"
-        docker-compose exec app python scripts/analyze_decision.py $model "$datetime"
-    }
     default {
         Write-Host "${Yellow}GCS-Bot - Painel de Controle${Reset}"
         Write-Host "---------------------------"
@@ -100,7 +87,6 @@ switch ($command) {
         Write-Host "  ${Red}clean-master${Reset}      - APAGA apenas a tabela Master, mantendo os dados das demais tabelas." 
         Write-Host "  ${Red}reset-trades${Reset}      - APAGA apenas o histórico de trades, mantendo os dados de mercado." 
         Write-Host "  ${Red}reset-sentiment${Reset}      - APAGA apenas o histórico de sentiment, mantendo os dados de mercado." 
-        Write-Host "  ${Cyan}analyze-decision${Reset} - Analisa o 'porquê' de uma decisão de um modelo num ponto específico."
         Write-Host ""
         Write-Host " Operações do Bot:"
         Write-Host "  ${Green}optimize${Reset}        - Executa a otimização para treinar os modelos."

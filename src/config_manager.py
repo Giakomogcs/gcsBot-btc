@@ -1,34 +1,35 @@
-# src/config_manager.py (VERSÃO CORRIGIDA E COMPLETA)
+# Ficheiro: src/config_manager.py (VERSÃO FINAL E ROBUSTA)
 
 import yaml
-from pathlib import Path
-from typing import Any
 from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Any
+from src.logger import logger
 
-# --- Modelos para o .env ---
-# Esta seção está correta. O Pydantic irá ler o .env e popular estes modelos.
+# --- Modelos para o .env (Segredos) ---
 class InfluxDBConfig(BaseSettings):
-    # Procura por um ficheiro .env e carrega as variáveis
-    model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', extra='ignore')
-    
+    model_config = SettingsConfigDict(env_file='.env', extra='ignore')
     url: str = Field(..., alias='INFLUXDB_URL')
     token: str = Field(..., alias='INFLUXDB_TOKEN')
     org: str = Field(..., alias='INFLUXDB_ORG')
     bucket: str = Field(..., alias='INFLUXDB_BUCKET')
 
 class ApiKeysConfig(BaseSettings):
-    # Procura por um ficheiro .env e carrega as variáveis
-    model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', extra='ignore')
-    
+    model_config = SettingsConfigDict(env_file='.env', extra='ignore')
     binance_api_key: str = Field("", alias='BINANCE_API_KEY')
     binance_api_secret: str = Field("", alias='BINANCE_API_SECRET')
     binance_testnet_api_key: str = Field("", alias='BINANCE_TESTNET_API_KEY')
     binance_testnet_api_secret: str = Field("", alias='BINANCE_TESTNET_API_SECRET')
 
+# --- Modelos para o config.yml (Estratégia e Parâmetros) ---
+class BacktestConfig(BaseModel):
+    start_date: str
+    initial_capital: int
+    commission_rate: float
+    # --- NOVOS PARÂMETROS ESTRATÉGICOS ---
+    first_entry_confidence_factor: float = 0.80
+    buy_the_dip_trigger_percent: float = -2.0
 
-# --- Modelos para o config.yml ---
-# Toda esta seção está perfeita e não precisa de alterações.
 class AppConfig(BaseModel):
     use_testnet: bool
     force_offline_mode: bool
@@ -80,11 +81,6 @@ class OptimizerConfig(BaseModel):
 class LoggingConfig(BaseModel):
     level: str
 
-class BacktestConfig(BaseModel):
-    start_date: str
-    initial_capital: int
-    commission_rate: float
-
 class PositionManagementConfig(BaseModel):
     profit_target_percent: float
     max_concurrent_trades: int
@@ -97,18 +93,13 @@ class DynamicSizingConfig(BaseModel):
     performance_upscale_factor: float
     performance_downscale_factor: float
 
-
-# --- Classe de Configuração Principal (COM A CORREÇÃO) ---
+# --- Classe de Configuração Principal (com carregamento explícito) ---
 class Settings(BaseModel):
-    """
-    Combina as configurações do .env e do config.yml de forma explícita.
-    """
-    # 1. Estas configurações serão preenchidas PRIMEIRO a partir do .env
-    #    graças aos modelos BaseSettings que definimos acima.
-    database: InfluxDBConfig = InfluxDBConfig()
-    api_keys: ApiKeysConfig = ApiKeysConfig()
+    # Campos que vêm do .env
+    database: InfluxDBConfig
+    api_keys: ApiKeysConfig
     
-    # 2. Estas configurações serão preenchidas a partir do config.yml
+    # Campos que vêm do config.yml
     app: AppConfig
     data_paths: DataPathsConfig
     data_pipeline: DataPipelineConfig
@@ -120,23 +111,38 @@ class Settings(BaseModel):
     position_management: PositionManagementConfig
     dynamic_sizing: DynamicSizingConfig
 
-
 def load_settings() -> Settings:
     """
-    Carrega o ficheiro YAML e o utiliza para criar a instância final de Settings.
+    Carrega as configurações de forma robusta e explícita.
+    Primeiro, carrega os segredos do .env.
+    Depois, carrega a estratégia do config.yml.
+    Finalmente, combina e valida tudo com Pydantic.
     """
     try:
+        # Carrega a configuração do ficheiro YAML
         with open('config.yml', 'r') as f:
             yaml_data = yaml.safe_load(f)
-            # O Pydantic irá inteligentemente mapear o dicionário do YAML
-            # para os modelos correspondentes dentro da classe Settings.
-            return Settings(**yaml_data)
+
+        # Carrega os segredos do .env usando os modelos Pydantic
+        env_data = {
+            'database': InfluxDBConfig().model_dump(),
+            'api_keys': ApiKeysConfig().model_dump()
+        }
+        
+        # Combina os dois dicionários
+        full_config_data = {**yaml_data, **env_data}
+        
+        # Valida a configuração completa
+        settings_object = Settings(**full_config_data)
+        logger.info("✅ Configurações carregadas e validadas com sucesso.")
+        return settings_object
+        
     except FileNotFoundError:
-        print("Erro: O ficheiro 'config.yml' não foi encontrado.")
+        logger.error("Erro Crítico: O ficheiro 'config.yml' não foi encontrado.")
         raise
     except Exception as e:
-        print(f"Erro ao carregar as configurações: {e}")
+        logger.error(f"Erro Crítico ao carregar as configurações: {e}")
         raise
 
-# Carrega as configurações uma vez para toda a aplicação
+# Instância única para toda a aplicação
 settings = load_settings()

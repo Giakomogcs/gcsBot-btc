@@ -1,47 +1,46 @@
-# Ficheiro: run_backtest.py (VERSÃO FINAL INTEGRADA)
+# Ficheiro: run_backtest.py (VERSÃO FINAL E ALINHADA)
 
-import pandas as pd
 from src.logger import logger
 from src.config_manager import settings
 from src.data_manager import DataManager
 from src.core.ensemble_manager import EnsembleManager
-from src.core.backtester import Backtester
 from src.core.position_manager import PositionManager
-from src.database_manager import db_manager
-import sys
+from src.core.backtester import Backtester
 
 def main():
-    logger.info("--- INICIANDO LABORATÓRIO DE BACKTEST (MODO ALTA FIDELIDADE) ---")
+    logger.info("--- INICIANDO LABORATÓRIO DE BACKTEST (ARQUITETURA FINAL) ---")
     
-    logger.info("Limpando o histórico de trades antigos do banco de dados para um backtest limpo...")
-    start = "1970-01-01T00:00:00Z"
-    stop = pd.Timestamp.now(tz='UTC').isoformat()
-    db_manager._client.delete_api().delete(start, stop, '_measurement="trades"', bucket=settings.database.bucket, org=settings.database.org)
-    logger.info("✅ Histórico de trades limpo.")
-    
+    # --- 1. CARREGA OS COMPONENTES AUTÓNOMOS ---
+    # Cada gestor agora é responsável pela sua própria inicialização e conexões.
     data_manager = DataManager()
+    ensemble_manager = EnsembleManager(config=settings)
+    position_manager = PositionManager(config=settings)
+    
+    # Limpa o histórico de trades para uma simulação limpa
+    logger.info("Limpando o histórico de trades antigos...")
+    # Acessamos o db_manager através da instância do position_manager para a limpeza
+    position_manager.db_manager.client.delete_api().delete(
+        "1970-01-01T00:00:00Z",
+        "2030-01-01T00:00:00Z",
+        f'_measurement="{position_manager.db_manager.measurement_name}"',
+        bucket=position_manager.db_manager.bucket,
+        org=position_manager.db_manager.org
+    )
+    
+    # --- 2. EXECUÇÃO DO BACKTEST ---
     df_features = data_manager.read_data_from_influx(
         measurement="features_master_table",
         start_date=settings.backtest.start_date
     )
-
     if df_features.empty:
-        logger.error("A 'features_master_table' está vazia ou não pôde ser carregada.")
+        logger.error("Não foram encontrados dados para o backtest.")
         return
-
-    ensemble_manager = EnsembleManager()
-    if not ensemble_manager.models:
-        logger.error("Nenhum modelo de IA foi carregado. Execute o otimizador primeiro.")
-        return
-
-    position_manager = PositionManager(settings)
 
     backtester = Backtester(
-        data=df_features, 
-        ensemble_manager=ensemble_manager,
+        data=df_features,
+        ensemble_manager = EnsembleManager(config=settings),
         position_manager=position_manager
     )
-    
     backtester.run()
 
 if __name__ == "__main__":

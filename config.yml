@@ -9,9 +9,20 @@ database:
 
 # Configurações do backtest (parâmetros da simulação)
 backtest:
-  start_date: "-60d"
-  initial_capital: 100
-  commission_rate: 0.001
+  start_date: "2024-01-01" # Defina a data de início que deseja para o backtest
+  commission_rate: 0.001 # A sua taxa de comissão (ex: 0.001 para 0.1%)
+
+  # --- CAMPOS NOVOS DA NOSSA ESTRATÉGIA ---
+  initial_capital: 10000
+  strategy:
+    max_concurrent_trades: 5
+    threshold_first_entry: 0.75
+    dca_grid_distance: 0.02
+    atr_period: 14
+    atr_multiplier: 2.0
+    risk_reward_ratio: 1.5
+    position_sizing:
+      risk_per_trade_percentage: 0.01
 
 app:
   use_testnet: false

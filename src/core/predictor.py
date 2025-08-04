@@ -6,7 +6,7 @@ from pathlib import Path
 
 from src.logger import logger
 from src.config_manager import settings
-from src.database_manager import db_manager
+from database.database_manager import db_manager
 from src.core.feature_engineering import add_all_features
 
 class Predictor:
