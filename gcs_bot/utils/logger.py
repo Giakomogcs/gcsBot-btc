@@ -31,12 +31,7 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(log_object)
 
 # --- CONFIGURAÇÃO DO LOGGER ---
-try:
-    from config_manager import MODE, LOGS_DIR
-except ImportError:
-    MODE = os.getenv("MODE", "optimize").lower()
-    LOGS_DIR = "logs"
-
+LOGS_DIR = "logs"
 os.makedirs(LOGS_DIR, exist_ok=True)
 
 logger = logging.getLogger("gcsBot")
@@ -55,10 +50,7 @@ if not logger.handlers:
     console_handler = logging.StreamHandler(sys.stdout)
     console_formatter = logging.Formatter('%(levelname)s: %(message)s') # Formato mais limpo
     console_handler.setFormatter(console_formatter)
-    
-    # <<< A CORREÇÃO ESTÁ AQUI >>>
-    # Agora o console mostrará INFO, WARNING, ERROR, etc.
-    console_handler.setLevel(logging.DEBUG)
+    console_handler.setLevel(logging.INFO) # Nível INFO para o console para não poluir
     logger.addHandler(console_handler)
 
     # 3. Handler para o ARQUIVO DE PERFORMANCE (performance.jsonl)
@@ -69,7 +61,7 @@ if not logger.handlers:
     perf_handler.setLevel(PERFORMANCE_LEVEL_NUM)
     logger.addHandler(perf_handler)
 
-    logger.info(f"Logger configurado para o modo: '{MODE.upper()}'. Logs de console a partir do nível INFO.")
+    logger.info("Logger configurado. Logs de console a partir do nível INFO.")
 
 def log_table(title, data, headers="keys", tablefmt="heavy_grid"):
     try:
