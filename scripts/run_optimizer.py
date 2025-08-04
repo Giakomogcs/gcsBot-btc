@@ -3,11 +3,11 @@
 import os
 import joblib
 import pandas as pd
-from src.logger import logger
-from src.config_manager import settings
-from src.data_manager import DataManager
-from src.core.optimizer import Optimizer
-from src.core.model_trainer import ModelTrainer
+from gcs_bot.utils.logger import logger
+from gcs_bot.utils.config_manager import settings
+from gcs_bot.data.data_manager import DataManager
+from gcs_bot.core.optimizer import Optimizer
+from gcs_bot.core.model_trainer import ModelTrainer
 
 def main():
     """

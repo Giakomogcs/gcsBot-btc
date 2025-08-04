@@ -4,6 +4,7 @@ import os
 import sys
 import datetime
 import pandas as pd
+import numpy as np
 import time
 import requests
 import yfinance as yf
@@ -19,11 +20,11 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from src.config_manager import settings
-from src.database_manager import db_manager
-from src.logger import logger
-from src.core.feature_engineering import add_all_features
-from src.core.situational_awareness import SituationalAwareness
+from gcs_bot.utils.config_manager import settings
+from gcs_bot.database.database_manager import db_manager
+from gcs_bot.utils.logger import logger
+from gcs_bot.data.feature_engineering import add_all_features
+from gcs_bot.core.situational_awareness import SituationalAwareness
 
 class DataPipeline:
     def __init__(self):
@@ -755,6 +756,60 @@ class DataPipeline:
         
         pbar.close()
         logger.info("🎉🎉🎉 PIPELINE INDUSTRIAL CONCLUÍDO! A FONTE DA VERDADE ESTÁ PRONTA. 🎉🎉🎉")
+
+        # --- FASE 3: VERIFICAÇÃO FINAL ---
+        self.verify_features_master_table()
+
+
+    def verify_features_master_table(self):
+        """
+        Executa uma verificação final e detalhada na features_master_table no banco de dados
+        para garantir a integridade dos dados após a conclusão do pipeline.
+        """
+        logger.info("--- 🔎 FASE FINAL: INICIANDO VERIFICAÇÃO GRANULAR DA features_master_table 🔎 ---")
+
+        # 1. Definir colunas críticas que não devem ser nulas
+        CRITICAL_COLUMNS = [
+            'close', 'volume', 'rsi_14', 'macd_12_26_9', 'macd_diff_12_26_9',
+            'macd_signal_12_26_9', 'atr_14', 'bbl_20_2_0', 'bbm_20_2_0', 'bbu_20_2_0',
+            'bbb_20_2_0', 'bbp_20_2_0', 'volume_delta', 'cvd', 'fng_change_3d',
+            'funding_rate_mean_24h', 'open_interest_pct_change_4h', 'btc_dxy_corr_30d',
+            'btc_vix_corr_30d', 'btc_spx_corr_30d', 'btc_ndx_corr_30d',
+            'btc_gold_corr_30d', 'target', 'regime'
+        ]
+
+        # 2. Ler os dados do último dia da tabela para verificação
+        last_ts = self._query_last_timestamp("features_master_table")
+        if not last_ts:
+            logger.error("VERIFICAÇÃO FALHOU: Não foi possível encontrar o último timestamp da features_master_table.")
+            return
+
+        start_date = (last_ts - pd.Timedelta(days=1)).isoformat()
+        end_date = last_ts.isoformat()
+
+        logger.info(f"Analisando amostra de dados do último dia: de {start_date} a {end_date}")
+        df_sample = self.read_data_in_range("features_master_table", start_date, end_date)
+
+        if df_sample.empty:
+            logger.error("VERIFICAÇÃO FALHOU: Não foi possível ler a amostra de dados da features_master_table.")
+            return
+
+        # 3. Verificar valores nulos
+        # Garante que todas as colunas críticas existam no dataframe, preenchendo com Nulos se faltarem
+        for col in CRITICAL_COLUMNS:
+            if col not in df_sample.columns:
+                df_sample[col] = np.nan
+
+        null_counts = df_sample[CRITICAL_COLUMNS].isnull().sum()
+        null_report = null_counts[null_counts > 0]
+
+        if not null_report.empty:
+            logger.error("🚨 VERIFICAÇÃO DE INTEGRIDADE FALHOU! 🚨")
+            logger.error("As seguintes colunas críticas contêm valores nulos na features_master_table:")
+            for col, count in null_report.items():
+                logger.error(f"  - Coluna '{col}': {count} valor(es) nulo(s)")
+        else:
+            logger.info("✅ VERIFICAÇÃO DE INTEGRIDADE CONCLUÍDA! Nenhuma anomalia encontrada nas colunas críticas.")
 
 
     def validate_data(self, df: pd.DataFrame) -> bool:

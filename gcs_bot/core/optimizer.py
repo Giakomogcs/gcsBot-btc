@@ -4,9 +4,9 @@ import optuna
 import pandas as pd
 from typing import Dict, Any
 
-from src.logger import logger
-from src.core.model_trainer import ModelTrainer
-from src.core.model_evaluator import ModelEvaluator
+from gcs_bot.utils.logger import logger
+from gcs_bot.core.model_trainer import ModelTrainer
+from gcs_bot.core.model_evaluator import ModelEvaluator
 
 class Optimizer:
     """Usa o Optuna para encontrar os melhores hiperparâmetros para um modelo especialista."""

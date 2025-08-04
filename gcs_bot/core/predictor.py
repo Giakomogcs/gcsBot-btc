@@ -4,10 +4,10 @@ import joblib
 import pandas as pd
 from pathlib import Path
 
-from src.logger import logger
-from src.config_manager import settings
-from src.database_manager import db_manager
-from src.core.feature_engineering import add_all_features
+from gcs_bot.utils.logger import logger
+from gcs_bot.utils.config_manager import settings
+from gcs_bot.database.database_manager import db_manager
+from gcs_bot.data.feature_engineering import add_all_features
 
 class Predictor:
     """

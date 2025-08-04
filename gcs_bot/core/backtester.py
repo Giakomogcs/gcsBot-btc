@@ -3,10 +3,10 @@
 import pandas as pd
 from tqdm import tqdm
 
-from src.logger import logger
-from src.config_manager import settings
-from src.core.ensemble_manager import EnsembleManager
-from src.core.position_manager import PositionManager
+from gcs_bot.utils.logger import logger
+from gcs_bot.utils.config_manager import settings
+from gcs_bot.core.ensemble_manager import EnsembleManager
+from gcs_bot.core.position_manager import PositionManager
 
 class Backtester:
     def __init__(self, data: pd.DataFrame, ensemble_manager: EnsembleManager, position_manager: PositionManager):

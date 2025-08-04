@@ -6,9 +6,8 @@ from pathlib import Path
 import shap
 import json
 
-from src.logger import logger
-from src.config_manager import settings
-from src.core.confidence_manager import ConfidenceManager # <-- NOVA IMPORTAÇÃO
+from gcs_bot.utils.logger import logger
+from gcs_bot.utils.config_manager import settings
 
 class EnsembleManager:
     def __init__(self):

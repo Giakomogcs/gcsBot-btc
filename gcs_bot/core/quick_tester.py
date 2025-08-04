@@ -7,13 +7,12 @@ import joblib
 import os
 from datetime import datetime, timezone, timedelta
 
-from src.logger import logger, log_table
+from gcs_bot.utils.logger import logger, log_table
 from config_manager import (
     MODEL_METADATA_FILE, SYMBOL, FEE_RATE, SLIPPAGE_RATE, IOF_RATE, DATA_DIR,
     DCA_IN_BEAR_MARKET_ENABLED, DCA_DAILY_AMOUNT_USDT, DCA_MIN_CAPITAL_USDT
 )
-from src.data_manager import DataManager
-from src.core.confidence_manager import AdaptiveConfidenceManager
+from gcs_bot.data.data_manager import DataManager
 from core.backtester import calculate_sortino_ratio
 
 class QuickTester:

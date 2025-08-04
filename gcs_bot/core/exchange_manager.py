@@ -2,8 +2,8 @@
 
 from binance.client import Client
 from binance.exceptions import BinanceAPIException, BinanceRequestException
-from src.config_manager import settings
-from src.logger import logger
+from gcs_bot.utils.config_manager import settings
+from gcs_bot.utils.logger import logger
 from typing import Optional, Union
 
 class ExchangeManager:

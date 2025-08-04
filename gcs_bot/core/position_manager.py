@@ -5,9 +5,9 @@ import uuid
 from datetime import datetime, timezone
 import json
 
-from src.logger import logger
-from src.database_manager import db_manager
-from src.config_manager import settings
+from gcs_bot.utils.logger import logger
+from gcs_bot.database.database_manager import db_manager
+from gcs_bot.utils.config_manager import settings
 
 class PositionManager:
     def __init__(self, config):

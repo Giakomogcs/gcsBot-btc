@@ -5,8 +5,8 @@ import numpy as np
 import pandas_ta as ta
 from tqdm import tqdm
 
-from src.logger import logger
-from src.config_manager import settings
+from gcs_bot.utils.logger import logger
+from gcs_bot.utils.config_manager import settings
 
 def add_all_features(df: pd.DataFrame) -> pd.DataFrame:
     """

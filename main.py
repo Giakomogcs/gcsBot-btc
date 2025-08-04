@@ -5,12 +5,12 @@ from datetime import datetime
 import pandas as pd
 import os
 
-from src.logger import logger
-from src.config_manager import settings
-from src.core.position_manager import PositionManager
-from src.core.exchange_manager import exchange_manager
+from gcs_bot.utils.logger import logger
+from gcs_bot.utils.config_manager import settings
+from gcs_bot.core.position_manager import PositionManager
+from gcs_bot.core.exchange_manager import exchange_manager
 # --- NOVA IMPORTAÇÃO ---
-from src.core.predictor import Predictor
+from gcs_bot.core.predictor import Predictor
 
 def main_loop():
     """O loop principal que executa a cada minuto."""

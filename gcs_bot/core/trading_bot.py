@@ -5,12 +5,12 @@ import signal
 import sys
 from typing import Any
 
-from src.logger import logger
-from src.config_manager import settings
-from src.core.position_manager import PositionManager
-from src.data_manager import DataManager
-from src.core.account_manager import AccountManager
-from src.core.portfolio_manager import PortfolioManager # Importação corrigida
+from gcs_bot.utils.logger import logger
+from gcs_bot.utils.config_manager import settings
+from gcs_bot.core.position_manager import PositionManager
+from gcs_bot.data.data_manager import DataManager
+from gcs_bot.core.account_manager import AccountManager
+from gcs_bot.core.portfolio_manager import PortfolioManager # Importação corrigida
 
 class TradingBot:
     """O maestro que orquestra todos os componentes do bot."""

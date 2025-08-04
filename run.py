@@ -106,7 +106,7 @@ def show_logs():
 
 def show_display():
     """Mostra o painel de otimização lendo o arquivo de status."""
-    from src.core.display_manager import display_optimization_dashboard
+    from gcs_bot.core.display_manager import display_optimization_dashboard
     
     # <<< CORRIGIDO AQUI
     result = run_command("docker compose ps -q app", capture_output=True)

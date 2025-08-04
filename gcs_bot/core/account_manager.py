@@ -2,8 +2,8 @@
 
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
-from src.logger import logger
-from src.config_manager import settings
+from gcs_bot.utils.logger import logger
+from gcs_bot.utils.config_manager import settings
 
 class AccountManager:
     def __init__(self, binance_client: Client):

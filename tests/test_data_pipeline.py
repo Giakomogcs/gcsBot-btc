@@ -5,7 +5,7 @@ import sys
 import os
 from unittest.mock import patch
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from src.data_manager import DataManager
+from gcs_bot.data.data_manager import DataManager
 
 @pytest.fixture
 def test_dm():

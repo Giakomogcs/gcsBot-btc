@@ -1,13 +1,13 @@
 # Ficheiro: run_backtest.py (VERSÃO FINAL INTEGRADA)
 
 import pandas as pd
-from src.logger import logger
-from src.config_manager import settings
-from src.data_manager import DataManager
-from src.core.ensemble_manager import EnsembleManager
-from src.core.backtester import Backtester
-from src.core.position_manager import PositionManager
-from src.database_manager import db_manager
+from gcs_bot.utils.logger import logger
+from gcs_bot.utils.config_manager import settings
+from gcs_bot.data.data_manager import DataManager
+from gcs_bot.core.ensemble_manager import EnsembleManager
+from gcs_bot.core.backtester import Backtester
+from gcs_bot.core.position_manager import PositionManager
+from gcs_bot.database.database_manager import db_manager
 import sys
 
 def main():

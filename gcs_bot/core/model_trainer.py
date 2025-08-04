@@ -6,7 +6,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from typing import Tuple, Any, Dict
 
-from src.logger import logger
+from gcs_bot.utils.logger import logger
 
 class ModelTrainer:
     """Responsável por treinar um único modelo de IA com um conjunto de dados e parâmetros."""

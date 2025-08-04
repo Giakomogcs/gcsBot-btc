@@ -3,8 +3,8 @@ import joblib
 import os
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
-from src.logger import logger
-from src.config_manager import settings
+from gcs_bot.utils.logger import logger
+from gcs_bot.utils.config_manager import settings
 
 class SituationalAwareness:
     def __init__(self, n_regimes: int = 4):

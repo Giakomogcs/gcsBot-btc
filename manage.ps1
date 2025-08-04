@@ -88,6 +88,10 @@ switch ($command) {
         Write-Host "${Cyan}--- Analisando a decisão do modelo '$model' para o momento '$datetime'...${Reset}"
         docker-compose exec app python scripts/analyze_decision.py $model "$datetime"
     }
+    "test" {
+        Write-Host "${Yellow}--- Executando a suíte de testes (pytest) DENTRO do container...${Reset}"
+        docker-compose exec app pytest
+    }
     default {
         Write-Host "${Yellow}GCS-Bot - Painel de Controle${Reset}"
         Write-Host "---------------------------"
@@ -106,6 +110,7 @@ switch ($command) {
         Write-Host "  ${Green}optimize${Reset}        - Executa a otimização para treinar os modelos."
         Write-Host "  ${Green}backtest${Reset}        - Executa um backtest com os modelos treinados."
         Write-Host "  ${Green}update-db${Reset}       - Executa o pipeline ETL completo para popular e atualizar o DB."
+        Write-Host "  ${Green}test${Reset}            - Executa a suíte de testes automatizados (pytest)."
         Write-Host "  ${Cyan}analyze${Reset}         - Analisa os resultados do último backtest."
         Write-Host "  ${Red}run-live${Reset}          - Inicia o bot para operação em tempo real/paper trading." # Adicionar esta linha na ajuda
     }

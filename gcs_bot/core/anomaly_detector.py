@@ -2,7 +2,7 @@
 
 import pandas as pd
 from sklearn.ensemble import IsolationForest
-from src.logger import logger
+from gcs_bot.utils.logger import logger
 
 class AnomalyDetector:
     def __init__(self, contamination=0.01, random_state=42):
