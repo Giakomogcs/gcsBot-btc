@@ -1,4 +1,4 @@
-# src/core/account_manager.py (Final Version)
+# src/core/account_manager.py (VERSÃO CORRIGIDA)
 
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
@@ -8,27 +8,31 @@ from gcs_bot.utils.config_manager import settings
 class AccountManager:
     def __init__(self, binance_client: Client):
         self.client = binance_client
-        # Define o ativo de cotação (ex: USDT) a partir das configurações
         self.quote_asset = settings.app.symbol.replace("BTC", "")
 
     def get_quote_asset_balance(self) -> float:
         """
         Busca o saldo livre do ativo de cotação (ex: USDT) na conta da Binance.
+        Esta versão foi corrigida para funcionar corretamente tanto em modo real quanto testnet.
         """
-        if not self.client or settings.app.use_testnet:
-            logger.debug("Cliente Binance não disponível ou em modo testnet. Usando capital do portfólio de simulação.")
-            # This is a placeholder for backtesting; the actual capital is managed by PortfolioManager
-            return settings.backtest.initial_capital
+        # Se o cliente não foi inicializado (modo offline), não há o que fazer.
+        if not self.client:
+            logger.warning("Cliente Binance não disponível (modo offline). Retornando saldo 100")
+            return 100
 
         try:
+            # Esta chamada funciona tanto para a conta real quanto para a testnet,
+            # dependendo de como o 'self.client' foi inicializado.
             account_info = self.client.get_account()
-            usdt_balance = next(
+            
+            # Procura o ativo de cotação (ex: USDT) nos saldos da conta.
+            balance_info = next(
                 (item for item in account_info['balances'] if item['asset'] == self.quote_asset),
                 None
             )
             
-            if usdt_balance:
-                free_balance = float(usdt_balance['free'])
+            if balance_info:
+                free_balance = float(balance_info['free'])
                 logger.debug(f"Saldo de {self.quote_asset} consultado: {free_balance}")
                 return free_balance
             else:

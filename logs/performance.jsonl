@@ -23,3 +23,84 @@
 {"timestamp": "2025-08-05 19:16:03,878", "level": "ERROR", "message": "Falha no lote de OI de 2023-08-01 a 2023-08-31: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1690848000000&endTime=1693440000000&limit=500"}
 {"timestamp": "2025-08-05 19:16:04,049", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
 {"timestamp": "2025-08-05 19:16:04,053", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:18:25,687", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:18:25,687", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:18:25,688", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:18:25,689", "level": "WARNING", "message": "Coluna 'dxy_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_dxy_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:18:25,690", "level": "WARNING", "message": "Coluna 'vix_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_vix_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:18:25,690", "level": "WARNING", "message": "Coluna 'spx_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_spx_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:18:25,691", "level": "WARNING", "message": "Coluna 'ndx_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_ndx_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:18:25,692", "level": "WARNING", "message": "Coluna 'gold_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_gold_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:18:25,802", "level": "ERROR", "message": "Erro durante a previs\u00e3o do modelo: 'StandardScaler' object has no attribute 'predict'"}
+{"timestamp": "2025-08-05 19:19:26,172", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:19:26,173", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:19:26,174", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:19:26,176", "level": "WARNING", "message": "Coluna 'dxy_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_dxy_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:19:26,177", "level": "WARNING", "message": "Coluna 'vix_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_vix_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:19:26,178", "level": "WARNING", "message": "Coluna 'spx_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_spx_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:19:26,179", "level": "WARNING", "message": "Coluna 'ndx_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_ndx_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:19:26,180", "level": "WARNING", "message": "Coluna 'gold_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_gold_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:19:26,296", "level": "ERROR", "message": "Erro durante a previs\u00e3o do modelo: 'StandardScaler' object has no attribute 'predict'"}
+{"timestamp": "2025-08-05 19:24:40,096", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:24:40,097", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:24:40,098", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:24:40,099", "level": "WARNING", "message": "Coluna 'dxy_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_dxy_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:24:40,100", "level": "WARNING", "message": "Coluna 'vix_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_vix_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:24:40,101", "level": "WARNING", "message": "Coluna 'spx_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_spx_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:24:40,102", "level": "WARNING", "message": "Coluna 'ndx_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_ndx_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:24:40,103", "level": "WARNING", "message": "Coluna 'gold_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_gold_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:24:40,245", "level": "ERROR", "message": "Features em falta para a previs\u00e3o: ['Column_0', 'Column_1', 'Column_2', 'Column_3', 'Column_4']. Imposs\u00edvel gerar sinal."}
+{"timestamp": "2025-08-05 19:25:40,721", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:25:40,722", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:25:40,723", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:25:40,724", "level": "WARNING", "message": "Coluna 'dxy_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_dxy_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:25:40,725", "level": "WARNING", "message": "Coluna 'vix_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_vix_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:25:40,726", "level": "WARNING", "message": "Coluna 'spx_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_spx_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:25:40,726", "level": "WARNING", "message": "Coluna 'ndx_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_ndx_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:25:40,727", "level": "WARNING", "message": "Coluna 'gold_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_gold_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:25:40,834", "level": "ERROR", "message": "Features em falta para a previs\u00e3o: ['Column_0', 'Column_1', 'Column_2', 'Column_3', 'Column_4']. Imposs\u00edvel gerar sinal."}
+{"timestamp": "2025-08-05 19:26:41,199", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:26:41,200", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:26:41,200", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:26:41,202", "level": "WARNING", "message": "Coluna 'dxy_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_dxy_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:26:41,203", "level": "WARNING", "message": "Coluna 'vix_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_vix_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:26:41,204", "level": "WARNING", "message": "Coluna 'spx_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_spx_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:26:41,205", "level": "WARNING", "message": "Coluna 'ndx_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_ndx_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:26:41,206", "level": "WARNING", "message": "Coluna 'gold_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_gold_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:26:41,322", "level": "ERROR", "message": "Features em falta para a previs\u00e3o: ['Column_0', 'Column_1', 'Column_2', 'Column_3', 'Column_4']. Imposs\u00edvel gerar sinal."}
+{"timestamp": "2025-08-05 19:27:41,673", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:27:41,674", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:27:41,675", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:27:41,677", "level": "WARNING", "message": "Coluna 'dxy_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_dxy_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:27:41,677", "level": "WARNING", "message": "Coluna 'vix_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_vix_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:27:41,678", "level": "WARNING", "message": "Coluna 'spx_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_spx_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:27:41,679", "level": "WARNING", "message": "Coluna 'ndx_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_ndx_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:27:41,680", "level": "WARNING", "message": "Coluna 'gold_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_gold_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:27:41,798", "level": "ERROR", "message": "Features em falta para a previs\u00e3o: ['Column_0', 'Column_1', 'Column_2', 'Column_3', 'Column_4']. Imposs\u00edvel gerar sinal."}
+{"timestamp": "2025-08-05 19:28:42,158", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:28:42,159", "level": "WARNING", "message": "Coluna 'funding_rate' n\u00e3o encontrada. Feature 'funding_rate_mean_24h' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:28:42,159", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:28:42,161", "level": "WARNING", "message": "Coluna 'dxy_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_dxy_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:28:42,162", "level": "WARNING", "message": "Coluna 'vix_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_vix_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:28:42,163", "level": "WARNING", "message": "Coluna 'spx_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_spx_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:28:42,164", "level": "WARNING", "message": "Coluna 'ndx_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_ndx_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:28:42,165", "level": "WARNING", "message": "Coluna 'gold_close' n\u00e3o encontrada. Feature de correla\u00e7\u00e3o 'btc_gold_corr_30d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:28:42,286", "level": "ERROR", "message": "Features em falta para a previs\u00e3o: ['Column_0', 'Column_1', 'Column_2', 'Column_3', 'Column_4']. Imposs\u00edvel gerar sinal."}
+{"timestamp": "2025-08-05 19:29:53,985", "level": "ERROR", "message": "Erro ao tentar abrir posi\u00e7\u00e3o: 'atr_14'"}
+{"timestamp": "2025-08-05 19:30:54,868", "level": "ERROR", "message": "Erro ao tentar abrir posi\u00e7\u00e3o: 'atr_14'"}
+{"timestamp": "2025-08-05 19:37:26,433", "level": "CRITICAL", "message": "\u274c Ocorreu um erro cr\u00edtico no loop principal: 'DataManager' object has no attribute 'get_historical_data'"}
+{"timestamp": "2025-08-05 19:42:26,028", "level": "WARNING", "message": "\ud83d\udea8 SINAL DE INTERRUP\u00c7\u00c3O RECEBIDO. ENCERRANDO... \ud83d\udea8"}
+{"timestamp": "2025-08-05 19:43:01,968", "level": "ERROR", "message": "Erro ao tentar abrir posi\u00e7\u00e3o: 'atr_14'"}
+{"timestamp": "2025-08-05 19:43:28,200", "level": "WARNING", "message": "\ud83d\udea8 SINAL DE INTERRUP\u00c7\u00c3O RECEBIDO. ENCERRANDO... \ud83d\udea8"}
+{"timestamp": "2025-08-05 19:46:10,303", "level": "WARNING", "message": "Nenhum dado encontrado para a measurement 'features_master_table' no per\u00edodo especificado."}
+{"timestamp": "2025-08-05 19:46:10,304", "level": "WARNING", "message": "A 'features_master_table' est\u00e1 vazia ou desatualizada. Verifique se o 'data_pipeline' est\u00e1 em execu\u00e7\u00e3o. A saltar ciclo."}
+{"timestamp": "2025-08-05 19:47:10,310", "level": "WARNING", "message": "Nenhum dado encontrado para a measurement 'features_master_table' no per\u00edodo especificado."}
+{"timestamp": "2025-08-05 19:47:10,312", "level": "WARNING", "message": "A 'features_master_table' est\u00e1 vazia ou desatualizada. Verifique se o 'data_pipeline' est\u00e1 em execu\u00e7\u00e3o. A saltar ciclo."}
+{"timestamp": "2025-08-05 19:48:10,320", "level": "WARNING", "message": "Nenhum dado encontrado para a measurement 'features_master_table' no per\u00edodo especificado."}
+{"timestamp": "2025-08-05 19:48:10,321", "level": "WARNING", "message": "A 'features_master_table' est\u00e1 vazia ou desatualizada. Verifique se o 'data_pipeline' est\u00e1 em execu\u00e7\u00e3o. A saltar ciclo."}
+{"timestamp": "2025-08-05 19:48:20,601", "level": "WARNING", "message": "\ud83d\udea8 SINAL DE INTERRUP\u00c7\u00c3O RECEBIDO. ENCERRANDO... \ud83d\udea8"}
+{"timestamp": "2025-08-05 19:48:28,036", "level": "CRITICAL", "message": "\u274c Falha catastr\u00f3fica ao inicializar o TradingBot: 'ExchangeManager' object has no attribute 'settings'"}
+{"timestamp": "2025-08-05 19:49:32,503", "level": "CRITICAL", "message": "\u274c Ocorreu um erro cr\u00edtico no loop principal: 'ExchangeManager' object has no attribute 'get_historical_candles'"}
+{"timestamp": "2025-08-05 19:50:35,100", "level": "WARNING", "message": "\ud83d\udea8 SINAL DE INTERRUP\u00c7\u00c3O RECEBIDO. ENCERRANDO... \ud83d\udea8"}
+{"timestamp": "2025-08-05 19:50:41,363", "level": "CRITICAL", "message": "\u274c Ocorreu um erro cr\u00edtico no loop principal: Cannot join tz-naive with tz-aware DatetimeIndex"}
+{"timestamp": "2025-08-05 19:51:35,054", "level": "WARNING", "message": "\ud83d\udea8 SINAL DE INTERRUP\u00c7\u00c3O RECEBIDO. ENCERRANDO... \ud83d\udea8"}

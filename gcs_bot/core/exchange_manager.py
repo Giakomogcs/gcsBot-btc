@@ -1,15 +1,15 @@
-# Ficheiro: src/core/exchange_manager.py
+# Ficheiro: src/core/exchange_manager.py (VERSÃO FINAL COM CORREÇÃO DE TIMEZONE)
 
 from binance.client import Client
 from binance.exceptions import BinanceAPIException, BinanceRequestException
 from gcs_bot.utils.config_manager import settings
 from gcs_bot.utils.logger import logger
 from typing import Optional, Union
+import pandas as pd
 
 class ExchangeManager:
     """
     Classe responsável por toda a comunicação com a API da corretora (Binance).
-    Abstrai as chamadas de API, como obter saldo, preços e executar ordens.
     """
     def __init__(self):
         self.use_testnet = settings.app.use_testnet
@@ -40,112 +40,86 @@ class ExchangeManager:
             return None
 
     def get_account_balance(self, asset: str = 'USDT') -> float:
-        """
-        Busca o saldo livre de um ativo específico na conta da corretora.
-
-        :param asset: O ticker do ativo (ex: 'USDT', 'BTC').
-        :return: O saldo livre (disponível para uso) como um float. Retorna 0.0 se ocorrer um erro.
-        """
+        """Busca o saldo livre de um ativo específico na conta da corretora."""
         if not self._client:
             logger.warning("Cliente Binance não inicializado. Retornando saldo 0.")
             return 0.0
         try:
             balance_info = self._client.get_asset_balance(asset=asset)
             if balance_info:
-                free_balance = float(balance_info['free'])
-                logger.debug(f"Saldo disponível de {asset}: {free_balance}")
-                return free_balance
-            logger.warning(f"Não foi possível obter informações de saldo para o ativo {asset}.")
-            return 0.0
-        except (BinanceAPIException, BinanceRequestException) as e:
-            logger.error(f"Erro na API da Binance ao buscar saldo de {asset}: {e}", exc_info=True)
+                return float(balance_info['free'])
             return 0.0
         except Exception as e:
             logger.error(f"Erro inesperado ao buscar saldo: {e}", exc_info=True)
             return 0.0
 
     def get_current_price(self, symbol: str) -> Optional[float]:
-        """
-        Busca o preço de mercado mais recente para um par de negociação.
-
-        :param symbol: O par de negociação (ex: 'BTCUSDT').
-        :return: O preço atual como um float, ou None se ocorrer um erro.
-        """
+        """Busca o preço de mercado mais recente para um par de negociação."""
         if not self._client:
             logger.warning("Cliente Binance não inicializado. Não é possível buscar o preço.")
             return None
         try:
             ticker = self._client.get_symbol_ticker(symbol=symbol)
-            price = float(ticker['price'])
-            logger.debug(f"Preço atual de {symbol}: {price}")
-            return price
-        except (BinanceAPIException, BinanceRequestException) as e:
-            logger.error(f"Erro na API da Binance ao buscar preço para {symbol}: {e}", exc_info=True)
-            return None
+            return float(ticker['price'])
         except Exception as e:
             logger.error(f"Erro inesperado ao buscar preço: {e}", exc_info=True)
             return None
 
-    def place_market_order(self, symbol: str, side: str, quantity: Union[float, str]) -> Optional[dict]:
+    def get_historical_candles(self, symbol: str, interval: str = '1m', limit: int = 100) -> pd.DataFrame:
         """
-        Envia uma ordem de mercado para a corretora.
+        Busca as últimas N velas (candles) para um símbolo, garantindo que o
+        fuso horário (timezone) UTC seja definido.
+        """
+        if not self._client:
+            logger.warning("Cliente Binance não inicializado. Não é possível buscar velas históricas.")
+            return pd.DataFrame()
+        try:
+            klines = self._client.get_klines(symbol=symbol, interval=interval, limit=limit)
+            
+            df = pd.DataFrame(klines, columns=[
+                'timestamp', 'open', 'high', 'low', 'close', 'volume', 
+                'close_time', 'quote_asset_volume', 'number_of_trades', 
+                'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'
+            ])
+            
+            # --- LINHA CORRIGIDA ---
+            # Adicionamos utc=True para criar um DatetimeIndex "timezone-aware".
+            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms', utc=True)
+            
+            df.set_index('timestamp', inplace=True)
+            
+            ohlcv_cols = ['open', 'high', 'low', 'close', 'volume']
+            df = df[ohlcv_cols]
+            df = df.astype(float)
+            
+            return df
+            
+        except Exception as e:
+            logger.error(f"Erro inesperado ao buscar velas: {e}", exc_info=True)
+            return pd.DataFrame()
 
-        :param symbol: O par de negociação (ex: 'BTCUSDT').
-        :param side: O lado da ordem ('BUY' ou 'SELL').
-        :param quantity: A quantidade a ser negociada. Para ordens de COMPRA, é a quantidade do ativo de cotação (USDT). Para ordens de VENDA, é a quantidade do ativo base (BTC).
-        :return: O dicionário de resposta da API da Binance se a ordem for bem-sucedida, caso contrário None.
-        """
+    def place_market_order(self, symbol: str, side: str, quantity: Union[float, str]) -> Optional[dict]:
+        """Envia uma ordem de mercado para a corretora."""
         if not self._client:
             logger.error("Cliente Binance não inicializado. Ordem não pode ser enviada.")
             return None
-
-        # Validação do lado da ordem
         if side.upper() not in ['BUY', 'SELL']:
             logger.error(f"Lado da ordem inválido: '{side}'. Use 'BUY' ou 'SELL'.")
             return None
-
         try:
-            logger.info(f"Tentando executar ordem de mercado: {side} {quantity} de {symbol}")
-            
-            if self.use_testnet:
-                # A Testnet da Binance tem bugs com ordens a mercado usando 'quoteOrderQty'.
-                # Criamos a ordem de teste, mas não executamos para evitar erros da API de teste.
-                # Em um cenário real, você poderia ter uma lógica mais complexa aqui.
-                logger.warning("--- MODO TESTNET ---")
-                logger.warning(f"Ordem de {side} {symbol} com quantidade {quantity} foi criada, mas não executada.")
-                # Simulamos uma resposta bem-sucedida para o fluxo do programa continuar
-                return {
-                    "symbol": symbol, "orderId": 12345, "status": "FILLED",
-                    "side": side, "type": "MARKET", "executedQty": quantity
-                }
-
-            # Lógica para MODO REAL
+            logger.info(f"TENTANDO EXECUTAR ORDEM DE MERCADO: {side} {quantity} de {symbol}")
             if side.upper() == 'BUY':
-                # Para ordens de compra, usamos a quantidade do ativo de cotação (ex: gastar 100 USDT)
                 order = self._client.create_order(
-                    symbol=symbol,
-                    side=Client.SIDE_BUY,
-                    type=Client.ORDER_TYPE_MARKET,
-                    quoteOrderQty=quantity # Quantidade em USDT
+                    symbol=symbol, side=Client.SIDE_BUY, type=Client.ORDER_TYPE_MARKET, quoteOrderQty=quantity
                 )
-            else: # side.upper() == 'SELL'
-                # Para ordens de venda, usamos a quantidade do ativo base (ex: vender 0.001 BTC)
+            else:
                 order = self._client.create_order(
-                    symbol=symbol,
-                    side=Client.SIDE_SELL,
-                    type=Client.ORDER_TYPE_MARKET,
-                    quantity=quantity # Quantidade em BTC
+                    symbol=symbol, side=Client.SIDE_SELL, type=Client.ORDER_TYPE_MARKET, quantity=quantity
                 )
-            
-            logger.info(f"✅ Ordem executada com sucesso: {order}")
+            logger.info(f"✅ ORDEM EXECUTADA COM SUCESSO: {order}")
             return order
-
-        except (BinanceAPIException, BinanceRequestException) as e:
-            logger.error(f"Erro na API da Binance ao colocar ordem: {e}", exc_info=True)
-            return None
         except Exception as e:
-            logger.error(f"Erro inesperado ao colocar ordem: {e}", exc_info=True)
+            logger.error(f"ERRO INESPERADO AO COLOCAR ORDEM: {e}", exc_info=True)
             return None
 
-# Instância única para ser usada em toda a aplicação
 exchange_manager = ExchangeManager()

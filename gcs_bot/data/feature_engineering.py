@@ -1,4 +1,4 @@
-# src/core/feature_engineering.py (VERSÃO FINAL E COMPLETA)
+# gcs_bot/data/feature_engineering.py (VERSÃO FINAL E FLEXÍVEL)
 
 import pandas as pd
 import numpy as np
@@ -8,11 +8,13 @@ from tqdm import tqdm
 from gcs_bot.utils.logger import logger
 from gcs_bot.utils.config_manager import settings
 
-def add_all_features(df: pd.DataFrame) -> pd.DataFrame:
+def add_all_features(df: pd.DataFrame, live_mode: bool = False) -> pd.DataFrame:
     """
-    Função central e única que adiciona todas as features de forma robusta.
+    Função central que adiciona todas as features.
+    :param df: DataFrame com os dados brutos.
+    :param live_mode: Se True, não calcula o 'target', que só é usado para treino.
     """
-    logger.debug("Iniciando a adição de todas as features de engenharia...")
+    logger.debug(f"Iniciando a adição de features (Modo Live: {live_mode})...")
     df_copy = df.copy()
 
     # --- GARANTIA DE DADOS DE ENTRADA ---
@@ -44,26 +46,19 @@ def add_all_features(df: pd.DataFrame) -> pd.DataFrame:
     
     # --- 3. FEATURES DE SENTIMENTO E DERIVATIVOS ---
     logger.debug("Calculando features de Sentimento e Derivativos...")
-    
-    # Fear & Greed
     if 'fear_and_greed' in df_copy.columns:
         df_copy['fng_change_3d'] = df_copy['fear_and_greed'].diff(periods=3 * 1440).ffill().bfill()
     else:
-        logger.warning("Coluna 'fear_and_greed' não encontrada. Feature 'fng_change_3d' será nula.")
         df_copy['fng_change_3d'] = 0.0
         
-    # Funding Rate
     if 'funding_rate' in df_copy.columns:
         df_copy['funding_rate_mean_24h'] = df_copy['funding_rate'].rolling(window=24 * 60).mean().ffill().bfill()
     else:
-        logger.warning("Coluna 'funding_rate' não encontrada. Feature 'funding_rate_mean_24h' será nula.")
         df_copy['funding_rate_mean_24h'] = 0.0
         
-    # Open Interest
     if 'open_interest' in df_copy.columns:
         df_copy['open_interest_pct_change_4h'] = df_copy['open_interest'].pct_change(periods=4 * 60).ffill().bfill()
     else:
-        logger.warning("Coluna 'open_interest' não encontrada. Feature 'open_interest_pct_change_4h' será nula.")
         df_copy['open_interest_pct_change_4h'] = 0.0
 
     # --- 4. CORRELAÇÕES DE MERCADO ---
@@ -72,48 +67,50 @@ def add_all_features(df: pd.DataFrame) -> pd.DataFrame:
         col_name = f"{asset}_close"
         corr_col_name = f"btc_{asset}_corr_30d"
         if col_name in df_copy.columns and 'close' in df_copy.columns:
-            corr_window = '30D'
+            # Em modo live, calcular a correlação de 30 dias a cada minuto é muito lento.
+            # Usamos um período menor para uma aproximação rápida.
+            corr_window = '30D' if not live_mode else '1D' 
             df_copy[corr_col_name] = df_copy['close'].rolling(window=corr_window).corr(df_copy[col_name]).ffill().bfill()
         else:
-            logger.warning(f"Coluna '{col_name}' não encontrada. Feature de correlação '{corr_col_name}' será nula.")
             df_copy[corr_col_name] = 0.0
 
     # --- 5. CÁLCULO DO ALVO (TARGET) ---
-    # Esta lógica permanece a mesma, pois é fundamental
-    logger.info("Calculando o alvo com o método da Barreira Tripla...")
-    cfg = settings.data_pipeline.target
-    future_periods, profit_mult, stop_mult = cfg.future_periods, cfg.profit_mult, cfg.stop_mult
+    # Só executa se não estiver em modo live
+    if not live_mode:
+        logger.info("Calculando o alvo com o método da Barreira Tripla...")
+        cfg = settings.data_pipeline.target
+        future_periods, profit_mult, stop_mult = cfg.future_periods, cfg.profit_mult, cfg.stop_mult
 
-    if 'atr_14' not in df_copy.columns or df_copy['atr_14'].isnull().all():
-        logger.error("A coluna 'atr_14' não pôde ser calculada. Impossível criar o target.")
-        return df_copy
+        if 'atr_14' not in df_copy.columns or df_copy['atr_14'].isnull().all():
+            logger.error("A coluna 'atr_14' não pôde ser calculada. Impossível criar o target.")
+            return df_copy
 
-    atr = df_copy['atr_14'].ffill().bfill()
-    take_profit_levels = df_copy['close'] + (atr * profit_mult)
-    stop_loss_levels = df_copy['close'] - (atr * stop_mult)
-    target = pd.Series(np.nan, index=df_copy.index)
+        atr = df_copy['atr_14'].ffill().bfill()
+        take_profit_levels = df_copy['close'] + (atr * profit_mult)
+        stop_loss_levels = df_copy['close'] - (atr * stop_mult)
+        target = pd.Series(np.nan, index=df_copy.index)
 
-    for i in tqdm(range(len(df_copy) - future_periods), desc="Calculando Target"):
-        if pd.isna(take_profit_levels.iloc[i]) or pd.isna(stop_loss_levels.iloc[i]):
-            continue
+        for i in tqdm(range(len(df_copy) - future_periods), desc="Calculando Target"):
+            if pd.isna(take_profit_levels.iloc[i]) or pd.isna(stop_loss_levels.iloc[i]):
+                continue
 
-        future_highs = df_copy['high'].iloc[i+1 : i+1+future_periods]
-        future_lows = df_copy['low'].iloc[i+1 : i+1+future_periods]
-        
-        hit_tp = future_highs[future_highs >= take_profit_levels.iloc[i]]
-        hit_sl = future_lows[future_lows <= stop_loss_levels.iloc[i]]
-        
-        if not hit_tp.empty and not hit_sl.empty:
-            target.iloc[i] = 1 if hit_tp.index[0] < hit_sl.index[0] else 0
-        elif not hit_tp.empty:
-            target.iloc[i] = 1
-        elif not hit_sl.empty:
-            target.iloc[i] = 0
+            future_highs = df_copy['high'].iloc[i+1 : i+1+future_periods]
+            future_lows = df_copy['low'].iloc[i+1 : i+1+future_periods]
             
-    df_copy['target'] = target
-    df_copy.dropna(subset=['target'], inplace=True)
-    if not df_copy.empty:
-        df_copy['target'] = df_copy['target'].astype(int)
+            hit_tp = future_highs[future_highs >= take_profit_levels.iloc[i]]
+            hit_sl = future_lows[future_lows <= stop_loss_levels.iloc[i]]
+            
+            if not hit_tp.empty and not hit_sl.empty:
+                target.iloc[i] = 1 if hit_tp.index[0] < hit_sl.index[0] else 0
+            elif not hit_tp.empty:
+                target.iloc[i] = 1
+            elif not hit_sl.empty:
+                target.iloc[i] = 0
+                
+        df_copy['target'] = target
+        df_copy.dropna(subset=['target'], inplace=True)
+        if not df_copy.empty:
+            df_copy['target'] = df_copy['target'].astype(int)
 
-    logger.debug("✅ Adição de features e target concluída.")
+    logger.debug("✅ Adição de features concluída.")
     return df_copy
