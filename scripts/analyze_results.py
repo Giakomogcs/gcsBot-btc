@@ -3,39 +3,40 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import os
+import sys
+
+# Adiciona o diretório raiz do projeto ao sys.path
+# para permitir a importação de módulos do gcs_bot.
+# Obtém o caminho do diretório onde o script está
+script_dir = os.path.dirname(os.path.abspath(__file__))
+# Obtém o caminho do diretório raiz do projeto (um nível acima de 'scripts')
+project_root = os.path.dirname(script_dir)
+# Adiciona o diretório raiz ao sys.path
+sys.path.append(project_root)
+
+from gcs_bot.database.database_manager import db_manager
 
 def analyze_confidence_performance():
     """
-    Carrega os resultados do backtest e o histórico de confiança para analisar
+    Carrega os resultados do backtest do banco de dados para analisar
     a correlação entre a confiança do modelo e a performance dos trades.
     """
-    print("--- Iniciando Análise de Confiança vs. Performance ---")
+    print("--- Iniciando Análise de Confiança vs. Performance a partir do DB ---")
 
-    # Caminhos para os arquivos de dados
-    trades_file = 'data/output/trades_history.csv'
-    confidence_file = 'data/output/confidence_history.csv'
+    # Carrega os dados diretamente do banco de dados
+    analysis_df = db_manager.get_all_trades_for_analysis()
 
-    # Verifica se os arquivos necessários existem
-    if not os.path.exists(trades_file) or not os.path.exists(confidence_file):
-        print("\nERRO: Arquivos 'trades_history.csv' ou 'confidence_history.csv' não encontrados.")
-        print("Por favor, execute o backtest primeiro para gerar esses arquivos.")
+    # Verifica se foram encontrados trades
+    if analysis_df.empty:
+        print("\nAVISO: Nenhum trade encontrado no banco de dados para o período especificado.")
+        print("Por favor, execute o backtest primeiro para gerar dados.")
         return
 
-    # Carrega os dados
-    trades_df = pd.read_csv(trades_file, parse_dates=['entry_time', 'exit_time'])
-    confidence_df = pd.read_csv(confidence_file, parse_dates=['timestamp'])
-    
-    print(f"Carregados {len(trades_df)} trades e {len(confidence_df)} registros de confiança.")
+    print(f"Carregados {len(analysis_df)} trades do banco de dados.")
 
-    # Junta os trades com a confiança que o bot tinha no momento da entrada
-    # Renomeia a coluna 'timestamp' para 'entry_time' para o merge
-    confidence_df.rename(columns={'timestamp': 'entry_time'}, inplace=True)
-    
-    # O merge junta as informações de confiança a cada trade correspondente
-    analysis_df = pd.merge(trades_df, confidence_df, on='entry_time', how='left')
-
+    # Remove trades onde a confiança não foi registrada (se houver)
     if analysis_df['final_confidence'].isnull().any():
-        print("AVISO: Alguns trades não encontraram um registro de confiança correspondente.")
+        print("AVISO: Alguns trades não tinham um valor de 'final_confidence' registrado.")
         analysis_df.dropna(subset=['final_confidence'], inplace=True)
 
     # Cria uma coluna para identificar se o trade foi vencedor (Win) ou não
