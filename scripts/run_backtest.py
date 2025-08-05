@@ -33,7 +33,7 @@ def main():
 
         data_manager = DataManager(db_manager=db_manager, config=settings, logger=logger)
         # No backtest, o cliente é None, o que é tratado pelo AccountManager
-        account_manager = AccountManager(binance_client=None) 
+        account_manager = AccountManager(binance_client=None)
 
         df_features = data_manager.read_data_from_influx(
             measurement="features_master_table",
@@ -45,9 +45,9 @@ def main():
             return
 
         position_manager = PositionManager(
-            config=settings, 
-            db_manager=db_manager, 
-            logger=logger, 
+            config=settings,
+            db_manager=db_manager,
+            logger=logger,
             account_manager=account_manager
         )
 

@@ -107,20 +107,27 @@ class PositionManager:
                 exit_reason = 'STOP_LOSS'
 
             if exit_reason:
+                self.logger.info(f"✅ FECHANDO TRADE {trade_id} POR {exit_reason}:")
+                self.logger.info(f"   Preço de Entrada: ${position['entry_price']:,.2f}")
+                self.logger.info(f"   Preço de Saída:   ${current_price:,.2f}")
+                self.logger.info(f"   Quantidade:       {position['quantity_btc']:.8f} BTC")
+                self.logger.info(f"   Comissões:        ${(commission_entry + commission_exit):,.4f}")
+                self.logger.info(f"   Resultado Líquido: ${net_pnl:,.2f}")
+
                 close_trade_data = {
                     "trade_id": trade_id,
                     "status": "CLOSED",
                     "entry_price": position['entry_price'],
-                    "realized_pnl_usdt": net_pnl, # Salva o PnL líquido
+                    "realized_pnl_usdt": net_pnl,
                     "timestamp": datetime.now(timezone.utc),
-                    "decision_data": {"exit_reason": exit_reason, "commission": commission_entry + commission_exit}
+                    "decision_data": {"exit_reason": exit_reason, "commission": commission_entry + commission_exit, "exit_price": current_price}
                 }
                 self.db_manager.write_trade(close_trade_data)
                 summary = {
                     'entry_price': position['entry_price'],
                     'exit_price': current_price,
                     'quantity_btc': position['quantity_btc'],
-                    'pnl_usdt': net_pnl, # Usa o PnL líquido
+                    'pnl_usdt': net_pnl,
                     'exit_reason': exit_reason
                 }
                 closed_trades_summaries.append(summary)
