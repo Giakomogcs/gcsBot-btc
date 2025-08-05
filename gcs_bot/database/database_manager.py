@@ -60,10 +60,50 @@ class DatabaseManager:
             df = df.rename(columns={"_time": "timestamp"})
             cols_to_drop = ['result', 'table', '_start', '_stop', '_measurement', 'status']
             df.drop(columns=[col for col in cols_to_drop if col in df.columns], inplace=True, errors='ignore')
+
+            # Garante que as colunas numéricas são do tipo correto
+            numeric_cols = ['entry_price', 'profit_target_price', 'stop_loss_price', 'quantity_btc', 'realized_pnl_usdt']
+            for col in numeric_cols:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+
             df.set_index('trade_id', inplace=True)
             return df
         except Exception as e:
             logger.error(f"Falha ao buscar posições abertas do DB: {e}", exc_info=True)
+            return pd.DataFrame()
+
+    def get_all_trades_in_range(self, start_date: str = "-90d", end_date: str = "now()"):
+        """Busca todos os trades (abertos e fechados) em um determinado período."""
+        try:
+            logger.info(f"Buscando todos os trades de {start_date} a {end_date}...")
+            query = f'''
+            from(bucket: "{self.bucket}")
+                |> range(start: {start_date}, stop: {end_date})
+                |> filter(fn: (r) => r._measurement == "trades")
+                |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+                |> sort(columns: ["_time"], desc: false)
+            '''
+            df = self.query_api.query_data_frame(query, org=self.org)
+            if isinstance(df, list):
+                df = pd.concat(df, ignore_index=True) if df else pd.DataFrame()
+            if df.empty:
+                logger.warning("Nenhum trade encontrado no período especificado.")
+                return pd.DataFrame()
+
+            df = df.rename(columns={"_time": "timestamp"})
+            cols_to_drop = ['result', 'table', '_start', '_stop', '_measurement']
+            df.drop(columns=[col for col in cols_to_drop if col in df.columns], inplace=True, errors='ignore')
+
+            # Converte colunas numéricas
+            numeric_cols = ['entry_price', 'profit_target_price', 'stop_loss_price', 'quantity_btc', 'realized_pnl_usdt']
+            for col in numeric_cols:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+
+            return df
+        except Exception as e:
+            logger.error(f"Falha ao buscar todos os trades do DB: {e}", exc_info=True)
             return pd.DataFrame()
 
     def get_last_n_trades(self, n: int):
