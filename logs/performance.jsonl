@@ -5,3 +5,10 @@
 {"timestamp": "2025-08-05 17:36:25,285", "level": "ERROR", "message": "Ocorreu um erro inesperado: <urllib3.connection.HTTPConnection object at 0x7f2c11d33e90>: Failed to establish a new connection: [Errno 111] Connection refused"}
 {"timestamp": "2025-08-05 17:43:31,649", "level": "ERROR", "message": "--- \u274c ERRO CR\u00cdTICO DURANTE O BACKTEST \u274c ---"}
 {"timestamp": "2025-08-05 17:43:31,649", "level": "ERROR", "message": "Ocorreu um erro inesperado: <urllib3.connection.HTTPConnection object at 0x7f4f9cf1c0b0>: Failed to establish a new connection: [Errno 111] Connection refused"}
+{"timestamp": "2025-08-05 18:16:14,626", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2025-07-01 - 2025-07-31. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-05 18:16:14,628", "level": "ERROR", "message": "Falha no lote de OI de 2025-07-01 a 2025-07-31: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1751384160000&endTime=1753976160000&limit=500"}
+{"timestamp": "2025-08-05 18:16:14,748", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 18:16:36,663", "level": "ERROR", "message": "\ud83d\udea8 VERIFICA\u00c7\u00c3O DE INTEGRIDADE FALHOU! \ud83d\udea8"}
+{"timestamp": "2025-08-05 18:16:36,664", "level": "ERROR", "message": "As seguintes colunas cr\u00edticas cont\u00eam valores nulos na features_master_table:"}
+{"timestamp": "2025-08-05 18:16:36,664", "level": "ERROR", "message": "  - Coluna 'fng_change_3d': 1325 valor(es) nulo(s)"}
+{"timestamp": "2025-08-05 18:16:36,665", "level": "ERROR", "message": "  - Coluna 'regime': 1423 valor(es) nulo(s)"}
