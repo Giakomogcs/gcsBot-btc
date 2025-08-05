@@ -1,3 +1,7 @@
 {"timestamp": "2025-08-05 16:09:18,893", "level": "ERROR", "message": "Falha ao buscar todos os trades do DB: <urllib3.connection.HTTPConnection object at 0x7fd92a96f470>: Failed to resolve 'db' ([Errno -2] Name or service not known)"}
 {"timestamp": "2025-08-05 16:10:08,277", "level": "ERROR", "message": "Falha ao buscar todos os trades do DB: <urllib3.connection.HTTPConnection object at 0x7f160ca42e70>: Failed to resolve 'db' ([Errno -2] Name or service not known)"}
 {"timestamp": "2025-08-05 16:11:00,910", "level": "ERROR", "message": "Falha ao buscar todos os trades do DB: <urllib3.connection.HTTPConnection object at 0x7f543dba6e10>: Failed to establish a new connection: [Errno 111] Connection refused"}
+{"timestamp": "2025-08-05 17:29:05,368", "level": "ERROR", "message": "--- \u274c ERRO CR\u00cdTICO DURANTE O BACKTEST \u274c ---"}
+{"timestamp": "2025-08-05 17:29:05,369", "level": "ERROR", "message": "Ocorreu um erro inesperado: PositionManager.__init__() missing 1 required positional argument: 'account_manager'"}
+{"timestamp": "2025-08-05 17:30:28,763", "level": "ERROR", "message": "--- \u274c ERRO CR\u00cdTICO DURANTE O BACKTEST \u274c ---"}
+{"timestamp": "2025-08-05 17:30:28,764", "level": "ERROR", "message": "Ocorreu um erro inesperado: PositionManager.__init__() missing 1 required positional argument: 'account_manager'"}

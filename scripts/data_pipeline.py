@@ -72,10 +72,8 @@ class DataPipeline:
             df_processed['timestamp'] = pd.to_datetime(pd.to_numeric(df_processed['timestamp']), unit='s', utc=True)
             df_processed = df_processed.set_index('timestamp')[['fear_and_greed']]
 
-            # --- INÍCIO DA CORREÇÃO ---
             # Garante que o tipo de dado é float para evitar conflito com o InfluxDB
             df_processed['fear_and_greed'] = pd.to_numeric(df_processed['fear_and_greed']).astype(float)
-            # --- FIM DA CORREÇÃO ---
             
             if last_ts_in_db:
                 df_processed = df_processed[df_processed.index > last_ts_in_db]
@@ -592,7 +590,7 @@ class DataPipeline:
         all_funding = []
         try:
             params = { "symbol": symbol_clean, "startTime": int(start_dt.timestamp() * 1000), "endTime": int(end_dt.timestamp() * 1000), "limit": 1000 }
-            response = session.get(f"{base_url}/fapi/v1/fundingRate", params=params, timeout=15)
+            response = session.get(f"{base_url}/fapi/v1/fundingRate", params=params, timeout=60)
             response.raise_for_status()
             all_funding = response.json()
         except requests.exceptions.RequestException as e:
@@ -619,7 +617,7 @@ class DataPipeline:
                 loop_end_dt = end_dt
             try:
                 params = { "symbol": symbol_clean, "period": "1h", "startTime": int(loop_start_dt.timestamp() * 1000), "endTime": int(loop_end_dt.timestamp() * 1000), "limit": 500 }
-                response = session.get(f"{base_url}/futures/data/openInterestHist", params=params, timeout=15)
+                response = session.get(f"{base_url}/futures/data/openInterestHist", params=params, timeout=60)
                 if response.status_code != 200:
                      logger.error(f"Erro {response.status_code} ao buscar Open Interest para o período {loop_start_dt.date()} - {loop_end_dt.date()}. Detalhes: {response.text}")
                 response.raise_for_status()
@@ -660,15 +658,13 @@ class DataPipeline:
         """
         Executa o pipeline completo com a arquitetura finalizada:
         1. Garante que os dados brutos existem (Ingestão).
-        2. Processa os dados brutos, JUNTANDO TODAS AS FONTES, para criar a tabela mestre.
+        2. Processa os dados brutos de forma incremental para criar/atualizar a tabela mestre.
         """
         # --- FASE 0: INGESTÃO E VALIDAÇÃO DE DADOS BRUTOS ---
         logger.info("--- FASE 0: Garantindo a existência e atualização dos dados brutos ---")
         self.run_btc_pipeline(symbol='BTCUSDT', interval='1m')
         self.run_macro_pipeline()
         self.run_sentiment_pipeline()
-        # Adicionar aqui a ingestão de dados de derivativos se ainda não existir um pipeline robusto para eles
-        # No seu caso, a função _get_derivatives_data já existe, vamos usá-la de forma inteligente.
         
         # --- FASE 1: PREPARAÇÃO DE MODELOS E DEPENDÊNCIAS ---
         logger.info("--- FASE 1: Preparando modelos e dependências ---")
@@ -686,11 +682,32 @@ class DataPipeline:
             logger.critical("Modelo de SituationalAwareness não pôde ser carregado. Abortando.")
             return
 
-        start_date = pd.to_datetime(datetime.date.today() - relativedelta(years=2), utc=True)
-        end_date = pd.to_datetime(datetime.date.today() + datetime.timedelta(days=1), utc=True)
+        # --- INÍCIO DA LÓGICA DE PROCESSAMENTO INCREMENTAL ---
+        measurement_name = "features_master_table"
+        last_timestamp_in_db = self._query_last_timestamp(measurement_name)
+
+        if last_timestamp_in_db:
+            # Começa a processar a partir do último minuto registado para evitar sobreposição.
+            start_date = last_timestamp_in_db + pd.Timedelta(minutes=1)
+            logger.info(f"Último registo encontrado em '{measurement_name}' em {last_timestamp_in_db}. "
+                        f"Iniciando processamento incremental a partir de {start_date}.")
+        else:
+            # Se não houver dados, usa a data de início para a ingestão inicial (ex: 2 anos atrás).
+            start_date = pd.to_datetime(datetime.date.today() - relativedelta(years=2), utc=True)
+            logger.info(f"Nenhum dado encontrado em '{measurement_name}'. "
+                        f"Iniciando processamento completo dos últimos 2 anos a partir de {start_date}.")
+
+        end_date = pd.to_datetime(datetime.date.today() + datetime.timedelta(days=1), utc=True).replace(second=0, microsecond=0)
+
+        # Verifica se a base de dados já está atualizada.
+        if start_date >= end_date:
+            logger.info("✅ A tabela mestre ('features_master_table') já está atualizada. Nenhuma ação necessária.")
+            return
+        # --- FIM DA LÓGICA DE PROCESSAMENTO INCREMENTAL ---
         
         current_date = start_date
-        total_months = (end_date.year - start_date.year) * 12 + end_date.month - start_date.month
+        # Cálculo mais preciso para a barra de progresso
+        total_months = (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month) + 1
         pbar = tqdm(total=total_months, desc="Processando Tabela Mestre")
         
         warmup_period = pd.Timedelta(days=35)
@@ -698,7 +715,10 @@ class DataPipeline:
         while current_date < end_date:
             processing_start_date = current_date
             fetch_start_date = processing_start_date - warmup_period
-            chunk_end_date = (current_date + relativedelta(months=1))
+            
+            # O lote termina no início do próximo mês ou na data final do pipeline, o que vier primeiro.
+            chunk_end_date = min((current_date + relativedelta(months=1)), end_date)
+            
             chunk_start = fetch_start_date.isoformat()
             chunk_end = chunk_end_date.isoformat()
             
@@ -707,19 +727,23 @@ class DataPipeline:
             # --- LÓGICA DE JUNÇÃO MELHORADA ---
             df_btc_chunk = self.read_data_in_range("btc_btcusdt_1m", chunk_start, chunk_end)
             
-            if len(df_btc_chunk) < 50000:
-                logger.warning(f"Dados de BTC insuficientes ou inexistentes ({len(df_btc_chunk)} linhas) para o período {processing_start_date.strftime('%Y-%m')}. A saltar lote.")
+            # Esta verificação agora só salta o lote se for uma carga inicial (DB vazio)
+            if len(df_btc_chunk) < 50000 and last_timestamp_in_db is None:
+                logger.warning(f"Dados de BTC insuficientes ({len(df_btc_chunk)} linhas) para o período {processing_start_date.strftime('%Y-%m')}. A saltar lote inicial.")
                 current_date += relativedelta(months=1)
                 pbar.update(1)
                 continue
             
+            # Se o chunk de BTC estiver vazio em uma execução incremental, não há o que processar.
+            if df_btc_chunk.empty:
+                logger.warning(f"Nenhum dado de BTC encontrado para o período {processing_start_date.strftime('%Y-%m')}. A saltar lote.")
+                current_date += relativedelta(months=1)
+                pbar.update(1)
+                continue
+                
             df_macro_chunk = self.read_data_in_range("macro_data_1m", chunk_start, chunk_end)
             df_sentiment_chunk = self.read_data_in_range("sentiment_fear_and_greed", chunk_start, chunk_end)
             
-            # --- INÍCIO DA ALTERAÇÃO CRÍTICA ---
-            # Busca os dados de derivativos para o mesmo período e os junta.
-            # Assumindo que você não tem uma tabela raw para derivativos, buscamos via API.
-            # Numa próxima versão, poderíamos criar um pipeline de ingestão para eles também.
             df_derivatives_chunk = self._get_derivatives_data(settings.app.symbol, fetch_start_date, chunk_end_date)
             if not df_derivatives_chunk.empty:
                 df_derivatives_chunk = df_derivatives_chunk.resample('1min').ffill()
@@ -729,12 +753,13 @@ class DataPipeline:
             df_combined = df_combined.join(df_sentiment_chunk, how='left')
             if not df_derivatives_chunk.empty:
                 df_combined = df_combined.join(df_derivatives_chunk, how='left')
-            # --- FIM DA ALTERAÇÃO CRÍTICA ---
 
             df_combined.ffill(inplace=True)
+            df_combined.bfill(inplace=True)
             
             # O resto do processo continua igual, mas agora com os dados completos
             df_with_features = add_all_features(df_combined)
+            # Filtra para remover dados do período de aquecimento e garantir que não reprocessamos
             df_with_features = df_with_features[df_with_features.index >= processing_start_date]
 
             if df_with_features.empty:
@@ -743,6 +768,7 @@ class DataPipeline:
                 df_with_regimes = situational_awareness_model.transform(df_with_features)
                 
                 if self.validate_data(df_with_regimes):
+                    # A função de escrita já existe no seu código
                     self._write_dataframe_to_influx(df_with_regimes, "features_master_table")
                 else:
                     logger.error(f"Validação final falhou ou lote vazio para {current_date.strftime('%Y-%m')}. Este lote não será salvo.")
@@ -755,7 +781,7 @@ class DataPipeline:
             pbar.update(1)
         
         pbar.close()
-        logger.info("🎉🎉🎉 PIPELINE INDUSTRIAL CONCLUÍDO! A FONTE DA VERDADE ESTÁ PRONTA. 🎉🎉🎉")
+        logger.info("🎉🎉🎉 PIPELINE INDUSTRIAL CONCLUÍDO! A FONTE DA VERDADE ESTÁ ATUALIZADA. 🎉🎉🎉")
 
         # --- FASE 3: VERIFICAÇÃO FINAL ---
         self.verify_features_master_table()
