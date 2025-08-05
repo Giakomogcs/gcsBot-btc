@@ -114,12 +114,12 @@ class PositionManager:
             commission_exit = exit_value * commission_rate
             net_pnl = exit_value - entry_cost - commission_entry - commission_exit
 
-            # Condição de Take Profit: só executa se o lucro líquido for positivo
+            # Condição de Take Profit: só executa se o lucro líquido for maior que o mínimo configurado
             if current_price >= position['profit_target_price']:
-                if net_pnl > 0:
+                if net_pnl > self.config.trading_strategy.minimum_profit_for_take_profit:
                     exit_reason = 'TAKE_PROFIT'
                 else:
-                    self.logger.debug(f"TAKE PROFIT para o trade {trade_id} ignorado. Lucro líquido ({net_pnl:.2f}) não cobre as comissões.")
+                    self.logger.debug(f"TAKE PROFIT para o trade {trade_id} ignorado. Lucro líquido ({net_pnl:.2f}) não atinge o mínimo de {self.config.trading_strategy.minimum_profit_for_take_profit}.")
 
             # Condição de Stop Loss: removida
 

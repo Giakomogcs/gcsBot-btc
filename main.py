@@ -30,7 +30,7 @@ def main_loop():
 
     # Inicializa os nossos gestores
     predictor = Predictor(model_path=latest_model_path)
-    account_manager = AccountManager(binance_client=exchange_manager.client)
+    account_manager = AccountManager(binance_client=exchange_manager._client)
     position_manager = PositionManager(
         config=settings,
         db_manager=db_manager,

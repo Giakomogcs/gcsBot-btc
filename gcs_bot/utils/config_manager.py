@@ -69,6 +69,7 @@ class TradingStrategyConfig(BaseModel):
     triple_barrier: TripleBarrierConfig
     models: ModelsConfig
     ensemble_weights: dict[str, float]
+    minimum_profit_for_take_profit: float
 
 class PositionSizingConfig(BaseModel):
     method: str

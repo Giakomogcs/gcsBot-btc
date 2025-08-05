@@ -78,6 +78,7 @@ trading_strategy:
     price_action: 0.4
     market_dynamics: 0.4
     intermarket_analyst: 0.2
+  minimum_profit_for_take_profit: 0.01 # Garante pelo menos 1 centavo de lucro
 
 # Configuração do dimensionamento de posição
 position_sizing:

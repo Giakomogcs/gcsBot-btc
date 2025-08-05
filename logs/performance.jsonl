@@ -10,3 +10,8 @@
 {"timestamp": "2025-08-05 18:53:16,552", "level": "ERROR", "message": "\u274c Falha na conex\u00e3o com a Binance: APIError(code=0): Service unavailable from a restricted location according to 'b. Eligibility' in https://www.binance.com/en/terms. Please contact customer service if you believe you received this message in error."}
 {"timestamp": "2025-08-05 18:53:17,490", "level": "CRITICAL", "message": "NENHUM MODELO TREINADO ENCONTRADO. O BOT N\u00c3O PODE OPERAR."}
 {"timestamp": "2025-08-05 18:53:17,490", "level": "CRITICAL", "message": "Execute o otimizador com './manage.ps1 optimize' primeiro."}
+{"timestamp": "2025-08-05 19:02:25,890", "level": "ERROR", "message": "--- \u274c ERRO CR\u00cdTICO DURANTE O BACKTEST \u274c ---"}
+{"timestamp": "2025-08-05 19:02:25,891", "level": "ERROR", "message": "Ocorreu um erro inesperado: <urllib3.connection.HTTPConnection object at 0x7efc65163da0>: Failed to establish a new connection: [Errno 111] Connection refused"}
+{"timestamp": "2025-08-05 19:06:41,710", "level": "ERROR", "message": "\u274c Falha na conex\u00e3o com a Binance: APIError(code=0): Service unavailable from a restricted location according to 'b. Eligibility' in https://www.binance.com/en/terms. Please contact customer service if you believe you received this message in error."}
+{"timestamp": "2025-08-05 19:06:42,684", "level": "CRITICAL", "message": "NENHUM MODELO TREINADO ENCONTRADO. O BOT N\u00c3O PODE OPERAR."}
+{"timestamp": "2025-08-05 19:06:42,685", "level": "CRITICAL", "message": "Execute o otimizador com './manage.ps1 optimize' primeiro."}
