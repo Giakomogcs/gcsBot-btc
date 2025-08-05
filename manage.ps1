@@ -66,6 +66,11 @@ switch ($command) {
         docker-compose exec app python scripts/db_utils.py sentiment_fear_and_greed
         Write-Host "${Green}--- Histórico de Sentimento limpo. ---${Reset}"
     }
+    "clear-trades" {
+        Write-Host "${Yellow}--- Apagando todos os registos de trades da medição 'trades'...${Reset}"
+        docker-compose exec app python scripts/clear_trades_measurement.py
+        Write-Host "${Green}--- Medição 'trades' limpa. Pode executar o backtest novamente. ---${Reset}"
+    }
     "analyze" {
         Write-Host "${Cyan}--- Executando script de análise de resultados DENTRO do container...${Reset}"
         docker-compose exec app python scripts/analyze_results.py
@@ -102,8 +107,9 @@ switch ($command) {
         Write-Host "  ${Green}stop-services${Reset}   - Para os containers Docker."
         Write-Host "  ${Red}reset-db${Reset}        - PARA e APAGA o banco de dados. Começa do zero."
         Write-Host "  ${Red}clean-master${Reset}      - APAGA apenas a tabela Master, mantendo os dados das demais tabelas." 
-        Write-Host "  ${Red}reset-trades${Reset}      - APAGA apenas o histórico de trades, mantendo os dados de mercado." 
-        Write-Host "  ${Red}reset-sentiment${Reset}      - APAGA apenas o histórico de sentiment, mantendo os dados de mercado." 
+        Write-Host "  ${Red}reset-trades${Reset}      - APAGA apenas o histórico de trades, mantendo os dados de mercado."
+        Write-Host "  ${Red}clear-trades${Reset}       - APAGA todos os registos de trades da medição 'trades'."
+        Write-Host "  ${Red}reset-sentiment${Reset}      - APAGA apenas o histórico de sentiment, mantendo os dados de mercado."
         Write-Host "  ${Cyan}analyze-decision${Reset} - Analisa o 'porquê' de uma decisão de um modelo num ponto específico."
         Write-Host ""
         Write-Host " Operações do Bot:"
