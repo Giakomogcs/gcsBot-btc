@@ -1,6 +1,7 @@
 # src/database_manager.py (VERSÃO FINAL COMPATÍVEL)
 
 import json
+import numpy as np
 import pandas as pd
 from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import SYNCHRONOUS
@@ -27,6 +28,9 @@ class DatabaseManager:
     def write_trade(self, trade_data: dict):
         """Escreve um único registo de trade no InfluxDB."""
         try:
+            # Extrai a confiança final para ser guardada como um campo numérico separado
+            final_confidence = trade_data.get("decision_data", {}).get("final_confidence", 0.0)
+
             point = Point("trades") \
                 .tag("status", trade_data["status"]) \
                 .tag("trade_id", trade_data["trade_id"]) \
@@ -35,6 +39,7 @@ class DatabaseManager:
                 .field("stop_loss_price", float(trade_data.get("stop_loss_price", 0.0))) \
                 .field("quantity_btc", float(trade_data.get("quantity_btc", 0.0))) \
                 .field("realized_pnl_usdt", float(trade_data.get("realized_pnl_usdt", 0.0))) \
+                .field("final_confidence", float(final_confidence)) \
                 .field("decision_data", json.dumps(trade_data.get("decision_data", {}))) \
                 .time(trade_data["timestamp"])
             
@@ -62,7 +67,7 @@ class DatabaseManager:
             df.drop(columns=[col for col in cols_to_drop if col in df.columns], inplace=True, errors='ignore')
 
             # Garante que as colunas numéricas são do tipo correto
-            numeric_cols = ['entry_price', 'profit_target_price', 'stop_loss_price', 'quantity_btc', 'realized_pnl_usdt']
+            numeric_cols = ['entry_price', 'profit_target_price', 'stop_loss_price', 'quantity_btc', 'realized_pnl_usdt', 'final_confidence']
             for col in numeric_cols:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -96,7 +101,7 @@ class DatabaseManager:
             df.drop(columns=[col for col in cols_to_drop if col in df.columns], inplace=True, errors='ignore')
 
             # Converte colunas numéricas
-            numeric_cols = ['entry_price', 'profit_target_price', 'stop_loss_price', 'quantity_btc', 'realized_pnl_usdt']
+            numeric_cols = ['entry_price', 'profit_target_price', 'stop_loss_price', 'quantity_btc', 'realized_pnl_usdt', 'final_confidence']
             for col in numeric_cols:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -136,5 +141,43 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Falha ao buscar os últimos {n} trades do DB: {e}", exc_info=True)
             return pd.DataFrame()
+
+    def get_all_trades_for_analysis(self, start_date: str = "-90d", end_date: str = "now()"):
+        """
+        Busca e formata todos os trades para a análise de resultados.
+        """
+        trades_df = self.get_all_trades_in_range(start_date, end_date)
+
+        if trades_df.empty:
+            return pd.DataFrame()
+
+        # Apenas trades fechados são relevantes para a análise de PnL
+        trades_df = trades_df[trades_df['status'] == 'CLOSED'].copy()
+
+        # Renomeia colunas para compatibilidade com o script de análise
+        trades_df.rename(columns={
+            'timestamp': 'entry_time',
+            'realized_pnl_usdt': 'pnl'
+        }, inplace=True)
+
+        # O 'exit_time' não está disponível diretamente, mas para a análise atual não é usado.
+        # Se for necessário, precisaria ser adicionado ao schema do InfluxDB.
+        # Por enquanto, criamos uma coluna vazia para manter a estrutura.
+        trades_df['exit_time'] = pd.NaT
+
+        # Garante que as colunas necessárias existem
+        required_cols = ['entry_time', 'exit_time', 'pnl', 'final_confidence']
+        for col in required_cols:
+            if col not in trades_df.columns:
+                # Adiciona a coluna com valor default se não existir
+                if col == 'exit_time':
+                     trades_df[col] = pd.NaT
+                elif col == 'final_confidence':
+                     trades_df[col] = 0.0 # Default para confiança
+                else:
+                     trades_df[col] = np.nan
+
+
+        return trades_df[required_cols]
 
 db_manager = DatabaseManager()

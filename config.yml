@@ -105,3 +105,8 @@ dynamic_sizing:
 # Configuração do logger
 logging:
   level: "INFO"
+
+# Configuração do Trailing Profit Target
+trailing_profit:
+  activation_percentage: 2.0  # Ativa o trailing quando o lucro não realizado atingir 2%
+  trailing_percentage: 1.0    # Mantém o novo alvo de lucro 1% acima do preço mais alto

@@ -7,10 +7,11 @@ import json
 from typing import Optional
 
 class PositionManager:
-    def __init__(self, config, db_manager, logger):
+    def __init__(self, config, db_manager, logger, account_manager):
         self.config = config
         self.db_manager = db_manager
         self.logger = logger
+        self.account_manager = account_manager
 
         self.position_config = self.config.position_management
         self.sizing_config = self.config.dynamic_sizing
@@ -79,28 +80,71 @@ class PositionManager:
         closed_trades_summaries = []
         current_price = candle['close']
         open_positions_df = self.db_manager.get_open_positions()
+        commission_rate = self.config.backtest.commission_rate
+        trailing_config = self.config.trailing_profit
 
         if open_positions_df.empty:
             return []
 
         for trade_id, position in open_positions_df.iterrows():
             exit_reason = None
+
+            # --- LÓGICA DE TRAILING PROFIT TARGET ---
+            unrealized_pnl_percent = (current_price - position['entry_price']) / position['entry_price']
+            if unrealized_pnl_percent >= (trailing_config.activation_percentage / 100.0):
+                new_profit_target = current_price * (1 - (trailing_config.trailing_percentage / 100.0))
+                if new_profit_target > position['profit_target_price']:
+                    self.logger.info(f"🚀 ATUALIZANDO PROFIT TARGET PARA O TRADE {trade_id}:")
+                    self.logger.info(f"   Antigo Alvo: ${position['profit_target_price']:,.2f}")
+                    self.logger.info(f"   Novo Alvo:   ${new_profit_target:,.2f}")
+                    # Atualiza o trade no DB
+                    self.db_manager.write_trade({
+                        "trade_id": trade_id,
+                        "status": "OPEN", # Mantém o status OPEN
+                        "profit_target_price": new_profit_target,
+                        "timestamp": datetime.now(timezone.utc)
+                    })
+                    # Atualiza a posição no DF local para o resto da lógica
+                    position['profit_target_price'] = new_profit_target
+
+            # Calcula o PnL líquido, considerando as comissões de entrada e saída
+            entry_cost = position['entry_price'] * position['quantity_btc']
+            exit_value = current_price * position['quantity_btc']
+            commission_entry = entry_cost * commission_rate
+            commission_exit = exit_value * commission_rate
+            net_pnl = exit_value - entry_cost - commission_entry - commission_exit
+
+            # Condição de Take Profit: só executa se o lucro líquido for positivo
             if current_price >= position['profit_target_price']:
-                exit_reason = 'TAKE_PROFIT'
-            elif current_price <= position['stop_loss_price']:
-                exit_reason = 'STOP_LOSS'
+                if net_pnl > 0:
+                    exit_reason = 'TAKE_PROFIT'
+                else:
+                    self.logger.debug(f"TAKE PROFIT para o trade {trade_id} ignorado. Lucro líquido ({net_pnl:.2f}) não cobre as comissões.")
+
+            # Condição de Stop Loss: removida
 
             if exit_reason:
-                pnl = (current_price - position['entry_price']) * position['quantity_btc']
+                self.logger.info(f"✅ FECHANDO TRADE {trade_id} POR {exit_reason}:")
+                self.logger.info(f"   Preço de Entrada: ${position['entry_price']:,.2f}")
+                self.logger.info(f"   Preço de Saída:   ${current_price:,.2f}")
+                self.logger.info(f"   Quantidade:       {position['quantity_btc']:.8f} BTC")
+                self.logger.info(f"   Comissões:        ${(commission_entry + commission_exit):,.4f}")
+                self.logger.info(f"   Resultado Líquido: ${net_pnl:,.2f}")
+
                 close_trade_data = {
-                    "trade_id": trade_id, "status": "CLOSED", "entry_price": position['entry_price'],
-                    "realized_pnl_usdt": pnl, "timestamp": datetime.now(timezone.utc),
-                    "decision_data": {"exit_reason": exit_reason}
+                    "trade_id": trade_id,
+                    "status": "CLOSED",
+                    "entry_price": position['entry_price'],
+                    "realized_pnl_usdt": net_pnl,
+                    "timestamp": datetime.now(timezone.utc),
+                    "decision_data": {"exit_reason": exit_reason, "commission": commission_entry + commission_exit, "exit_price": current_price}
                 }
                 self.db_manager.write_trade(close_trade_data)
                 summary = {
-                    'entry_price': position['entry_price'], 'exit_price': current_price,
-                    'quantity_btc': position['quantity_btc'], 'pnl_usdt': pnl,
+                    'entry_price': position['entry_price'],
+                    'exit_price': current_price,
+                    'quantity_btc': position['quantity_btc'],
+                    'pnl_usdt': net_pnl,
                     'exit_reason': exit_reason
                 }
                 closed_trades_summaries.append(summary)
@@ -112,41 +156,49 @@ class PositionManager:
 
     def check_for_entry(self, candle: pd.Series) -> Optional[dict]:
         """
-        Nova lógica de entrada estratégica AI-less.
+        Nova lógica de entrada estratégica AI-less, com verificação de fundos.
         Retorna um dicionário de decisão se uma compra deve ser executada, caso contrário None.
         """
         open_positions = self.get_open_positions()
         open_trades_count = len(open_positions)
         max_trades = self.position_config.max_concurrent_trades
 
-        # Ação a ser tomada no final do método
-        update_previous_candle = True
-
         if open_trades_count >= max_trades:
             return None
 
-        # --- ESTRATÉGIA 1: ENTRAR NO JOGO (PRIMEIRO TRADE) ---
+        # Lógica de decisão de entrada (a mesma de antes)
+        entry_decision = None
         if open_trades_count == 0:
-            # Lógica de "comprar na primeira baixa"
             if self.previous_candle is not None and candle['close'] < self.previous_candle['close']:
-                self.logger.info(f"ESTRATÉGIA 'ENTRAR NO JOGO': Primeira vela de baixa detectada. Comprando.")
-                # Retorna um dicionário vazio porque não há dados da IA
-                return {"reason": "FIRST_ENTRY_DIP"}
+                self.logger.info("ESTRATÉGIA 'ENTRAR NO JOGO': Primeira vela de baixa detectada.")
+                entry_decision = {"reason": "FIRST_ENTRY_DIP"}
+        elif open_trades_count > 0:
+            average_entry_price = open_positions['entry_price'].mean()
+            price_change_percent = (candle['close'] - average_entry_price) / average_entry_price
+            if price_change_percent <= self.dca_grid_spacing_percent:
+                self.logger.info(f"ESTRATÉGIA 'COMPRAR NA BAIXA': Preço caiu {price_change_percent:.2%}")
+                entry_decision = {"reason": "DCA_GRID_ENTRY"}
 
-            # Se não, apenas atualiza e espera
+        # Se não há decisão de entrada, atualiza e sai
+        if not entry_decision:
             self.previous_candle = candle
             return None
 
-        # --- ESTRATÉGIA 2: COMPRAR NA BAIXA (GRID-DCA) ---
-        if open_trades_count > 0:
-            average_entry_price = open_positions['entry_price'].mean()
-            current_price = candle['close']
-            price_change_percent = (current_price - average_entry_price) / average_entry_price
+        # --- VERIFICAÇÃO DE FUNDOS ---
+        available_balance = self.account_manager.get_quote_asset_balance()
+        required_capital = self.get_capital_per_trade(available_balance)
 
-            if price_change_percent <= self.dca_grid_spacing_percent:
-                self.logger.info(f"ESTRATÉGIA 'COMPRAR NA BAIXA': Preço caiu {price_change_percent:.2%} abaixo da média ({average_entry_price:.2f}). Gatilho: {self.dca_grid_spacing_percent:.2%}. Comprando mais.")
-                return {"reason": "DCA_GRID_ENTRY"}
+        # Adiciona uma margem de segurança (ex: 1%) para evitar problemas com ordens de mercado
+        required_capital_with_slippage = required_capital * 1.01
 
-        # Atualiza a vela anterior para a próxima iteração
+        if available_balance < required_capital_with_slippage:
+            self.logger.warning(f"ENTRADA IGNORADA: Saldo insuficiente. Saldo disponível: {available_balance:.2f} USDT, Capital necessário: {required_capital_with_slippage:.2f} USDT.")
+            self.previous_candle = candle
+            return None
+
+        self.logger.info(f"Decisão de COMPRA confirmada com saldo suficiente. Alocando {required_capital:.2f} USDT.")
+        # Adiciona o tamanho do trade na decisão para ser usado em open_position
+        entry_decision['trade_size_usdt'] = required_capital
+
         self.previous_candle = candle
-        return None
+        return entry_decision

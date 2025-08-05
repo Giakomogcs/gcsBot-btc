@@ -99,6 +99,9 @@ class DynamicSizingConfig(BaseModel):
     performance_upscale_factor: float
     performance_downscale_factor: float
 
+class TrailingProfitConfig(BaseModel):
+    activation_percentage: float
+    trailing_percentage: float
 
 # --- Classe de Configuração Principal (COM A CORREÇÃO) ---
 class Settings(BaseModel):
@@ -121,6 +124,7 @@ class Settings(BaseModel):
     backtest: BacktestConfig
     position_management: PositionManagementConfig
     dynamic_sizing: DynamicSizingConfig
+    trailing_profit: TrailingProfitConfig
 
 
 def load_settings() -> Settings:

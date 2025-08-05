@@ -14,6 +14,7 @@ from gcs_bot.utils.config_manager import settings
 from gcs_bot.data.data_manager import DataManager
 from gcs_bot.core.backtester import Backtester
 from gcs_bot.core.position_manager import PositionManager
+from gcs_bot.core.account_manager import AccountManager
 from gcs_bot.database.database_manager import db_manager
 import sys
 
@@ -31,6 +32,8 @@ def main():
         logger.info("Construindo o ambiente do backtest com injeção de dependências...")
 
         data_manager = DataManager(db_manager=db_manager, config=settings, logger=logger)
+        # No backtest, o cliente é None, o que é tratado pelo AccountManager
+        account_manager = AccountManager(binance_client=None)
 
         df_features = data_manager.read_data_from_influx(
             measurement="features_master_table",
@@ -41,7 +44,12 @@ def main():
             logger.error("A 'features_master_table' está vazia ou não pôde ser carregada. Abortando backtest.")
             return
 
-        position_manager = PositionManager(config=settings, db_manager=db_manager, logger=logger)
+        position_manager = PositionManager(
+            config=settings,
+            db_manager=db_manager,
+            logger=logger,
+            account_manager=account_manager
+        )
 
         backtester = Backtester(
             data=df_features,

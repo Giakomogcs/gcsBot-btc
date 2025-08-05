@@ -27,7 +27,7 @@ class TradingBot:
         # No backtest, usamos o capital inicial passado. Em modo real, seria o saldo da conta.
         self.portfolio = PortfolioManager(initial_capital=initial_capital_for_backtest)
         
-        self.position_manager = PositionManager(settings)
+        self.position_manager = PositionManager(settings, self.account_manager)
         self.position_config = settings.position_management
         # --- FIM DA CORREÇÃO ---
         

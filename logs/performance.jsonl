@@ -1,0 +1,9 @@
+{"timestamp": "2025-08-05 16:09:18,893", "level": "ERROR", "message": "Falha ao buscar todos os trades do DB: <urllib3.connection.HTTPConnection object at 0x7fd92a96f470>: Failed to resolve 'db' ([Errno -2] Name or service not known)"}
+{"timestamp": "2025-08-05 16:10:08,277", "level": "ERROR", "message": "Falha ao buscar todos os trades do DB: <urllib3.connection.HTTPConnection object at 0x7f160ca42e70>: Failed to resolve 'db' ([Errno -2] Name or service not known)"}
+{"timestamp": "2025-08-05 16:11:00,910", "level": "ERROR", "message": "Falha ao buscar todos os trades do DB: <urllib3.connection.HTTPConnection object at 0x7f543dba6e10>: Failed to establish a new connection: [Errno 111] Connection refused"}
+{"timestamp": "2025-08-05 17:36:25,284", "level": "ERROR", "message": "--- \u274c ERRO CR\u00cdTICO DURANTE O BACKTEST \u274c ---"}
+{"timestamp": "2025-08-05 17:36:25,285", "level": "ERROR", "message": "Ocorreu um erro inesperado: <urllib3.connection.HTTPConnection object at 0x7f2c11d33e90>: Failed to establish a new connection: [Errno 111] Connection refused"}
+{"timestamp": "2025-08-05 17:43:31,649", "level": "ERROR", "message": "--- \u274c ERRO CR\u00cdTICO DURANTE O BACKTEST \u274c ---"}
+{"timestamp": "2025-08-05 17:43:31,649", "level": "ERROR", "message": "Ocorreu um erro inesperado: <urllib3.connection.HTTPConnection object at 0x7f4f9cf1c0b0>: Failed to establish a new connection: [Errno 111] Connection refused"}
+{"timestamp": "2025-08-05 18:28:06,251", "level": "ERROR", "message": "--- \u274c ERRO CR\u00cdTICO DURANTE O BACKTEST \u274c ---"}
+{"timestamp": "2025-08-05 18:28:06,251", "level": "ERROR", "message": "Ocorreu um erro inesperado: <urllib3.connection.HTTPConnection object at 0x7fc3a9a172f0>: Failed to establish a new connection: [Errno 111] Connection refused"}
