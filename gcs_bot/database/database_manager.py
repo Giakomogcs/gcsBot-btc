@@ -32,6 +32,7 @@ class DatabaseManager:
                 .tag("trade_id", trade_data["trade_id"]) \
                 .field("entry_price", float(trade_data["entry_price"])) \
                 .field("profit_target_price", float(trade_data.get("profit_target_price", 0.0))) \
+                .field("stop_loss_price", float(trade_data.get("stop_loss_price", 0.0))) \
                 .field("quantity_btc", float(trade_data.get("quantity_btc", 0.0))) \
                 .field("realized_pnl_usdt", float(trade_data.get("realized_pnl_usdt", 0.0))) \
                 .field("decision_data", json.dumps(trade_data.get("decision_data", {}))) \
