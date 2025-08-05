@@ -2,13 +2,11 @@
 
 import pandas as pd
 from tqdm import tqdm
-from gcs_bot.core.ensemble_manager import EnsembleManager
 from gcs_bot.core.position_manager import PositionManager
 
 class Backtester:
-    def __init__(self, data: pd.DataFrame, ensemble_manager: EnsembleManager, position_manager: PositionManager, config, logger):
+    def __init__(self, data: pd.DataFrame, position_manager: PositionManager, config, logger):
         self.data = data
-        self.ensemble_manager = ensemble_manager
         self.position_manager = position_manager
         self.config = config
         self.logger = logger
@@ -33,13 +31,10 @@ class Backtester:
                     self.capital += trade['pnl_usdt'] - commission
                     self.logger.info(f"[{timestamp}] Posição FECHADA ({trade['exit_reason']}). P&L: ${trade['pnl_usdt']:.2f}. Capital: ${self.capital:,.2f}")
 
-            # 2. OBTER RELATÓRIO DA IA
-            decision_report = self.ensemble_manager.get_ensemble_signal(candle)
+            # 2. DELEGAR A DECISÃO DE ENTRADA AO ESTRATEGA
+            buy_decision = self.position_manager.check_for_entry(candle)
 
-            # 3. DELEGAR A DECISÃO DE ENTRADA AO ESTRATEGA
-            buy_decision = self.position_manager.check_for_entry(candle, decision_report)
-
-            # 4. EXECUTAR A COMPRA SE O ESTRATEGA DECIDIR
+            # 3. EXECUTAR A COMPRA SE O ESTRATEGA DECIDIR
             if buy_decision:
                 trade_size_usdt = self.position_manager.get_capital_per_trade(self.capital)
 

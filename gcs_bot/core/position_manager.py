@@ -20,10 +20,10 @@ class PositionManager:
         self.stop_loss_mult = self.strategy_config.triple_barrier.stop_mult
         
         # --- NOVOS PARÂMETROS ESTRATÉGICOS ---
-        self.first_entry_confidence_factor = self.strategy_config.first_entry_confidence_factor
         self.dca_grid_spacing_percent = self.strategy_config.dca_grid_spacing_percent / 100.0
 
         self.performance_factor = 1.0
+        self.previous_candle = None
 
     def _update_performance_factor(self):
         if not self.sizing_config.enabled:
@@ -110,28 +110,31 @@ class PositionManager:
         """Retorna um DataFrame com as posições abertas."""
         return self.db_manager.get_open_positions()
 
-    def check_for_entry(self, candle: pd.Series, decision_report: dict) -> Optional[dict]:
+    def check_for_entry(self, candle: pd.Series) -> Optional[dict]:
         """
-        Nova lógica de entrada estratégica. Decide se faz a primeira compra ou se compra mais na baixa.
-        Retorna o decision_report se uma compra deve ser executada, caso contrário None.
+        Nova lógica de entrada estratégica AI-less.
+        Retorna um dicionário de decisão se uma compra deve ser executada, caso contrário None.
         """
         open_positions = self.get_open_positions()
         open_trades_count = len(open_positions)
         max_trades = self.position_config.max_concurrent_trades
 
+        # Ação a ser tomada no final do método
+        update_previous_candle = True
+
         if open_trades_count >= max_trades:
             return None
 
-        signal = decision_report.get('signal', 'NEUTRAL')
-        final_confidence = decision_report.get('final_confidence', 0)
-        static_threshold = self.strategy_config.static_confidence_threshold
-
         # --- ESTRATÉGIA 1: ENTRAR NO JOGO (PRIMEIRO TRADE) ---
         if open_trades_count == 0:
-            required_confidence = static_threshold * self.first_entry_confidence_factor
-            if signal == "BUY" and final_confidence >= required_confidence:
-                self.logger.info(f"ESTRATÉGIA 'ENTRAR NO JOGO': Condições de primeira entrada atingidas. Confiança: {final_confidence:.2%}, Limiar Ajustado: {required_confidence:.2%}")
-                return decision_report
+            # Lógica de "comprar na primeira baixa"
+            if self.previous_candle is not None and candle['close'] < self.previous_candle['close']:
+                self.logger.info(f"ESTRATÉGIA 'ENTRAR NO JOGO': Primeira vela de baixa detectada. Comprando.")
+                # Retorna um dicionário vazio porque não há dados da IA
+                return {"reason": "FIRST_ENTRY_DIP"}
+
+            # Se não, apenas atualiza e espera
+            self.previous_candle = candle
             return None
 
         # --- ESTRATÉGIA 2: COMPRAR NA BAIXA (GRID-DCA) ---
@@ -143,6 +146,7 @@ class PositionManager:
             if price_change_percent <= self.dca_grid_spacing_percent:
                 self.logger.info(f"ESTRATÉGIA 'COMPRAR NA BAIXA': Preço caiu {price_change_percent:.2%} abaixo da média ({average_entry_price:.2f}). Gatilho: {self.dca_grid_spacing_percent:.2%}. Comprando mais.")
                 return {"reason": "DCA_GRID_ENTRY"}
-            return None
 
+        # Atualiza a vela anterior para a próxima iteração
+        self.previous_candle = candle
         return None
