@@ -15,3 +15,11 @@
 {"timestamp": "2025-08-05 19:06:41,710", "level": "ERROR", "message": "\u274c Falha na conex\u00e3o com a Binance: APIError(code=0): Service unavailable from a restricted location according to 'b. Eligibility' in https://www.binance.com/en/terms. Please contact customer service if you believe you received this message in error."}
 {"timestamp": "2025-08-05 19:06:42,684", "level": "CRITICAL", "message": "NENHUM MODELO TREINADO ENCONTRADO. O BOT N\u00c3O PODE OPERAR."}
 {"timestamp": "2025-08-05 19:06:42,685", "level": "CRITICAL", "message": "Execute o otimizador com './manage.ps1 optimize' primeiro."}
+{"timestamp": "2025-08-05 19:15:00,196", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2023-07-01 - 2023-07-31. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-05 19:15:00,198", "level": "ERROR", "message": "Falha no lote de OI de 2023-07-01 a 2023-07-31: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1688169600000&endTime=1690761600000&limit=500"}
+{"timestamp": "2025-08-05 19:15:00,408", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:15:00,412", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:16:03,877", "level": "ERROR", "message": "Erro 400 ao buscar Open Interest para o per\u00edodo 2023-08-01 - 2023-08-31. Detalhes: {\"msg\":\"parameter 'startTime' is invalid.\",\"code\":-1130}"}
+{"timestamp": "2025-08-05 19:16:03,878", "level": "ERROR", "message": "Falha no lote de OI de 2023-08-01 a 2023-08-31: 400 Client Error:  for url: https://fapi.binance.com/futures/data/openInterestHist?symbol=BTCUSDT&period=1h&startTime=1690848000000&endTime=1693440000000&limit=500"}
+{"timestamp": "2025-08-05 19:16:04,049", "level": "WARNING", "message": "Coluna 'fear_and_greed' n\u00e3o encontrada. Feature 'fng_change_3d' ser\u00e1 nula."}
+{"timestamp": "2025-08-05 19:16:04,053", "level": "WARNING", "message": "Coluna 'open_interest' n\u00e3o encontrada. Feature 'open_interest_pct_change_4h' ser\u00e1 nula."}
