@@ -39,11 +39,11 @@ switch ($command) {
     }
     "optimize" {
         Write-Host "${Yellow}--- Iniciando a Fábrica de IAs (Otimizador) DENTRO do container...${Reset}"
-        docker-compose exec app python scripts/run_optimizer.py
+        docker-compose exec app python run_optimizer.py
     }
     "backtest" {
          Write-Host "${Yellow}--- Iniciando o Laboratório de Simulação (Backtester) DENTRO do container...${Reset}"
-         docker-compose exec app python scripts/run_backtest.py
+         docker-compose exec app python run_backtest.py
     }
     "update-db" {
         Write-Host "${Yellow}--- Iniciando Pipeline de Ingestão de Dados (ETL)...${Reset}"

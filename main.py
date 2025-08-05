@@ -9,6 +9,8 @@ from gcs_bot.utils.logger import logger
 from gcs_bot.utils.config_manager import settings
 from gcs_bot.core.position_manager import PositionManager
 from gcs_bot.core.exchange_manager import exchange_manager
+from gcs_bot.core.account_manager import AccountManager
+from gcs_bot.database.database_manager import db_manager
 # --- NOVA IMPORTAÇÃO ---
 from gcs_bot.core.predictor import Predictor
 
@@ -28,7 +30,13 @@ def main_loop():
 
     # Inicializa os nossos gestores
     predictor = Predictor(model_path=latest_model_path)
-    position_manager = PositionManager(settings)
+    account_manager = AccountManager(binance_client=exchange_manager.client)
+    position_manager = PositionManager(
+        config=settings,
+        db_manager=db_manager,
+        logger=logger,
+        account_manager=account_manager
+    )
     # --- FIM DA NOVA LÓGICA DE INICIALIZAÇÃO ---
 
     while True:

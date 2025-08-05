@@ -686,29 +686,11 @@ class DataPipeline:
             logger.critical("Modelo de SituationalAwareness não pôde ser carregado. Abortando.")
             return
 
-        measurement_name = "features_master_table"
-        last_timestamp_in_db = self._query_last_timestamp(measurement_name)
+        start_date = pd.to_datetime(datetime.date.today() - relativedelta(years=2), utc=True)
+        end_date = pd.to_datetime(datetime.date.today() + datetime.timedelta(days=1), utc=True)
 
-        if last_timestamp_in_db:
-            # Começa a processar a partir do último minuto registado para evitar sobreposição.
-            start_date = last_timestamp_in_db + pd.Timedelta(minutes=1)
-            logger.info(f"Último registo encontrado em '{measurement_name}' em {last_timestamp_in_db}. "
-                        f"Iniciando processamento incremental a partir de {start_date}.")
-        else:
-            # Se não houver dados, usa a data de início para a ingestão inicial (ex: 2 anos atrás).
-            start_date = pd.to_datetime(datetime.date.today() - relativedelta(years=2), utc=True)
-            logger.info(f"Nenhum dado encontrado em '{measurement_name}'. "
-                        f"Iniciando processamento completo dos últimos 2 anos a partir de {start_date}.")
-
-        end_date = pd.to_datetime(datetime.date.today() + datetime.timedelta(days=1), utc=True).replace(second=0, microsecond=0)
-
-        # Verifica se a base de dados já está atualizada.
-        if start_date >= end_date:
-            logger.info("✅ A tabela mestre ('features_master_table') já está atualizada. Nenhuma ação necessária.")
-            return
-        # --- FIM DA LÓGICA DE PROCESSAMENTO INCREMENTAL ---
         current_date = start_date
-        total_months = (end_date.year - start_date.year) * 12 + (end_date.month - start_date.month) + 1
+        total_months = (end_date.year - start_date.year) * 12 + end_date.month - start_date.month
         pbar = tqdm(total=total_months, desc="Processando Tabela Mestre")
         
         warmup_period = pd.Timedelta(days=35)
@@ -716,7 +698,7 @@ class DataPipeline:
         while current_date < end_date:
             processing_start_date = current_date
             fetch_start_date = processing_start_date - warmup_period
-            chunk_end_date = min((current_date + relativedelta(months=1)), end_date)
+            chunk_end_date = (current_date + relativedelta(months=1))
             chunk_start = fetch_start_date.isoformat()
             chunk_end = chunk_end_date.isoformat()
             
@@ -725,16 +707,8 @@ class DataPipeline:
             # --- LÓGICA DE JUNÇÃO MELHORADA ---
             df_btc_chunk = self.read_data_in_range("btc_btcusdt_1m", chunk_start, chunk_end)
             
-             # Esta verificação agora só salta o lote se for uma carga inicial (DB vazio)
-            if len(df_btc_chunk) < 50000 and last_timestamp_in_db is None:
-                logger.warning(f"Dados de BTC insuficientes ({len(df_btc_chunk)} linhas) para o período {processing_start_date.strftime('%Y-%m')}. A saltar lote inicial.")
-                current_date += relativedelta(months=1)
-                pbar.update(1)
-                continue
-
-            # Se o chunk de BTC estiver vazio em uma execução incremental, não há o que processar.
-            if df_btc_chunk.empty:
-                logger.warning(f"Nenhum dado de BTC encontrado para o período {processing_start_date.strftime('%Y-%m')}. A saltar lote.")
+            if len(df_btc_chunk) < 50000:
+                logger.warning(f"Dados de BTC insuficientes ou inexistentes ({len(df_btc_chunk)} linhas) para o período {processing_start_date.strftime('%Y-%m')}. A saltar lote.")
                 current_date += relativedelta(months=1)
                 pbar.update(1)
                 continue
@@ -758,7 +732,6 @@ class DataPipeline:
             # --- FIM DA ALTERAÇÃO CRÍTICA ---
 
             df_combined.ffill(inplace=True)
-            df_combined.bfill(inplace=True)
             
             # O resto do processo continua igual, mas agora com os dados completos
             df_with_features = add_all_features(df_combined)
@@ -782,7 +755,7 @@ class DataPipeline:
             pbar.update(1)
         
         pbar.close()
-        logger.info("🎉🎉🎉 PIPELINE INDUSTRIAL CONCLUÍDO! A FONTE DA VERDADE ESTÁ ATUALIZADA. 🎉🎉🎉")
+        logger.info("🎉🎉🎉 PIPELINE INDUSTRIAL CONCLUÍDO! A FONTE DA VERDADE ESTÁ PRONTA. 🎉🎉🎉")
 
         # --- FASE 3: VERIFICAÇÃO FINAL ---
         self.verify_features_master_table()

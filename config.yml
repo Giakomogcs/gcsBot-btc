@@ -9,7 +9,7 @@ database:
 
 # Configurações do backtest (parâmetros da simulação)
 backtest:
-  start_date: "-2d"
+  start_date: "-60d"
   initial_capital: 100
   commission_rate: 0.001
 
@@ -41,8 +41,8 @@ data_pipeline:
 # Estratégia de Trading: o cérebro da tomada de decisão
 trading_strategy:
   static_confidence_threshold: 0.55 # Limiar de confiança estático para o sinal preliminar do Ensemble
-  first_entry_confidence_factor: 0.8 # Fator de redução do limiar para a primeira entrada (80% do normal)
-  dca_grid_spacing_percent: -2.0 # % de queda para acionar uma nova compra DCA (-2.0%)
+  first_entry_confidence_factor: 0.8  # Fator de redução do limiar para a primeira entrada (80% do normal)
+  dca_grid_spacing_percent: -2.0      # % de queda para acionar uma nova compra DCA (-2.0%)
   triple_barrier:
     profit_mult: 4.0
     stop_mult: 2.0
