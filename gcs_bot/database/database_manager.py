@@ -19,6 +19,21 @@ class DatabaseManager:
         self.query_api = self._client.query_api()
         self.write_api = self._client.write_api(write_options=SYNCHRONOUS)
 
+    def is_measurement_empty(self, measurement: str) -> bool:
+        """Verifica se uma measurement no InfluxDB está vazia."""
+        try:
+            query = f'''
+            from(bucket: "{self.bucket}")
+                |> range(start: -100y)
+                |> filter(fn: (r) => r._measurement == "{measurement}")
+                |> limit(n: 1)
+            '''
+            result = self.query_api.query(query, org=self.org)
+            return len(result) == 0
+        except Exception as e:
+            logger.error(f"Falha ao verificar se a measurement '{measurement}' está vazia: {e}", exc_info=True)
+            return True # Assume que está vazia em caso de erro, para forçar o bootstrap
+
     def get_write_api(self): # Função mantida para compatibilidade
         return self.write_api
 

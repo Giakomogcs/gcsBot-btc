@@ -105,13 +105,17 @@ def test_update_on_sell_success(account_manager, mock_binance_client):
     # Arrange
     mock_order = {'symbol': 'BTCUSDT', 'orderId': 125, 'status': 'FILLED'}
     mock_binance_client.order_market_sell.return_value = mock_order
+    # Mock the internal validation/formatting function to isolate the test
+    account_manager._format_quantity_for_symbol = Mock(return_value=0.1)
 
     # Act
-    result = account_manager.update_on_sell(quantity_btc=0.1)
+    result = account_manager.update_on_sell(quantity_btc=0.1, current_price=50000)
 
     # Assert
-    assert result is True
+    assert result == mock_order
+    account_manager._format_quantity_for_symbol.assert_called_once_with(symbol='BTCUSDT', quantity=0.1, current_price=50000)
     mock_binance_client.order_market_sell.assert_called_once_with(symbol='BTCUSDT', quantity=0.1)
+
 
 def test_update_on_sell_api_error(account_manager, mock_binance_client):
     """Test update_on_sell handles Binance API errors."""
@@ -119,9 +123,11 @@ def test_update_on_sell_api_error(account_manager, mock_binance_client):
     mock_response = Mock()
     mock_response.text = '{"code": -2010, "msg": "Account has insufficient balance for requested action."}'
     mock_binance_client.order_market_sell.side_effect = BinanceAPIException(response=mock_response, status_code=400, text=mock_response.text)
+    # Mock the internal validation/formatting function
+    account_manager._format_quantity_for_symbol = Mock(return_value=0.1)
 
     # Act
-    result = account_manager.update_on_sell(quantity_btc=0.1)
+    result = account_manager.update_on_sell(quantity_btc=0.1, current_price=50000)
 
     # Assert
-    assert result is False
+    assert result is None

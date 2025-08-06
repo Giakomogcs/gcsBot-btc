@@ -71,7 +71,13 @@ class LiveFeatureCalculator:
         df_combined = df_candles.join(df_macro, how='left')
         if not df_sentiment.empty:
              df_combined = df_combined.join(df_sentiment, how='left')
+
         df_combined.ffill(inplace=True) # Preenche lacunas com o último valor válido
+
+        # Adicionado para garantir que nenhum NaN passe para a engenharia de features
+        if df_combined.isnull().values.any():
+            logger.warning("NaNs encontrados após o ffill (provavelmente no início do histórico). Preenchendo com 0.")
+            df_combined.fillna(0, inplace=True)
 
         # 5. Calcular todas as features usando a função centralizada
         df_with_features = add_all_features(df_combined, live_mode=True)

@@ -26,6 +26,12 @@ class PositionManager:
         self.consecutive_green_candles_for_entry = self.strategy_config.consecutive_green_candles_for_entry
         self.max_total_capital_allocation_percent = self.position_config.max_total_capital_allocation_percent / 100.0
 
+        # Parâmetros para Take Profit Dinâmico
+        self.dynamic_tp_config = self.strategy_config.get('dynamic_take_profit', {})
+        self.dynamic_tp_enabled = self.dynamic_tp_config.get('enabled', False)
+        self.near_target_factor = self.dynamic_tp_config.get('near_target_factor', 0.98)
+        self.rsi_overbought_threshold = self.dynamic_tp_config.get('rsi_overbought_threshold', 75)
+
         self.performance_factor = 1.0
         self.previous_candle = None
         self.consecutive_green_candles = 0
@@ -120,6 +126,50 @@ class PositionManager:
         trades_to_partially_close = []
 
         for trade_id, position in open_positions_df.iterrows():
+            # --- LÓGICA DE STOP-LOSS (PRIORIDADE MÁXIMA) ---
+            if 'stop_loss_price' in position and pd.notna(position['stop_loss_price']) and current_price <= position['stop_loss_price']:
+                self.logger.info(f"❌ STOP-LOSS ATINGIDO PARA O TRADE {trade_id}:")
+                self.logger.info(f"   Preço de Entrada: ${position['entry_price']:,.2f}, Stop Loss: ${position['stop_loss_price']:,.2f}, Preço Atual: ${current_price:,.2f}")
+
+                quantity_to_sell = position['quantity_btc']
+
+                # Calcula o P&L realizado
+                entry_cost = position['entry_price'] * quantity_to_sell
+                exit_value = current_price * quantity_to_sell
+                commission_entry = entry_cost * commission_rate
+                commission_exit = exit_value * commission_rate
+                net_pnl = exit_value - entry_cost - commission_entry - commission_exit
+
+                sell_successful = self.account_manager.update_on_sell(quantity_btc=quantity_to_sell, current_price=current_price)
+
+                if sell_successful:
+                    decision_data = position.get('decision_data', {})
+                    decision_data['exit_reason'] = 'STOP_LOSS'
+
+                    update_trade_data = {
+                        "trade_id": trade_id,
+                        "status": "CLOSED",
+                        "quantity_btc": 0,
+                        "total_realized_pnl_usdt": position.get('total_realized_pnl_usdt', 0.0) + net_pnl,
+                        "timestamp": datetime.now(timezone.utc),
+                        "decision_data": decision_data
+                    }
+                    self.db_manager.write_trade(update_trade_data)
+
+                    summary = {
+                        'entry_price': position['entry_price'],
+                        'exit_price': current_price,
+                        'quantity_btc_sold': quantity_to_sell,
+                        'quantity_btc_remaining': 0,
+                        'pnl_usdt': net_pnl,
+                        'exit_reason': 'STOP_LOSS'
+                    }
+                    closed_trades_summaries.append(summary)
+                else:
+                    self.logger.error(f"A ordem de venda de STOP-LOSS para o trade {trade_id} falhou. O trade permanecerá aberto no DB.")
+
+                continue # Pula para o próximo trade, pois este foi fechado.
+
             # --- LÓGICA DE TRAILING PROFIT TARGET ---
             unrealized_pnl_percent = (current_price - position['entry_price']) / position['entry_price']
             if unrealized_pnl_percent >= (trailing_config.activation_percentage / 100.0):
@@ -136,11 +186,23 @@ class PositionManager:
                     })
                     position['profit_target_price'] = new_profit_target
 
-            # Check if trade is eligible for partial take profit
+            # --- LÓGICA DE TAKE PROFIT (Dinâmica ou Fixa) ---
             decision_data = position.get('decision_data', {})
             is_partially_closed = decision_data.get('partially_closed', False)
 
-            if not is_partially_closed and current_price >= position['profit_target_price']:
+            take_profit_condition_met = False
+            if self.dynamic_tp_enabled:
+                is_near_target = current_price >= (position['profit_target_price'] * self.near_target_factor)
+                is_overbought = candle.get('rsi_14', 50) > self.rsi_overbought_threshold
+                if is_near_target and is_overbought:
+                    self.logger.info(f"TAKE PROFIT DINÂMICO para trade {trade_id}: Perto do alvo E RSI sobrecomprado ({candle.get('rsi_14', 50):.1f} > {self.rsi_overbought_threshold}).")
+                    take_profit_condition_met = True
+            else:
+                # Lógica original se o modo dinâmico estiver desativado
+                if current_price >= position['profit_target_price']:
+                    take_profit_condition_met = True
+
+            if not is_partially_closed and take_profit_condition_met:
                 entry_cost = position['entry_price'] * position['quantity_btc']
                 exit_value = current_price * position['quantity_btc']
                 commission = (entry_cost + exit_value) * commission_rate

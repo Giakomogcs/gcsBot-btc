@@ -161,16 +161,29 @@ class TradingBot:
                 open_positions_count = len(open_positions)
 
                 # --- NOVA LÓGICA PARA DETALHAR POSIÇÕES ABERTAS ---
+                commission_rate = self.position_manager.config.backtest.commission_rate
                 for _, trade in open_positions.iterrows():
-                    tp_price = trade.get('take_profit_price', 0)
+                    entry_price = trade['entry_price']
+                    quantity_btc = trade['quantity_btc']
+
+                    # Cálculos de P&L
+                    unrealized_pnl_usdt = (current_price - entry_price) * quantity_btc
+
+                    entry_value = entry_price * quantity_btc
+                    current_value = current_price * quantity_btc
+                    unrealized_pnl_liquid_usdt = (current_value * (1 - commission_rate)) - (entry_value * (1 + commission_rate))
+
+                    tp_price = trade.get('profit_target_price', 0) # Corrigido para usar o nome correto do campo
                     distance_pct = ((tp_price - current_price) / current_price) * 100 if tp_price > 0 and current_price > 0 else 0
                     
                     open_positions_summary.append({
                         "trade_id": str(trade.name),
-                        "entry_price": trade['entry_price'],
-                        "quantity_btc": trade['quantity_btc'],
+                        "entry_price": entry_price,
+                        "quantity_btc": quantity_btc,
                         "take_profit_price": tp_price,
                         "target_distance_pct": distance_pct,
+                        "unrealized_pnl_usdt": unrealized_pnl_usdt,
+                        "unrealized_pnl_liquid_usdt": unrealized_pnl_liquid_usdt,
                         "timestamp": trade['timestamp'].isoformat()
                     })
 

@@ -65,13 +65,21 @@ def check_docker_running():
 
 # --- Docker-based Commands ---
 def setup():
-    """Builds and starts the Docker services."""
+    """Builds and starts the Docker services, including initial data population."""
     check_docker_running()
     print_color("--- Building Docker images (this may take a while)...", "yellow")
     run_command("docker compose build", check=True)
-    print_color("--- Starting services in the background...", "yellow")
+    print_color("--- Starting services in the background (db, etc.)...", "yellow")
     run_command("docker compose up -d", check=True)
-    print_color("--- Environment is ready! ---", "green")
+
+    print_color("--- Waiting for services to be ready before populating DB...", "yellow")
+    time.sleep(10) # Dá um tempo para o InfluxDB iniciar completamente
+
+    print_color("--- POPULATING DATABASE WITH INITIAL DATA (ETL Pipeline)...", "yellow")
+    print_color("This is a one-time setup and may take several minutes...", "yellow")
+    run_script_in_container("scripts/data_pipeline.py")
+
+    print_color("--- ✅ Environment is ready! You can now start the bot. ---", "green")
 
 def start_services():
     """Starts the Docker services."""

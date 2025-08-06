@@ -1996,3 +1996,10 @@
 {"timestamp": "2025-08-06 16:41:56,095", "level": "CRITICAL", "message": "\u274c Falha catastr\u00f3fica ao inicializar o TradingBot: 'PositionManagementConfig' object has no attribute 'max_total_capital_allocation_percent'"}
 {"timestamp": "2025-08-06 16:43:35,510", "level": "CRITICAL", "message": "\u274c Falha catastr\u00f3fica ao inicializar o TradingBot: 'PositionManagementConfig' object has no attribute 'max_total_capital_allocation_percent'"}
 {"timestamp": "2025-08-06 16:46:45,297", "level": "ERROR", "message": "Falha durante a sincroniza\u00e7\u00e3o de trades: 'list' object has no attribute 'empty'"}
+{"timestamp": "2025-08-06 17:20:52,178", "level": "ERROR", "message": "Binance API Error fetching open orders: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time."}
+{"timestamp": "2025-08-06 17:20:52,187", "level": "ERROR", "message": "Binance API Error fetching trade history: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time."}
+{"timestamp": "2025-08-06 17:20:52,192", "level": "ERROR", "message": "Binance API Error on BUY: APIError(code=-2010): Account has insufficient balance for requested action."}
+{"timestamp": "2025-08-06 17:30:35,512", "level": "ERROR", "message": "Binance API Error fetching open orders: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time."}
+{"timestamp": "2025-08-06 17:30:35,522", "level": "ERROR", "message": "Binance API Error fetching trade history: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time."}
+{"timestamp": "2025-08-06 17:30:35,528", "level": "ERROR", "message": "Binance API Error on BUY: APIError(code=-2010): Account has insufficient balance for requested action."}
+{"timestamp": "2025-08-06 17:30:35,535", "level": "ERROR", "message": "Binance API Error on SELL: APIError(code=-2010): Account has insufficient balance for requested action."}

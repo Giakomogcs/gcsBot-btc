@@ -79,6 +79,13 @@ trading_strategy:
     market_dynamics: 0.4
     intermarket_analyst: 0.2
   minimum_profit_for_take_profit: 0.01 # Garante pelo menos 1 centavo de lucro
+  partial_sell_percent: 100.0 # Vende 100% no take-profit para análise
+
+  # --- NOVA ESTRATÉGIA DE TAKE PROFIT DINÂMICO ---
+  dynamic_take_profit:
+    enabled: true
+    near_target_factor: 0.98 # Ex: 0.98 para 98% do alvo
+    rsi_overbought_threshold: 75 # Limiar de RSI para considerar o mercado "esticado"
 
 # Configuração do dimensionamento de posição
 position_sizing:

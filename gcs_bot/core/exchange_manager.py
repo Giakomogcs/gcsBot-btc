@@ -6,6 +6,8 @@ from gcs_bot.utils.config_manager import settings
 from gcs_bot.utils.logger import logger
 from typing import Optional, Union
 import pandas as pd
+import time
+from datetime import datetime, timedelta
 
 class ExchangeManager:
     """
@@ -32,6 +34,19 @@ class ExchangeManager:
                 return None
 
             client = Client(api_key, api_secret, tld='com', testnet=use_testnet)
+
+            # Sincroniza o tempo com o servidor da Binance para evitar erros de timestamp
+            try:
+                server_time = client.get_server_time()
+                local_time = int(time.time() * 1000)
+                time_diff = server_time['serverTime'] - local_time
+                client.timestamp_offset = time_diff
+                logger.info(f"Offset de tempo com o servidor da Binance ajustado em {time_diff} ms.")
+            except Exception as e:
+                logger.error(f"Não foi possível sincronizar o tempo com a Binance. Erro: {e}", exc_info=True)
+                # Mesmo que a sincronização falhe, tentamos continuar.
+                # O erro de timestamp pode ocorrer mais tarde.
+
             client.ping()
             logger.info(f"✅ Conexão com a Binance estabelecida com sucesso (Modo: {'TESTNET' if use_testnet else 'REAL'}).")
             return client
@@ -99,6 +114,44 @@ class ExchangeManager:
             
         except Exception as e:
             logger.error(f"Erro inesperado ao buscar velas: {e}", exc_info=True)
+            return pd.DataFrame()
+
+    def get_historical_candles_long_period(self, symbol: str, interval: str, start_str: str) -> pd.DataFrame:
+        """
+        Busca velas históricas para um período longo, usando o gerador da biblioteca.
+        """
+        if not self._client:
+            logger.warning("Cliente Binance não inicializado. Não é possível buscar velas históricas.")
+            return pd.DataFrame()
+
+        try:
+            logger.info(f"Iniciando busca de velas históricas para {symbol} desde {start_str}...")
+
+            klines_generator = self._client.get_historical_klines_generator(symbol, interval, start_str)
+            klines = list(klines_generator)
+
+            df = pd.DataFrame(klines, columns=[
+                'timestamp', 'open', 'high', 'low', 'close', 'volume',
+                'close_time', 'quote_asset_volume', 'number_of_trades',
+                'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'
+            ])
+
+            if df.empty:
+                logger.warning("Nenhuma vela histórica encontrada para o período.")
+                return pd.DataFrame()
+
+            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms', utc=True)
+            df.set_index('timestamp', inplace=True)
+
+            ohlcv_cols = ['open', 'high', 'low', 'close', 'volume']
+            df = df[ohlcv_cols]
+            df = df.astype(float)
+
+            logger.info(f"✅ {len(df)} velas históricas para {symbol} foram baixadas com sucesso.")
+            return df
+
+        except Exception as e:
+            logger.error(f"Erro inesperado ao buscar velas históricas de longo período: {e}", exc_info=True)
             return pd.DataFrame()
 
     def place_market_order(self, symbol: str, side: str, quantity: Union[float, str]) -> Optional[dict]:
