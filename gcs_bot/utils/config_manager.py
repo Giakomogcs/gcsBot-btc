@@ -91,7 +91,6 @@ class BacktestConfig(BaseModel):
     commission_rate: float
 
 class PositionManagementConfig(BaseModel):
-    profit_target_percent: float
     max_concurrent_trades: int
     capital_per_trade_percent: float
     max_total_capital_allocation_percent: float
