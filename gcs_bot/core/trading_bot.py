@@ -2,6 +2,7 @@
 
 import time
 import pandas as pd
+import uuid
 from datetime import datetime, timezone
 import signal
 import sys
@@ -73,18 +74,63 @@ class TradingBot:
             except Exception as e:
                 logger.error(f"Falha durante a sincronização de trades: {e}", exc_info=True)
 
-        # --- ETAPA 2.5: VERIFICAÇÃO DE ORDENS ABERTAS INESPERADAS ---
-        # Adiciona uma camada de segurança para alertar sobre ordens que não deveriam estar abertas
-        # (já que o bot só usa ordens de mercado).
+        # --- ETAPA 2.5: VERIFICAÇÃO E ADOÇÃO DE ORDENS ABERTAS INESPERADAS ---
         try:
             open_orders = self.account_manager.get_open_orders()
             if open_orders:
-                logger.critical("🚨 ALERTA DE SINCRONIZAÇÃO: Foram encontradas ordens abertas na Binance que não deveriam existir! 🚨")
-                for order in open_orders:
-                    logger.critical(f"   - Ordem Órfã ID: {order['orderId']}, Lado: {order['side']}, Preço: {order['price']}, Qtd: {order['origQty']}")
-                logger.critical("   Estas ordens podem indicar uma falha anterior ou intervenção manual. O bot NÃO as cancelará. Verifique manualmente na corretora.")
+                logger.warning(f"🚨 {len(open_orders)} ordens abertas encontradas na Binance. Tentando adotá-las como posições... 🚨")
+
+                # Re-usa os dados históricos já carregados se possível, ou carrega-os novamente.
+                if 'historical_data_df' not in locals() or historical_data_df.empty:
+                    historical_data_df = data_manager.read_data_from_influx(
+                        measurement="features_master_table",
+                        start_date="-3d"
+                    )
+
+                if historical_data_df.empty:
+                    logger.error("Não foi possível carregar dados históricos para o cálculo do ATR. Adoção de ordens pulada.")
+                else:
+                    # Obter posições abertas para evitar adotar uma ordem que já corresponde a uma posição
+                    open_positions = self.position_manager.get_open_positions()
+                    # Extrair IDs de ordens já associadas a posições
+                    linked_order_ids = []
+                    if not open_positions.empty:
+                        for data in open_positions.get('decision_data', []):
+                            if isinstance(data, dict) and data.get('binance_order_id'):
+                                linked_order_ids.append(data['binance_order_id'])
+
+                    for order in open_orders:
+                        if order['orderId'] in linked_order_ids:
+                            continue
+
+                        logger.info(f"Adotando ordem órfã ID: {order['orderId']}...")
+
+                        trade_timestamp = pd.to_datetime(order['time'], unit='ms', utc=True)
+                        candle = historical_data_df.asof(trade_timestamp)
+
+                        if pd.isna(candle.get('atr_14')):
+                            logger.warning(f"Não foi possível encontrar ATR para a ordem {order['orderId']}. Adoção pulada.")
+                            continue
+
+                        entry_price = float(order['price'])
+                        quantity_btc = float(order['origQty'])
+                        atr_value = candle['atr_14']
+
+                        trade_data = {
+                            "trade_id": str(uuid.uuid4()),
+                            "status": "OPEN",
+                            "entry_price": entry_price,
+                            "quantity_btc": quantity_btc,
+                            "profit_target_price": entry_price + (atr_value * self.position_manager.profit_target_mult),
+                            "stop_loss_price": entry_price - (atr_value * self.position_manager.stop_loss_mult),
+                            "timestamp": trade_timestamp,
+                            "decision_data": {"reason": "ADOPTED_FROM_OPEN_ORDER", "binance_order_id": order['orderId']},
+                        }
+                        self.position_manager.db_manager.write_trade(trade_data)
+                        logger.info(f"✅ Posição para a ordem Binance ID {order['orderId']} adotada com sucesso.")
+
         except Exception as e:
-            logger.error(f"Falha ao verificar ordens abertas durante a inicialização: {e}", exc_info=True)
+            logger.error(f"Falha ao verificar/adotar ordens abertas durante a inicialização: {e}", exc_info=True)
 
 
         # --- ETAPA 3: Finalização da Inicialização ---

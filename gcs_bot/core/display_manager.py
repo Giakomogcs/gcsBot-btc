@@ -37,8 +37,7 @@ def display_trading_dashboard(status_data: dict):
     )
     # A direita agora terá nosso novo painel de Posições Abertas
     layout["right"].split_column(
-        Layout(name="open_positions_panel"), 
-        Layout(name="open_orders")
+        Layout(name="open_positions_panel")
     )
 
     header = Panel(Text("🤖 GCS-BOT EM OPERAÇÃO 🤖", justify="center", style="bold white on blue"))
@@ -98,20 +97,6 @@ def display_trading_dashboard(status_data: dict):
                 Text(f"${pnl:,.2f}", style=pnl_color) # NOVO CAMPO
             )
         layout["open_positions_panel"].update(Panel(open_pos_table))
-
-    # Painel de Ordens Abertas na Binance (sem alterações)
-    open_orders = status_data.get('open_orders', [])
-    open_orders_table = Table(title="📖 ORDENS ABERTAS (BINANCE)")
-    # ... (código do painel de ordens abertas continua o mesmo)
-    open_orders_table.add_column("ID", style="dim")
-    open_orders_table.add_column("Lado", justify="center")
-    open_orders_table.add_column("Tipo", justify="center")
-    open_orders_table.add_column("Preço", style="cyan", justify="right")
-    open_orders_table.add_column("Quantidade", style="magenta", justify="right")
-    for order in open_orders:
-        side_color = "green" if order['side'] == 'BUY' else "red"
-        open_orders_table.add_row(str(order['orderId']), Text(order['side'], style=side_color), order['type'], f"${float(order['price']):,.2f}", f"{float(order['origQty']):.6f} BTC")
-    layout["open_orders"].update(Panel(open_orders_table))
 
     # Painel de Histórico de Trades da Binance (sem alterações)
     trade_history = status_data.get('trade_history', [])
