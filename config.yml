@@ -9,7 +9,7 @@ database:
 
 # Configurações do backtest (parâmetros da simulação)
 backtest:
-  start_date: "-60d"
+  start_date: "-2d"
   initial_capital: 100
   commission_rate: 0.001
 
