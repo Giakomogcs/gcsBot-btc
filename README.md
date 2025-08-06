@@ -1,28 +1,67 @@
-# GCS-Bot: The GCS-Bot Manifesto
+# GCS-Bot: A Sophisticated Cryptocurrency Trading Bot
+
+GCS-Bot is a powerful, event-driven cryptocurrency trading bot designed for adaptability and transparency. It leverages a sophisticated grid-DCA strategy, real-time feature calculation, and a comprehensive monitoring dashboard to trade on the Binance exchange.
 
 ## Core Philosophy
-A synthesis of four non-negotiable pillars that will guide every line of code and strategic decision.
 
-*   **Discipline:** The system must execute its rules without emotion or deviation. All logic for entry, management, and exit must be absolute and auditable. Each trade is a sovereign entity, managed from inception to conclusion based on mathematical criteria.
-*   **Adaptation:** The market is a living organism. Our bot will not be a rigid statue. It will adapt its risk, confidence, and strategy based on market regimes (e.g., high/low volatility, trending/ranging).
+*   **Discipline:** The system executes its rules without emotion or deviation. All logic for entry, management, and exit is absolute and auditable.
+*   **Adaptation:** The market is a living organism. Our bot is not a rigid statue; it adapts its strategy based on market regimes.
 *   **Robustness:** The system is a battle tank. Built on the principles of Defensive Software Engineering, it anticipates and handles real-world imperfections—missing data, API errors, network latency—without ever failing its core mission.
-*   **Transparency:** The bot cannot be a "black box." Using the new dashboard, we have a clear window into the bot's real-time operations, account status, and performance.
+*   **Transparency:** The bot is not a "black box." Using the new dashboard, we have a clear window into the bot's real-time operations, account status, and performance.
 
-## Architecture
+## Features
 
-The project is organized into a clean, professional, and scalable structure adhering to Python packaging standards.
+*   **Advanced Trading Strategy:** Implements a hybrid Grid-DCA (Dollar-Cost Averaging) strategy.
+*   **Partial Sells:** Takes profit on 90% of a position, leaving the remaining 10% to run, maximizing profit potential.
+*   **Live Monitoring Dashboard:** A comprehensive, real-time terminal dashboard to monitor performance, balances, and trades.
+*   **Binance Integration:** Connects to Binance for live trading, testnet trading, and account data.
+*   **Multiple Operating Modes:** Supports `trade` (live), `test` (testnet), `backtest`, and `offline` modes.
+*   **Dockerized Environment:** Ensures a consistent and reliable operating environment.
 
-### Module Interaction
+## Getting Started
 
-*   **`run.py`**: The main command-line interface (CLI) for all operations. This Python script orchestrates Docker commands to run the various components of the bot.
-*   **`gcs_bot/`**: The main Python package containing all the application source code.
-    *   **`core/`**: The bot's brain. It houses the central logic for trading, position management, and account interaction.
-    *   **`database/`**: A dedicated module to handle all interactions with the InfluxDB time-series database.
-    *   **`utils/`**: Shared utilities for configuration management and logging.
+### Prerequisites
 
-## Control Panel (`run.py`)
+*   [Docker Desktop](https://www.docker.com/products/docker-desktop/) (must be running)
+*   [Python 3.10+](https://www.python.org/downloads/)
 
-Use this Python script to manage the entire bot lifecycle. All commands are executed via `python3 run.py [command]`.
+### 1. Installation
+
+First, clone the repository to your local machine:
+```bash
+git clone https://github.com/your-username/gcs-bot.git
+cd gcs-bot
+```
+
+### 2. Configuration
+
+The bot uses two primary configuration files: `.env` for secrets and `config.yml` for strategy parameters.
+
+**a. Environment Variables (`.env`)**
+
+Create a `.env` file by copying the example file:
+```bash
+cp .env.example .env
+```
+Now, open the `.env` file and fill in your Binance API keys. You will need separate keys for the mainnet and the testnet.
+
+**b. Strategy Configuration (`config.yml`)**
+
+The `config.yml` file contains all the parameters for the trading strategy, backtesting, and other settings. You can modify this file to customize the bot's behavior.
+
+### 3. Setup the Environment
+
+Run the setup command to build the Docker images and start the necessary services (like the InfluxDB database):
+```bash
+python3 run.py setup
+```
+
+## Usage
+
+All commands are executed through the `run.py` script:
+```bash
+python3 run.py [command]
+```
 
 ### Environment Management
 *   `setup`: Builds and starts the Docker environment for the first time.
@@ -30,9 +69,9 @@ Use this Python script to manage the entire bot lifecycle. All commands are exec
 *   `stop-services`: Stops the Docker containers.
 *   `reset-db`: **DANGER!** Stops and erases the database.
 
-### Bot Operations & Modes
-*   `trade`: Starts the bot in **live trading mode** (real money) in a background container.
-*   `test`: Starts the bot in **test mode** (live data on Binance Testnet) in a background container.
+### Bot Operations
+*   `trade`: Starts the bot in **live trading mode** (real money).
+*   `test`: Starts the bot in **test mode** (live data on Binance Testnet).
 *   `backtest`: Runs a backtest using the current models and historical data.
 *   `optimize`: Runs the model optimization process.
 *   `update-db`: Runs the ETL pipeline to populate/update the database with market data.
@@ -50,6 +89,24 @@ Use this Python script to manage the entire bot lifecycle. All commands are exec
 *   `analyze-decision <model> "<datetime>"`: Analyzes a specific model's decision.
 *   `run-tests`: Runs the automated test suite (pytest).
 
+## Execution Modes
+
+*   **`trade`**: Live trading on the Binance mainnet with real funds. Use with caution.
+*   **`test`**: Live trading on the Binance Testnet. Uses real-time market data but places orders on the testnet, so no real funds are at risk. This is the recommended mode for testing new strategies.
+*   **`backtest`**: Simulates the trading strategy on historical data. Useful for evaluating the performance of a strategy over a long period.
+*   **`offline`**: A mode for development and testing without an internet connection. The bot will not connect to Binance.
+
+## Trading Strategy
+
+The bot employs a hybrid strategy that combines elements of Dollar-Cost Averaging (DCA) and grid trading, with a unique take-profit mechanism.
+
+*   **Entry Logic:**
+    *   **Dip Buying:** The primary entry signal is a dip in price.
+    *   **Uptrend Entry:** To avoid missing out on strong uptrends, the bot will also enter a position after a configurable number of consecutive green candles.
+*   **Exit Logic:**
+    *   **Partial Take-Profit:** When a position becomes profitable, the bot sells 90% of the position to lock in gains. The remaining 10% is left to run, potentially capturing further upside.
+    *   **Stop-Loss:** Each trade has a stop-loss calculated based on the Average True Range (ATR) at the time of entry.
+
 ## Trading Dashboard
 
 The trading dashboard provides a real-time overview of the bot's performance and status. To view it, run `python3 run.py show_trading` while the bot is running in `trade` or `test` mode.
@@ -61,43 +118,11 @@ The dashboard includes:
 *   **Binance Open Orders:** A list of open orders for the trading symbol, fetched directly from Binance.
 *   **Binance Trade History:** Your recent trade history for the symbol, fetched directly from Binance for verification.
 
-## Quick Start Guide
+## Architecture
 
-1.  **Prerequisites**:
-    *   Docker Desktop (must be running).
-    *   Python 3.10+.
-
-2.  **Setup the Environment**:
-    Open a terminal and run the setup command. This will build the Docker images and start the necessary services.
-    ```bash
-    python3 run.py setup
-    ```
-    You will also need to create a `.env` file from the `.env.example` template and fill in your Binance API keys (both mainnet and testnet) and desired InfluxDB credentials.
-
-3.  **Run in Test Mode**:
-    Before running with real money, it's highly recommended to run the bot in test mode on the Binance Testnet.
-    ```bash
-    python3 run.py test
-    ```
-
-4.  **Monitor the Bot**:
-    To see the live trading dashboard, open a new terminal and run:
-    ```bash
-    python3 run.py show_trading
-    ```
-    To view the raw logs from the bot, run:
-    ```bash
-    python3 run.py logs
-    ```
-
-5.  **Run in Live Mode**:
-    Once you are confident that the bot is working as expected, you can run it in live mode with real funds.
-    ```bash
-    python3 run.py trade
-    ```
-
-6.  **Stopping the Bot**:
-    To stop the bot and its associated services, run:
-    ```bash
-    python3 run.py stop-services
-    ```
+The project is organized into a clean, professional, and scalable structure.
+*   **`run.py`**: The main command-line interface (CLI).
+*   **`gcs_bot/`**: The main Python package.
+    *   **`core/`**: The bot's brain, containing the logic for trading, position management, and exchange interaction.
+    *   **`database/`**: Manages all interactions with the InfluxDB database.
+    *   **`utils/`**: Shared utilities for configuration and logging.
