@@ -23,9 +23,11 @@ class PositionManager:
         # --- NOVOS PARÂMETROS ESTRATÉGICOS ---
         self.dca_grid_spacing_percent = self.strategy_config.dca_grid_spacing_percent / 100.0
         self.partial_sell_percent = self.strategy_config.partial_sell_percent / 100.0
+        self.consecutive_green_candles_for_entry = self.strategy_config.consecutive_green_candles_for_entry
 
         self.performance_factor = 1.0
         self.previous_candle = None
+        self.consecutive_green_candles = 0
 
     def _update_performance_factor(self):
         if not self.sizing_config.enabled:
@@ -189,6 +191,7 @@ class PositionManager:
             update_trade_data = {
                 "trade_id": trade_id,
                 "status": status,
+                "entry_price": entry_price,
                 "quantity_btc": quantity_remaining,
                 "total_realized_pnl_usdt": total_realized_pnl,
                 "timestamp": datetime.now(timezone.utc),
@@ -223,12 +226,22 @@ class PositionManager:
         if open_trades_count >= max_trades:
             return None
 
-        # Lógica de decisão de entrada (a mesma de antes)
+        # Lógica de decisão de entrada
         entry_decision = None
+        if self.previous_candle is not None:
+            if candle['close'] > self.previous_candle['close']:
+                self.consecutive_green_candles += 1
+            else:
+                self.consecutive_green_candles = 0
+
         if open_trades_count == 0:
             if self.previous_candle is not None and candle['close'] < self.previous_candle['close']:
                 self.logger.info("ESTRATÉGIA 'ENTRAR NO JOGO': Primeira vela de baixa detectada.")
                 entry_decision = {"reason": "FIRST_ENTRY_DIP"}
+            elif self.consecutive_green_candles >= self.consecutive_green_candles_for_entry:
+                self.logger.info(f"ESTRATÉGIA 'ENTRAR NO JOGO': {self.consecutive_green_candles} velas verdes consecutivas detectadas.")
+                entry_decision = {"reason": "UPTREND_ENTRY"}
+                self.consecutive_green_candles = 0 # Reset after entry
         elif open_trades_count > 0:
             average_entry_price = open_positions['entry_price'].mean()
             price_change_percent = (candle['close'] - average_entry_price) / average_entry_price
