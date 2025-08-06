@@ -112,3 +112,7 @@
 {"timestamp": "2025-08-06 11:27:47,921", "level": "ERROR", "message": "Comando Sugerido: .\\manage.ps1 backtest"}
 {"timestamp": "2025-08-06 11:29:10,670", "level": "ERROR", "message": "--- \u274c ERRO CR\u00cdTICO DURANTE O BACKTEST \u274c ---"}
 {"timestamp": "2025-08-06 11:29:10,671", "level": "ERROR", "message": "Ocorreu um erro inesperado: <urllib3.connection.HTTPConnection object at 0x7ff1b28948f0>: Failed to establish a new connection: [Errno 111] Connection refused"}
+{"timestamp": "2025-08-06 11:50:37,156", "level": "ERROR", "message": "Binance API Error fetching open orders: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time."}
+{"timestamp": "2025-08-06 11:50:37,167", "level": "ERROR", "message": "Binance API Error fetching trade history: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time."}
+{"timestamp": "2025-08-06 11:50:37,171", "level": "ERROR", "message": "Binance API Error on BUY: APIError(code=-2010): Account has insufficient balance for requested action."}
+{"timestamp": "2025-08-06 11:50:37,176", "level": "ERROR", "message": "Binance API Error on SELL: APIError(code=-2010): Account has insufficient balance for requested action."}

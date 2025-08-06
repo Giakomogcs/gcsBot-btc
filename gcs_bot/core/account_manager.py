@@ -69,13 +69,78 @@ class AccountManager:
             logger.error(f"Erro inesperado ao buscar saldo: {e}", exc_info=True)
             return 0.0
 
-    def update_on_sell(self, revenue_usdt: float, quantity_btc: float):
+    def update_on_sell(self, quantity_btc: float):
         """
-        Placeholder for updating account after a sell. In a live environment,
-        this would handle the sell order execution.
+        Places a market sell order on Binance.
         """
-        logger.info(f"Simulating sell of {quantity_btc:.8f} BTC for ${revenue_usdt:,.2f} USDT.")
-        # In a real scenario, we would place a market sell order here
-        # and then confirm the balance update.
-        # For backtesting, the portfolio_manager's method is used which updates simulated balances.
-        pass
+        if not self.client or settings.app.force_offline_mode:
+            logger.warning(f"OFFLINE MODE: Simulating sell of {quantity_btc:.8f} BTC.")
+            return True # Simulate success
+
+        try:
+            logger.info(f"Attempting to place market SELL order for {quantity_btc:.8f} BTC...")
+            order = self.client.order_market_sell(symbol=settings.app.symbol, quantity=quantity_btc)
+            logger.info(f"SUCCESS: Market SELL order placed: {order}")
+            return True
+        except BinanceAPIException as e:
+            logger.error(f"Binance API Error on SELL: {e}", exc_info=True)
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error on SELL: {e}", exc_info=True)
+            return False
+
+    def update_on_buy(self, quote_order_qty: float):
+        """
+        Places a market buy order on Binance.
+        """
+        if not self.client or settings.app.force_offline_mode:
+            logger.warning(f"OFFLINE MODE: Simulating buy with {quote_order_qty:.2f} USDT.")
+            return True # Simulate success
+
+        try:
+            logger.info(f"Attempting to place market BUY order for {quote_order_qty:.2f} USDT...")
+            order = self.client.order_market_buy(symbol=settings.app.symbol, quoteOrderQty=quote_order_qty)
+            logger.info(f"SUCCESS: Market BUY order placed: {order}")
+            return True
+        except BinanceAPIException as e:
+            logger.error(f"Binance API Error on BUY: {e}", exc_info=True)
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error on BUY: {e}", exc_info=True)
+            return False
+
+    def get_open_orders(self) -> list:
+        """
+        Fetches open orders from Binance for the current symbol.
+        """
+        if not self.client or settings.app.force_offline_mode:
+            logger.warning("OFFLINE MODE: Cannot fetch open orders.")
+            return []
+
+        try:
+            open_orders = self.client.get_open_orders(symbol=settings.app.symbol)
+            return open_orders
+        except BinanceAPIException as e:
+            logger.error(f"Binance API Error fetching open orders: {e}", exc_info=True)
+            return []
+        except Exception as e:
+            logger.error(f"Unexpected error fetching open orders: {e}", exc_info=True)
+            return []
+
+    def get_trade_history(self, limit: int = 10) -> list:
+        """
+        Fetches trade history from Binance for the current symbol.
+        """
+        if not self.client or settings.app.force_offline_mode:
+            logger.warning("OFFLINE MODE: Cannot fetch trade history.")
+            return []
+
+        try:
+            trades = self.client.get_my_trades(symbol=settings.app.symbol, limit=limit)
+            return trades
+        except BinanceAPIException as e:
+            logger.error(f"Binance API Error fetching trade history: {e}", exc_info=True)
+            return []
+        except Exception as e:
+            logger.error(f"Unexpected error fetching trade history: {e}", exc_info=True)
+            return []

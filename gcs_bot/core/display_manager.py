@@ -26,13 +26,18 @@ def display_trading_dashboard(status_data: dict):
     layout.split(
         Layout(name="header", size=3),
         Layout(ratio=1, name="main"),
-        Layout(size=10, name="footer"),
+        Layout(name="trade_history", size=10),
+        Layout(name="footer", size=1),
     )
 
     layout["main"].split_row(Layout(name="left", ratio=1), Layout(name="right", ratio=2))
     layout["left"].split_column(
         Layout(name="portfolio"),
         Layout(name="session_stats"),
+    )
+    layout["right"].split_column(
+        Layout(name="trade_summary"),
+        Layout(name="open_orders")
     )
 
     header = Panel(Text("🤖 GCS-BOT EM OPERAÇÃO 🤖", justify="center", style="bold white on blue"))
@@ -81,7 +86,50 @@ def display_trading_dashboard(status_data: dict):
             f"{trade.get('quantity_btc', 0):.6f} BTC",
             datetime.fromisoformat(trade['timestamp']).strftime('%Y-%m-%d %H:%M')
         )
-    layout["right"].update(Panel(summary_table))
+    layout["trade_summary"].update(Panel(summary_table))
+
+    # Painel de Ordens Abertas na Binance
+    open_orders = status_data.get('open_orders', [])
+    open_orders_table = Table(title="📖 ORDENS ABERTAS (BINANCE)")
+    open_orders_table.add_column("ID", style="dim")
+    open_orders_table.add_column("Lado", justify="center")
+    open_orders_table.add_column("Tipo", justify="center")
+    open_orders_table.add_column("Preço", style="cyan", justify="right")
+    open_orders_table.add_column("Quantidade", style="magenta", justify="right")
+
+    for order in open_orders:
+        side_color = "green" if order['side'] == 'BUY' else "red"
+        open_orders_table.add_row(
+            str(order['orderId']),
+            Text(order['side'], style=side_color),
+            order['type'],
+            f"${float(order['price']):,.2f}",
+            f"{float(order['origQty']):.6f} BTC"
+        )
+    layout["open_orders"].update(Panel(open_orders_table))
+
+    # Painel de Histórico de Trades da Binance
+    trade_history = status_data.get('trade_history', [])
+    history_table = Table(title="📜 HISTÓRICO DE TRADES (BINANCE)")
+    history_table.add_column("ID", style="dim")
+    history_table.add_column("Lado", justify="center")
+    history_table.add_column("Preço", style="cyan", justify="right")
+    history_table.add_column("Quantidade", style="magenta", justify="right")
+    history_table.add_column("Comissão", style="yellow", justify="right")
+    history_table.add_column("Data", style="blue")
+
+    for trade in trade_history:
+        side_color = "green" if trade['isBuyer'] else "red"
+        side_text = "BUY" if trade['isBuyer'] else "SELL"
+        history_table.add_row(
+            str(trade['id']),
+            Text(side_text, style=side_color),
+            f"${float(trade['price']):,.2f}",
+            f"{float(trade['qty']):.6f} BTC",
+            f"{float(trade['commission']):.8f} {trade['commissionAsset']}",
+            datetime.fromtimestamp(trade['time'] / 1000).strftime('%Y-%m-%d %H:%M')
+        )
+    layout["trade_history"].update(Panel(history_table))
 
     # Footer com status do bot
     bot_status = status_data.get('bot_status', {})

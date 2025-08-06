@@ -153,11 +153,19 @@ class TradingBot:
             }
 
             # Montagem final do payload
+            # 5. Ordens Abertas da Binance
+            open_orders_list = self.account_manager.get_open_orders()
+
+            # 6. Histórico de Trades da Binance
+            trade_history_list = self.account_manager.get_trade_history(limit=10)
+
             status_payload = {
                 "portfolio": portfolio_data,
                 "session_stats": session_stats,
                 "bot_status": bot_status,
-                "trade_summary": trade_summary
+                "trade_summary": trade_summary,
+                "open_orders": open_orders_list,
+                "trade_history": trade_history_list
             }
 
             # Escrever no arquivo

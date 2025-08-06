@@ -58,25 +58,48 @@ class PositionManager:
         return trade_size_usdt
 
     def open_position(self, candle: pd.Series, decision_data: dict = None):
+        trade_size_usdt = decision_data.get('trade_size_usdt', 0)
+        if trade_size_usdt <= 0:
+            self.logger.warning("Tamanho de trade inválido para abrir posição. Abortando.")
+            return
+
+        # 1. Executar a ordem de compra primeiro
+        buy_successful = self.account_manager.update_on_buy(quote_order_qty=trade_size_usdt)
+
+        # 2. Se a compra falhar, não registrar o trade no DB
+        if not buy_successful:
+            self.logger.error("A ordem de compra falhou. O trade não será registrado no banco de dados.")
+            return
+
+        # 3. Se a compra for bem-sucedida, registrar o trade
         try:
             entry_price = candle['close']
             atr = candle['atr_14']
-            if pd.isna(atr) or atr == 0: return
+            if pd.isna(atr) or atr == 0:
+                self.logger.warning("ATR inválido, não é possível calcular SL/TP. Posição não será aberta.")
+                return
 
             profit_target_price = entry_price + (atr * self.profit_target_mult)
             stop_loss_price = entry_price - (atr * self.stop_loss_mult)
-            quantity_btc = decision_data.get('trade_size_usdt', 0) / entry_price
+            # A quantidade real de BTC virá da resposta da exchange no futuro, por enquanto calculamos
+            quantity_btc = trade_size_usdt / entry_price
 
             trade_data = {
-                "trade_id": str(uuid.uuid4()), "status": "OPEN", "entry_price": entry_price,
-                "quantity_btc": quantity_btc, "profit_target_price": profit_target_price,
-                "stop_loss_price": stop_loss_price, "timestamp": datetime.now(timezone.utc),
+                "trade_id": str(uuid.uuid4()),
+                "status": "OPEN",
+                "entry_price": entry_price,
+                "quantity_btc": quantity_btc,
+                "profit_target_price": profit_target_price,
+                "stop_loss_price": stop_loss_price,
+                "timestamp": datetime.now(timezone.utc),
                 "decision_data": decision_data or {},
                 "total_realized_pnl_usdt": 0.0,
             }
             self.db_manager.write_trade(trade_data)
+            self.logger.info(f"Trade {trade_data['trade_id']} aberto e registrado com sucesso.")
+
         except Exception as e:
-            self.logger.error(f"Erro ao tentar abrir posição: {e}", exc_info=True)
+            self.logger.critical(f"CRÍTICO: A ORDEM DE COMPRA FOI EXECUTADA, MAS FALHOU AO REGISTRAR NO DB! Verifique manualmente. Erro: {e}", exc_info=True)
 
     def check_and_close_positions(self, candle: pd.Series):
         closed_trades_summaries = []
@@ -147,7 +170,11 @@ class PositionManager:
             self.logger.info(f"   Selling {quantity_to_sell:.8f} BTC ({self.partial_sell_percent:.0%}) at ${current_price:,.2f}")
             self.logger.info(f"   Realized PnL: ${net_pnl_sold:,.2f}. Remaining: {quantity_remaining:.8f} BTC")
 
-            self.account_manager.update_on_sell(exit_value_sold, quantity_to_sell)
+            sell_successful = self.account_manager.update_on_sell(quantity_btc=quantity_to_sell)
+
+            if not sell_successful:
+                self.logger.error(f"A ordem de venda para o trade {trade_id} falhou. O trade não será atualizado no DB.")
+                continue
 
             decision_data = position.get('decision_data', {})
             decision_data['partially_closed'] = True
