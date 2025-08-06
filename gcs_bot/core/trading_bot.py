@@ -35,7 +35,7 @@ class TradingBot:
         data_manager = DataManager(db_manager=db_manager, config=settings, logger=logger)
 
         # 2. O novo Calculador de Features em Tempo Real
-        self.feature_calculator = LiveFeatureCalculator(data_manager)
+        self.feature_calculator = LiveFeatureCalculator(data_manager, mode=self.mode)
 
         # 3. Gestor de Posição (cérebro de decisão)
         self.position_manager = PositionManager(

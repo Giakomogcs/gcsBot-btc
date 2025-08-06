@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from gcs_bot.utils.logger import logger
 # --- IMPORTAÇÃO CORRIGIDA ---
 from gcs_bot.utils.config_manager import settings 
-from gcs_bot.core.exchange_manager import exchange_manager
+from gcs_bot.core.exchange_manager import ExchangeManager
 from gcs_bot.data.data_manager import DataManager
 from gcs_bot.data.feature_engineering import add_all_features
 
@@ -16,10 +16,10 @@ class LiveFeatureCalculator:
     Responsável por buscar todos os dados brutos necessários em tempo real,
     combiná-los e calcular o conjunto completo de features para a tomada de decisão.
     """
-    def __init__(self, data_manager: DataManager):
+    def __init__(self, data_manager: DataManager, mode: str = 'trade'):
         self.data_manager = data_manager
-        # --- LINHA CORRIGIDA ---
-        # Acessa o símbolo diretamente do objeto de configurações importado.
+        self.mode = mode
+        self.exchange_manager = ExchangeManager(mode=self.mode)
         self.symbol = settings.app.symbol
 
     def _get_live_sentiment_data(self) -> pd.DataFrame:
@@ -49,7 +49,7 @@ class LiveFeatureCalculator:
         logger.debug("Iniciando cálculo de features em tempo real...")
         
         # 1. Dados de Velas (OHLCV) da Binance (base principal)
-        df_candles = exchange_manager.get_historical_candles(self.symbol, '1m', limit=2*1440)
+        df_candles = self.exchange_manager.get_historical_candles(self.symbol, '1m', limit=2*1440)
         if df_candles.empty:
             logger.error("Falha ao obter velas históricas da Binance. Abortando ciclo.")
             return pd.Series(dtype=float)
@@ -81,7 +81,7 @@ class LiveFeatureCalculator:
             return pd.Series(dtype=float)
 
         # 6. Obter o preço mais recente e preparar a vela final
-        current_price = exchange_manager.get_current_price(self.symbol)
+        current_price = self.exchange_manager.get_current_price(self.symbol)
         if current_price is None:
             logger.error("Não foi possível obter o preço atual da corretora. Abortando ciclo.")
             return pd.Series(dtype=float)

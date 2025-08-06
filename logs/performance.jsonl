@@ -132,3 +132,21 @@
 {"timestamp": "2025-08-06 12:29:39,391", "level": "ERROR", "message": "Binance API Error fetching trade history: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time."}
 {"timestamp": "2025-08-06 12:29:39,397", "level": "ERROR", "message": "Binance API Error on BUY: APIError(code=-2010): Account has insufficient balance for requested action."}
 {"timestamp": "2025-08-06 12:29:39,401", "level": "ERROR", "message": "Binance API Error on SELL: APIError(code=-2010): Account has insufficient balance for requested action."}
+{"timestamp": "2025-08-06 12:55:12,916", "level": "ERROR", "message": "Erro ao buscar o \u00faltimo timestamp do InfluxDB: <urllib3.connection.HTTPConnection object at 0x7f1a3f13fc50>: Failed to resolve 'db' ([Errno -2] Name or service not known)"}
+{"timestamp": "2025-08-06 12:55:12,958", "level": "ERROR", "message": "\u274c Erro ao escrever dados para o InfluxDB: <urllib3.connection.HTTPConnection object at 0x7f1a3f13f710>: Failed to resolve 'db' ([Errno -2] Name or service not known)"}
+{"timestamp": "2025-08-06 12:55:12,976", "level": "ERROR", "message": "Erro ao buscar o \u00faltimo timestamp do InfluxDB: <urllib3.connection.HTTPConnection object at 0x7f1a3f13c830>: Failed to resolve 'db' ([Errno -2] Name or service not known)"}
+{"timestamp": "2025-08-06 12:55:35,982", "level": "WARNING", "message": "Nenhum dado de fluxo de ordens encontrado para 2023-08."}
+{"timestamp": "2025-08-06 12:55:59,055", "level": "WARNING", "message": "Nenhum dado de fluxo de ordens encontrado para 2023-09."}
+{"timestamp": "2025-08-06 12:56:22,279", "level": "WARNING", "message": "Nenhum dado de fluxo de ordens encontrado para 2023-10."}
+{"timestamp": "2025-08-06 12:56:45,836", "level": "WARNING", "message": "Nenhum dado de fluxo de ordens encontrado para 2023-11."}
+{"timestamp": "2025-08-06 12:57:09,112", "level": "WARNING", "message": "Nenhum dado de fluxo de ordens encontrado para 2023-12."}
+{"timestamp": "2025-08-06 12:57:32,583", "level": "WARNING", "message": "Nenhum dado de fluxo de ordens encontrado para 2024-01."}
+{"timestamp": "2025-08-06 12:57:54,567", "level": "WARNING", "message": "Nenhum dado de fluxo de ordens encontrado para 2024-02."}
+{"timestamp": "2025-08-06 12:58:17,093", "level": "WARNING", "message": "Nenhum dado de fluxo de ordens encontrado para 2024-03."}
+{"timestamp": "2025-08-06 12:58:39,463", "level": "WARNING", "message": "Nenhum dado de fluxo de ordens encontrado para 2024-04."}
+{"timestamp": "2025-08-06 12:59:01,985", "level": "WARNING", "message": "Nenhum dado de fluxo de ordens encontrado para 2024-05."}
+{"timestamp": "2025-08-06 12:59:23,919", "level": "WARNING", "message": "Nenhum dado de fluxo de ordens encontrado para 2024-06."}
+{"timestamp": "2025-08-06 12:59:47,848", "level": "WARNING", "message": "Nenhum dado de fluxo de ordens encontrado para 2024-07."}
+{"timestamp": "2025-08-06 13:00:10,154", "level": "WARNING", "message": "Nenhum dado de fluxo de ordens encontrado para 2024-08."}
+{"timestamp": "2025-08-06 13:00:33,057", "level": "WARNING", "message": "Nenhum dado de fluxo de ordens encontrado para 2024-09."}
+{"timestamp": "2025-08-06 13:00:56,261", "level": "WARNING", "message": "Nenhum dado de fluxo de ordens encontrado para 2024-10."}
