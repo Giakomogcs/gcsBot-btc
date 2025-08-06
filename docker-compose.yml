@@ -34,8 +34,12 @@ services:
       - .env
     volumes:
       - .:/app
-    # Mantém o contentor a correr para que possamos usar 'exec'
-    command: tail -f /dev/null
+    command: >
+      sh -c "if [ \"$MODE\" = \"trade\" ] || [ \"$MODE\" = \"test\" ]; then
+               python main.py $MODE;
+             else
+               tail -f /dev/null;
+             fi"
 
 volumes:
   influxdb_data:

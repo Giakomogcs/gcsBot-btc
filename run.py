@@ -77,6 +77,7 @@ def run_script_in_container(script_path, *args):
     command = f"docker compose exec app python {script_path} {' '.join(args)}"
     run_command(command)
 
+
 def show_display(status_file, dashboard_func, name):
     """Generic function to show a dashboard by reading a status file."""
     result = run_command("docker compose ps -q app", capture_output=True)
@@ -139,8 +140,16 @@ def main():
     elif command == "start-services": start_services()
     elif command == "stop-services": stop_services()
     elif command == "reset-db": reset_db()
-    elif command == "trade": run_script_in_container("main.py", "trade")
-    elif command == "test": run_script_in_container("main.py", "test")
+    elif command == "trade":
+        check_docker_running()
+        print_color("--- Starting Bot in TRADE mode... ---", "yellow")
+        run_command(f"MODE=trade docker compose up -d --build app", check=True)
+        print_color("Bot started in TRADE mode in the background.", "green")
+    elif command == "test":
+        check_docker_running()
+        print_color("--- Starting Bot in TEST mode... ---", "yellow")
+        run_command(f"MODE=test docker compose up -d --build app", check=True)
+        print_color("Bot started in TEST mode in the background.", "green")
     elif command == "backtest": run_script_in_container("scripts/run_backtest.py")
     elif command == "optimize": run_script_in_container("scripts/run_optimizer.py")
     elif command == "update-db": run_script_in_container("scripts/data_pipeline.py")
