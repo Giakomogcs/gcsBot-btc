@@ -27,7 +27,7 @@ data_paths:
 
 # Configurações do pipeline de dados
 data_pipeline:
-  start_date_ingestion: "2020-01-01"
+  start_date_ingestion: "2023-01-01"
   # --- INÍCIO DA CORREÇÃO DOS NOMES DAS FEATURES ---
   # Alinhados com os nomes gerados em 'feature_engineering.py'
   regime_features: ["atr_14", "macd_diff_12_26_9", "rsi_14"]

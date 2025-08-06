@@ -2,7 +2,7 @@
 
 import time
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone
 import signal
 import sys
 import json
