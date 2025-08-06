@@ -33,6 +33,59 @@ class AccountManager:
         except Exception as e:
             logger.error(f"Erro inesperado ao buscar saldo de BTC: {e}", exc_info=True)
             return 0.0
+        
+    def _format_quantity_for_symbol(self, symbol: str, quantity: float, current_price: float) -> float:
+        """
+        Formata a quantidade para a precisão correta (LOT_SIZE) e valida
+        o valor mínimo da ordem (MIN_NOTIONAL).
+        Retorna 0.0 se a validação falhar.
+        """
+        try:
+            logger.info(f"Buscando filtros de negociação para o símbolo {symbol}...")
+            info = self.client.get_exchange_info()
+            symbol_info = next((s for s in info['symbols'] if s['symbol'] == symbol), None)
+            if not symbol_info:
+                logger.error(f"Não foi possível encontrar informações para o símbolo {symbol}.")
+                return 0.0
+
+            # 1. Validação do MIN_NOTIONAL (Valor Mínimo da Ordem)
+            min_notional_filter = next((f for f in symbol_info['filters'] if f['filterType'] == 'MIN_NOTIONAL'), None)
+            # Usamos 5.0 como um padrão seguro caso a API não retorne o valor.
+            min_notional_value = float(min_notional_filter.get('minNotional', '5.0')) if min_notional_filter else 5.0
+            
+            order_value = quantity * current_price
+            if order_value < min_notional_value:
+                logger.warning(
+                    f"Ordem de venda IGNORADA. O valor da ordem ({order_value:.2f} USDT) "
+                    f"é menor que o mínimo exigido de {min_notional_value:.2f} USDT."
+                )
+                return 0.0 # Retorna 0 para indicar que a ordem não deve ser enviada
+
+            # 2. Formatação da precisão (LOT_SIZE)
+            lot_size_filter = next((f for f in symbol_info['filters'] if f['filterType'] == 'LOT_SIZE'), None)
+            if not lot_size_filter:
+                logger.error(f"Não foi possível encontrar o filtro LOT_SIZE para {symbol}.")
+                return 0.0
+
+            step_size = lot_size_filter.get('stepSize')
+            precision = step_size.find('1') - 1
+            if precision < 0:
+                precision = 0
+            
+            # Formata a quantidade truncando (mais seguro que arredondar)
+            formatted_quantity = int(quantity * (10 ** precision)) / (10 ** precision)
+            logger.info(f"Quantidade original: {quantity}, Quantidade formatada: {formatted_quantity}")
+            
+            # Garante que mesmo após formatar, a quantidade não seja zero
+            if formatted_quantity <= 0:
+                 logger.warning(f"Após formatação, a quantidade resultou em {formatted_quantity}. Ignorando ordem.")
+                 return 0.0
+                 
+            return formatted_quantity
+
+        except Exception as e:
+            logger.error(f"Falha crítica ao formatar/validar a quantidade para o símbolo {symbol}: {e}", exc_info=True)
+            return 0.0
 
     def get_quote_asset_balance(self) -> float:
         """
@@ -69,25 +122,39 @@ class AccountManager:
             logger.error(f"Erro inesperado ao buscar saldo: {e}", exc_info=True)
             return 0.0
 
-    def update_on_sell(self, quantity_btc: float):
+    def update_on_sell(self, quantity_btc: float, current_price: float):
         """
-        Places a market sell order on Binance.
+        Places a market sell order on Binance after full validation.
         """
         if not self.client or settings.app.force_offline_mode:
             logger.warning(f"OFFLINE MODE: Simulating sell of {quantity_btc:.8f} BTC.")
-            return True # Simulate success
+            return {"status": "FILLED"} # Simula uma ordem bem-sucedida
 
         try:
-            logger.info(f"Attempting to place market SELL order for {quantity_btc:.8f} BTC...")
-            order = self.client.order_market_sell(symbol=settings.app.symbol, quantity=quantity_btc)
-            logger.info(f"SUCCESS: Market SELL order placed: {order}")
-            return True
+            # Valida e formata a quantidade usando a nova função robusta
+            formatted_quantity = self._format_quantity_for_symbol(
+                symbol=settings.app.symbol, 
+                quantity=quantity_btc, 
+                current_price=current_price
+            )
+            
+            # Apenas tenta vender se a quantidade for válida (maior que zero)
+            if formatted_quantity > 0:
+                logger.info(f"Attempting to place market SELL order for {formatted_quantity:.8f} BTC...")
+                order = self.client.order_market_sell(symbol=settings.app.symbol, quantity=formatted_quantity)
+                logger.info(f"SUCCESS: Market SELL order placed: {order}")
+                return order # Retorna a ordem para o PositionManager
+            else:
+                # A razão já foi logada dentro de _format_quantity_for_symbol
+                logger.info("A ordem de venda não prosseguiu após validação.")
+                return None # Indica que nenhuma ordem foi criada
+
         except BinanceAPIException as e:
             logger.error(f"Binance API Error on SELL: {e}", exc_info=True)
-            return False
+            return None
         except Exception as e:
             logger.error(f"Unexpected error on SELL: {e}", exc_info=True)
-            return False
+            return None
 
     def update_on_buy(self, quote_order_qty: float):
         """

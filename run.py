@@ -14,21 +14,44 @@ def print_color(text, color="green"):
     colors = {"green": "\033[92m", "yellow": "\033[93m", "red": "\033[91m", "blue": "\033[94m", "end": "\033[0m"}
     print(f"{colors.get(color, colors['green'])}{text}{colors['end']}")
 
-def run_command(command, shell=True, capture_output=False, check=False):
-    """Executes a shell command."""
-    print_color(f"\n> Executing: {command}", "blue")
+def run_command(command, shell=True, capture_output=False, check=False, env=None):
+    """Executes a shell command, with better support for environment variables."""
+    # Para comandos passados como lista de argumentos, shell=False é mais seguro.
+    # Para strings simples, mantemos o comportamento original.
+    use_shell = not isinstance(command, list)
+    
+    # Exibe o comando de forma legível
+    display_command = ' '.join(command) if isinstance(command, list) else command
+    print_color(f"\n> Executing: {display_command}", "blue")
+
     try:
         if capture_output:
-            return subprocess.run(command, shell=shell, capture_output=True, text=True, check=check, encoding='utf-8')
+            return subprocess.run(command, shell=use_shell, capture_output=True, text=True, check=check, encoding='utf-8', env=env)
         else:
-            process = subprocess.Popen(command, shell=shell, text=True, stdout=sys.stdout, stderr=sys.stderr)
+            process = subprocess.Popen(command, shell=use_shell, text=True, stdout=sys.stdout, stderr=sys.stderr, env=env)
             process.wait()
             if check and process.returncode != 0:
                 raise subprocess.CalledProcessError(process.returncode, command)
             return process
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        print_color(f"ERROR executing command: {command}\n{e}", "red")
+        print_color(f"ERROR executing command: {display_command}\n{e}", "red")
         sys.exit(1)
+
+def start_bot(mode: str):
+    """Inicia o bot no modo especificado, passando o ambiente de forma robusta."""
+    check_docker_running()
+    print_color(f"--- Starting Bot in {mode.upper()} mode... ---", "yellow")
+    
+    # O comando agora é uma lista de argumentos, o que é mais seguro
+    command_args = ["docker", "compose", "up", "-d", "--build", "app"]
+    
+    # Cria uma cópia do ambiente atual e adiciona nossa variável
+    bot_env = os.environ.copy()
+    bot_env["MODE"] = mode
+    
+    # Passa a lista de argumentos e o ambiente personalizado para o comando
+    run_command(command_args, check=True, env=bot_env)
+    print_color(f"Bot started in {mode.upper()} mode in the background.", "green")
 
 def check_docker_running():
     """Checks if Docker is running."""
@@ -140,17 +163,13 @@ def main():
     elif command == "start-services": start_services()
     elif command == "stop-services": stop_services()
     elif command == "reset-db": reset_db()
+    
     elif command == "trade":
-        check_docker_running()
-        print_color("--- Starting Bot in TRADE mode... ---", "yellow")
-        run_command(f"MODE=trade docker compose up -d --build app", check=True)
-        print_color("Bot started in TRADE mode in the background.", "green")
+        start_bot("trade")
     elif command == "test":
-        check_docker_running()
-        print_color("--- Starting Bot in TEST mode... ---", "yellow")
-        run_command(f"MODE=test docker compose up -d --build app", check=True)
-        print_color("Bot started in TEST mode in the background.", "green")
+        start_bot("test")
     elif command == "backtest": run_script_in_container("scripts/run_backtest.py")
+    
     elif command == "optimize": run_script_in_container("scripts/run_optimizer.py")
     elif command == "update-db": run_script_in_container("scripts/data_pipeline.py")
     elif command == "clean-master": run_script_in_container("scripts/db_utils.py", "features_master_table")

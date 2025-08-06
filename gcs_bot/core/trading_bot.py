@@ -29,15 +29,12 @@ class TradingBot:
         self.mode = mode
         logger.info(f"--- INICIALIZANDO O TRADING BOT EM MODO '{self.mode.upper()}' ---")
 
-        # 1. Gestores de Conexão, Conta e Dados
+        # --- ETAPA 1: Construção dos Managers ---
+        logger.info("Construindo e injetando dependências...")
         exchange_manager = ExchangeManager(mode=self.mode)
         self.account_manager = AccountManager(binance_client=exchange_manager._client)
         data_manager = DataManager(db_manager=db_manager, config=settings, logger=logger)
-
-        # 2. O novo Calculador de Features em Tempo Real
         self.feature_calculator = LiveFeatureCalculator(data_manager, mode=self.mode)
-
-        # 3. Gestor de Posição (cérebro de decisão)
         self.position_manager = PositionManager(
             config=settings,
             db_manager=db_manager,
@@ -46,10 +43,42 @@ class TradingBot:
         )
         
         self.symbol = settings.app.symbol
+
+        # --- ETAPA 2: SINCRONIZAÇÃO DE POSIÇÕES (NOVO BLOCO) ---
+        # Este bloco garante que o bot "conheça" os trades feitos anteriormente.
+        if self.mode in ['test', 'trade']:
+            logger.info("Iniciando processo de sincronização de trades órfãos...")
+            try:
+                # a) Busque os trades recentes da corretora (ex: últimos 100)
+                recent_trades_df = self.account_manager.get_trade_history(limit=100)
+
+                if recent_trades_df is not None and not recent_trades_df.empty:
+                    # b) Busque dados históricos com features (ATR) para calcular os alvos
+                    historical_data_df = data_manager.read_data_from_influx(
+                        measurement="features_master_table", 
+                        start_date="-3d" # Garante cobertura para trades dos últimos dias
+                    )
+
+                    if not historical_data_df.empty:
+                        # c) Execute a sincronização
+                        self.position_manager.synchronize_with_exchange(
+                            recent_exchange_trades=pd.DataFrame(recent_trades_df),
+                            historical_data=historical_data_df
+                        )
+                    else:
+                        logger.warning("Não foi possível carregar dados históricos para o cálculo do ATR. Sincronização pulada.")
+                else:
+                    logger.info("Nenhum trade encontrado na corretora para sincronizar.")
+            except Exception as e:
+                logger.error(f"Falha durante a sincronização de trades: {e}", exc_info=True)
+
+
+        # --- ETAPA 3: Finalização da Inicialização ---
         self.is_running = True
         signal.signal(signal.SIGINT, self.graceful_shutdown)
         signal.signal(signal.SIGTERM, self.graceful_shutdown)
         logger.info("✅ Bot inicializado com sucesso. Pressione Ctrl+C para encerrar.")
+
 
 
     def run(self):
@@ -115,18 +144,35 @@ class TradingBot:
                 "current_price": current_price
             }
 
-            # 2. Estatísticas da Sessão
-            all_trades = db_manager.get_all_trades_in_range(start_date="-90d") # Fetch recent trades
+            # 2. Estatísticas da Sessão e Posições Abertas
+            all_trades = db_manager.get_all_trades_in_range(start_date="-1y")
             total_pnl = 0
             closed_trades_count = 0
+            open_positions_count = 0
+            open_positions_summary = []
+
             if not all_trades.empty:
-                closed_trades = all_trades[all_trades['status'] == 'CLOSED'].copy()
+                closed_trades = all_trades[all_trades['status'] == 'CLOSED']
                 if not closed_trades.empty:
                     total_pnl = closed_trades['realized_pnl_usdt'].sum()
-                    closed_trades_count = len(closed_trades)
+                closed_trades_count = len(closed_trades)
 
-            open_positions = db_manager.get_open_positions()
-            open_positions_count = len(open_positions) if not open_positions.empty else 0
+                open_positions = all_trades[all_trades['status'] == 'OPEN']
+                open_positions_count = len(open_positions)
+
+                # --- NOVA LÓGICA PARA DETALHAR POSIÇÕES ABERTAS ---
+                for _, trade in open_positions.iterrows():
+                    tp_price = trade.get('take_profit_price', 0)
+                    distance_pct = ((tp_price - current_price) / current_price) * 100 if tp_price > 0 and current_price > 0 else 0
+                    
+                    open_positions_summary.append({
+                        "trade_id": str(trade.name),
+                        "entry_price": trade['entry_price'],
+                        "quantity_btc": trade['quantity_btc'],
+                        "take_profit_price": tp_price,
+                        "target_distance_pct": distance_pct,
+                        "timestamp": trade['timestamp'].isoformat()
+                    })
 
             session_stats = {
                 "total_pnl_usdt": total_pnl,
@@ -134,37 +180,27 @@ class TradingBot:
                 "closed_trades_count": closed_trades_count
             }
 
-            # 3. Resumo de Trades
+            # 3. Resumo dos Últimos 5 Trades (mantido para contexto geral)
             trade_summary = []
             if not all_trades.empty:
-                # Get last 5 trades (open or closed)
                 last_5_trades = all_trades.sort_values(by='timestamp', ascending=False).head(5)
                 for _, trade in last_5_trades.iterrows():
                     trade_summary.append({
-                        "trade_id": trade.name,
-                        "status": trade['status'],
-                        "entry_price": trade['entry_price'],
-                        "quantity_btc": trade['quantity_btc'],
-                        "timestamp": trade['timestamp'].isoformat()
+                        "trade_id": str(trade.name), "status": trade['status'], "entry_price": trade['entry_price'],
+                        "quantity_btc": trade['quantity_btc'], "timestamp": trade['timestamp'].isoformat()
                     })
 
-            # 4. Status Geral do Bot
-            bot_status = {
-                "last_update": datetime.now(timezone.utc).isoformat(),
-                "symbol": self.symbol,
-            }
-
-            # Montagem final do payload
-            # 5. Ordens Abertas da Binance
+            # 4. Status e Dados da Binance
+            bot_status = {"last_update": datetime.now(timezone.utc).isoformat(), "symbol": self.symbol}
             open_orders_list = self.account_manager.get_open_orders()
-
-            # 6. Histórico de Trades da Binance
             trade_history_list = self.account_manager.get_trade_history(limit=10)
 
+            # 5. Montagem Final do Payload
             status_payload = {
                 "portfolio": portfolio_data,
                 "session_stats": session_stats,
                 "bot_status": bot_status,
+                "open_positions_summary": open_positions_summary,  # <-- ADICIONADO
                 "trade_summary": trade_summary,
                 "open_orders": open_orders_list,
                 "trade_history": trade_history_list

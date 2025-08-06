@@ -35,32 +35,31 @@ def display_trading_dashboard(status_data: dict):
         Layout(name="portfolio"),
         Layout(name="session_stats"),
     )
+    # A direita agora terá nosso novo painel de Posições Abertas
     layout["right"].split_column(
-        Layout(name="trade_summary"),
+        Layout(name="open_positions_panel"), 
         Layout(name="open_orders")
     )
 
     header = Panel(Text("🤖 GCS-BOT EM OPERAÇÃO 🤖", justify="center", style="bold white on blue"))
     layout["header"].update(header)
 
-    # Painel do Portfólio
+    # Painel do Portfólio (sem alterações)
     portfolio = status_data.get('portfolio', {})
     portfolio_table = Table(title="📊 PORTFÓLIO ATUAL")
     portfolio_table.add_column("Ativo", style="cyan")
     portfolio_table.add_column("Quantidade", style="magenta", justify="right")
     portfolio_table.add_column("Valor (USDT)", style="green", justify="right")
-
     portfolio_table.add_row("Saldo BTC", f"{portfolio.get('btc_balance', 0):.8f}", f"${portfolio.get('btc_value_usdt', 0):,.2f}")
     portfolio_table.add_row("Saldo USDT", f"{portfolio.get('usd_balance', 0):,.2f}", f"${portfolio.get('usd_balance', 0):,.2f}")
     portfolio_table.add_row(Text("Total", style="bold"), "", Text(f"${portfolio.get('total_value_usdt', 0):,.2f}", style="bold green"))
     layout["portfolio"].update(Panel(portfolio_table))
 
-    # Painel de Estatísticas da Sessão
+    # Painel de Estatísticas da Sessão (sem alterações)
     session_stats = status_data.get('session_stats', {})
     stats_table = Table(title="📈 ESTATÍSTICAS DA SESSÃO")
     stats_table.add_column("Métrica", style="cyan")
     stats_table.add_column("Valor", style="magenta", justify="right")
-
     pnl = session_stats.get('total_pnl_usdt', 0.0)
     pnl_color = "green" if pnl >= 0 else "red"
     stats_table.add_row("P&L Total Realizado", Text(f"${pnl:,.2f}", style=pnl_color))
@@ -68,75 +67,68 @@ def display_trading_dashboard(status_data: dict):
     stats_table.add_row("Trades Fechados", str(session_stats.get('closed_trades_count', 0)))
     layout["session_stats"].update(Panel(stats_table))
 
-    # Painel de Resumo de Trades (agora no lado direito)
-    trade_summary = status_data.get('trade_summary', [])
-    summary_table = Table(title="📜 RESUMO DOS ÚLTIMOS TRADES")
-    summary_table.add_column("ID", style="dim")
-    summary_table.add_column("Status", justify="center")
-    summary_table.add_column("Preço Entrada", style="cyan", justify="right")
-    summary_table.add_column("Quantidade", style="magenta", justify="right")
-    summary_table.add_column("Data", style="yellow")
+    # --- NOVO PAINEL DETALHADO DE POSIÇÕES ABERTAS ---
+    open_positions = status_data.get('open_positions_summary', [])
+    open_pos_table = Table(title="🎯 POSIÇÕES ABERTAS EM TEMPO REAL")
+    open_pos_table.add_column("ID", style="dim")
+    open_pos_table.add_column("Preço Entrada", style="cyan", justify="right")
+    open_pos_table.add_column("Qtd (BTC)", style="magenta", justify="right")
+    open_pos_table.add_column("Alvo TP ($)", style="yellow", justify="right")
+    open_pos_table.add_column("Distância", style="bold", justify="right")
 
-    for trade in trade_summary:
-        status_style = "green" if trade['status'] == 'OPEN' else ("yellow" if "PARTIAL" in trade.get('exit_reason', '') else "dim")
-        summary_table.add_row(
-            trade['trade_id'][:8],
-            Text(trade['status'], style=status_style),
-            f"${trade.get('entry_price', 0):,.2f}",
-            f"{trade.get('quantity_btc', 0):.6f} BTC",
-            datetime.fromisoformat(trade['timestamp']).strftime('%Y-%m-%d %H:%M')
-        )
-    layout["trade_summary"].update(Panel(summary_table))
+    if not open_positions:
+        layout["open_positions_panel"].update(Panel(Text("Nenhuma posição aberta no momento.", justify="center"), title="🎯 POSIÇÕES ABERTAS EM TEMPO REAL"))
+    else:
+        for trade in open_positions:
+            dist_pct = trade.get('target_distance_pct', 0)
+            dist_color = "green" if dist_pct <= 1 else ("yellow" if dist_pct <= 5 else "white") # Exemplo de cores
+            dist_str = f"{dist_pct:+.2f}%"
+            
+            open_pos_table.add_row(
+                trade['trade_id'][:8],
+                f"${trade['entry_price']:,.2f}",
+                f"{trade['quantity_btc']:.6f}",
+                f"${trade['take_profit_price']:,.2f}",
+                Text(dist_str, style=dist_color)
+            )
+        layout["open_positions_panel"].update(Panel(open_pos_table))
 
-    # Painel de Ordens Abertas na Binance
+    # Painel de Ordens Abertas na Binance (sem alterações)
     open_orders = status_data.get('open_orders', [])
     open_orders_table = Table(title="📖 ORDENS ABERTAS (BINANCE)")
+    # ... (código do painel de ordens abertas continua o mesmo)
     open_orders_table.add_column("ID", style="dim")
     open_orders_table.add_column("Lado", justify="center")
     open_orders_table.add_column("Tipo", justify="center")
     open_orders_table.add_column("Preço", style="cyan", justify="right")
     open_orders_table.add_column("Quantidade", style="magenta", justify="right")
-
     for order in open_orders:
         side_color = "green" if order['side'] == 'BUY' else "red"
-        open_orders_table.add_row(
-            str(order['orderId']),
-            Text(order['side'], style=side_color),
-            order['type'],
-            f"${float(order['price']):,.2f}",
-            f"{float(order['origQty']):.6f} BTC"
-        )
+        open_orders_table.add_row(str(order['orderId']), Text(order['side'], style=side_color), order['type'], f"${float(order['price']):,.2f}", f"{float(order['origQty']):.6f} BTC")
     layout["open_orders"].update(Panel(open_orders_table))
 
-    # Painel de Histórico de Trades da Binance
+    # Painel de Histórico de Trades da Binance (sem alterações)
     trade_history = status_data.get('trade_history', [])
     history_table = Table(title="📜 HISTÓRICO DE TRADES (BINANCE)")
+    # ... (código do painel de histórico de trades continua o mesmo)
     history_table.add_column("ID", style="dim")
     history_table.add_column("Lado", justify="center")
     history_table.add_column("Preço", style="cyan", justify="right")
     history_table.add_column("Quantidade", style="magenta", justify="right")
     history_table.add_column("Comissão", style="yellow", justify="right")
     history_table.add_column("Data", style="blue")
-
     for trade in trade_history:
         side_color = "green" if trade['isBuyer'] else "red"
         side_text = "BUY" if trade['isBuyer'] else "SELL"
-        history_table.add_row(
-            str(trade['id']),
-            Text(side_text, style=side_color),
-            f"${float(trade['price']):,.2f}",
-            f"{float(trade['qty']):.6f} BTC",
-            f"{float(trade['commission']):.8f} {trade['commissionAsset']}",
-            datetime.fromtimestamp(trade['time'] / 1000).strftime('%Y-%m-%d %H:%M')
-        )
+        history_table.add_row(str(trade['id']), Text(side_text, style=side_color), f"${float(trade['price']):,.2f}", f"{float(trade['qty']):.6f} BTC", f"{float(trade['commission']):.8f} {trade['commissionAsset']}", datetime.fromtimestamp(trade['time'] / 1000).strftime('%Y-%m-%d %H:%M'))
     layout["trade_history"].update(Panel(history_table))
 
-    # Footer com status do bot
+
+    # Footer com status do bot (sem alterações)
     bot_status = status_data.get('bot_status', {})
     current_price = portfolio.get('current_price', 0)
     last_update_str = bot_status.get('last_update', '')
     last_update_dt = datetime.fromisoformat(last_update_str) if last_update_str else datetime.now()
-
     footer_text = Text(f"Preço Atual {bot_status.get('symbol', 'BTC/USDT')}: ${current_price:,.2f} | Última Atualização: {last_update_dt.strftime('%H:%M:%S')}", justify="center")
     layout["footer"].update(Panel(footer_text))
     
