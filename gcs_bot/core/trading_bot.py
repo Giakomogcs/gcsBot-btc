@@ -5,6 +5,8 @@ import pandas as pd
 from datetime import datetime
 import signal
 import sys
+import json
+import os
 from typing import Any
 
 from gcs_bot.utils.logger import logger
@@ -83,6 +85,8 @@ class TradingBot:
                 else:
                     logger.info("Nenhuma condição de entrada satisfeita. A aguardar.")
                 
+                self._update_status_file(current_candle)
+
                 logger.info("--- Ciclo concluído. A aguardar 60 segundos... ---")
                 time.sleep(60)
 
@@ -90,6 +94,80 @@ class TradingBot:
                 logger.critical(f"❌ Ocorreu um erro crítico no loop principal: {e}", exc_info=True)
                 logger.info("A aguardar 5 minutos antes de reiniciar o loop para evitar spam de erros.")
                 time.sleep(300)
+
+    def _update_status_file(self, current_candle: pd.Series):
+        """Coleta dados de status e os escreve em um arquivo JSON."""
+        try:
+            # 1. Dados do Portfólio
+            btc_balance = self.account_manager.get_base_asset_balance()
+            usd_balance = self.account_manager.get_quote_asset_balance()
+            current_price = current_candle['close']
+            btc_value_usdt = btc_balance * current_price
+            total_value_usdt = usd_balance + btc_value_usdt
+
+            portfolio_data = {
+                "btc_balance": btc_balance,
+                "usd_balance": usd_balance,
+                "btc_value_usdt": btc_value_usdt,
+                "total_value_usdt": total_value_usdt,
+                "current_price": current_price
+            }
+
+            # 2. Estatísticas da Sessão
+            all_trades = db_manager.get_all_trades_in_range(start_date="-90d") # Fetch recent trades
+            total_pnl = 0
+            closed_trades_count = 0
+            if not all_trades.empty:
+                closed_trades = all_trades[all_trades['status'] == 'CLOSED'].copy()
+                if not closed_trades.empty:
+                    total_pnl = closed_trades['realized_pnl_usdt'].sum()
+                    closed_trades_count = len(closed_trades)
+
+            open_positions = db_manager.get_open_positions()
+            open_positions_count = len(open_positions) if not open_positions.empty else 0
+
+            session_stats = {
+                "total_pnl_usdt": total_pnl,
+                "open_positions_count": open_positions_count,
+                "closed_trades_count": closed_trades_count
+            }
+
+            # 3. Resumo de Trades
+            trade_summary = []
+            if not all_trades.empty:
+                # Get last 5 trades (open or closed)
+                last_5_trades = all_trades.sort_values(by='timestamp', ascending=False).head(5)
+                for _, trade in last_5_trades.iterrows():
+                    trade_summary.append({
+                        "trade_id": trade.name,
+                        "status": trade['status'],
+                        "entry_price": trade['entry_price'],
+                        "quantity_btc": trade['quantity_btc'],
+                        "timestamp": trade['timestamp'].isoformat()
+                    })
+
+            # 4. Status Geral do Bot
+            bot_status = {
+                "last_update": datetime.now(timezone.utc).isoformat(),
+                "symbol": self.symbol,
+            }
+
+            # Montagem final do payload
+            status_payload = {
+                "portfolio": portfolio_data,
+                "session_stats": session_stats,
+                "bot_status": bot_status,
+                "trade_summary": trade_summary
+            }
+
+            # Escrever no arquivo
+            status_file_path = os.path.join("logs", "trading_status.json")
+            with open(status_file_path, 'w') as f:
+                json.dump(status_payload, f, indent=4)
+
+        except Exception as e:
+            logger.error(f"Falha ao atualizar o arquivo de status: {e}", exc_info=True)
+
 
     def graceful_shutdown(self, signum: int, frame: Any) -> None:
         """Encerra o bot de forma segura."""

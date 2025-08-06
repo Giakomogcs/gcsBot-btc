@@ -22,6 +22,7 @@ class PositionManager:
         
         # --- NOVOS PARÂMETROS ESTRATÉGICOS ---
         self.dca_grid_spacing_percent = self.strategy_config.dca_grid_spacing_percent / 100.0
+        self.partial_sell_percent = self.strategy_config.get('partial_sell_percent', 90) / 100.0
 
         self.performance_factor = 1.0
         self.previous_candle = None
@@ -70,7 +71,8 @@ class PositionManager:
                 "trade_id": str(uuid.uuid4()), "status": "OPEN", "entry_price": entry_price,
                 "quantity_btc": quantity_btc, "profit_target_price": profit_target_price,
                 "stop_loss_price": stop_loss_price, "timestamp": datetime.now(timezone.utc),
-                "decision_data": decision_data or {}
+                "decision_data": decision_data or {},
+                "total_realized_pnl_usdt": 0.0,
             }
             self.db_manager.write_trade(trade_data)
         except Exception as e:
@@ -86,9 +88,9 @@ class PositionManager:
         if open_positions_df.empty:
             return []
 
-        for trade_id, position in open_positions_df.iterrows():
-            exit_reason = None
+        trades_to_partially_close = []
 
+        for trade_id, position in open_positions_df.iterrows():
             # --- LÓGICA DE TRAILING PROFIT TARGET ---
             unrealized_pnl_percent = (current_price - position['entry_price']) / position['entry_price']
             if unrealized_pnl_percent >= (trailing_config.activation_percentage / 100.0):
@@ -97,57 +99,85 @@ class PositionManager:
                     self.logger.info(f"🚀 ATUALIZANDO PROFIT TARGET PARA O TRADE {trade_id}:")
                     self.logger.info(f"   Antigo Alvo: ${position['profit_target_price']:,.2f}")
                     self.logger.info(f"   Novo Alvo:   ${new_profit_target:,.2f}")
-                    # Atualiza o trade no DB
                     self.db_manager.write_trade({
                         "trade_id": trade_id,
-                        "status": "OPEN", # Mantém o status OPEN
+                        "status": "OPEN",
                         "profit_target_price": new_profit_target,
                         "timestamp": datetime.now(timezone.utc)
                     })
-                    # Atualiza a posição no DF local para o resto da lógica
                     position['profit_target_price'] = new_profit_target
 
-            # Calcula o PnL líquido, considerando as comissões de entrada e saída
-            entry_cost = position['entry_price'] * position['quantity_btc']
-            exit_value = current_price * position['quantity_btc']
-            commission_entry = entry_cost * commission_rate
-            commission_exit = exit_value * commission_rate
-            net_pnl = exit_value - entry_cost - commission_entry - commission_exit
+            # Check if trade is eligible for partial take profit
+            decision_data = position.get('decision_data', {})
+            is_partially_closed = decision_data.get('partially_closed', False)
 
-            # Condição de Take Profit: só executa se o lucro líquido for maior que o mínimo configurado
-            if current_price >= position['profit_target_price']:
+            if not is_partially_closed and current_price >= position['profit_target_price']:
+                entry_cost = position['entry_price'] * position['quantity_btc']
+                exit_value = current_price * position['quantity_btc']
+                commission = (entry_cost + exit_value) * commission_rate
+                net_pnl = exit_value - entry_cost - commission
+
                 if net_pnl > self.config.trading_strategy.minimum_profit_for_take_profit:
-                    exit_reason = 'TAKE_PROFIT'
+                    trades_to_partially_close.append(position)
                 else:
-                    self.logger.debug(f"TAKE PROFIT para o trade {trade_id} ignorado. Lucro líquido ({net_pnl:.2f}) não atinge o mínimo de {self.config.trading_strategy.minimum_profit_for_take_profit}.")
+                    self.logger.debug(f"TAKE PROFIT for trade {trade_id} ignored due to insufficient net profit.")
 
-            # Condição de Stop Loss: removida
+        if not trades_to_partially_close:
+            return []
 
-            if exit_reason:
-                self.logger.info(f"✅ FECHANDO TRADE {trade_id} POR {exit_reason}:")
-                self.logger.info(f"   Preço de Entrada: ${position['entry_price']:,.2f}")
-                self.logger.info(f"   Preço de Saída:   ${current_price:,.2f}")
-                self.logger.info(f"   Quantidade:       {position['quantity_btc']:.8f} BTC")
-                self.logger.info(f"   Comissões:        ${(commission_entry + commission_exit):,.4f}")
-                self.logger.info(f"   Resultado Líquido: ${net_pnl:,.2f}")
+        self.logger.info(f"Identified {len(trades_to_partially_close)} trades for partial take-profit.")
 
-                close_trade_data = {
-                    "trade_id": trade_id,
-                    "status": "CLOSED",
-                    "entry_price": position['entry_price'],
-                    "realized_pnl_usdt": net_pnl,
-                    "timestamp": datetime.now(timezone.utc),
-                    "decision_data": {"exit_reason": exit_reason, "commission": commission_entry + commission_exit, "exit_price": current_price}
-                }
-                self.db_manager.write_trade(close_trade_data)
-                summary = {
-                    'entry_price': position['entry_price'],
-                    'exit_price': current_price,
-                    'quantity_btc': position['quantity_btc'],
-                    'pnl_usdt': net_pnl,
-                    'exit_reason': exit_reason
-                }
-                closed_trades_summaries.append(summary)
+        for position in trades_to_partially_close:
+            trade_id = position.name
+            original_quantity = position['quantity_btc']
+            quantity_to_sell = original_quantity * self.partial_sell_percent
+            quantity_remaining = original_quantity - quantity_to_sell
+
+            if quantity_remaining < 1e-8:
+                quantity_remaining = 0
+
+            entry_price = position['entry_price']
+            entry_cost_sold = entry_price * quantity_to_sell
+            exit_value_sold = current_price * quantity_to_sell
+            commission_entry_sold = entry_cost_sold * commission_rate
+            commission_exit_sold = exit_value_sold * commission_rate
+            net_pnl_sold = exit_value_sold - entry_cost_sold - commission_entry_sold - commission_exit_sold
+
+            self.logger.info(f"✅ PARTIALLY CLOSING TRADE {trade_id} (TAKE_PROFIT):")
+            self.logger.info(f"   Selling {quantity_to_sell:.8f} BTC ({self.partial_sell_percent:.0%}) at ${current_price:,.2f}")
+            self.logger.info(f"   Realized PnL: ${net_pnl_sold:,.2f}. Remaining: {quantity_remaining:.8f} BTC")
+
+            self.account_manager.update_on_sell(exit_value_sold, quantity_to_sell)
+
+            decision_data = position.get('decision_data', {})
+            decision_data['partially_closed'] = True
+            decision_data['last_partial_close_ts'] = datetime.now(timezone.utc).isoformat()
+
+            total_realized_pnl = position.get('total_realized_pnl_usdt', 0.0) + net_pnl_sold
+
+            status = "OPEN"
+            if quantity_remaining == 0:
+                status = "CLOSED"
+
+            update_trade_data = {
+                "trade_id": trade_id,
+                "status": status,
+                "quantity_btc": quantity_remaining,
+                "total_realized_pnl_usdt": total_realized_pnl,
+                "timestamp": datetime.now(timezone.utc),
+                "decision_data": decision_data
+            }
+            self.db_manager.write_trade(update_trade_data)
+
+            summary = {
+                'entry_price': entry_price,
+                'exit_price': current_price,
+                'quantity_btc': quantity_to_sell,
+                'pnl_usdt': net_pnl_sold,
+                'exit_reason': 'TAKE_PROFIT_PARTIAL'
+            }
+            closed_trades_summaries.append(summary)
+
         return closed_trades_summaries
 
     def get_open_positions(self) -> pd.DataFrame:

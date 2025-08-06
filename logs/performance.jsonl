@@ -104,3 +104,11 @@
 {"timestamp": "2025-08-05 19:50:35,100", "level": "WARNING", "message": "\ud83d\udea8 SINAL DE INTERRUP\u00c7\u00c3O RECEBIDO. ENCERRANDO... \ud83d\udea8"}
 {"timestamp": "2025-08-05 19:50:41,363", "level": "CRITICAL", "message": "\u274c Ocorreu um erro cr\u00edtico no loop principal: Cannot join tz-naive with tz-aware DatetimeIndex"}
 {"timestamp": "2025-08-05 19:51:35,054", "level": "WARNING", "message": "\ud83d\udea8 SINAL DE INTERRUP\u00c7\u00c3O RECEBIDO. ENCERRANDO... \ud83d\udea8"}
+{"timestamp": "2025-08-06 11:27:47,901", "level": "ERROR", "message": "--- \u274c ERRO CR\u00cdTICO DURANTE O BACKTEST \u274c ---"}
+{"timestamp": "2025-08-06 11:27:47,902", "level": "ERROR", "message": "Ocorreu um erro inesperado: <urllib3.connection.HTTPConnection object at 0x7f112ac384a0>: Failed to resolve 'db' ([Errno -2] Name or service not known)"}
+{"timestamp": "2025-08-06 11:27:47,921", "level": "ERROR", "message": "\n--- CAUSA PROV\u00c1VEL ---"}
+{"timestamp": "2025-08-06 11:27:47,921", "level": "ERROR", "message": "Este erro geralmente significa que o script n\u00e3o consegue se conectar ao banco de dados porque n\u00e3o est\u00e1 sendo executado dentro do ambiente Docker."}
+{"timestamp": "2025-08-06 11:27:47,921", "level": "ERROR", "message": "Para corrigir, certifique-se de que os containers Docker est\u00e3o ativos e execute o backtest usando o script de gerenciamento:"}
+{"timestamp": "2025-08-06 11:27:47,921", "level": "ERROR", "message": "Comando Sugerido: .\\manage.ps1 backtest"}
+{"timestamp": "2025-08-06 11:29:10,670", "level": "ERROR", "message": "--- \u274c ERRO CR\u00cdTICO DURANTE O BACKTEST \u274c ---"}
+{"timestamp": "2025-08-06 11:29:10,671", "level": "ERROR", "message": "Ocorreu um erro inesperado: <urllib3.connection.HTTPConnection object at 0x7ff1b28948f0>: Failed to establish a new connection: [Errno 111] Connection refused"}

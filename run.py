@@ -17,6 +17,7 @@ ENV_FILE = ".env"
 ENV_EXAMPLE_FILE = ".env.example"
 MODEL_METADATA_FILE = os.path.join("data", "model_metadata.json")
 OPTIMIZER_STATUS_FILE = os.path.join("logs", "optimizer_status.json")
+TRADING_STATUS_FILE = os.path.join("logs", "trading_status.json")
 # -----------------------------
 
 def print_color(text, color="green"):
@@ -132,17 +133,45 @@ def show_display():
     except KeyboardInterrupt:
         print_color("\nPainel finalizado.", "yellow")
 
+def show_trading_display():
+    """Mostra o painel de trading lendo o arquivo de status."""
+    from gcs_bot.core.display_manager import display_trading_dashboard
+
+    result = run_command("docker compose ps -q app", capture_output=True)
+    if not result.stdout.strip():
+        print_color("O container do bot 'app' não está em execução.", "red")
+        print_color("Inicie-o com: python3 run.py trade", "yellow")
+        return
+
+    print_color("Mostrando painel de trading. Pressione CTRL+C para sair.", "green")
+    try:
+        while True:
+            if os.path.exists(TRADING_STATUS_FILE):
+                try:
+                    with open(TRADING_STATUS_FILE, 'r') as f:
+                        status_data = json.load(f)
+                    display_trading_dashboard(status_data)
+                except (json.JSONDecodeError, KeyError) as e:
+                    print(f"Aguardando arquivo de status válido... Erro: {e}")
+            else:
+                print("Aguardando o bot iniciar e criar o arquivo de status...")
+
+            time.sleep(5)
+    except KeyboardInterrupt:
+        print_color("\nPainel finalizado.", "yellow")
+
 def main():
     if len(sys.argv) < 2:
         print_color("Uso: python3 run.py [comando]", "blue")
         print("Comandos disponíveis:")
-        print("  setup        - Instala dependências e prepara o ambiente.")
-        print("  optimize     - Roda a otimização em SEGUNDO PLANO.")
-        print("  display      - Mostra o PAINEL da otimização em execução.")
-        print("  backtest     - Roda um backtest rápido com o modelo atual.")
-        print("  test / trade - Roda o bot (em segundo plano).")
-        print("  stop         - Para e remove TODOS os containers do bot.")
-        print("  logs         - Mostra os logs brutos de um container em execução.")
+        print("  setup             - Instala dependências e prepara o ambiente.")
+        print("  optimize          - Roda a otimização em SEGUNDO PLANO.")
+        print("  display           - Mostra o PAINEL da otimização em execução.")
+        print("  trade             - Roda o bot em modo de trade em SEGUNDO PLANO.")
+        print("  show_trading      - Mostra o PAINEL do bot de trade em execução.")
+        print("  backtest          - Roda um backtest rápido com o modelo atual.")
+        print("  stop              - Para e remove TODOS os containers do bot.")
+        print("  logs              - Mostra os logs brutos de um container em execução.")
         return
 
     command = sys.argv[1].lower()
@@ -150,8 +179,9 @@ def main():
     if command == "setup": initial_setup()
     elif command == "optimize": start_optimizer()
     elif command == "display": show_display()
-    elif command in ["test", "trade"]: start_bot(command)
-    elif command == "backtest": start_bot(command)
+    elif command == "trade": start_bot('trade')
+    elif command == "show_trading": show_trading_display()
+    elif command == "backtest": start_bot('backtest')
     elif command == "stop": stop_all()
     elif command == "logs": show_logs()
     else: print_color(f"Comando '{command}' não reconhecido.", "red")

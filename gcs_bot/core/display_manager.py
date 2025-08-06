@@ -20,84 +20,79 @@ def display_trading_dashboard(status_data: dict):
     if not sys.stdout.isatty():
         return
 
+    os.system('cls' if os.name == 'nt' else 'clear')
     layout = Layout()
 
     layout.split(
         Layout(name="header", size=3),
         Layout(ratio=1, name="main"),
-        Layout(size=3, name="footer"),
+        Layout(size=10, name="footer"),
     )
 
-    layout["main"].split_row(Layout(name="left"), Layout(name="right"))
+    layout["main"].split_row(Layout(name="left", ratio=1), Layout(name="right", ratio=2))
     layout["left"].split_column(
         Layout(name="portfolio"),
         Layout(name="session_stats"),
-    )
-    layout["right"].split_column(
-        Layout(name="bot_status"),
-        Layout(name="last_operation"),
     )
 
     header = Panel(Text("🤖 GCS-BOT EM OPERAÇÃO 🤖", justify="center", style="bold white on blue"))
     layout["header"].update(header)
 
+    # Painel do Portfólio
     portfolio = status_data.get('portfolio', {})
-    portfolio_table = Table(title="📊 PORTFÓLIO")
+    portfolio_table = Table(title="📊 PORTFÓLIO ATUAL")
     portfolio_table.add_column("Ativo", style="cyan")
-    portfolio_table.add_column("Valor", style="magenta")
-    portfolio_table.add_row("Capital de Trading (USDT)", f"💵 ${portfolio.get('trading_capital_usdt', 0):,.2f}")
-    portfolio_table.add_row("Posição Aberta (BTC)", f"📈 {portfolio.get('trading_btc_balance', 0):.8f} BTC")
-    portfolio_table.add_row("  └─ Valor Posição (USDT)", f"   ${portfolio.get('trading_btc_value_usdt', 0):,.2f}")
-    portfolio_table.add_row("Tesouraria Longo Prazo (BTC)", f"🏦 {portfolio.get('long_term_btc_holdings', 0):.8f} BTC")
-    portfolio_table.add_row("  └─ Valor Tesouraria (USDT)", f"   ${portfolio.get('long_term_value_usdt', 0):,.2f}")
-    portfolio_table.add_row("Valor Total (USDT)", f"💎 ${portfolio.get('total_value_usdt', 0):,.2f}")
+    portfolio_table.add_column("Quantidade", style="magenta", justify="right")
+    portfolio_table.add_column("Valor (USDT)", style="green", justify="right")
+
+    portfolio_table.add_row("Saldo BTC", f"{portfolio.get('btc_balance', 0):.8f}", f"${portfolio.get('btc_value_usdt', 0):,.2f}")
+    portfolio_table.add_row("Saldo USDT", f"{portfolio.get('usd_balance', 0):,.2f}", f"${portfolio.get('usd_balance', 0):,.2f}")
+    portfolio_table.add_row(Text("Total", style="bold"), "", Text(f"${portfolio.get('total_value_usdt', 0):,.2f}", style="bold green"))
     layout["portfolio"].update(Panel(portfolio_table))
 
+    # Painel de Estatísticas da Sessão
     session_stats = status_data.get('session_stats', {})
-    session_stats_table = Table(title="📈 PERFORMANCE DA SESSÃO")
-    session_stats_table.add_column("Métrica", style="cyan")
-    session_stats_table.add_column("Valor", style="magenta")
-    trades = session_stats.get('trades', 0)
-    wins = session_stats.get('wins', 0)
-    losses = trades - wins
-    win_rate = (wins / trades * 100) if trades > 0 else 0
-    total_pnl = session_stats.get('total_pnl_usdt', 0.0)
-    pnl_color_realized = "green" if total_pnl >= 0 else "red"
-    session_stats_table.add_row("Trades na Sessão", f"{trades} ({wins}V / {losses}D)")
-    session_stats_table.add_row("Taxa de Acerto", f"{win_rate:.2f}%")
-    session_stats_table.add_row("P&L Realizado (USDT)", Text(f"${total_pnl:,.2f}", style=pnl_color_realized))
-    growth_pct = portfolio.get('session_growth_pct', 0)
-    pnl_color = "green" if growth_pct >= 0 else "red"
-    session_stats_table.add_row("Crescimento na Sessão", Text(f"{growth_pct:+.2%}", style=pnl_color))
-    layout["session_stats"].update(Panel(session_stats_table))
+    stats_table = Table(title="📈 ESTATÍSTICAS DA SESSÃO")
+    stats_table.add_column("Métrica", style="cyan")
+    stats_table.add_column("Valor", style="magenta", justify="right")
 
+    pnl = session_stats.get('total_pnl_usdt', 0.0)
+    pnl_color = "green" if pnl >= 0 else "red"
+    stats_table.add_row("P&L Total Realizado", Text(f"${pnl:,.2f}", style=pnl_color))
+    stats_table.add_row("Posições Abertas", str(session_stats.get('open_positions_count', 0)))
+    stats_table.add_row("Trades Fechados", str(session_stats.get('closed_trades_count', 0)))
+    layout["session_stats"].update(Panel(stats_table))
+
+    # Painel de Resumo de Trades (agora no lado direito)
+    trade_summary = status_data.get('trade_summary', [])
+    summary_table = Table(title="📜 RESUMO DOS ÚLTIMOS TRADES")
+    summary_table.add_column("ID", style="dim")
+    summary_table.add_column("Status", justify="center")
+    summary_table.add_column("Preço Entrada", style="cyan", justify="right")
+    summary_table.add_column("Quantidade", style="magenta", justify="right")
+    summary_table.add_column("Data", style="yellow")
+
+    for trade in trade_summary:
+        status_style = "green" if trade['status'] == 'OPEN' else ("yellow" if "PARTIAL" in trade.get('exit_reason', '') else "dim")
+        summary_table.add_row(
+            trade['trade_id'][:8],
+            Text(trade['status'], style=status_style),
+            f"${trade.get('entry_price', 0):,.2f}",
+            f"{trade.get('quantity_btc', 0):.6f} BTC",
+            datetime.fromisoformat(trade['timestamp']).strftime('%Y-%m-%d %H:%M')
+        )
+    layout["right"].update(Panel(summary_table))
+
+    # Footer com status do bot
     bot_status = status_data.get('bot_status', {})
-    bot_status_table = Table(title="🧠 STATUS DO BOT")
-    bot_status_table.add_column("Parâmetro", style="cyan")
-    bot_status_table.add_column("Valor", style="magenta")
-    bot_status_table.add_row("Situação de Mercado Atual", str(bot_status.get('market_situation', 'N/A')))
-    bot_status_table.add_row("Modelo Ativo", bot_status.get('active_model', 'N/A'))
-    bot_status_table.add_row("Confiança Mínima (Alvo)", f"{bot_status.get('confidence_threshold', 0):.2%}")
-    bot_status_table.add_row("Último Evento", bot_status.get('last_event_message', '')[:65])
-    bot_status_table.add_row("Recomendação", bot_status.get('recommendation', 'N/A'))
-    layout["bot_status"].update(Panel(bot_status_table))
+    current_price = portfolio.get('current_price', 0)
+    last_update_str = bot_status.get('last_update', '')
+    last_update_dt = datetime.fromisoformat(last_update_str) if last_update_str else datetime.now()
 
-    last_op = status_data.get('last_operation', {})
-    last_op_table = Table(title="🎯 ÚLTIMA OPERAÇÃO")
-    last_op_table.add_column("Métrica", style="cyan")
-    last_op_table.add_column("Valor", style="magenta")
-    op_color = "green" if last_op.get('pnl_pct', 0) >= 0 else "red"
-    last_op_table.add_row("Situação", last_op.get('situation_name', 'N/A'))
-    last_op_table.add_row("Resultado do Último Trade", Text(f"{last_op.get('pnl_pct', 0):+.2%}", style=op_color))
-    last_op_table.add_row("Trades / Vitórias", f"{last_op.get('total_trades', 0)} / {last_op.get('wins', 0)}")
-    last_op_table.add_row("P&L Total da Situação", f"${last_op.get('total_pnl', 0):,.2f}")
-    layout["last_operation"].update(Panel(last_op_table))
-
-    footer = Panel(Text(f"Preço Atual BTC: ${portfolio.get('current_price', 0):,.2f} | Última atualização: {datetime.now().strftime('%H:%M:%S')}", justify="center"))
-    layout["footer"].update(footer)
+    footer_text = Text(f"Preço Atual {bot_status.get('symbol', 'BTC/USDT')}: ${current_price:,.2f} | Última Atualização: {last_update_dt.strftime('%H:%M:%S')}", justify="center")
+    layout["footer"].update(Panel(footer_text))
     
-    with Live(layout, console=console, screen=True, transient=True):
-        pass
+    console.print(layout)
 
 def display_optimization_dashboard(status_data: dict):
     """Exibe o painel de controle para o modo de otimização a partir de um dicionário de status."""
