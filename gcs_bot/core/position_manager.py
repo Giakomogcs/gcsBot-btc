@@ -22,7 +22,7 @@ class PositionManager:
         
         # --- NOVOS PARÂMETROS ESTRATÉGICOS ---
         self.dca_grid_spacing_percent = self.strategy_config.dca_grid_spacing_percent / 100.0
-        self.partial_sell_percent = self.strategy_config.get('partial_sell_percent', 90) / 100.0
+        self.partial_sell_percent = self.strategy_config.partial_sell_percent / 100.0
 
         self.performance_factor = 1.0
         self.previous_candle = None

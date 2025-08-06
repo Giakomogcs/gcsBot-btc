@@ -6,7 +6,7 @@ A synthesis of four non-negotiable pillars that will guide every line of code an
 *   **Discipline:** The system must execute its rules without emotion or deviation. All logic for entry, management, and exit must be absolute and auditable. Each trade is a sovereign entity, managed from inception to conclusion based on mathematical criteria.
 *   **Adaptation:** The market is a living organism. Our bot will not be a rigid statue. It will adapt its risk, confidence, and strategy based on market regimes (e.g., high/low volatility, trending/ranging).
 *   **Robustness:** The system is a battle tank. Built on the principles of Defensive Software Engineering, it anticipates and handles real-world imperfections—missing data, API errors, network latency—without ever failing its core mission.
-*   **Transparency:** The bot cannot be a "black box." Using Explainable AI (XAI) techniques, we will have a window into our AI's mind, allowing us to understand the "why" behind each decision, build trust, and iterate with intelligence.
+*   **Transparency:** The bot cannot be a "black box." Using the new dashboard, we have a clear window into the bot's real-time operations, account status, and performance.
 
 ## Architecture
 
@@ -18,14 +18,11 @@ The project is organized into a clean, professional, and scalable structure adhe
 gcs-bot/
 ├── gcs_bot/
 │   ├── core/
-│   │   ├── backtester.py
-│   │   ├── ensemble_manager.py
+│   │   ├── trading_bot.py
 │   │   ├── position_manager.py
 │   │   └── ... (The bot's brain: other core logic)
 │   ├── data/
-│   │   ├── data_manager.py
-│   │   ├── feature_engineering.py
-│   │   └── feature_selector.py
+│   │   └── ... (Data handling modules)
 │   ├── database/
 │   │   └── database_manager.py
 │   └── utils/
@@ -33,78 +30,82 @@ gcs-bot/
 │       └── logger.py
 ├── scripts/
 │   ├── run_backtest.py
-│   ├── run_optimizer.py
-│   ├── data_pipeline.py
-│   └── analyze_results.py
+│   └── ... (High-level scripts)
 ├── tests/
 ├── config.yml
-├── manage.ps1
+├── run.py
 └── README.md
 ```
 
 ### Module Interaction
 
-*   **`manage.ps1`**: The main entry point for all operations. This PowerShell script orchestrates Docker commands to run the various components of the bot.
-*   **`scripts/`**: Contains high-level executable scripts that perform specific tasks like running a backtest (`run_backtest.py`), training models (`run_optimizer.py`), or populating the database (`data_pipeline.py`).
+*   **`run.py`**: The main command-line interface (CLI) for all operations. This Python script orchestrates Docker commands to run the various components of the bot.
 *   **`gcs_bot/`**: The main Python package containing all the application source code.
-    *   **`core/`**: The bot's brain. It houses the central logic for backtesting, position management, and AI model ensembles.
-    *   **`data/`**: Modules responsible for fetching, cleaning, processing, and engineering features from raw market data.
-    *   **`database/`**: A dedicated module to handle all interactions with the time-series database (InfluxDB).
-    *   **`utils/`**: Shared utilities for tasks like managing configuration (`config.yml`) and logging.
+    *   **`core/`**: The bot's brain. It houses the central logic for trading, position management, and account interaction.
+    *   **`database/`**: A dedicated module to handle all interactions with the InfluxDB time-series database.
+    *   **`utils/`**: Shared utilities for configuration management and logging.
 
-## Control Panel (`manage.ps1`)
+## Control Panel (`run.py`)
 
-Use this PowerShell script to manage the entire bot lifecycle.
+Use this Python script to manage the entire bot lifecycle.
 
 ### Environment Management
-*   `.\manage.ps1 setup`: Configures the Docker environment completely for the first time.
-*   `.\manage.ps1 start-services`: Starts the required Docker containers (app, db).
-*   `.\manage.ps1 stop-services`: Stops the running Docker containers.
-*   `.\manage.ps1 reset-db`: **DANGER!** Stops and completely erases the database volume.
-*   `.\manage.ps1 clean-master`: Deletes only the `features_master_table` to be rebuilt.
-*   `.\manage.ps1 reset-trades`: Deletes only the trade history from the database.
-*   `.\manage.ps1 reset-sentiment`: Deletes only the sentiment data history.
+*   `python3 run.py setup`: Installs dependencies and prepares the environment.
+*   `python3 run.py stop`: Stops and removes all running containers associated with the bot.
 
 ### Bot Operations
-*   `.\manage.ps1 update-db`: Runs the complete ETL pipeline to populate and update the database with the latest market data.
-*   `.\manage.ps1 optimize`: Starts the AI model training and optimization process.
-*   `.\manage.ps1 backtest`: Runs a backtest using the currently trained models.
-*   `.\manage.ps1 run-live`: **DANGER!** Starts the bot in live trading mode.
-*   `.\manage.ps1 analyze`: Analyzes the results of the last backtest run.
-*   `.\manage.ps1 analyze-decision <model_name> "<timestamp>"`: Provides an XAI analysis for a specific model's decision at a given time.
+*   `python3 run.py trade`: Starts the bot in live trading mode in the background.
+*   `python3 run.py backtest`: Runs a backtest using the current strategy.
+*   `python3 run.py optimize`: Starts the AI model training and optimization process in the background.
+
+### Monitoring
+*   `python3 run.py show_trading`: **(NEW)** Shows the live trading dashboard.
+*   `python3 run.py display`: Shows the dashboard for the optimization process.
+*   `python3 run.py logs`: Shows the raw logs from the main application container.
+
+## Trading Dashboard
+
+The new trading dashboard provides a real-time overview of the bot's performance and status. To view it, run `python3 run.py show_trading` while the bot is running in `trade` mode.
+
+The dashboard includes:
+*   **Portfolio:** Your current BTC and USDT balances, and the total value of your portfolio.
+*   **Session Stats:** Total realized Profit & Loss, and counts of open and closed trades.
+*   **Bot's Internal Trades:** A summary of the last few trades as recorded by the bot.
+*   **Binance Open Orders:** A list of open orders for the trading symbol, fetched directly from Binance.
+*   **Binance Trade History:** Your recent trade history for the symbol, fetched directly from Binance for verification.
 
 ## Quick Start Guide
 
 1.  **Prerequisites**:
-    *   Docker Desktop (must be running)
-    *   PowerShell
+    *   Docker Desktop (must be running).
+    *   Python 3.10+.
 
 2.  **Setup the Environment**:
-    Open a PowerShell terminal and run the setup command. This will build the Docker images and start the necessary services.
-    ```powershell
-    .\manage.ps1 setup
+    Open a terminal and run the setup command. This will install all required Python packages.
+    ```bash
+    python3 run.py setup
+    ```
+    You will also need to create a `.env` file from the `.env.example` template and fill in your Binance API keys and desired InfluxDB credentials.
+
+3.  **Start the Bot**:
+    To start the bot in live trading mode, run:
+    ```bash
+    python3 run.py trade
+    ```
+    This will start the bot in a Docker container in the background.
+
+4.  **Monitor the Bot**:
+    To see the live trading dashboard, open a new terminal and run:
+    ```bash
+    python3 run.py show_trading
+    ```
+    To view the raw logs from the bot, run:
+    ```bash
+    python3 run.py logs
     ```
 
-3.  **Populate the Database**:
-    Run the data pipeline to download, process, and store all the necessary market data in the database.
-    ```powershell
-    .\manage.ps1 update-db
-    ```
-
-4.  **Train the AI Models**:
-    Run the optimizer to train the machine learning models on the historical data. This can be a long process.
-    ```powershell
-    .\manage.ps1 optimize
-    ```
-
-5.  **Run a Backtest**:
-    Once the models are trained, run a backtest to simulate the strategy and evaluate its performance.
-    ```powershell
-    .\manage.ps1 backtest
-    ```
-
-6.  **Analyze the Results**:
-    After the backtest is complete, generate a performance report.
-    ```powershell
-    .\manage.ps1 analyze
+5.  **Stopping the Bot**:
+    To stop the bot and its associated services, run:
+    ```bash
+    python3 run.py stop
     ```

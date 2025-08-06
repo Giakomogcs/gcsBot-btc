@@ -70,6 +70,7 @@ class TradingStrategyConfig(BaseModel):
     models: ModelsConfig
     ensemble_weights: dict[str, float]
     minimum_profit_for_take_profit: float
+    partial_sell_percent: float = 90.0
 
 class PositionSizingConfig(BaseModel):
     method: str
