@@ -50,9 +50,10 @@ def display_trading_dashboard(status_data: dict):
     portfolio_table.add_column("Ativo", style="cyan")
     portfolio_table.add_column("Quantidade", style="magenta", justify="right")
     portfolio_table.add_column("Valor (USDT)", style="green", justify="right")
-    portfolio_table.add_row("Saldo BTC", f"{portfolio.get('btc_balance', 0):.8f}", f"${portfolio.get('btc_value_usdt', 0):,.2f}")
-    portfolio_table.add_row("Saldo USDT", f"{portfolio.get('usd_balance', 0):,.2f}", f"${portfolio.get('usd_balance', 0):,.2f}")
-    portfolio_table.add_row(Text("Total", style="bold"), "", Text(f"${portfolio.get('total_value_usdt', 0):,.2f}", style="bold green"))
+    portfolio_table.add_row("USDT na Carteira", f"{portfolio.get('usd_balance', 0):,.2f}", f"${portfolio.get('usd_balance', 0):,.2f}")
+    portfolio_table.add_row("BTC em Posições", f"{portfolio.get('btc_for_sale', 0):.8f}", f"${portfolio.get('btc_for_sale', 0) * portfolio.get('current_price', 0):,.2f}")
+    portfolio_table.add_row("BTC Tesouro", f"{portfolio.get('btc_treasure', 0):.8f}", f"${portfolio.get('btc_treasure', 0) * portfolio.get('current_price', 0):,.2f}")
+    portfolio_table.add_row(Text("Total (Wallet)", style="bold"), "", Text(f"${portfolio.get('total_value_usdt', 0):,.2f}", style="bold green"))
     layout["portfolio"].update(Panel(portfolio_table))
 
     # Painel de Estatísticas da Sessão (sem alterações)

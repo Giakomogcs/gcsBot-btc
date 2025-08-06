@@ -155,7 +155,7 @@ class PositionManager:
                         "trade_id": trade_id,
                         "status": "CLOSED",
                         "quantity_btc": 0,
-                        "total_realized_pnl_usdt": position.get('total_realized_pnl_usdt', 0.0) + net_pnl,
+                        "realized_pnl_usdt": position.get('realized_pnl_usdt', 0.0) + net_pnl,
                         "timestamp": datetime.now(timezone.utc),
                         "decision_data": decision_data
                     }
@@ -254,7 +254,7 @@ class PositionManager:
             decision_data['partially_closed'] = True
             decision_data['last_partial_close_ts'] = datetime.now(timezone.utc).isoformat()
 
-            total_realized_pnl = position.get('total_realized_pnl_usdt', 0.0) + net_pnl_sold
+            total_realized_pnl = position.get('realized_pnl_usdt', 0.0) + net_pnl_sold
 
             # --- MUDANÇA ESTRATÉGICA ---
             # O trade é considerado 'FECHADO' para o bot após a venda parcial.
@@ -266,7 +266,7 @@ class PositionManager:
                 "status": status,  # Agora o status é sempre FECHADO aqui.
                 "entry_price": entry_price,
                 "quantity_btc": quantity_remaining,  # Registra os 10% restantes.
-                "total_realized_pnl_usdt": total_realized_pnl,
+                "realized_pnl_usdt": total_realized_pnl,
                 "timestamp": datetime.now(timezone.utc),
                 "decision_data": decision_data
             }

@@ -137,9 +137,30 @@ class TradingBot:
             btc_value_usdt = btc_balance * current_price
             total_value_usdt = usd_balance + btc_value_usdt
 
+            # --- Cálculos de Métricas de Portfólio Detalhadas ---
+            all_trades_for_metrics = db_manager.get_all_trades_in_range(start_date="-1y")
+            btc_for_sale = 0
+            btc_treasure = 0
+
+            if not all_trades_for_metrics.empty:
+                open_positions_metrics = all_trades_for_metrics[all_trades_for_metrics['status'] == 'OPEN']
+                if not open_positions_metrics.empty:
+                    btc_for_sale = open_positions_metrics['quantity_btc'].sum()
+
+                treasure_trades = all_trades_for_metrics[
+                    (all_trades_for_metrics['status'] == 'CLOSED') &
+                    (all_trades_for_metrics['decision_data'].apply(
+                        lambda x: isinstance(x, dict) and x.get('exit_reason') == 'TAKE_PROFIT_PARTIAL'
+                    ))
+                ]
+                if not treasure_trades.empty:
+                    btc_treasure = treasure_trades['quantity_btc'].sum()
+
             portfolio_data = {
-                "btc_balance": btc_balance,
+                "btc_balance": btc_balance, # Saldo total na wallet
                 "usd_balance": usd_balance,
+                "btc_for_sale": btc_for_sale, # BTC em posições abertas
+                "btc_treasure": btc_treasure, # BTC acumulado de vendas parciais
                 "btc_value_usdt": btc_value_usdt,
                 "total_value_usdt": total_value_usdt,
                 "current_price": current_price
