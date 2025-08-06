@@ -1,3 +1,17 @@
+# #############################################################################
+# # ATENÇÃO: ESTE SCRIPT (run.py) ESTÁ OBSOLETO E NÃO É MAIS UTILIZADO.       #
+# #############################################################################
+# #
+# # O gerenciamento do projeto agora é feito exclusivamente através do
+# # script PowerShell `manage.ps1`. Ele oferece uma interface de comando
+# # mais robusta e centralizada para todas as operações do bot, incluindo
+# # setup, execução de backtests, otimização e operações ao vivo.
+# #
+# # Por favor, utilize `.\manage.ps1` para todas as interações com o bot.
+# #
+# #############################################################################
+
+
 # run.py (VERSÃO 3.2 - Usando Docker Compose V2)
 
 import subprocess
