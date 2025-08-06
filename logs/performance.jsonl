@@ -104,3 +104,5 @@
 {"timestamp": "2025-08-05 19:50:35,100", "level": "WARNING", "message": "\ud83d\udea8 SINAL DE INTERRUP\u00c7\u00c3O RECEBIDO. ENCERRANDO... \ud83d\udea8"}
 {"timestamp": "2025-08-05 19:50:41,363", "level": "CRITICAL", "message": "\u274c Ocorreu um erro cr\u00edtico no loop principal: Cannot join tz-naive with tz-aware DatetimeIndex"}
 {"timestamp": "2025-08-05 19:51:35,054", "level": "WARNING", "message": "\ud83d\udea8 SINAL DE INTERRUP\u00c7\u00c3O RECEBIDO. ENCERRANDO... \ud83d\udea8"}
+{"timestamp": "2025-08-05 19:54:32,539", "level": "WARNING", "message": "\ud83d\udea8 SINAL DE INTERRUP\u00c7\u00c3O RECEBIDO. ENCERRANDO... \ud83d\udea8"}
+{"timestamp": "2025-08-06 11:34:37,391", "level": "WARNING", "message": "\ud83d\udea8 SINAL DE INTERRUP\u00c7\u00c3O RECEBIDO. ENCERRANDO... \ud83d\udea8"}
