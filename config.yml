@@ -99,7 +99,6 @@ optimizer:
   objective_metric: "Profit Factor"
 
 position_management:
-  profit_target_percent: 4.0
   max_concurrent_trades: 15
   capital_per_trade_percent: 1.5
   max_total_capital_allocation_percent: 90 # Ex: Alocar no máximo 90% do capital total
