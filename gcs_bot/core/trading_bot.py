@@ -52,7 +52,8 @@ class TradingBot:
                 # a) Busque os trades recentes da corretora (ex: últimos 100)
                 recent_trades_df = self.account_manager.get_trade_history(limit=100)
 
-                if recent_trades_df is not None and not recent_trades_df.empty:
+                # A API retorna uma lista. A verificação correta é se a lista não está vazia.
+                if recent_trades_df:
                     # b) Busque dados históricos com features (ATR) para calcular os alvos
                     historical_data_df = data_manager.read_data_from_influx(
                         measurement="features_master_table", 

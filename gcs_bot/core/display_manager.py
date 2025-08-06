@@ -75,21 +75,26 @@ def display_trading_dashboard(status_data: dict):
     open_pos_table.add_column("Qtd (BTC)", style="magenta", justify="right")
     open_pos_table.add_column("Alvo TP ($)", style="yellow", justify="right")
     open_pos_table.add_column("Distância", style="bold", justify="right")
+    open_pos_table.add_column("P&L Líquido", style="bold", justify="right") # NOVA COLUNA
 
     if not open_positions:
         layout["open_positions_panel"].update(Panel(Text("Nenhuma posição aberta no momento.", justify="center"), title="🎯 POSIÇÕES ABERTAS EM TEMPO REAL"))
     else:
         for trade in open_positions:
             dist_pct = trade.get('target_distance_pct', 0)
-            dist_color = "green" if dist_pct <= 1 else ("yellow" if dist_pct <= 5 else "white") # Exemplo de cores
+            dist_color = "green" if dist_pct <= 1 else ("yellow" if dist_pct <= 5 else "white")
             dist_str = f"{dist_pct:+.2f}%"
             
+            pnl = trade.get('unrealized_pnl_liquid_usdt', 0.0)
+            pnl_color = "green" if pnl >= 0 else "red"
+
             open_pos_table.add_row(
                 trade['trade_id'][:8],
                 f"${trade['entry_price']:,.2f}",
                 f"{trade['quantity_btc']:.6f}",
                 f"${trade['take_profit_price']:,.2f}",
-                Text(dist_str, style=dist_color)
+                Text(dist_str, style=dist_color),
+                Text(f"${pnl:,.2f}", style=pnl_color) # NOVO CAMPO
             )
         layout["open_positions_panel"].update(Panel(open_pos_table))
 
