@@ -73,6 +73,19 @@ class TradingBot:
             except Exception as e:
                 logger.error(f"Falha durante a sincronização de trades: {e}", exc_info=True)
 
+        # --- ETAPA 2.5: VERIFICAÇÃO DE ORDENS ABERTAS INESPERADAS ---
+        # Adiciona uma camada de segurança para alertar sobre ordens que não deveriam estar abertas
+        # (já que o bot só usa ordens de mercado).
+        try:
+            open_orders = self.account_manager.get_open_orders()
+            if open_orders:
+                logger.critical("🚨 ALERTA DE SINCRONIZAÇÃO: Foram encontradas ordens abertas na Binance que não deveriam existir! 🚨")
+                for order in open_orders:
+                    logger.critical(f"   - Ordem Órfã ID: {order['orderId']}, Lado: {order['side']}, Preço: {order['price']}, Qtd: {order['origQty']}")
+                logger.critical("   Estas ordens podem indicar uma falha anterior ou intervenção manual. O bot NÃO as cancelará. Verifique manualmente na corretora.")
+        except Exception as e:
+            logger.error(f"Falha ao verificar ordens abertas durante a inicialização: {e}", exc_info=True)
+
 
         # --- ETAPA 3: Finalização da Inicialização ---
         self.is_running = True
