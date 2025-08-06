@@ -98,8 +98,9 @@ class AccountManager:
             return True # Simulate success
 
         try:
-            logger.info(f"Attempting to place market BUY order for {quote_order_qty:.2f} USDT...")
-            order = self.client.order_market_buy(symbol=settings.app.symbol, quoteOrderQty=quote_order_qty)
+            rounded_qty = round(quote_order_qty, 2)
+            logger.info(f"Attempting to place market BUY order for {rounded_qty:.2f} USDT...")
+            order = self.client.order_market_buy(symbol=settings.app.symbol, quoteOrderQty=rounded_qty)
             logger.info(f"SUCCESS: Market BUY order placed: {order}")
             return True
         except BinanceAPIException as e:
