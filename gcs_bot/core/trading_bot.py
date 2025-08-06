@@ -12,7 +12,7 @@ from typing import Any
 from gcs_bot.utils.logger import logger
 from gcs_bot.utils.config_manager import settings
 from gcs_bot.core.position_manager import PositionManager
-from gcs_bot.core.exchange_manager import exchange_manager
+from gcs_bot.core.exchange_manager import ExchangeManager
 from gcs_bot.core.account_manager import AccountManager
 from gcs_bot.database.database_manager import db_manager
 from gcs_bot.data.data_manager import DataManager
@@ -25,10 +25,12 @@ class TradingBot:
     calculador de features em tempo real para tomar decisões.
     """
 
-    def __init__(self):
-        logger.info("--- INICIALIZANDO O TRADING BOT EM MODO DE OPERAÇÃO ---")
+    def __init__(self, mode: str = 'trade'):
+        self.mode = mode
+        logger.info(f"--- INICIALIZANDO O TRADING BOT EM MODO '{self.mode.upper()}' ---")
 
         # 1. Gestores de Conexão, Conta e Dados
+        exchange_manager = ExchangeManager(mode=self.mode)
         self.account_manager = AccountManager(binance_client=exchange_manager._client)
         data_manager = DataManager(db_manager=db_manager, config=settings, logger=logger)
 

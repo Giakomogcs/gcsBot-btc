@@ -72,19 +72,9 @@ class DatabaseManager:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
 
-            # Converte a coluna 'decision_data' de string JSON para dict
+            # Converte a string JSON de decision_data para um dicionário
             if 'decision_data' in df.columns:
-                def safe_json_loads(s):
-                    if isinstance(s, str):
-                        try:
-                            return json.loads(s)
-                        except json.JSONDecodeError:
-                            # Loga um aviso se a string não for um JSON válido
-                            logger.warning(f"Não foi possível decodificar o JSON em decision_data: '{s}'")
-                            return {}
-                    return {} # Retorna um dict vazio se não for uma string (ex: NaN)
-
-                df['decision_data'] = df['decision_data'].apply(safe_json_loads)
+                df['decision_data'] = df['decision_data'].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
 
             df.set_index('trade_id', inplace=True)
             return df
@@ -119,6 +109,10 @@ class DatabaseManager:
             for col in numeric_cols:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
+
+            # Converte a string JSON de decision_data para um dicionário
+            if 'decision_data' in df.columns:
+                df['decision_data'] = df['decision_data'].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
 
             return df
         except Exception as e:

@@ -1,204 +1,164 @@
-# #############################################################################
-# # ATENÇÃO: ESTE SCRIPT (run.py) ESTÁ OBSOLETO E NÃO É MAIS UTILIZADO.       #
-# #############################################################################
-# #
-# # O gerenciamento do projeto agora é feito exclusivamente através do
-# # script PowerShell `manage.ps1`. Ele oferece uma interface de comando
-# # mais robusta e centralizada para todas as operações do bot, incluindo
-# # setup, execução de backtests, otimização e operações ao vivo.
-# #
-# # Por favor, utilize `.\manage.ps1` para todas as interações com o bot.
-# #
-# #############################################################################
-
-
-# run.py (VERSÃO 3.2 - Usando Docker Compose V2)
-
 import subprocess
 import os
 import sys
-import shutil
-import json
 import time
-from dotenv import load_dotenv
-from datetime import datetime, timezone
-from dateutil.parser import isoparse
+import json
 
-# --- Configuração do Projeto ---
-DOCKER_IMAGE_NAME = "gcsbot"
-KAGGLE_DATA_FILE = os.path.join("data", "kaggle_btc_1m_bootstrap.csv")
-ENV_FILE = ".env"
-ENV_EXAMPLE_FILE = ".env.example"
-MODEL_METADATA_FILE = os.path.join("data", "model_metadata.json")
-OPTIMIZER_STATUS_FILE = os.path.join("logs", "optimizer_status.json")
+# --- Constants ---
 TRADING_STATUS_FILE = os.path.join("logs", "trading_status.json")
-# -----------------------------
+OPTIMIZER_STATUS_FILE = os.path.join("logs", "optimizer_status.json")
 
+# --- Helper Functions ---
 def print_color(text, color="green"):
-    """Imprime texto colorido no terminal."""
+    """Prints text in color."""
     colors = {"green": "\033[92m", "yellow": "\033[93m", "red": "\033[91m", "blue": "\033[94m", "end": "\033[0m"}
     print(f"{colors.get(color, colors['green'])}{text}{colors['end']}")
 
 def run_command(command, shell=True, capture_output=False, check=False):
-    """Executa um comando no shell."""
-    print_color(f"\n> Executando: {command}", "blue")
+    """Executes a shell command."""
+    print_color(f"\n> Executing: {command}", "blue")
     try:
-        if not capture_output:
+        if capture_output:
+            return subprocess.run(command, shell=shell, capture_output=True, text=True, check=check, encoding='utf-8')
+        else:
             process = subprocess.Popen(command, shell=shell, text=True, stdout=sys.stdout, stderr=sys.stderr)
             process.wait()
             if check and process.returncode != 0:
                 raise subprocess.CalledProcessError(process.returncode, command)
             return process
-        else:
-            result = subprocess.run(command, shell=shell, capture_output=True, text=True, encoding='utf-8', check=check)
-            return result
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        print_color(f"ERRO ao executar o comando: {command}\n{e}", "red")
+        print_color(f"ERROR executing command: {command}\n{e}", "red")
         sys.exit(1)
 
 def check_docker_running():
-    print_color("Verificando se o Docker está em execução...", "yellow")
+    """Checks if Docker is running."""
+    print_color("Verifying Docker status...", "yellow")
     try:
-        subprocess.run("docker info", shell=True, check=True, capture_output=True)
-        print_color("Docker está ativo e pronto.", "green")
+        run_command("docker info", capture_output=True, check=True)
+        print_color("Docker is running.", "green")
     except (subprocess.CalledProcessError, FileNotFoundError):
-        print_color("ERRO: Docker Desktop não parece estar em execução.", "red"); sys.exit(1)
+        print_color("ERROR: Docker Desktop does not seem to be running.", "red")
+        sys.exit(1)
 
-def check_env_file():
-    print_color("Verificando arquivo de configuração .env...", "yellow")
-    if not os.path.exists(ENV_FILE):
-        print_color(f"Arquivo .env não encontrado. Copiando de {ENV_EXAMPLE_FILE}...", "yellow")
-        if not os.path.exists(ENV_EXAMPLE_FILE):
-             print_color(f"ERRO: {ENV_EXAMPLE_FILE} também não encontrado.", "red"); sys.exit(1)
-        shutil.copy(ENV_EXAMPLE_FILE, ENV_FILE)
-        print_color("IMPORTANTE: Abra o arquivo .env e preencha suas chaves de API.", "red"); sys.exit(1)
-    print_color("Arquivo .env encontrado.", "green")
-
-def initial_setup():
-    print_color("--- Iniciando Setup e Verificação do Ambiente ---", "blue")
-    check_env_file()
-    os.makedirs("data", exist_ok=True)
-    os.makedirs("logs", exist_ok=True)
-    run_command(f"\"{sys.executable}\" -m pip install -r requirements.txt", check=True)
-    print_color("--- Setup Concluído com Sucesso ---", "green")
-
-def start_optimizer():
-    """Inicia o processo de otimização em um container Docker em modo background."""
+# --- Docker-based Commands ---
+def setup():
+    """Builds and starts the Docker services."""
     check_docker_running()
-    print_color("--- Iniciando Otimização (Modo Background) ---", "blue")
-    # <<< CORRIGIDO AQUI
-    run_command("docker compose up -d --build app", check=True)
-    print_color("Otimização iniciada em segundo plano com sucesso!", "green")
-    print_color("Para acompanhar o progresso, use o comando:", "yellow")
-    print_color("python3 run.py display", "blue")
-    print_color("Para ver os logs completos, use o comando:", "yellow")
-    print_color("python3 run.py logs", "blue")
+    print_color("--- Building Docker images (this may take a while)...", "yellow")
+    run_command("docker compose build", check=True)
+    print_color("--- Starting services in the background...", "yellow")
+    run_command("docker compose up -d", check=True)
+    print_color("--- Environment is ready! ---", "green")
 
-def start_bot(mode):
+def start_services():
+    """Starts the Docker services."""
     check_docker_running()
-    print_color(f"--- Iniciando Bot em Modo '{mode.upper()}' ---", "blue")
-    # <<< CORRIGIDO AQUI
-    run_command(f"MODE={mode} docker compose up -d --build app", check=True)
+    print_color("--- Starting services...", "yellow")
+    run_command("docker compose up -d", check=True)
 
-    if mode in ['test', 'trade']:
-        print_color(f"Bot no modo '{mode}' iniciado em segundo plano.", "green")
-        print_color("Para ver os logs, use: python3 run.py logs", "yellow")
-
-def stop_all():
+def stop_services():
+    """Stops the Docker services."""
     check_docker_running()
-    print_color("--- Parando e Removendo TODOS os Containers do Bot ---", "yellow")
-    # <<< CORRIGIDO AQUI
+    print_color("--- Stopping services...", "yellow")
     run_command("docker compose down", check=True)
-    print_color("Containers parados e removidos com sucesso.", "green")
 
-def show_logs():
+def reset_db():
+    """Stops the services and resets the database volume."""
     check_docker_running()
-    print_color("Anexando aos logs do container 'app'. Pressione CTRL+C para sair.", "green")
-    try:
-        # <<< CORRIGIDO AQUI
-        subprocess.run("docker compose logs -f app", shell=True)
-    except KeyboardInterrupt: print_color("\n\nDesanexado dos logs.", "yellow")
+    print_color("--- STOPPING AND RESETTING DOCKER ENVIRONMENT ---", "red")
+    run_command("docker compose down", check=True)
+    print_color("--- REMOVING OLD INFLUXDB DATA VOLUME ---", "red")
+    run_command("docker volume rm gcsbot-btc_influxdb_data", check=True)
+    print_color("--- Reset complete. Use 'start-services' to begin again. ---", "green")
 
-def show_display():
-    """Mostra o painel de otimização lendo o arquivo de status."""
-    from gcs_bot.core.display_manager import display_optimization_dashboard
-    
-    # <<< CORRIGIDO AQUI
+def run_script_in_container(script_path, *args):
+    """Generic function to run a Python script inside the 'app' container."""
+    check_docker_running()
+    command = f"docker compose exec app python {script_path} {' '.join(args)}"
+    run_command(command)
+
+def show_display(status_file, dashboard_func, name):
+    """Generic function to show a dashboard by reading a status file."""
     result = run_command("docker compose ps -q app", capture_output=True)
     if not result.stdout.strip():
-        print_color("O container de otimização 'app' não está em execução.", "red")
-        print_color("Inicie-o com: python3 run.py optimize", "yellow")
+        print_color(f"The '{name}' container 'app' is not running.", "red")
         return
 
-    print_color("Mostrando painel de otimização. Pressione CTRL+C para sair.", "green")
+    print_color(f"Showing {name} dashboard. Press CTRL+C to exit.", "green")
     try:
         while True:
-            if os.path.exists(OPTIMIZER_STATUS_FILE):
+            if os.path.exists(status_file):
                 try:
-                    with open(OPTIMIZER_STATUS_FILE, 'r') as f:
+                    with open(status_file, 'r') as f:
                         status_data = json.load(f)
-                    display_optimization_dashboard(status_data)
+                    os.system('cls' if os.name == 'nt' else 'clear')
+                    dashboard_func(status_data)
                 except (json.JSONDecodeError, KeyError) as e:
-                    print(f"Aguardando arquivo de status válido... Erro: {e}")
+                    print(f"Waiting for a valid status file... Error: {e}")
             else:
-                print("Aguardando o otimizador iniciar e criar o arquivo de status...")
-            
+                print(f"Waiting for {name} to start and create the status file...")
             time.sleep(2)
     except KeyboardInterrupt:
-        print_color("\nPainel finalizado.", "yellow")
+        print_color(f"\nDashboard for {name} terminated.", "yellow")
 
-def show_trading_display():
-    """Mostra o painel de trading lendo o arquivo de status."""
-    from gcs_bot.core.display_manager import display_trading_dashboard
-
-    result = run_command("docker compose ps -q app", capture_output=True)
-    if not result.stdout.strip():
-        print_color("O container do bot 'app' não está em execução.", "red")
-        print_color("Inicie-o com: python3 run.py trade", "yellow")
-        return
-
-    print_color("Mostrando painel de trading. Pressione CTRL+C para sair.", "green")
-    try:
-        while True:
-            if os.path.exists(TRADING_STATUS_FILE):
-                try:
-                    with open(TRADING_STATUS_FILE, 'r') as f:
-                        status_data = json.load(f)
-                    display_trading_dashboard(status_data)
-                except (json.JSONDecodeError, KeyError) as e:
-                    print(f"Aguardando arquivo de status válido... Erro: {e}")
-            else:
-                print("Aguardando o bot iniciar e criar o arquivo de status...")
-
-            time.sleep(5)
-    except KeyboardInterrupt:
-        print_color("\nPainel finalizado.", "yellow")
-
+# --- Main Command-line Interface ---
 def main():
+    """Main CLI entry point."""
     if len(sys.argv) < 2:
-        print_color("Uso: python3 run.py [comando]", "blue")
-        print("Comandos disponíveis:")
-        print("  setup             - Instala dependências e prepara o ambiente.")
-        print("  optimize          - Roda a otimização em SEGUNDO PLANO.")
-        print("  display           - Mostra o PAINEL da otimização em execução.")
-        print("  trade             - Roda o bot em modo de trade em SEGUNDO PLANO.")
-        print("  show_trading      - Mostra o PAINEL do bot de trade em execução.")
-        print("  backtest          - Roda um backtest rápido com o modelo atual.")
-        print("  stop              - Para e remove TODOS os containers do bot.")
-        print("  logs              - Mostra os logs brutos de um container em execução.")
+        print_color("GCS-Bot - Control Panel", "yellow")
+        print("---------------------------")
+        print("\nUsage: python3 run.py [command]\n")
+        print("Environment Management:")
+        print("  setup           - Builds and starts the Docker environment for the first time.")
+        print("  start-services  - Starts the Docker containers (app, db).")
+        print("  stop-services   - Stops the Docker containers.")
+        print("  reset-db        - DANGER! Stops and erases the database.")
+        print("\nBot Operations:")
+        print("  trade           - Starts the bot in live trading mode.")
+        print("  test            - Starts the bot in test mode (live data, testnet wallet).")
+        print("  backtest        - Runs a backtest with the current models.")
+        print("  optimize        - Runs the model optimization process.")
+        print("  update-db       - Runs the ETL pipeline to update the database.")
+        print("\nDatabase Utilities:")
+        print("  clean-master    - Clears the 'features_master_table'.")
+        print("  reset-trades    - Clears all trade records from the database.")
+        print("  reset-sentiment - Clears all sentiment data from the database.")
+        print("\nMonitoring & Analysis:")
+        print("  show-trading    - Shows the live trading dashboard.")
+        print("  show-optimizer  - Shows the optimizer dashboard.")
+        print("  logs            - Shows the raw logs from the running application.")
+        print("  analyze         - Analyzes the results of the last backtest run.")
+        print("  analyze-decision <model> \"<datetime>\" - Analyzes a specific model's decision.")
+        print("  run-tests       - Runs the automated test suite (pytest).")
         return
 
     command = sys.argv[1].lower()
-    
-    if command == "setup": initial_setup()
-    elif command == "optimize": start_optimizer()
-    elif command == "display": show_display()
-    elif command == "trade": start_bot('trade')
-    elif command == "show_trading": show_trading_display()
-    elif command == "backtest": start_bot('backtest')
-    elif command == "stop": stop_all()
-    elif command == "logs": show_logs()
-    else: print_color(f"Comando '{command}' não reconhecido.", "red")
+    args = sys.argv[2:]
+
+    if command == "setup": setup()
+    elif command == "start-services": start_services()
+    elif command == "stop-services": stop_services()
+    elif command == "reset-db": reset_db()
+    elif command == "trade": run_script_in_container("main.py", "trade")
+    elif command == "test": run_script_in_container("main.py", "test")
+    elif command == "backtest": run_script_in_container("scripts/run_backtest.py")
+    elif command == "optimize": run_script_in_container("scripts/run_optimizer.py")
+    elif command == "update-db": run_script_in_container("scripts/data_pipeline.py")
+    elif command == "clean-master": run_script_in_container("scripts/db_utils.py", "features_master_table")
+    elif command == "reset-trades": run_script_in_container("scripts/db_utils.py", "trades")
+    elif command == "reset-sentiment": run_script_in_container("scripts/db_utils.py", "sentiment_fear_and_greed")
+    elif command == "show-trading":
+        from gcs_bot.core.display_manager import display_trading_dashboard
+        show_display(TRADING_STATUS_FILE, display_trading_dashboard, "Trading Bot")
+    elif command == "show-optimizer":
+        from gcs_bot.core.display_manager import display_optimization_dashboard
+        show_display(OPTIMIZER_STATUS_FILE, display_optimization_dashboard, "Optimizer")
+    elif command == "logs": run_command("docker compose logs -f app")
+    elif command == "analyze": run_script_in_container("scripts/analyze_results.py")
+    elif command == "analyze-decision": run_script_in_container("scripts/analyze_decision.py", *args)
+    elif command == "run-tests": run_script_in_container("pytest")
+    else:
+        print_color(f"Command '{command}' not recognized.", "red")
 
 if __name__ == "__main__":
     main()

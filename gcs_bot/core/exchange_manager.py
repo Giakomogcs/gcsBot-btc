@@ -11,26 +11,29 @@ class ExchangeManager:
     """
     Classe responsável por toda a comunicação com a API da corretora (Binance).
     """
-    def __init__(self):
-        self.use_testnet = settings.app.use_testnet
+    def __init__(self, mode: str = 'trade'):
+        self.mode = mode
         self._client = self._init_binance_client()
 
     def _init_binance_client(self) -> Optional[Client]:
-        """Inicializa e autentica o cliente da API da Binance."""
-        if settings.app.force_offline_mode:
-            logger.warning("Modo OFFLINE forçado. ExchangeManager não se conectará.")
+        """Inicializa e autentica o cliente da API da Binance com base no modo."""
+        if self.mode == 'offline':
+            logger.warning("Modo OFFLINE. ExchangeManager não se conectará.")
             return None
+
+        use_testnet = self.mode == 'test'
+
         try:
-            api_key = settings.api_keys.binance_testnet_api_key if self.use_testnet else settings.api_keys.binance_api_key
-            api_secret = settings.api_keys.binance_testnet_api_secret if self.use_testnet else settings.api_keys.binance_api_secret
+            api_key = settings.api_keys.binance_testnet_api_key if use_testnet else settings.api_keys.binance_api_key
+            api_secret = settings.api_keys.binance_testnet_api_secret if use_testnet else settings.api_keys.binance_api_secret
 
             if not api_key or not api_secret:
-                logger.error("API Key/Secret da Binance não encontradas nas configurações.")
+                logger.error(f"API Key/Secret da Binance para o modo '{self.mode}' não encontradas.")
                 return None
 
-            client = Client(api_key, api_secret, tld='com', testnet=self.use_testnet)
+            client = Client(api_key, api_secret, tld='com', testnet=use_testnet)
             client.ping()
-            logger.info(f"✅ Conexão com a Binance estabelecida com sucesso (Modo: {'TESTNET' if self.use_testnet else 'REAL'}).")
+            logger.info(f"✅ Conexão com a Binance estabelecida com sucesso (Modo: {'TESTNET' if use_testnet else 'REAL'}).")
             return client
         except (BinanceAPIException, BinanceRequestException) as e:
             logger.error(f"❌ Falha na conexão com a Binance: {e}", exc_info=True)
@@ -121,5 +124,3 @@ class ExchangeManager:
         except Exception as e:
             logger.error(f"ERRO INESPERADO AO COLOCAR ORDEM: {e}", exc_info=True)
             return None
-
-exchange_manager = ExchangeManager()

@@ -12,31 +12,6 @@ A synthesis of four non-negotiable pillars that will guide every line of code an
 
 The project is organized into a clean, professional, and scalable structure adhering to Python packaging standards.
 
-### Folder Structure Diagram
-
-```
-gcs-bot/
-├── gcs_bot/
-│   ├── core/
-│   │   ├── trading_bot.py
-│   │   ├── position_manager.py
-│   │   └── ... (The bot's brain: other core logic)
-│   ├── data/
-│   │   └── ... (Data handling modules)
-│   ├── database/
-│   │   └── database_manager.py
-│   └── utils/
-│       ├── config_manager.py
-│       └── logger.py
-├── scripts/
-│   ├── run_backtest.py
-│   └── ... (High-level scripts)
-├── tests/
-├── config.yml
-├── run.py
-└── README.md
-```
-
 ### Module Interaction
 
 *   **`run.py`**: The main command-line interface (CLI) for all operations. This Python script orchestrates Docker commands to run the various components of the bot.
@@ -47,25 +22,37 @@ gcs-bot/
 
 ## Control Panel (`run.py`)
 
-Use this Python script to manage the entire bot lifecycle.
+Use this Python script to manage the entire bot lifecycle. All commands are executed via `python3 run.py [command]`.
 
 ### Environment Management
-*   `python3 run.py setup`: Installs dependencies and prepares the environment.
-*   `python3 run.py stop`: Stops and removes all running containers associated with the bot.
+*   `setup`: Builds and starts the Docker environment for the first time.
+*   `start-services`: Starts the Docker containers (app, db).
+*   `stop-services`: Stops the Docker containers.
+*   `reset-db`: **DANGER!** Stops and erases the database.
 
-### Bot Operations
-*   `python3 run.py trade`: Starts the bot in live trading mode in the background.
-*   `python3 run.py backtest`: Runs a backtest using the current strategy.
-*   `python3 run.py optimize`: Starts the AI model training and optimization process in the background.
+### Bot Operations & Modes
+*   `trade`: Starts the bot in **live trading mode** (real money) in a background container.
+*   `test`: Starts the bot in **test mode** (live data on Binance Testnet) in a background container.
+*   `backtest`: Runs a backtest using the current models and historical data.
+*   `optimize`: Runs the model optimization process.
+*   `update-db`: Runs the ETL pipeline to populate/update the database with market data.
 
-### Monitoring
-*   `python3 run.py show_trading`: **(NEW)** Shows the live trading dashboard.
-*   `python3 run.py display`: Shows the dashboard for the optimization process.
-*   `python3 run.py logs`: Shows the raw logs from the main application container.
+### Database Utilities
+*   `clean-master`: Clears the `features_master_table`.
+*   `reset-trades`: Clears all trade records from the database.
+*   `reset-sentiment`: Clears all sentiment data from the database.
+
+### Monitoring & Analysis
+*   `show-trading`: Shows the live trading dashboard.
+*   `show-optimizer`: Shows the optimizer dashboard.
+*   `logs`: Shows the raw logs from the running application.
+*   `analyze`: Analyzes the results of the last backtest run.
+*   `analyze-decision <model> "<datetime>"`: Analyzes a specific model's decision.
+*   `run-tests`: Runs the automated test suite (pytest).
 
 ## Trading Dashboard
 
-The new trading dashboard provides a real-time overview of the bot's performance and status. To view it, run `python3 run.py show_trading` while the bot is running in `trade` mode.
+The trading dashboard provides a real-time overview of the bot's performance and status. To view it, run `python3 run.py show_trading` while the bot is running in `trade` or `test` mode.
 
 The dashboard includes:
 *   **Portfolio:** Your current BTC and USDT balances, and the total value of your portfolio.
@@ -81,18 +68,17 @@ The dashboard includes:
     *   Python 3.10+.
 
 2.  **Setup the Environment**:
-    Open a terminal and run the setup command. This will install all required Python packages.
+    Open a terminal and run the setup command. This will build the Docker images and start the necessary services.
     ```bash
     python3 run.py setup
     ```
-    You will also need to create a `.env` file from the `.env.example` template and fill in your Binance API keys and desired InfluxDB credentials.
+    You will also need to create a `.env` file from the `.env.example` template and fill in your Binance API keys (both mainnet and testnet) and desired InfluxDB credentials.
 
-3.  **Start the Bot**:
-    To start the bot in live trading mode, run:
+3.  **Run in Test Mode**:
+    Before running with real money, it's highly recommended to run the bot in test mode on the Binance Testnet.
     ```bash
-    python3 run.py trade
+    python3 run.py test
     ```
-    This will start the bot in a Docker container in the background.
 
 4.  **Monitor the Bot**:
     To see the live trading dashboard, open a new terminal and run:
@@ -104,8 +90,14 @@ The dashboard includes:
     python3 run.py logs
     ```
 
-5.  **Stopping the Bot**:
+5.  **Run in Live Mode**:
+    Once you are confident that the bot is working as expected, you can run it in live mode with real funds.
+    ```bash
+    python3 run.py trade
+    ```
+
+6.  **Stopping the Bot**:
     To stop the bot and its associated services, run:
     ```bash
-    python3 run.py stop
+    python3 run.py stop-services
     ```
