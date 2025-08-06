@@ -26,11 +26,16 @@ class PositionManager:
         self.consecutive_green_candles_for_entry = self.strategy_config.consecutive_green_candles_for_entry
         self.max_total_capital_allocation_percent = self.position_config.max_total_capital_allocation_percent / 100.0
 
-        # Parâmetros para Take Profit Dinâmico
-        self.dynamic_tp_config = self.strategy_config.get('dynamic_take_profit', {})
-        self.dynamic_tp_enabled = self.dynamic_tp_config.get('enabled', False)
-        self.near_target_factor = self.dynamic_tp_config.get('near_target_factor', 0.98)
-        self.rsi_overbought_threshold = self.dynamic_tp_config.get('rsi_overbought_threshold', 75)
+        # Parâmetros para Take Profit Dinâmico (com acesso seguro a atributos Pydantic)
+        if hasattr(self.strategy_config, 'dynamic_take_profit'):
+            self.dynamic_tp_enabled = self.strategy_config.dynamic_take_profit.enabled
+            self.near_target_factor = self.strategy_config.dynamic_take_profit.near_target_factor
+            self.rsi_overbought_threshold = self.strategy_config.dynamic_take_profit.rsi_overbought_threshold
+        else:
+            self.logger.warning("Seção 'dynamic_take_profit' não encontrada no config. Usando valores padrão (desativado).")
+            self.dynamic_tp_enabled = False
+            self.near_target_factor = 0.98
+            self.rsi_overbought_threshold = 75
 
         self.performance_factor = 1.0
         self.previous_candle = None
