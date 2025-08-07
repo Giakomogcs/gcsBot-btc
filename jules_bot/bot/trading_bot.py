@@ -145,11 +145,15 @@ class TradingBot:
         self.db_manager.clear_all_trades()
         logger.info("Trades antigos do backtest foram limpos.")
 
-        # 2. Carrega os dados históricos
-        # TODO: Ajustar os parâmetros (intervalo, data de início) conforme necessário
-        historical_data = self.data_manager.get_master_table()
+        # 2. Carrega os dados históricos da tabela mestre de features
+        logger.info("A carregar dados históricos da 'features_master_table'...")
+        # CORREÇÃO: Usa o método correto e define um período padrão para o backtest.
+        historical_data = self.data_manager.read_data_from_influx(
+            measurement="features_master_table",
+            start_date="-90d" # Carrega os últimos 90 dias para o backtest
+        )
         if historical_data.empty:
-            logger.error("Nenhuma dado histórico encontrado na master_table. Encerrando backtest.")
+            logger.error("Nenhum dado histórico encontrado na 'features_master_table'. Encerrando backtest.")
             return
         logger.info(f"{len(historical_data)} registos históricos carregados para o backtest.")
 
