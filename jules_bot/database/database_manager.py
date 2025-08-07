@@ -28,6 +28,22 @@ class DatabaseManager:
             self._client.close()
             logger.info("Conexão com o InfluxDB fechada.")
 
+    def clear_all_trades(self):
+        """Deletes all records from the 'trades' measurement for the current mode."""
+        if not self.mode:
+            logger.warning("Não é possível limpar os trades sem um modo de execução definido. Abortando.")
+            return
+        try:
+            start = "1970-01-01T00:00:00Z"
+            stop = datetime.now(timezone.utc).isoformat()
+            predicate = f'_measurement="trades" AND environment="{self.mode}"'
+
+            logger.info(f"A limpar a medição 'trades' para o ambiente '{self.mode}'...")
+            self._client.delete_api().delete(start, stop, predicate, bucket=self.bucket, org=self.org)
+            logger.info(f"✅ Medição 'trades' para o ambiente '{self.mode}' limpa com sucesso.")
+        except Exception as e:
+            logger.error(f"Falha ao limpar a medição 'trades': {e}", exc_info=True)
+
     def is_measurement_empty(self, measurement: str) -> bool:
         """Verifica se uma measurement no InfluxDB está vazia."""
         try:

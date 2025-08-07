@@ -157,6 +157,7 @@ class PositionManager:
             update_trade_data = {
                 "trade_id": position.name,
                 "status": "CLOSED",
+                "entry_price": position['entry_price'],
                 "quantity_btc": 0,
                 "realized_pnl_usdt": position.get('realized_pnl_usdt', 0.0) + net_pnl,
                 "timestamp": datetime.now(timezone.utc),

@@ -202,6 +202,13 @@ class TradingBot:
             return
 
         open_positions = self.db_manager.get_open_positions()
+
+        # CORREÇÃO: Converte Timestamps para strings antes de serializar
+        if not open_positions.empty and 'timestamp' in open_positions.columns:
+            open_positions['timestamp'] = open_positions['timestamp'].apply(
+                lambda x: x.isoformat() if pd.notna(x) else None
+            )
+
         positions_list = open_positions.to_dict(orient='records') if not open_positions.empty else []
 
         state = {
@@ -211,6 +218,8 @@ class TradingBot:
             "open_positions": positions_list,
             "recent_high_price": self.position_manager.recent_high_price if self.position_manager else None
         }
+
         os.makedirs("/app/logs", exist_ok=True)
         with open("/app/logs/trading_status.json", "w") as f:
+            # Usar um default handler no json.dump é uma alternativa, mas a conversão explícita é mais clara.
             json.dump(state, f, indent=4)
