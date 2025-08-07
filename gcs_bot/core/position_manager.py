@@ -41,6 +41,10 @@ class PositionManager:
         self.previous_candle = None
         self.consecutive_green_candles = 0
 
+        # --- CORREÇÃO DE BUG (RACE CONDITION) ---
+        # Lock para impedir que a mesma posição seja vendida múltiplas vezes no mesmo ciclo.
+        self.positions_pending_closure = set()
+
     def _update_performance_factor(self):
         if not self.sizing_config.enabled:
             self.performance_factor = 1.0
@@ -119,6 +123,9 @@ class PositionManager:
             self.logger.critical(f"CRÍTICO: A ORDEM DE COMPRA FOI EXECUTADA, MAS FALHOU AO REGISTRAR NO DB! Verifique manualmente. Erro: {e}", exc_info=True)
 
     def check_and_close_positions(self, candle: pd.Series):
+        # Limpa o lock de posições pendentes no início de cada ciclo de verificação.
+        self.positions_pending_closure.clear()
+
         closed_trades_summaries = []
         current_price = candle['close']
         open_positions_df = self.db_manager.get_open_positions()
@@ -128,9 +135,25 @@ class PositionManager:
         if open_positions_df.empty:
             return []
 
-        trades_to_partially_close = []
+        # Obter a lista de IDs de trade para evitar problemas com a iteração de um DataFrame mutável
+        trade_ids = open_positions_df.index.tolist()
 
-        for trade_id, position in open_positions_df.iterrows():
+        for trade_id in trade_ids:
+            # --- CORREÇÃO DE BUG (RACE CONDITION) ---
+            # Se a posição já está sendo processada para venda neste ciclo, pule.
+            if trade_id in self.positions_pending_closure:
+                continue
+
+            # --- CORREÇÃO DE BUG CRÍTICO (KeyError) ---
+            # Carregar a versão mais recente e autoritativa do trade diretamente do banco de dados
+            # para garantir que temos todos os campos necessários (ex: 'entry_price').
+            position = self.db_manager.get_trade_by_id(trade_id)
+
+            # Verifica se o trade ainda existe e está aberto. Pode ter sido fechado por outro processo.
+            if position is None or position.get('status') != 'OPEN':
+                self.logger.warning(f"Trade {trade_id} não encontrado ou não está mais ABERTO no DB. Pulando.")
+                continue
+
             # --- LÓGICA DE STOP-LOSS (PRIORIDADE MÁXIMA) ---
             if 'stop_loss_price' in position and pd.notna(position['stop_loss_price']) and current_price <= position['stop_loss_price']:
                 self.logger.info(f"❌ STOP-LOSS ATINGIDO PARA O TRADE {trade_id}:")
@@ -145,9 +168,15 @@ class PositionManager:
                 commission_exit = exit_value * commission_rate
                 net_pnl = exit_value - entry_cost - commission_entry - commission_exit
 
+                # --- CORREÇÃO DE BUG (RACE CONDITION) ---
+                # 1. Adiciona o ID da posição ao lock para impedir reprocessamento.
+                self.positions_pending_closure.add(trade_id)
+
+                # 2. Executa a ordem de venda.
                 sell_successful = self.account_manager.update_on_sell(quantity_btc=quantity_to_sell, current_price=current_price)
 
                 if sell_successful:
+                    # 3. Em caso de sucesso, o trade é atualizado no DB e o lock permanece até o próximo ciclo.
                     decision_data = position.get('decision_data', {})
                     decision_data['exit_reason'] = 'STOP_LOSS'
 
@@ -172,7 +201,9 @@ class PositionManager:
                     }
                     closed_trades_summaries.append(summary)
                 else:
+                    # 4. Em caso de falha na API, remove o lock para que o trade possa ser tentado novamente no próximo ciclo.
                     self.logger.error(f"A ordem de venda de STOP-LOSS para o trade {trade_id} falhou. O trade permanecerá aberto no DB.")
+                    self.positions_pending_closure.remove(trade_id)
 
                 continue # Pula para o próximo trade, pois este foi fechado.
 
@@ -215,73 +246,54 @@ class PositionManager:
                 net_pnl = exit_value - entry_cost - commission
 
                 if net_pnl > self.config.trading_strategy.minimum_profit_for_take_profit:
-                    trades_to_partially_close.append(position)
+                    # --- LÓGICA DE VENDA MOVIDA PARA CÁ ---
+                    # --- CORREÇÃO DE BUG (RACE CONDITION) ---
+                    self.logger.info(f"✅ INICIANDO VENDA PARCIAL (TAKE_PROFIT) PARA O TRADE {trade_id}:")
+                    # 1. Adiciona o ID da posição ao lock.
+                    self.positions_pending_closure.add(trade_id)
+
+                    # Calcula quantidades e P&L para a porção a ser vendida.
+                    original_quantity = position['quantity_btc']
+                    quantity_to_sell = original_quantity * self.partial_sell_percent
+                    quantity_remaining = original_quantity - quantity_to_sell
+                    if quantity_remaining < 1e-8: quantity_remaining = 0
+                    entry_price = position['entry_price']
+                    entry_cost_sold = entry_price * quantity_to_sell
+                    exit_value_sold = current_price * quantity_to_sell
+                    commission_entry_sold = entry_cost_sold * commission_rate
+                    commission_exit_sold = exit_value_sold * commission_rate
+                    net_pnl_sold = exit_value_sold - entry_cost_sold - commission_entry_sold - commission_exit_sold
+                    self.logger.info(f"   Selling {quantity_to_sell:.8f} BTC ({self.partial_sell_percent:.0%}) at ${current_price:,.2f}")
+                    self.logger.info(f"   Realized PnL: ${net_pnl_sold:,.2f}. Remaining: {quantity_remaining:.8f} BTC")
+
+                    # 2. Executa a ordem de venda.
+                    sell_successful = self.account_manager.update_on_sell(quantity_btc=quantity_to_sell, current_price=current_price)
+
+                    if sell_successful:
+                        # 3. Em caso de sucesso, atualiza o DB.
+                        decision_data_tp = position.get('decision_data', {})
+                        decision_data_tp['partially_closed'] = True
+                        decision_data_tp['last_partial_close_ts'] = datetime.now(timezone.utc).isoformat()
+                        total_realized_pnl = position.get('realized_pnl_usdt', 0.0) + net_pnl_sold
+                        status = "CLOSED" # O trade é considerado FECHADO após a venda parcial.
+                        update_trade_data = {
+                            "trade_id": trade_id, "status": status, "entry_price": entry_price,
+                            "quantity_btc": quantity_remaining, "realized_pnl_usdt": total_realized_pnl,
+                            "timestamp": datetime.now(timezone.utc), "decision_data": decision_data_tp
+                        }
+                        self.db_manager.write_trade(update_trade_data)
+                        summary = {
+                            'entry_price': entry_price, 'exit_price': current_price,
+                            'quantity_btc_sold': quantity_to_sell, 'quantity_btc_remaining': quantity_remaining,
+                            'pnl_usdt': net_pnl_sold, 'exit_reason': 'TAKE_PROFIT_PARTIAL'
+                        }
+                        closed_trades_summaries.append(summary)
+                    else:
+                        # 4. Em caso de falha, remove o lock para retentativa.
+                        self.logger.error(f"A ordem de venda (TAKE-PROFIT) para o trade {trade_id} falhou. O trade não será atualizado no DB.")
+                        self.positions_pending_closure.remove(trade_id)
                 else:
                     self.logger.debug(f"TAKE PROFIT for trade {trade_id} ignored due to insufficient net profit.")
-
-        if not trades_to_partially_close:
-            return []
-
-        self.logger.info(f"Identified {len(trades_to_partially_close)} trades for partial take-profit.")
-
-        for position in trades_to_partially_close:
-            trade_id = position.name
-            original_quantity = position['quantity_btc']
-            quantity_to_sell = original_quantity * self.partial_sell_percent
-            quantity_remaining = original_quantity - quantity_to_sell
-
-            if quantity_remaining < 1e-8:
-                quantity_remaining = 0
-
-            entry_price = position['entry_price']
-            entry_cost_sold = entry_price * quantity_to_sell
-            exit_value_sold = current_price * quantity_to_sell
-            commission_entry_sold = entry_cost_sold * commission_rate
-            commission_exit_sold = exit_value_sold * commission_rate
-            net_pnl_sold = exit_value_sold - entry_cost_sold - commission_entry_sold - commission_exit_sold
-
-            self.logger.info(f"✅ PARTIALLY CLOSING TRADE {trade_id} (TAKE_PROFIT):")
-            self.logger.info(f"   Selling {quantity_to_sell:.8f} BTC ({self.partial_sell_percent:.0%}) at ${current_price:,.2f}")
-            self.logger.info(f"   Realized PnL: ${net_pnl_sold:,.2f}. Remaining: {quantity_remaining:.8f} BTC")
-            
-
-            sell_successful = self.account_manager.update_on_sell(quantity_btc=quantity_to_sell, current_price=current_price)
-
-            if not sell_successful:
-                self.logger.error(f"A ordem de venda para o trade {trade_id} falhou. O trade não será atualizado no DB.")
-                continue
-
-            decision_data = position.get('decision_data', {})
-            decision_data['partially_closed'] = True
-            decision_data['last_partial_close_ts'] = datetime.now(timezone.utc).isoformat()
-
-            total_realized_pnl = position.get('realized_pnl_usdt', 0.0) + net_pnl_sold
-
-            # --- MUDANÇA ESTRATÉGICA ---
-            # O trade é considerado 'FECHADO' para o bot após a venda parcial.
-            # O BTC restante se torna parte do 'tesouro' e não será mais gerenciado.
-            status = "CLOSED"
-
-            update_trade_data = {
-                "trade_id": trade_id,
-                "status": status,  # Agora o status é sempre FECHADO aqui.
-                "entry_price": entry_price,
-                "quantity_btc": quantity_remaining,  # Registra os 10% restantes.
-                "realized_pnl_usdt": total_realized_pnl,
-                "timestamp": datetime.now(timezone.utc),
-                "decision_data": decision_data
-            }
-            self.db_manager.write_trade(update_trade_data)
-
-            summary = {
-                'entry_price': entry_price,
-                'exit_price': current_price,
-                'quantity_btc_sold': quantity_to_sell,      
-                'quantity_btc_remaining': quantity_remaining, 
-                'pnl_usdt': net_pnl_sold,
-                'exit_reason': 'TAKE_PROFIT_PARTIAL'
-            }
-            closed_trades_summaries.append(summary)
 
         return closed_trades_summaries
     

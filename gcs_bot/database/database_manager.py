@@ -1,6 +1,7 @@
 # src/database_manager.py (VERSÃO FINAL COMPATÍVEL)
 
 import json
+from typing import Optional
 import numpy as np
 import pandas as pd
 from influxdb_client import InfluxDBClient, Point
@@ -96,6 +97,49 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Falha ao buscar posições abertas do DB: {e}", exc_info=True)
             return pd.DataFrame()
+
+    def get_trade_by_id(self, trade_id: str) -> Optional[pd.Series]:
+        """Busca um único trade pelo seu trade_id."""
+        try:
+            # Uma consulta mais direcionada para buscar o estado mais recente de um único trade.
+            query = f'''
+            from(bucket: "{self.bucket}")
+                |> range(start: -90d) // Range amplo para garantir que encontramos o trade
+                |> filter(fn: (r) => r._measurement == "trades")
+                |> filter(fn: (r) => r.trade_id == "{trade_id}")
+                |> sort(columns: ["_time"], desc: true) // Pega o registro mais recente para esse ID
+                |> limit(n: 1)
+                |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+            '''
+            df = self.query_api.query_data_frame(query, org=self.org)
+            if isinstance(df, list): df = pd.concat(df, ignore_index=True) if df else pd.DataFrame()
+            if df.empty:
+                logger.warning(f"Nenhum trade encontrado com o ID: {trade_id}")
+                return None
+
+            # Renomeia e limpa colunas
+            df = df.rename(columns={"_time": "timestamp"})
+            cols_to_drop = ['result', 'table', '_start', '_stop', '_measurement', 'trade_id'] # trade_id já temos
+            df.drop(columns=[col for col in cols_to_drop if col in df.columns], inplace=True, errors='ignore')
+
+            # Garante tipos numéricos corretos
+            numeric_cols = ['entry_price', 'profit_target_price', 'stop_loss_price', 'quantity_btc', 'realized_pnl_usdt', 'final_confidence']
+            for col in numeric_cols:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+
+            # Desserializa o JSON de decision_data
+            if 'decision_data' in df.columns and isinstance(df['decision_data'].iloc[0], str):
+                df['decision_data'] = df['decision_data'].apply(json.loads)
+
+            # Retorna a primeira (e única) linha como uma Series
+            trade_series = df.iloc[0]
+            trade_series.name = trade_id # Define o nome da Series como o trade_id
+            return trade_series
+
+        except Exception as e:
+            logger.error(f"Falha ao buscar trade pelo ID '{trade_id}': {e}", exc_info=True)
+            return None
 
     def get_all_trades_in_range(self, start_date: str = "-90d", end_date: str = "now()"):
         """Busca todos os trades (abertos e fechados) em um determinado período."""
