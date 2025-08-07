@@ -1,6 +1,7 @@
 # src/database_manager.py (VERSÃO FINAL COMPATÍVEL)
 
 import json
+import logging
 import uuid
 from typing import Optional
 import numpy as np
@@ -12,15 +13,61 @@ from jules_bot.utils.config_manager import settings
 from jules_bot.utils.logger import logger
 
 class DatabaseManager:
-    def __init__(self, execution_mode: Optional[str] = None):
-        self.url = settings.database.url
-        self.token = settings.database.token
-        self.org = settings.database.org
-        self.bucket = settings.database.bucket
+    def __init__(self, execution_mode: Optional[str] = "trade"):
+        self.url = settings.influxdb_connection.url
+        self.token = settings.influxdb_connection.token
+        self.org = settings.influxdb_connection.org
         self.mode = execution_mode
+
+        if self.mode == "trade":
+            self.bucket = settings.influxdb_trade.bucket
+        elif self.mode == "test":
+            self.bucket = settings.influxdb_test.bucket
+        elif self.mode == "backtest":
+            self.bucket = settings.influxdb_backtest.bucket
+        else:
+            # Fallback to trade bucket if mode is not set or invalid
+            self.bucket = settings.influxdb_trade.bucket
+            logger.warning(f"Invalid or no execution mode provided. Falling back to trade bucket: {self.bucket}")
+
+
         self._client = InfluxDBClient(url=self.url, token=self.token, org=self.org, timeout=30_000)
         self.query_api = self._client.query_api()
         self.write_api = self._client.write_api(write_options=SYNCHRONOUS)
+
+    def write_bot_status(self, bot_id: str, mode: str, status_data: dict):
+        """Writes a single point representing the current operational status of the bot."""
+        try:
+            point = Point("bot_status") \
+                .tag("bot_id", bot_id) \
+                .tag("mode", mode) \
+                .field("is_running", status_data.get("is_running", False)) \
+                .field("session_pnl_usd", float(status_data.get("session_pnl_usd", 0.0))) \
+                .field("session_pnl_percent", float(status_data.get("session_pnl_percent", 0.0))) \
+                .field("open_positions", int(status_data.get("open_positions", 0))) \
+                .field("portfolio_value_usd", float(status_data.get("portfolio_value_usd", 0.0)))
+            self.write_api.write(bucket=self.bucket, org=self.org, record=point)
+        except Exception as e:
+            logging.error(f"Failed to write bot status to InfluxDB: {e}")
+
+    def open_trade(self, trade_data: dict):
+        """Writes a new trade with status OPEN to the 'trades' measurement."""
+        try:
+            point = Point("trades") \
+                .tag("bot_id", trade_data.get("bot_id")) \
+                .tag("mode", trade_data.get("mode")) \
+                .tag("symbol", trade_data.get("symbol")) \
+                .tag("strategy", trade_data.get("strategy")) \
+                .tag("trade_id", trade_data.get("trade_id")) \
+                .field("trade_type", "BUY") \
+                .field("status", "OPEN") \
+                .field("entry_price", float(trade_data.get("entry_price", 0.0))) \
+                .field("quantity", float(trade_data.get("quantity", 0.0))) \
+                .field("usd_value", float(trade_data.get("usd_value", 0.0))) \
+                .field("commission", float(trade_data.get("commission", 0.0)))
+            self.write_api.write(bucket=self.bucket, org=self.org, record=point)
+        except Exception as e:
+            logging.error(f"Failed to write open trade to InfluxDB: {e}")
 
     def close_client(self):
         """Closes the InfluxDB client."""

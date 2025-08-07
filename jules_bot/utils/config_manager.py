@@ -8,15 +8,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # --- Modelos para o .env ---
 # Esta seção está correta. O Pydantic irá ler o .env e popular estes modelos.
-class InfluxDBConfig(BaseSettings):
-    # Procura por um ficheiro .env e carrega as variáveis
-    model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', extra='ignore')
-    
-    url: str = Field(..., alias='INFLUXDB_URL')
-    token: str = Field(..., alias='INFLUXDB_TOKEN')
-    org: str = Field(..., alias='INFLUXDB_ORG')
-    bucket: str = Field(..., alias='INFLUXDB_BUCKET')
-
 class ApiKeysConfig(BaseSettings):
     # Procura por um ficheiro .env e carrega as variáveis
     model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', extra='ignore')
@@ -28,7 +19,14 @@ class ApiKeysConfig(BaseSettings):
 
 
 # --- Modelos para o config.yml ---
-# Toda esta seção está perfeita e não precisa de alterações.
+class InfluxDBConnectionConfig(BaseModel):
+    url: str
+    token: str
+    org: str
+
+class InfluxDBBucketConfig(BaseModel):
+    bucket: str
+
 class AppConfig(BaseModel):
     execution_mode: str = "trade" # Default value, will be overridden by command line
     use_testnet: bool
@@ -99,10 +97,13 @@ class Settings(BaseModel):
     """
     # 1. Estas configurações serão preenchidas PRIMEIRO a partir do .env
     #    graças aos modelos BaseSettings que definimos acima.
-    database: InfluxDBConfig = InfluxDBConfig()
     api_keys: ApiKeysConfig = ApiKeysConfig()
     
     # 2. Estas configurações serão preenchidas a partir do config.yml
+    influxdb_connection: InfluxDBConnectionConfig
+    influxdb_trade: InfluxDBBucketConfig
+    influxdb_test: InfluxDBBucketConfig
+    influxdb_backtest: InfluxDBBucketConfig
     app: AppConfig
     data_paths: DataPathsConfig
     data_pipeline: DataPipelineConfig

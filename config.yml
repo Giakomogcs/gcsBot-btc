@@ -1,11 +1,22 @@
 # config.yml (VERSÃO CORRIGIDA)
 
-database:
-  influxdb:
-    url: "http://db:8086"
-    token: "my-super-secret-auth-token"
-    org: "gcsbot_org"
-    bucket: "btc_data"
+# Common connection details
+influxdb_connection:
+  url: "http://db:8086"
+  token: "YOUR_INFLUXDB_API_TOKEN"
+  org: "gcsbot_org"
+
+# Per-mode configurations that specify the target bucket.
+# These buckets MUST exist in your InfluxDB instance.
+influxdb_trade:
+  bucket: "jules_bot_trade_v1"
+
+influxdb_test:
+  bucket: "jules_bot_test_v1" # For paper trading
+
+influxdb_backtest:
+  bucket: "jules_bot_backtest_v1" # For historical simulation data
+
 
 # Configurações do backtest (parâmetros da simulação)
 backtest:
