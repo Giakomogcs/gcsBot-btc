@@ -30,6 +30,7 @@ numba
 pandas_ta # Sem versão para instalar a mais recente e compatível
 
 # --- Config & Utilities ---
+python-daemon
 typer
 pydantic
 pydantic-settings
