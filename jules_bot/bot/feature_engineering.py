@@ -1,12 +1,12 @@
-# gcs_bot/data/feature_engineering.py (VERSÃO FINAL E FLEXÍVEL)
+# jules_bot/bot/feature_engineering.py (VERSÃO FINAL E FLEXÍVEL)
 
 import pandas as pd
 import numpy as np
 import pandas_ta as ta
 from tqdm import tqdm
 
-from gcs_bot.utils.logger import logger
-from gcs_bot.utils.config_manager import settings
+from jules_bot.utils.logger import logger
+from jules_bot.utils.config_manager import settings
 
 def add_all_features(df: pd.DataFrame, live_mode: bool = False) -> pd.DataFrame:
     """

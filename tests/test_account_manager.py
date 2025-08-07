@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 # Add project root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from gcs_bot.core.account_manager import AccountManager
+from jules_bot.bot.account_manager import AccountManager
 from binance.exceptions import BinanceAPIException
 
 @pytest.fixture
@@ -17,7 +17,7 @@ def mock_binance_client():
 @pytest.fixture
 def account_manager(mock_binance_client):
     """Pytest fixture for AccountManager with a mocked client."""
-    with patch('gcs_bot.utils.config_manager.settings') as mock_settings:
+    with patch('jules_bot.utils.config_manager.settings') as mock_settings:
         mock_settings.app.symbol = 'BTCUSDT'
         mock_settings.app.force_offline_mode = False
         return AccountManager(binance_client=mock_binance_client)

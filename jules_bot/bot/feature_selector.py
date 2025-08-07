@@ -2,7 +2,7 @@
 
 import pandas as pd
 from sklearn.feature_selection import SelectKBest, f_classif
-from gcs_bot.utils.logger import logger
+from jules_bot.utils.logger import logger
 
 class FeatureSelector:
     def __init__(self, k=10):

@@ -9,7 +9,7 @@ import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from gcs_bot.core.position_manager import PositionManager
+from jules_bot.bot.position_manager import PositionManager
 
 # --- Fixtures ---
 

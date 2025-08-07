@@ -185,10 +185,10 @@ def main():
     elif command == "reset-trades": run_script_in_container("scripts/db_utils.py", "trades")
     elif command == "reset-sentiment": run_script_in_container("scripts/db_utils.py", "sentiment_fear_and_greed")
     elif command == "show-trading":
-        from gcs_bot.core.display_manager import display_trading_dashboard
+        from jules_bot.ui.display_manager import display_trading_dashboard
         show_display(TRADING_STATUS_FILE, display_trading_dashboard, "Trading Bot")
     elif command == "show-optimizer":
-        from gcs_bot.core.display_manager import display_optimization_dashboard
+        from jules_bot.ui.display_manager import display_optimization_dashboard
         show_display(OPTIMIZER_STATUS_FILE, display_optimization_dashboard, "Optimizer")
     elif command == "logs": run_command("docker-compose logs -f app") # Alterado
     elif command == "analyze": run_script_in_container("scripts/analyze_results.py")

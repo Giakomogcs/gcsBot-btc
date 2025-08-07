@@ -1,8 +1,8 @@
 # Ficheiro: main.py (VERSÃO FINAL REATORADA)
 
 import sys
-from gcs_bot.utils.logger import logger
-from gcs_bot.core.trading_bot import TradingBot
+from jules_bot.utils.logger import logger
+from jules_bot.bot.trading_bot import TradingBot
 
 def main():
     """

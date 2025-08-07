@@ -20,11 +20,11 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from gcs_bot.utils.config_manager import settings
-from gcs_bot.database.database_manager import db_manager
-from gcs_bot.utils.logger import logger
-from gcs_bot.data.feature_engineering import add_all_features
-from gcs_bot.core.situational_awareness import SituationalAwareness
+from jules_bot.utils.config_manager import settings
+from jules_bot.database.database_manager import db_manager
+from jules_bot.utils.logger import logger
+from jules_bot.bot.feature_engineering import add_all_features
+from jules_bot.bot.situational_awareness import SituationalAwareness
 
 class DataPipeline:
     def __init__(self):

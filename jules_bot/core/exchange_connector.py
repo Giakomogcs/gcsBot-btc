@@ -2,8 +2,8 @@
 
 from binance.client import Client
 from binance.exceptions import BinanceAPIException, BinanceRequestException
-from gcs_bot.utils.config_manager import settings
-from gcs_bot.utils.logger import logger
+from jules_bot.utils.config_manager import settings
+from jules_bot.utils.logger import logger
 from typing import Optional, Union
 import pandas as pd
 import time

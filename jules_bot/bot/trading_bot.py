@@ -10,15 +10,15 @@ import json
 import os
 from typing import Any
 
-from gcs_bot.utils.logger import logger
-from gcs_bot.utils.config_manager import settings
-from gcs_bot.core.position_manager import PositionManager
-from gcs_bot.core.exchange_manager import ExchangeManager
-from gcs_bot.core.account_manager import AccountManager
-from gcs_bot.database.database_manager import db_manager
-from gcs_bot.data.data_manager import DataManager
+from jules_bot.utils.logger import logger
+from jules_bot.utils.config_manager import settings
+from jules_bot.bot.position_manager import PositionManager
+from jules_bot.core.exchange_connector import ExchangeManager
+from jules_bot.bot.account_manager import AccountManager
+from jules_bot.database.database_manager import db_manager
+from jules_bot.database.data_manager import DataManager
 # --- NOVA IMPORTAÇÃO ESSENCIAL ---
-from gcs_bot.core.live_feature_calculator import LiveFeatureCalculator
+from jules_bot.bot.live_feature_calculator import LiveFeatureCalculator
 
 class TradingBot:
     """

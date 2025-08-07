@@ -1,15 +1,15 @@
-# gcs_bot/core/live_feature_calculator.py (VERSÃO CORRIGIDA)
+# jules_bot/bot/live_feature_calculator.py (VERSÃO CORRIGIDA)
 
 import pandas as pd
 import requests
 from datetime import datetime, timedelta
 
-from gcs_bot.utils.logger import logger
+from jules_bot.utils.logger import logger
 # --- IMPORTAÇÃO CORRIGIDA ---
-from gcs_bot.utils.config_manager import settings 
-from gcs_bot.core.exchange_manager import ExchangeManager
-from gcs_bot.data.data_manager import DataManager
-from gcs_bot.data.feature_engineering import add_all_features
+from jules_bot.utils.config_manager import settings
+from jules_bot.core.exchange_connector import ExchangeManager
+from jules_bot.database.data_manager import DataManager
+from jules_bot.bot.feature_engineering import add_all_features
 
 class LiveFeatureCalculator:
     """

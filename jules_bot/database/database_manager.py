@@ -6,8 +6,8 @@ import numpy as np
 import pandas as pd
 from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import SYNCHRONOUS
-from gcs_bot.utils.config_manager import settings
-from gcs_bot.utils.logger import logger
+from jules_bot.utils.config_manager import settings
+from jules_bot.utils.logger import logger
 
 class DatabaseManager:
     def __init__(self):

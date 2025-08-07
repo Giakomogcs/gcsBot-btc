@@ -14,7 +14,7 @@ project_root = os.path.dirname(script_dir)
 # Adiciona o diretório raiz ao sys.path
 sys.path.append(project_root)
 
-from gcs_bot.database.database_manager import db_manager
+from jules_bot.database.database_manager import db_manager
 
 def analyze_confidence_performance():
     """

@@ -122,7 +122,7 @@ The dashboard includes:
 
 The project is organized into a clean, professional, and scalable structure.
 *   **`run.py`**: The main command-line interface (CLI).
-*   **`gcs_bot/`**: The main Python package.
+*   **`jules_bot/`**: The main Python package.
     *   **`core/`**: The bot's brain, containing the logic for trading, position management, and exchange interaction.
     *   **`database/`**: Manages all interactions with the InfluxDB database.
     *   **`utils/`**: Shared utilities for configuration and logging.

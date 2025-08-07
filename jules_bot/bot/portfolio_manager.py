@@ -1,6 +1,6 @@
 # src/core/portfolio_manager.py (NOVO ARQUIVO)
 
-from gcs_bot.utils.logger import logger
+from jules_bot.utils.logger import logger
 
 class PortfolioManager:
     """Gestor de portfólio para simulação e tracking de capital."""

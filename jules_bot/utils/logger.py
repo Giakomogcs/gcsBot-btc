@@ -39,7 +39,7 @@ logger.setLevel(logging.DEBUG)
 
 if not logger.handlers:
     # 1. Handler para o ARQUIVO DE DEBUG (gcs_bot.log)
-    log_file_path = os.path.join(LOGS_DIR, 'gcs_bot.log')
+    log_file_path = os.path.join(LOGS_DIR, 'jules_bot.log')
     file_handler = TimedRotatingFileHandler(log_file_path, when="midnight", interval=1, backupCount=14, encoding='utf-8')
     file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     file_handler.setFormatter(file_formatter)
