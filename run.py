@@ -42,8 +42,8 @@ def start_bot(mode: str):
     check_docker_running()
     print_color(f"--- Starting Bot in {mode.upper()} mode... ---", "yellow")
     
-    # O comando agora é uma lista de argumentos, o que é mais seguro
-    command_args = ["docker", "compose", "up", "-d", "--build", "app"]
+    # O comando agora usa 'docker-compose' com hífen
+    command_args = ["docker-compose", "up", "-d", "--build", "app"]
     
     # Cria uma cópia do ambiente atual e adiciona nossa variável
     bot_env = os.environ.copy()
@@ -68,9 +68,9 @@ def setup():
     """Builds and starts the Docker services, including initial data population."""
     check_docker_running()
     print_color("--- Building Docker images (this may take a while)...", "yellow")
-    run_command("docker compose build", check=True)
+    run_command("docker-compose build", check=True) # Alterado
     print_color("--- Starting services in the background (db, etc.)...", "yellow")
-    run_command("docker compose up -d", check=True)
+    run_command("docker-compose up -d", check=True) # Alterado
 
     print_color("--- Waiting for services to be ready before populating DB...", "yellow")
     time.sleep(10) # Dá um tempo para o InfluxDB iniciar completamente
@@ -85,33 +85,34 @@ def start_services():
     """Starts the Docker services."""
     check_docker_running()
     print_color("--- Starting services...", "yellow")
-    run_command("docker compose up -d", check=True)
+    run_command("docker-compose up -d", check=True) # Alterado
 
 def stop_services():
     """Stops the Docker services."""
     check_docker_running()
     print_color("--- Stopping services...", "yellow")
-    run_command("docker compose down", check=True)
+    run_command("docker-compose down", check=True) # Alterado
 
 def reset_db():
     """Stops the services and resets the database volume."""
     check_docker_running()
     print_color("--- STOPPING AND RESETTING DOCKER ENVIRONMENT ---", "red")
-    run_command("docker compose down", check=True)
+    run_command("docker-compose down", check=True) # Alterado
     print_color("--- REMOVING OLD INFLUXDB DATA VOLUME ---", "red")
+    # Este comando 'docker volume' não precisa de alteração
     run_command("docker volume rm gcsbot-btc_influxdb_data", check=True)
     print_color("--- Reset complete. Use 'start-services' to begin again. ---", "green")
 
 def run_script_in_container(script_path, *args):
     """Generic function to run a Python script inside the 'app' container."""
     check_docker_running()
-    command = f"docker compose exec app python {script_path} {' '.join(args)}"
+    command = f"docker-compose exec app python {script_path} {' '.join(args)}" # Alterado
     run_command(command)
 
 
 def show_display(status_file, dashboard_func, name):
     """Generic function to show a dashboard by reading a status file."""
-    result = run_command("docker compose ps -q app", capture_output=True)
+    result = run_command("docker-compose ps -q app", capture_output=True) # Alterado
     if not result.stdout.strip():
         print_color(f"The '{name}' container 'app' is not running.", "red")
         return
@@ -189,7 +190,7 @@ def main():
     elif command == "show-optimizer":
         from gcs_bot.core.display_manager import display_optimization_dashboard
         show_display(OPTIMIZER_STATUS_FILE, display_optimization_dashboard, "Optimizer")
-    elif command == "logs": run_command("docker compose logs -f app")
+    elif command == "logs": run_command("docker-compose logs -f app") # Alterado
     elif command == "analyze": run_script_in_container("scripts/analyze_results.py")
     elif command == "analyze-decision": run_script_in_container("scripts/analyze_decision.py", *args)
     elif command == "run-tests": run_script_in_container("pytest")

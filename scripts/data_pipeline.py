@@ -411,6 +411,10 @@ class DataPipeline:
             df_combined = pd.concat(all_dfs)
             df_combined = df_combined[~df_combined.index.duplicated(keep='last')]
             df_combined.sort_index(inplace=True)
+            
+            # Garante que o diretório de destino exista antes de salvar o ficheiro
+            os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+            
             df_combined.to_csv(csv_path)
             logger.info(f"✅ CSV de histórico do BTC atualizado com {len(df_combined)} registros em {csv_path}")
         else:
@@ -574,6 +578,10 @@ class DataPipeline:
         sa_model.fit(df_with_features)
         
         model_path = os.path.join(settings.data_paths.models_dir, 'situational_awareness.joblib')
+
+        # Adicione esta verificação aqui também
+        os.makedirs(os.path.dirname(model_path), exist_ok=True) 
+
         sa_model.save_model(model_path)
         return True # Retorna sucesso
 

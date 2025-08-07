@@ -9,7 +9,7 @@ database:
 
 # Configurações do backtest (parâmetros da simulação)
 backtest:
-  start_date: "-1d"
+  start_date: "-10d"
   initial_capital: 100
   commission_rate: 0.001
 
@@ -26,6 +26,7 @@ data_paths:
   models_dir: "data/models"
 
 # Configurações do pipeline de dados
+
 data_pipeline:
   start_date_ingestion: "2023-01-01"
   # --- INÍCIO DA CORREÇÃO DOS NOMES DAS FEATURES ---
@@ -79,7 +80,7 @@ trading_strategy:
     market_dynamics: 0.4
     intermarket_analyst: 0.2
   minimum_profit_for_take_profit: 0.01 # Garante pelo menos 1 centavo de lucro
-  partial_sell_percent: 100.0 # Vende 100% no take-profit para análise
+  partial_sell_percent: 90.0 # Vende 90% no take-profit para análise
 
   # --- NOVA ESTRATÉGIA DE TAKE PROFIT DINÂMICO ---
   dynamic_take_profit:
