@@ -35,5 +35,11 @@ class ConfigManager:
         """
         return self.config.get(section, key, fallback=fallback)
 
+    def getboolean(self, section: str, key: str, fallback: bool = None) -> bool:
+        """
+        Retrieves a specific key from a section as a boolean.
+        """
+        return self.config.getboolean(section, key, fallback=fallback)
+
 # Instantiate the config manager for global use
 config_manager = ConfigManager()

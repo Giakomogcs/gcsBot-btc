@@ -9,7 +9,6 @@ import pandas as pd
 from influxdb_client import InfluxDBClient, Point
 from datetime import datetime, timezone
 from influxdb_client.client.write_api import SYNCHRONOUS
-from jules_bot.utils.config_manager import settings
 from jules_bot.utils.logger import logger
 
 class DatabaseManager:

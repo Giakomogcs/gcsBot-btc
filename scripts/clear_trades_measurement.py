@@ -9,7 +9,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from jules_bot.utils.logger import logger
-from jules_bot.utils.config_manager import settings
+from jules_bot.utils.config_manager import config_manager
 from jules_bot.database.database_manager import DatabaseManager
 
 def main(environment: str):
@@ -19,7 +19,13 @@ def main(environment: str):
         # A instanciação do DatabaseManager não é estritamente necessária aqui,
         # pois usamos o _client diretamente, mas é bom para consistência.
         # No futuro, o método de delete pode ser movido para dentro da classe.
-        db_manager = DatabaseManager(execution_mode=environment)
+        db_config = config_manager.get_section('INFLUXDB')
+        if environment == 'test':
+            db_config['bucket'] = 'jules_bot_test_v1'
+        elif environment == 'backtest':
+            db_config['bucket'] = 'jules_bot_backtest_v1'
+        db_manager = DatabaseManager(config=db_config)
+
 
         start = "1970-01-01T00:00:00Z"
         stop = pd.Timestamp.now(tz='UTC').isoformat()
@@ -27,8 +33,8 @@ def main(environment: str):
         # PREDICADO DE EXCLUSÃO: Agora inclui o ambiente para segurança.
         predicate = f'_measurement="trades" AND environment="{environment}"'
 
-        logger.info(f"Excluindo dados com o predicado: '{predicate}' do bucket '{settings.database.bucket}'...")
-        db_manager._client.delete_api().delete(start, stop, predicate, bucket=settings.database.bucket, org=settings.database.org)
+        logger.info(f"Excluindo dados com o predicado: '{predicate}' do bucket '{db_config['bucket']}'...")
+        db_manager._client.delete_api().delete(start, stop, predicate, bucket=db_config['bucket'], org=db_config['org'])
         logger.info(f"✅ Medição 'trades' do ambiente '{environment}' limpa com sucesso.")
 
     except Exception as e:

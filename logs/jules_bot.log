@@ -3199,3 +3199,205 @@ AttributeError: 'DatabaseManager' object has no attribute 'clear_all_trades'
 2025-08-07 19:35:16,884 - gcsBot - ERROR - Não foi possível obter o preço atual. A saltar ciclo.
 2025-08-07 19:35:26,885 - gcsBot - WARNING - Cliente Binance não inicializado. Não é possível buscar o preço.
 2025-08-07 19:35:26,886 - gcsBot - ERROR - Não foi possível obter o preço atual. A saltar ciclo.
+2025-08-07 23:35:28,343 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-07 23:35:28,358 - gcsBot - INFO - Initializing CorePriceCollector...
+2025-08-07 23:35:49,709 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-07 23:35:49,710 - gcsBot - INFO - Initializing CorePriceCollector...
+2025-08-07 23:35:49,799 - gcsBot - ERROR - Failed to connect to Binance: APIError(code=0): Service unavailable from a restricted location according to 'b. Eligibility' in https://www.binance.com/en/terms. Please contact customer service if you believe you received this message in error.
+Traceback (most recent call last):
+  File "/app/collectors/core_price_collector.py", line 46, in _init_binance_client
+    client = Client(api_key, api_secret, tld='com', testnet=use_testnet)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/binance/client.py", line 51, in __init__
+    self.ping()
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/binance/client.py", line 344, in ping
+    return self._get("ping", version=self.PRIVATE_API_VERSION)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/binance/client.py", line 180, in _get
+    return self._request_api("get", path, signed, version, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/binance/client.py", line 117, in _request_api
+    return self._request(method, uri, signed, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/binance/client.py", line 89, in _request
+    return self._handle_response(self.response)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/binance/client.py", line 98, in _handle_response
+    raise BinanceAPIException(response, response.status_code, response.text)
+binance.exceptions.BinanceAPIException: APIError(code=0): Service unavailable from a restricted location according to 'b. Eligibility' in https://www.binance.com/en/terms. Please contact customer service if you believe you received this message in error.
+2025-08-07 23:36:35,656 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-07 23:36:35,657 - gcsBot - INFO - Initializing CorePriceCollector...
+2025-08-07 23:36:35,683 - gcsBot - WARNING - Force offline mode is enabled. Binance client will not be initialized.
+2025-08-07 23:36:35,683 - gcsBot - INFO - --- Starting price collection ---
+2025-08-07 23:36:35,683 - gcsBot - INFO - Querying last timestamp from measurement 'btc_prices'...
+2025-08-07 23:36:35,701 - gcsBot - ERROR - Error querying last timestamp from InfluxDB: <urllib3.connection.HTTPConnection object at 0x7fc2ad57db20>: Failed to resolve 'db' ([Errno -2] Name or service not known)
+Traceback (most recent call last):
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/connection.py", line 198, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/util/connection.py", line 60, in create_connection
+    for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/socket.py", line 978, in getaddrinfo
+    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+socket.gaierror: [Errno -2] Name or service not known
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/app/collectors/core_price_collector.py", line 86, in _query_last_timestamp
+    result = query_api.query(query)
+             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/influxdb_client/client/query_api.py", line 203, in query
+    response = self._query_api.post_query(org=org, query=self._create_query(query, self.default_dialect, params),
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/influxdb_client/service/query_service.py", line 285, in post_query
+    (data) = self.post_query_with_http_info(**kwargs)  # noqa: E501
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/influxdb_client/service/query_service.py", line 311, in post_query_with_http_info
+    return self.api_client.call_api(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/influxdb_client/_sync/api_client.py", line 343, in call_api
+    return self.__call_api(resource_path, method,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/influxdb_client/_sync/api_client.py", line 173, in __call_api
+    response_data = self.request(
+                    ^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/influxdb_client/_sync/api_client.py", line 388, in request
+    return self.rest_client.POST(url,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/influxdb_client/_sync/rest.py", line 311, in POST
+    return self.request("POST", url,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/influxdb_client/_sync/rest.py", line 186, in request
+    r = self.pool_manager.request(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/_request_methods.py", line 143, in request
+    return self.request_encode_body(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/_request_methods.py", line 278, in request_encode_body
+    return self.urlopen(method, url, **extra_kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/poolmanager.py", line 459, in urlopen
+    response = conn.urlopen(method, u.request_uri, **kw)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/util/retry.py", line 449, in increment
+    raise reraise(type(error), error, _stacktrace)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/util/util.py", line 39, in reraise
+    raise value
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/connectionpool.py", line 493, in _make_request
+    conn.request(
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/connection.py", line 494, in request
+    self.endheaders()
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/http/client.py", line 1333, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/http/client.py", line 1093, in _send_output
+    self.send(msg)
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/http/client.py", line 1037, in send
+    self.connect()
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/connection.py", line 325, in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/connection.py", line 205, in _new_conn
+    raise NameResolutionError(self.host, self, e) from e
+urllib3.exceptions.NameResolutionError: <urllib3.connection.HTTPConnection object at 0x7fc2ad57db20>: Failed to resolve 'db' ([Errno -2] Name or service not known)
+2025-08-07 23:36:35,717 - gcsBot - INFO - No existing data. Starting collection from 2023-01-01.
+2025-08-07 23:36:35,717 - gcsBot - INFO - Fetching OHLCV data for BTCUSDT from 2023-01-01 00:00:00+00:00 to 2025-08-07 23:36:35.717477+00:00...
+2025-08-07 23:36:35,717 - gcsBot - WARNING - Binance client not initialized. Cannot fetch historical klines.
+2025-08-07 23:36:35,718 - gcsBot - INFO - --- Price collection finished ---
+2025-08-07 23:36:54,692 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-07 23:36:54,693 - gcsBot - INFO - Initializing CorePriceCollector...
+2025-08-07 23:36:54,698 - gcsBot - WARNING - Force offline mode is enabled. Binance client will not be initialized.
+2025-08-07 23:36:54,698 - gcsBot - INFO - --- Starting price collection ---
+2025-08-07 23:36:54,698 - gcsBot - INFO - Querying last timestamp from measurement 'btc_prices'...
+2025-08-07 23:36:54,702 - gcsBot - ERROR - Error querying last timestamp from InfluxDB: <urllib3.connection.HTTPConnection object at 0x7f157bf91430>: Failed to establish a new connection: [Errno 111] Connection refused
+Traceback (most recent call last):
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/connection.py", line 198, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/util/connection.py", line 85, in create_connection
+    raise err
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/util/connection.py", line 73, in create_connection
+    sock.connect(sa)
+ConnectionRefusedError: [Errno 111] Connection refused
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/app/collectors/core_price_collector.py", line 86, in _query_last_timestamp
+    result = query_api.query(query)
+             ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/influxdb_client/client/query_api.py", line 203, in query
+    response = self._query_api.post_query(org=org, query=self._create_query(query, self.default_dialect, params),
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/influxdb_client/service/query_service.py", line 285, in post_query
+    (data) = self.post_query_with_http_info(**kwargs)  # noqa: E501
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/influxdb_client/service/query_service.py", line 311, in post_query_with_http_info
+    return self.api_client.call_api(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/influxdb_client/_sync/api_client.py", line 343, in call_api
+    return self.__call_api(resource_path, method,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/influxdb_client/_sync/api_client.py", line 173, in __call_api
+    response_data = self.request(
+                    ^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/influxdb_client/_sync/api_client.py", line 388, in request
+    return self.rest_client.POST(url,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/influxdb_client/_sync/rest.py", line 311, in POST
+    return self.request("POST", url,
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/influxdb_client/_sync/rest.py", line 186, in request
+    r = self.pool_manager.request(
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/_request_methods.py", line 143, in request
+    return self.request_encode_body(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/_request_methods.py", line 278, in request_encode_body
+    return self.urlopen(method, url, **extra_kw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/poolmanager.py", line 459, in urlopen
+    response = conn.urlopen(method, u.request_uri, **kw)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/util/retry.py", line 449, in increment
+    raise reraise(type(error), error, _stacktrace)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/util/util.py", line 39, in reraise
+    raise value
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/connectionpool.py", line 493, in _make_request
+    conn.request(
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/connection.py", line 494, in request
+    self.endheaders()
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/http/client.py", line 1333, in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/http/client.py", line 1093, in _send_output
+    self.send(msg)
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/http/client.py", line 1037, in send
+    self.connect()
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/connection.py", line 325, in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/urllib3/connection.py", line 213, in _new_conn
+    raise NewConnectionError(
+urllib3.exceptions.NewConnectionError: <urllib3.connection.HTTPConnection object at 0x7f157bf91430>: Failed to establish a new connection: [Errno 111] Connection refused
+2025-08-07 23:36:54,710 - gcsBot - INFO - No existing data. Starting collection from 2023-01-01.
+2025-08-07 23:36:54,710 - gcsBot - INFO - Fetching OHLCV data for BTCUSDT from 2023-01-01 00:00:00+00:00 to 2025-08-07 23:36:54.710233+00:00...
+2025-08-07 23:36:54,710 - gcsBot - WARNING - Binance client not initialized. Cannot fetch historical klines.
+2025-08-07 23:36:54,711 - gcsBot - INFO - --- Price collection finished ---
+2025-08-07 23:37:06,694 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-07 23:37:18,494 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
