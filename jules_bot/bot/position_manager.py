@@ -19,7 +19,7 @@ class PositionManager:
 
         self.profit_target_mult = self.strategy_config.triple_barrier.profit_mult
         self.stop_loss_mult = self.strategy_config.triple_barrier.stop_mult
-        
+
         # --- NOVOS PARÂMETROS ESTRATÉGICOS ---
         self.dca_grid_spacing_percent = self.strategy_config.dca_grid_spacing_percent / 100.0
         self.partial_sell_percent = self.strategy_config.partial_sell_percent / 100.0
@@ -64,7 +64,7 @@ class PositionManager:
             self.performance_factor = self.sizing_config.performance_upscale_factor
         else:
             self.performance_factor = self.sizing_config.performance_downscale_factor
-            
+
     def get_capital_per_trade(self, available_capital: float) -> float:
         self._update_performance_factor()
         base_risk_percent = self.position_config.capital_per_trade_percent / 100
@@ -137,34 +137,6 @@ class PositionManager:
                 self.logger.debug(f"Trade {trade_id} is pending closure, skipping evaluation.")
                 continue
 
-            # Ignore legacy hold positions from all automatic trading logic
-            if position.get('is_legacy_hold', False):
-                self.logger.debug(f"Trade {trade_id} is on Legacy Hold, skipping.")
-                continue
-
-            # --- LEGACY HOLD STRATEGY ---
-            legacy_hold_trigger = self.strategy_config.legacy_hold_trigger_percent / 100.0
-            unrealized_pnl_percent = (current_price - position['entry_price']) / position['entry_price']
-
-            if unrealized_pnl_percent <= legacy_hold_trigger:
-                self.logger.warning(f"LEGACY HOLD TRIGGERED for trade {trade_id} at {unrealized_pnl_percent:.2%} P&L.")
-                update_data = {
-                    "trade_id": trade_id,
-                    "status": "OPEN",
-                    "is_legacy_hold": True,
-                    "entry_price": position['entry_price'],
-                    "profit_target_price": position['profit_target_price'],
-                    "stop_loss_price": position['stop_loss_price'],
-                    "quantity_btc": position['quantity_btc'],
-                    "timestamp": datetime.now(timezone.utc)
-                }
-                try:
-                    self.db_manager.write_trade(update_data)
-                    self.logger.info(f"Trade {trade_id} successfully marked as Legacy Hold.")
-                    continue # Skip further processing for this cycle
-                except Exception as e:
-                    self.logger.error(f"Failed to mark trade {trade_id} as Legacy Hold: {e}", exc_info=True)
-
             # --- LÓGICA DE STOP-LOSS (PRIORIDADE MÁXIMA) ---
             if 'stop_loss_price' in position and pd.notna(position['stop_loss_price']) and current_price <= position['stop_loss_price']:
                 self.logger.info(f"❌ STOP-LOSS ATINGIDO PARA O TRADE {trade_id}:")
@@ -207,6 +179,7 @@ class PositionManager:
                         closed_trades_summaries.append(summary)
                     except Exception as e:
                         self.logger.critical(f"CRÍTICO: A VENDA FOI EXECUTADA, MAS O DB WRITE FALHOU PARA O STOP-LOSS {trade_id}! A posição permanecerá bloqueada nesta sessão.", exc_info=True)
+                        # Do not unlock as per instruction
                 else:
                     self.logger.error(f"A ordem de venda de STOP-LOSS para o trade {trade_id} falhou. Liberando o bloqueio.")
                     self.positions_pending_close.remove(trade_id) # UNLOCK on failure
@@ -214,6 +187,7 @@ class PositionManager:
                 continue
 
             # --- LÓGICA DE TRAILING PROFIT TARGET ---
+            unrealized_pnl_percent = (current_price - position['entry_price']) / position['entry_price']
             if unrealized_pnl_percent >= (trailing_config.activation_percentage / 100.0):
                 new_profit_target = current_price * (1 - (trailing_config.trailing_percentage / 100.0))
                 if new_profit_target > position['profit_target_price']:
@@ -279,7 +253,7 @@ class PositionManager:
             self.logger.info(f"✅ PARTIALLY CLOSING TRADE {trade_id} (TAKE_PROFIT):")
             self.logger.info(f"   Selling {quantity_to_sell:.8f} BTC ({self.partial_sell_percent:.0%}) at ${current_price:,.2f}")
             self.logger.info(f"   Realized PnL: ${net_pnl_sold:,.2f}. Remaining: {quantity_remaining:.8f} BTC")
-            
+
             sell_successful = self.account_manager.update_on_sell(quantity_btc=quantity_to_sell, current_price=current_price)
 
             if not sell_successful:
@@ -291,15 +265,15 @@ class PositionManager:
             decision_data['partially_closed'] = True
             decision_data['last_partial_close_ts'] = datetime.now(timezone.utc).isoformat()
             total_realized_pnl = position.get('realized_pnl_usdt', 0.0) + net_pnl_sold
+            status = "CLOSED"
 
+            update_trade_data = {
+                "trade_id": trade_id, "status": status, "entry_price": entry_price,
+                "quantity_btc": quantity_remaining, "realized_pnl_usdt": total_realized_pnl,
+                "timestamp": datetime.now(timezone.utc), "decision_data": decision_data
+            }
             try:
-                self.db_manager.process_take_profit(
-                    original_trade_id=trade_id,
-                    original_entry_price=entry_price,
-                    total_realized_pnl=total_realized_pnl,
-                    quantity_remaining=quantity_remaining,
-                    decision_data=decision_data
-                )
+                self.db_manager.write_trade(update_trade_data)
                 self.positions_pending_close.remove(trade_id) # UNLOCK
                 summary = {
                     'entry_price': entry_price, 'exit_price': current_price,
@@ -308,10 +282,11 @@ class PositionManager:
                 }
                 closed_trades_summaries.append(summary)
             except Exception as e:
-                self.logger.critical(f"A operação atômica de take-profit para o trade {trade_id} falhou. A posição permanecerá bloqueada nesta sessão.")
+                self.logger.critical(f"CRÍTICO: A VENDA FOI EXECUTADA, MAS O DB WRITE FALHOU PARA O TAKE-PROFIT {trade_id}! A posição permanecerá bloqueada nesta sessão.", exc_info=True)
+                # Do not unlock as per instruction
 
         return closed_trades_summaries
-    
+
     def synchronize_with_exchange(self, recent_exchange_trades: pd.DataFrame, historical_data: pd.DataFrame):
         """
         Compara os trades da corretora com o DB local e "adota" os trades órfãos.
@@ -328,7 +303,7 @@ class PositionManager:
 
         # Filtra apenas por trades de COMPRA
         buy_trades = recent_exchange_trades[recent_exchange_trades['isBuyer']].copy()
-        
+
         trades_to_sync = 0
         for _, exchange_trade in buy_trades.iterrows():
             # Verifica se o trade já foi registrado
@@ -337,7 +312,7 @@ class PositionManager:
 
             trades_to_sync += 1
             self.logger.info(f"Trade órfão detectado: ID Binance {exchange_trade['id']}. Reconstruindo posição...")
-            
+
             trade_timestamp = pd.to_datetime(exchange_trade['time'], unit='ms', utc=True)
             # Encontra a vela mais próxima do momento do trade para obter o ATR
             candle = historical_data.asof(trade_timestamp)
@@ -348,7 +323,7 @@ class PositionManager:
 
             entry_price = float(exchange_trade['price'])
             atr_value = candle['atr_14']
-            
+
             # Recria a posição com a mesma lógica de um trade novo
             trade_data = {
                 "trade_id": str(uuid.uuid4()),
@@ -363,7 +338,7 @@ class PositionManager:
             }
             self.db_manager.write_trade(trade_data)
             self.logger.info(f"✅ Posição para o trade Binance ID {exchange_trade['id']} sincronizada com sucesso.")
-        
+
         if trades_to_sync == 0:
             self.logger.info("Nenhum trade novo para sincronizar. O banco de dados já está alinhado.")
 
@@ -380,16 +355,16 @@ class PositionManager:
 
         if not open_positions.empty:
             total_usdt_balance = self.account_manager.get_quote_asset_balance()
-            
+
             # Calcula o custo total das posições abertas
             open_positions_cost = (open_positions['entry_price'] * open_positions['quantity_btc']).sum()
-            
+
             # Calcula o valor total do portfólio (dinheiro + cripto em risco)
             total_portfolio_value = total_usdt_balance + open_positions_cost
-            
+
             # Calcula a alocação atual
             current_allocation = open_positions_cost / total_portfolio_value
-            
+
             if current_allocation >= self.max_total_capital_allocation_percent:
                 self.logger.info(f"ENTRADA BLOQUEADA: Alocação de capital ({current_allocation:.1%}) atingiu o limite de {self.max_total_capital_allocation_percent:.1%}.")
                 return None # Bloqueia qualquer nova compra
@@ -419,7 +394,7 @@ class PositionManager:
         elif open_trades_count > 0:
             average_entry_price = open_positions['entry_price'].mean()
             price_change_percent = (candle['close'] - average_entry_price) / average_entry_price
-            
+
             # LOG DE DEPURAÇÃO ESSENCIAL
             self.logger.info(
                 f"DCA CHECK | Preço Médio: ${average_entry_price:,.2f} | "

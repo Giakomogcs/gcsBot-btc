@@ -1,7 +1,7 @@
 import pytest
 import pandas as pd
 import uuid
-from unittest.mock import Mock, patch, call
+from unittest.mock import Mock, patch
 from datetime import datetime, timezone
 
 # Add project root to path for imports

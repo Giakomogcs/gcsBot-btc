@@ -32,6 +32,7 @@ class TradingBot:
 
         # --- ETAPA 1: Construção dos Managers ---
         logger.info("Construindo e injetando dependências...")
+        db_manager.set_mode(self.mode)
         exchange_manager = ExchangeManager(mode=self.mode)
         self.account_manager = AccountManager(binance_client=exchange_manager._client)
         data_manager = DataManager(db_manager=db_manager, config=settings, logger=logger)
@@ -309,7 +310,7 @@ class TradingBot:
             logger.error(f"Falha ao atualizar o arquivo de status: {e}", exc_info=True)
 
 
-    def graceful_shutdown(self, signum: int, frame: Any) -> None:
+    def graceful_shutdown(self, _signum: int, _frame: Any) -> None:
         """Encerra o bot de forma segura."""
         logger.warning("🚨 SINAL DE INTERRUPÇÃO RECEBIDO. ENCERRANDO... 🚨")
         self.is_running = False

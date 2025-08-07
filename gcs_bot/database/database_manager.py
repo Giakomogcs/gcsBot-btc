@@ -7,6 +7,8 @@ from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import SYNCHRONOUS
 from gcs_bot.utils.config_manager import settings
 from gcs_bot.utils.logger import logger
+import uuid
+from datetime import datetime, timezone
 
 class DatabaseManager:
     def __init__(self):
@@ -14,10 +16,15 @@ class DatabaseManager:
         self.token = settings.database.token
         self.org = settings.database.org
         self.bucket = settings.database.bucket
+        self.mode = "trade"  # Default mode, will be overwritten
         self._client = InfluxDBClient(url=self.url, token=self.token, org=self.org, timeout=30_000)
-        # Mantemos os métodos antigos para não quebrar o data_pipeline
         self.query_api = self._client.query_api()
         self.write_api = self._client.write_api(write_options=SYNCHRONOUS)
+
+    def set_mode(self, mode: str):
+        """Sets the operational mode to tag database entries."""
+        self.mode = mode
+        logger.info(f"DatabaseManager mode set to '{self.mode}'")
 
     def is_measurement_empty(self, measurement: str) -> bool:
         """Verifica se uma measurement no InfluxDB está vazia."""
@@ -49,12 +56,14 @@ class DatabaseManager:
             point = Point("trades") \
                 .tag("status", trade_data["status"]) \
                 .tag("trade_id", trade_data["trade_id"]) \
+                .tag("environment", self.mode) \
                 .field("entry_price", float(trade_data["entry_price"])) \
                 .field("profit_target_price", float(trade_data.get("profit_target_price", 0.0))) \
                 .field("stop_loss_price", float(trade_data.get("stop_loss_price", 0.0))) \
                 .field("quantity_btc", float(trade_data.get("quantity_btc", 0.0))) \
                 .field("realized_pnl_usdt", float(trade_data.get("realized_pnl_usdt", 0.0))) \
                 .field("final_confidence", float(final_confidence)) \
+                .field("is_legacy_hold", bool(trade_data.get("is_legacy_hold", False))) \
                 .field("decision_data", json.dumps(trade_data.get("decision_data", {}))) \
                 .time(trade_data["timestamp"])
             
@@ -63,6 +72,42 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Falha ao escrever trade no DB: {e}", exc_info=True)
 
+    def process_take_profit(self, original_trade_id, original_entry_price, total_realized_pnl, quantity_remaining, decision_data):
+        """
+        Atomically processes a take-profit event by closing the original trade
+        and creating a new treasured trade for the remainder.
+        """
+        new_treasured_trade_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc)
+
+        # Point 1: Close the original trade
+        point_original_closed = Point("trades") \
+            .tag("trade_id", original_trade_id) \
+            .tag("status", "CLOSED") \
+            .tag("environment", self.mode) \
+            .field("quantity_btc", 0.0) \
+            .field("realized_pnl_usdt", total_realized_pnl) \
+            .field("entry_price", original_entry_price) \
+            .field("decision_data", json.dumps(decision_data)) \
+            .time(now)
+
+        # Point 2: Create the new treasured trade
+        point_treasured_new = Point("trades") \
+            .tag("trade_id", new_treasured_trade_id) \
+            .tag("status", "TREASURED") \
+            .tag("environment", self.mode) \
+            .field("quantity_btc", quantity_remaining) \
+            .field("entry_price", original_entry_price) \
+            .field("is_legacy_hold", False) \
+            .time(now)
+
+        try:
+            self.write_api.write(bucket=self.bucket, org=self.org, record=[point_original_closed, point_treasured_new])
+            logger.info(f"Take-profit processed for trade {original_trade_id}. New treasured trade {new_treasured_trade_id} created.")
+        except Exception as e:
+            logger.error(f"Failed to process take-profit atomically for trade {original_trade_id}: {e}", exc_info=True)
+            raise
+
     def get_open_positions(self) -> pd.DataFrame:
         try:
             query = f'''
@@ -70,6 +115,7 @@ class DatabaseManager:
                 |> range(start: -30d) 
                 |> filter(fn: (r) => r._measurement == "trades")
                 |> filter(fn: (r) => r.status == "OPEN")
+                |> filter(fn: (r) => r.environment == "{self.mode}")
                 |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
                 |> sort(columns: ["_time"], desc: false)
             '''
@@ -86,6 +132,9 @@ class DatabaseManager:
             for col in numeric_cols:
                 if col in df.columns:
                     df[col] = pd.to_numeric(df[col], errors='coerce')
+
+            if 'is_legacy_hold' in df.columns:
+                df['is_legacy_hold'] = df['is_legacy_hold'].astype(bool)
 
             # Converte a string JSON de decision_data para um dicionário
             if 'decision_data' in df.columns:
@@ -105,6 +154,7 @@ class DatabaseManager:
             from(bucket: "{self.bucket}")
                 |> range(start: {start_date}, stop: {end_date})
                 |> filter(fn: (r) => r._measurement == "trades")
+                |> filter(fn: (r) => r.environment == "{self.mode}")
                 |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
                 |> sort(columns: ["_time"], desc: false)
             '''
@@ -144,6 +194,7 @@ class DatabaseManager:
                 |> range(start: -90d)
                 |> filter(fn: (r) => r._measurement == "trades")
                 |> filter(fn: (r) => r.status == "CLOSED")
+                |> filter(fn: (r) => r.environment == "{self.mode}")
                 |> filter(fn: (r) => r._field == "realized_pnl_usdt")
                 |> sort(columns: ["_time"], desc: true)
                 |> limit(n: {n})

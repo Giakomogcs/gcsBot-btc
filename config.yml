@@ -14,7 +14,7 @@ backtest:
   commission_rate: 0.001
 
 app:
-  use_testnet: true
+  execution_mode: "test"
   force_offline_mode: false
   symbol: "BTCUSDT"
 
@@ -87,6 +87,9 @@ trading_strategy:
     enabled: true
     near_target_factor: 0.98 # Ex: 0.98 para 98% do alvo
     rsi_overbought_threshold: 75 # Limiar de RSI para considerar o mercado "esticado"
+
+  # --- ESTRATÉGIA LEGACY HOLD ---
+  legacy_hold_trigger_percent: -15.0 # % de P&L não realizado para marcar uma posição como legacy
 
 # Configuração do dimensionamento de posição
 position_sizing:

@@ -6,11 +6,12 @@ from gcs_bot.core.position_manager import PositionManager
 
 
 class Backtester:
-    def __init__(self, data: pd.DataFrame, position_manager: PositionManager, config, logger):
+    def __init__(self, data: pd.DataFrame, position_manager: PositionManager, config, logger, queue=None):
         self.data = data
         self.position_manager = position_manager
         self.config = config
         self.logger = logger
+        self.queue = queue
 
         self.initial_capital = self.config.backtest.initial_capital
         self.commission_rate = self.config.backtest.commission_rate
@@ -21,7 +22,13 @@ class Backtester:
     def run(self):
         self.logger.info(f"Iniciando simulação com {len(self.data)} velas...")
 
-        for timestamp, candle in tqdm(self.data.iterrows(), total=len(self.data), desc="Simulando Trades"):
+        i = 0
+        total_candles = len(self.data)
+        for timestamp, candle in self.data.iterrows():
+            i += 1
+            if self.queue:
+                progress = i / total_candles
+                self.queue.put({'type': 'progress', 'value': progress})
 
            # 1. VERIFICAR SAÍDAS (LUCRO OU STOP-LOSS)
             closed_trades = self.position_manager.check_and_close_positions(candle)
@@ -62,6 +69,8 @@ class Backtester:
                 self.logger.info(f"[{timestamp}] Nova Posição ABERTA. Custo: ${trade_size_usdt:.2f}. Capital Restante: ${self.capital:,.2f}")
 
         self.print_results()
+        if self.queue:
+            self.queue.put({'type': 'done'})
 
     def print_results(self):
         """

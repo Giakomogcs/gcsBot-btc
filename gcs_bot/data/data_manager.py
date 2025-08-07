@@ -1,7 +1,6 @@
 # src/data_manager.py
 
 import pandas as pd
-import influxdb_client
 from influxdb_client.client.write_api import SYNCHRONOUS
 
 # Resolução de Path (assumindo que você o queira aqui também)

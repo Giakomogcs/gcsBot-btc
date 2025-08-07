@@ -3,6 +3,8 @@ import os
 import sys
 import time
 import json
+import yaml
+import multiprocessing
 
 # --- Constants ---
 TRADING_STATUS_FILE = os.path.join("logs", "trading_status.json")
@@ -14,7 +16,7 @@ def print_color(text, color="green"):
     colors = {"green": "\033[92m", "yellow": "\033[93m", "red": "\033[91m", "blue": "\033[94m", "end": "\033[0m"}
     print(f"{colors.get(color, colors['green'])}{text}{colors['end']}")
 
-def run_command(command, shell=True, capture_output=False, check=False, env=None):
+def run_command(command, capture_output=False, check=False, env=None):
     """Executes a shell command, with better support for environment variables."""
     # Para comandos passados como lista de argumentos, shell=False é mais seguro.
     # Para strings simples, mantemos o comportamento original.
@@ -52,6 +54,12 @@ def start_bot(mode: str):
     # Passa a lista de argumentos e o ambiente personalizado para o comando
     run_command(command_args, check=True, env=bot_env)
     print_color(f"Bot started in {mode.upper()} mode in the background.", "green")
+
+def run_backtest_in_process():
+    """Target function to run the backtester in a separate process."""
+    print_color("--- Starting Backtester Process ---", "blue")
+    run_script_in_container("scripts/run_backtest.py")
+    print_color("--- Backtester Process Finished ---", "blue")
 
 def check_docker_running():
     """Checks if Docker is running."""
@@ -147,8 +155,7 @@ def main():
         print("  stop-services   - Stops the Docker containers.")
         print("  reset-db        - DANGER! Stops and erases the database.")
         print("\nBot Operations:")
-        print("  trade           - Starts the bot in live trading mode.")
-        print("  test            - Starts the bot in test mode (live data, testnet wallet).")
+        print("  start           - Starts the bot using the 'execution_mode' from config.yml.")
         print("  backtest        - Runs a backtest with the current models.")
         print("  optimize        - Runs the model optimization process.")
         print("  update-db       - Runs the ETL pipeline to update the database.")
@@ -173,11 +180,14 @@ def main():
     elif command == "stop-services": stop_services()
     elif command == "reset-db": reset_db()
     
-    elif command == "trade":
-        start_bot("trade")
-    elif command == "test":
-        start_bot("test")
-    elif command == "backtest": run_script_in_container("scripts/run_backtest.py")
+    elif command == "start":
+        with open("config.yml", "r") as f:
+            config = yaml.safe_load(f)
+        mode = config.get("app", {}).get("execution_mode", "test")
+        start_bot(mode)
+
+    elif command == "backtest":
+        run_script_in_container("scripts/run_tui.py", "--backtest")
     
     elif command == "optimize": run_script_in_container("scripts/run_optimizer.py")
     elif command == "update-db": run_script_in_container("scripts/data_pipeline.py")
@@ -185,12 +195,11 @@ def main():
     elif command == "reset-trades": run_script_in_container("scripts/db_utils.py", "trades")
     elif command == "reset-sentiment": run_script_in_container("scripts/db_utils.py", "sentiment_fear_and_greed")
     elif command == "show-trading":
-        from gcs_bot.core.display_manager import display_trading_dashboard
-        show_display(TRADING_STATUS_FILE, display_trading_dashboard, "Trading Bot")
+        run_script_in_container("scripts/run_tui.py", "--live")
     elif command == "show-optimizer":
         from gcs_bot.core.display_manager import display_optimization_dashboard
         show_display(OPTIMIZER_STATUS_FILE, display_optimization_dashboard, "Optimizer")
-    elif command == "logs": run_command("docker-compose logs -f app") # Alterado
+    elif command == "logs": run_command("docker-compose logs -f app")
     elif command == "analyze": run_script_in_container("scripts/analyze_results.py")
     elif command == "analyze-decision": run_script_in_container("scripts/analyze_decision.py", *args)
     elif command == "run-tests": run_script_in_container("pytest")
