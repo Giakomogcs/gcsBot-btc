@@ -12,13 +12,13 @@ from jules_bot.utils.config_manager import settings
 from jules_bot.utils.logger import logger
 
 class DatabaseManager:
-    def __init__(self):
+    def __init__(self, execution_mode: Optional[str] = None):
         self.url = settings.database.url
         self.token = settings.database.token
         self.org = settings.database.org
         self.bucket = settings.database.bucket
+        self.mode = execution_mode
         self._client = InfluxDBClient(url=self.url, token=self.token, org=self.org, timeout=30_000)
-        # Mantemos os métodos antigos para não quebrar o data_pipeline
         self.query_api = self._client.query_api()
         self.write_api = self._client.write_api(write_options=SYNCHRONOUS)
 
@@ -37,6 +37,12 @@ class DatabaseManager:
             logger.error(f"Falha ao verificar se a measurement '{measurement}' está vazia: {e}", exc_info=True)
             return True # Assume que está vazia em caso de erro, para forçar o bootstrap
 
+    def _get_env_filter(self) -> str:
+        """Retorna uma string de filtro do Flux para o ambiente, se aplicável."""
+        if self.mode:
+            return f'|> filter(fn: (r) => r.environment == "{self.mode}")'
+        return ""
+
     def get_write_api(self): # Função mantida para compatibilidade
         return self.write_api
 
@@ -51,8 +57,10 @@ class DatabaseManager:
 
             point = Point("trades") \
                 .tag("status", trade_data["status"]) \
-                .tag("trade_id", trade_data["trade_id"]) \
-                .field("entry_price", float(trade_data["entry_price"])) \
+                .tag("trade_id", trade_data["trade_id"])
+            if self.mode:
+                point = point.tag("environment", self.mode)
+            point = point.field("entry_price", float(trade_data["entry_price"])) \
                 .field("profit_target_price", float(trade_data.get("profit_target_price", 0.0))) \
                 .field("stop_loss_price", float(trade_data.get("stop_loss_price", 0.0))) \
                 .field("quantity_btc", float(trade_data.get("quantity_btc", 0.0))) \
@@ -73,6 +81,7 @@ class DatabaseManager:
                 |> range(start: -30d) 
                 |> filter(fn: (r) => r._measurement == "trades")
                 |> filter(fn: (r) => r.status == "OPEN")
+                {self._get_env_filter()}
                 |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
                 |> sort(columns: ["_time"], desc: false)
             '''
@@ -148,8 +157,10 @@ class DatabaseManager:
         try:
             point = Point("trades") \
                 .tag("trade_id", trade_id) \
-                .tag("status", status) \
-                .field("is_legacy_hold", is_legacy) \
+                .tag("status", status)
+            if self.mode:
+                point = point.tag("environment", self.mode)
+            point = point.field("is_legacy_hold", is_legacy) \
                 .time(datetime.now(timezone.utc))
 
             self.write_api.write(bucket=self.bucket, org=self.org, record=point)
@@ -170,8 +181,10 @@ class DatabaseManager:
             # A quantidade é zerada para indicar que a parte 'ativa' do trade acabou.
             closed_point = Point("trades") \
                 .tag("trade_id", original_position.name) \
-                .tag("status", "CLOSED") \
-                .field("entry_price", float(original_position.get('entry_price', 0.0))) \
+                .tag("status", "CLOSED")
+            if self.mode:
+                closed_point = closed_point.tag("environment", self.mode)
+            closed_point = closed_point.field("entry_price", float(original_position.get('entry_price', 0.0))) \
                 .field("quantity_btc", 0.0) \
                 .field("realized_pnl_usdt", float(original_position.get('realized_pnl_usdt', 0.0)) + realized_pnl) \
                 .field("profit_target_price", float(original_position.get('profit_target_price', 0.0))) \
@@ -182,8 +195,10 @@ class DatabaseManager:
             # Ponto 2: Cria a nova posição "do tesouro"
             treasured_point = Point("trades") \
                 .tag("trade_id", str(uuid.uuid4())) \
-                .tag("status", "TREASURED") \
-                .field("entry_price", float(original_position.get('entry_price', 0.0))) \
+                .tag("status", "TREASURED")
+            if self.mode:
+                treasured_point = treasured_point.tag("environment", self.mode)
+            treasured_point = treasured_point.field("entry_price", float(original_position.get('entry_price', 0.0))) \
                 .field("quantity_btc", treasury_quantity) \
                 .field("realized_pnl_usdt", 0.0) \
                 .field("is_legacy_hold", False) \
@@ -207,6 +222,7 @@ class DatabaseManager:
             from(bucket: "{self.bucket}")
                 |> range(start: {start_date}, stop: {end_date})
                 |> filter(fn: (r) => r._measurement == "trades")
+                {self._get_env_filter()}
                 |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
                 |> sort(columns: ["_time"], desc: false)
             '''
@@ -246,6 +262,7 @@ class DatabaseManager:
                 |> range(start: -90d)
                 |> filter(fn: (r) => r._measurement == "trades")
                 |> filter(fn: (r) => r.status == "CLOSED")
+                {self._get_env_filter()}
                 |> filter(fn: (r) => r._field == "realized_pnl_usdt")
                 |> sort(columns: ["_time"], desc: true)
                 |> limit(n: {n})
@@ -304,5 +321,3 @@ class DatabaseManager:
 
 
         return trades_df[required_cols]
-
-db_manager = DatabaseManager()

@@ -15,7 +15,7 @@ from jules_bot.utils.config_manager import settings
 from jules_bot.bot.position_manager import PositionManager
 from jules_bot.core.exchange_connector import ExchangeManager
 from jules_bot.bot.account_manager import AccountManager
-from jules_bot.database.database_manager import db_manager
+from jules_bot.database.database_manager import DatabaseManager
 from jules_bot.database.data_manager import DataManager
 # --- NOVA IMPORTAÇÃO ESSENCIAL ---
 from jules_bot.bot.live_feature_calculator import LiveFeatureCalculator
@@ -32,13 +32,15 @@ class TradingBot:
 
         # --- ETAPA 1: Construção dos Managers ---
         logger.info("Construindo e injetando dependências...")
+        # Instancia o DatabaseManager com o modo de execução correto
+        self.db_manager = DatabaseManager(execution_mode=self.mode)
         exchange_manager = ExchangeManager(mode=self.mode)
         self.account_manager = AccountManager(binance_client=exchange_manager._client)
-        data_manager = DataManager(db_manager=db_manager, config=settings, logger=logger)
+        data_manager = DataManager(db_manager=self.db_manager, config=settings, logger=logger)
         self.feature_calculator = LiveFeatureCalculator(data_manager, mode=self.mode)
         self.position_manager = PositionManager(
             config=settings,
-            db_manager=db_manager,
+            db_manager=self.db_manager,
             logger=logger,
             account_manager=self.account_manager
         )
@@ -197,7 +199,7 @@ class TradingBot:
             total_value_usdt = usd_balance + btc_value_usdt
 
             # --- Cálculos de Métricas de Portfólio Detalhadas ---
-            all_trades_for_metrics = db_manager.get_all_trades_in_range(start_date="-1y")
+            all_trades_for_metrics = self.db_manager.get_all_trades_in_range(start_date="-1y")
             btc_for_sale = 0
             btc_treasure = 0
 
@@ -226,7 +228,7 @@ class TradingBot:
             }
 
             # 2. Estatísticas da Sessão e Posições Abertas
-            all_trades = db_manager.get_all_trades_in_range(start_date="-1y")
+            all_trades = self.db_manager.get_all_trades_in_range(start_date="-1y")
             total_pnl = 0
             closed_trades_count = 0
             open_positions_count = 0

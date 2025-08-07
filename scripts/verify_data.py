@@ -10,13 +10,14 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from jules_bot.database.database_manager import db_manager
+from jules_bot.database.database_manager import DatabaseManager
 from jules_bot.utils.logger import logger
 from jules_bot.utils.config_manager import settings
 
 def check_measurement_data(measurement: str, start_date: str, end_date: str):
     """Verifica a contagem de registros em uma medição para um determinado período."""
     logger.info(f"Verificando dados para '{measurement}' de {start_date} a {end_date}...")
+    db_manager = DatabaseManager()
     query_api = db_manager.get_query_api()
     if not query_api:
         logger.error("API de consulta do InfluxDB indisponível.")

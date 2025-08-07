@@ -4,24 +4,26 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 import sys
+import argparse
 
 # Adiciona o diretório raiz do projeto ao sys.path
-# para permitir a importação de módulos do gcs_bot.
-# Obtém o caminho do diretório onde o script está
+# para permitir a importação de módulos do jules_bot.
 script_dir = os.path.dirname(os.path.abspath(__file__))
-# Obtém o caminho do diretório raiz do projeto (um nível acima de 'scripts')
 project_root = os.path.dirname(script_dir)
-# Adiciona o diretório raiz ao sys.path
 sys.path.append(project_root)
 
-from jules_bot.database.database_manager import db_manager
+from jules_bot.database.database_manager import DatabaseManager
+from jules_bot.utils.config_manager import settings
 
-def analyze_confidence_performance():
+def analyze_confidence_performance(environment: str):
     """
     Carrega os resultados do backtest do banco de dados para analisar
     a correlação entre a confiança do modelo e a performance dos trades.
     """
-    print("--- Iniciando Análise de Confiança vs. Performance a partir do DB ---")
+    print(f"--- Iniciando Análise de Confiança vs. Performance do ambiente '{environment}' ---")
+
+    # Instancia o DatabaseManager com o modo de execução correto
+    db_manager = DatabaseManager(execution_mode=environment)
 
     # Carrega os dados diretamente do banco de dados
     analysis_df = db_manager.get_all_trades_for_analysis()
@@ -93,4 +95,16 @@ def analyze_confidence_performance():
 
 
 if __name__ == "__main__":
-    analyze_confidence_performance()
+    parser = argparse.ArgumentParser(
+        description="Analisa a performance dos trades em relação à confiança do modelo."
+    )
+    parser.add_argument(
+        '--env',
+        type=str,
+        default='trade',
+        choices=['trade', 'test', 'backtest'],
+        help='O ambiente de execução para analisar (default: trade)'
+    )
+    args = parser.parse_args()
+
+    analyze_confidence_performance(environment=args.env)

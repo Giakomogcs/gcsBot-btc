@@ -3,9 +3,10 @@ from unittest.mock import patch, Mock
 
 @pytest.fixture
 def mock_db_manager():
-    """Mocks the db_manager singleton."""
-    with patch('jules_bot.database.database_manager.db_manager', autospec=True) as mock_db:
-        yield mock_db
+    """Mocks the DatabaseManager class and returns a mock instance."""
+    with patch('jules_bot.database.database_manager.DatabaseManager', autospec=True) as mock_db_class:
+        mock_instance = mock_db_class.return_value
+        yield mock_instance
 
 @pytest.fixture
 def mock_binance_client():

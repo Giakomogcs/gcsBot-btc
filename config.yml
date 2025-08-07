@@ -14,6 +14,7 @@ backtest:
   commission_rate: 0.001
 
 app:
+  execution_mode: "trade" # Possible values: "trade", "test", "backtest"
   use_testnet: true
   force_offline_mode: false
   symbol: "BTCUSDT"

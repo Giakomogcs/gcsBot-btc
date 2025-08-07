@@ -5,6 +5,7 @@ import joblib
 import pandas as pd
 from jules_bot.utils.logger import logger
 from jules_bot.utils.config_manager import settings
+from jules_bot.database.database_manager import DatabaseManager
 from jules_bot.database.data_manager import DataManager
 from jules_bot.bot.optimizer import Optimizer
 from jules_bot.bot.model_trainer import ModelTrainer
@@ -16,7 +17,8 @@ def main():
     logger.info("--- INICIANDO PROCESSO DE TREINAMENTO DE MODELOS DE IA ---")
     
     # 1. Carregar os dados da fonte da verdade
-    data_manager = DataManager()
+    db_manager = DatabaseManager() # Instancia um DB manager neutro para ler dados brutos
+    data_manager = DataManager(db_manager=db_manager, config=settings, logger=logger)
     df_features = data_manager.read_data_from_influx(
         measurement="features_master_table",
         start_date="-2y" # Carrega 2 anos de dados para o treino

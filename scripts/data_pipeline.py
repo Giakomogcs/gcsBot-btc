@@ -21,7 +21,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from jules_bot.utils.config_manager import settings
-from jules_bot.database.database_manager import db_manager
+from jules_bot.database.database_manager import DatabaseManager
 from jules_bot.utils.logger import logger
 from jules_bot.bot.feature_engineering import add_all_features
 from jules_bot.bot.situational_awareness import SituationalAwareness
@@ -29,6 +29,7 @@ from jules_bot.bot.situational_awareness import SituationalAwareness
 class DataPipeline:
     def __init__(self):
         self.binance_client = self._init_binance_client()
+        self.db_manager = DatabaseManager()
 
     def _init_binance_client(self) -> Optional[Client]:
         if settings.app.force_offline_mode: return None
@@ -90,7 +91,7 @@ class DataPipeline:
 
 
     def _write_dataframe_to_influx(self, df: pd.DataFrame, measurement: str, batch_size: int = 2000):
-        write_api = db_manager.get_write_api()
+        write_api = self.db_manager.get_write_api()
         if not write_api:
             logger.error(f"API de escrita do InfluxDB indisponível. Escrita para '{measurement}' abortada.")
             return
@@ -123,7 +124,7 @@ class DataPipeline:
             logger.error(f"❌ Erro ao escrever dados para o InfluxDB: {e}", exc_info=True)
 
     def _query_last_timestamp(self, measurement: str) -> Optional[pd.Timestamp]:
-        query_api = db_manager.get_query_api()
+        query_api = self.db_manager.get_query_api()
         if not query_api: return None
         query = f'from(bucket:"{settings.database.bucket}") |> range(start: 0) |> filter(fn: (r) => r._measurement == "{measurement}") |> last() |> keep(columns: ["_time"])'
         try:
@@ -140,7 +141,7 @@ class DataPipeline:
         Retorna uma lista de tuplas, onde cada tupla representa o início e o fim de uma lacuna.
         """
         logger.info(f"Iniciando verificação de lacunas no banco de dados para '{measurement}' de {start_date.date()} a {end_date.date()}.")
-        query_api = db_manager.get_query_api()
+        query_api = self.db_manager.get_query_api()
         if not query_api:
             logger.error("API de consulta do InfluxDB indisponível. Não é possível encontrar lacunas.")
             return []
@@ -196,7 +197,7 @@ class DataPipeline:
     # Ficheiro: scripts/data_pipeline.py
 
     def read_data_in_range(self, measurement: str, start_date: str, end_date: str) -> pd.DataFrame:
-        query_api = db_manager.get_query_api()
+        query_api = self.db_manager.get_query_api()
         if not query_api:
             logger.error(f"API de consulta do InfluxDB indisponível ao ler range para '{measurement}'.")
             return pd.DataFrame()

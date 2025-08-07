@@ -15,18 +15,23 @@ from jules_bot.database.data_manager import DataManager
 from jules_bot.backtesting.backtester import Backtester
 from jules_bot.bot.position_manager import PositionManager
 from jules_bot.bot.account_manager import AccountManager
-from jules_bot.database.database_manager import db_manager
+from jules_bot.database.database_manager import DatabaseManager
 import sys
 
 def main():
     try:
         logger.info("--- INICIANDO LABORATÓRIO DE BACKTEST (MODO ALTA FIDELIDADE) ---")
 
-        logger.info("Limpando o histórico de trades antigos do banco de dados para um backtest limpo...")
+        # Instancia o DatabaseManager com o modo 'backtest'
+        db_manager = DatabaseManager(execution_mode='backtest')
+
+        logger.info("Limpando o histórico de trades do ambiente 'backtest' para um backtest limpo...")
         start = "1970-01-01T00:00:00Z"
         stop = pd.Timestamp.now(tz='UTC').isoformat()
-        db_manager._client.delete_api().delete(start, stop, '_measurement="trades"', bucket=settings.database.bucket, org=settings.database.org)
-        logger.info("✅ Histórico de trades limpo.")
+        # Usa o predicado para deletar apenas do ambiente de backtest
+        predicate = f'_measurement="trades" AND environment="backtest"'
+        db_manager._client.delete_api().delete(start, stop, predicate, bucket=settings.database.bucket, org=settings.database.org)
+        logger.info("✅ Histórico de trades do ambiente 'backtest' limpo.")
 
         # --- Master Builder: Instanciando e Injetando Dependências ---
         logger.info("Construindo o ambiente do backtest com injeção de dependências...")

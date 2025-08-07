@@ -2,6 +2,9 @@
 import sys
 from datetime import datetime, timezone
 import os
+import argparse
+from typing import Optional
+
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
@@ -10,20 +13,22 @@ from jules_bot.utils.config_manager import settings
 from jules_bot.utils.logger import logger
 from influxdb_client import InfluxDBClient
 
-def delete_measurement(measurement_name: str):
+def delete_measurement(measurement_name: str, environment: Optional[str] = None):
     """Deleta todos os dados de uma 'measurement' (tabela) específica no InfluxDB."""
-    logger.info(f"--- 🚮 INICIANDO EXCLUSÃO DA TABELA (MEASUREMENT): {measurement_name} 🚮 ---")
+
+    log_message = f"--- 🚮 INICIANDO EXCLUSÃO DA TABELA (MEASUREMENT): {measurement_name}"
+    if environment:
+        log_message += f" NO AMBIENTE: {environment.upper()}"
+    log_message += " 🚮 ---"
+    logger.info(log_message)
     
     try:
-        # --- INÍCIO DA CORREÇÃO ---
-        # Aumentamos o timeout para 5 minutos (300,000 ms) para dar tempo ao DB
         client = InfluxDBClient(
             url=settings.database.url,
             token=settings.database.token,
             org=settings.database.org,
             timeout=300_000 
         )
-        # --- FIM DA CORREÇÃO ---
         
         delete_api = client.delete_api()
         
@@ -32,9 +37,14 @@ def delete_measurement(measurement_name: str):
         bucket = settings.database.bucket
         org = settings.database.org
         
-        delete_api.delete(start, stop, f'_measurement="{measurement_name}"', bucket, org)
+        predicate = f'_measurement="{measurement_name}"'
+        if measurement_name == "trades" and environment:
+            predicate += f' AND environment="{environment}"'
+
+        logger.info(f"Executando exclusão com o predicado: {predicate}")
+        delete_api.delete(start, stop, predicate, bucket, org)
         
-        logger.info(f"✅ Solicitação de exclusão para '{measurement_name}' enviada com sucesso.")
+        logger.info(f"✅ Solicitação de exclusão para '{measurement_name}' (ambiente: {environment or 'todos'}) enviada com sucesso.")
         client.close()
         
     except Exception as e:
@@ -42,9 +52,19 @@ def delete_measurement(measurement_name: str):
         sys.exit(1)
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        measurement_to_delete = sys.argv[1]
-        delete_measurement(measurement_to_delete)
-    else:
-        logger.error("Nenhum nome de measurement fornecido. Uso: python scripts/db_utils.py <nome_da_tabela>")
+    parser = argparse.ArgumentParser(description="Deleta uma measurement do InfluxDB, com verificação de ambiente para 'trades'.")
+    parser.add_argument("measurement", help="O nome da measurement a ser deletada.")
+    parser.add_argument(
+        '--env',
+        type=str,
+        choices=['trade', 'test', 'backtest'],
+        help="O ambiente de execução a ser limpo (obrigatório se a measurement for 'trades')."
+    )
+    args = parser.parse_args()
+
+    if args.measurement == "trades" and not args.env:
+        logger.error("Para a measurement 'trades', o argumento --env é obrigatório por segurança.")
+        logger.error("Uso: python scripts/db_utils.py trades --env <trade|test|backtest>")
         sys.exit(1)
+
+    delete_measurement(args.measurement, args.env)
