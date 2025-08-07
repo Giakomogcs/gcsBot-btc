@@ -571,3 +571,66 @@ Traceback (most recent call last):
     raise effect
 binance.exceptions.BinanceAPIException: APIError(code=-2010): Account has insufficient balance for requested action.
 2025-08-07 16:53:21,317 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-07 17:04:13,197 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-07 17:04:13,584 - gcsBot - ERROR - Binance API Error fetching open orders: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time.
+Traceback (most recent call last):
+  File "/app/jules_bot/bot/account_manager.py", line 189, in get_open_orders
+    open_orders = self.client.get_open_orders(symbol=settings.app.symbol)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+binance.exceptions.BinanceAPIException: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time.
+2025-08-07 17:04:13,594 - gcsBot - ERROR - Binance API Error fetching trade history: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time.
+Traceback (most recent call last):
+  File "/app/jules_bot/bot/account_manager.py", line 207, in get_trade_history
+    trades = self.client.get_my_trades(symbol=settings.app.symbol, limit=limit)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+binance.exceptions.BinanceAPIException: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time.
+2025-08-07 17:04:13,598 - gcsBot - INFO - Attempting to place market BUY order for 1000.00 USDT...
+2025-08-07 17:04:13,598 - gcsBot - INFO - SUCCESS: Market BUY order placed: {'symbol': 'BTCUSDT', 'orderId': 124, 'status': 'FILLED'}
+2025-08-07 17:04:13,600 - gcsBot - INFO - Attempting to place market BUY order for 1000.00 USDT...
+2025-08-07 17:04:13,600 - gcsBot - ERROR - Binance API Error on BUY: APIError(code=-2010): Account has insufficient balance for requested action.
+Traceback (most recent call last):
+  File "/app/jules_bot/bot/account_manager.py", line 170, in update_on_buy
+    order = self.client.order_market_buy(symbol=settings.app.symbol, quoteOrderQty=rounded_qty)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+binance.exceptions.BinanceAPIException: APIError(code=-2010): Account has insufficient balance for requested action.
+2025-08-07 17:04:13,603 - gcsBot - INFO - Attempting to place market SELL order for 0.10000000 BTC...
+2025-08-07 17:04:13,603 - gcsBot - INFO - SUCCESS: Market SELL order placed: {'symbol': 'BTCUSDT', 'orderId': 125, 'status': 'FILLED'}
+2025-08-07 17:04:13,606 - gcsBot - INFO - Attempting to place market SELL order for 0.10000000 BTC...
+2025-08-07 17:04:13,606 - gcsBot - ERROR - Binance API Error on SELL: APIError(code=-2010): Account has insufficient balance for requested action.
+Traceback (most recent call last):
+  File "/app/jules_bot/bot/account_manager.py", line 144, in update_on_sell
+    order = self.client.order_market_sell(symbol=settings.app.symbol, quantity=formatted_quantity)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+binance.exceptions.BinanceAPIException: APIError(code=-2010): Account has insufficient balance for requested action.

@@ -183,6 +183,23 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Falha ao marcar trade {trade_id} como legacy hold: {e}", exc_info=True)
 
+    def update_trade_status(self, trade_id: str, new_status: str, extra_fields: dict = None):
+        """Updates the status and other fields of a specific trade."""
+        try:
+            point = Point("trades").tag("trade_id", trade_id).tag("status", new_status)
+            if self.mode:
+                point = point.tag("environment", self.mode)
+
+            if extra_fields:
+                for key, value in extra_fields.items():
+                    point = point.field(key, value)
+
+            point = point.time(datetime.now(timezone.utc))
+            self.write_api.write(bucket=self.bucket, org=self.org, record=point)
+            logger.info(f"Trade {trade_id} status updated to {new_status}.")
+        except Exception as e:
+            logger.error(f"Failed to update trade status for {trade_id}: {e}", exc_info=True)
+
     def execute_90_10_take_profit_split(self, original_position: pd.Series, treasury_quantity: float, realized_pnl: float):
         """
         Atomically closes 90% of a position and creates a new 10% "treasured" position

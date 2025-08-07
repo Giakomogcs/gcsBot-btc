@@ -71,10 +71,13 @@ class TradingBot:
                 
                 logger.info(f"Preço atual de {self.symbol}: ${current_price:,.2f}")
 
-                # --- ETAPA 2: EXECUTAR A LÓGICA DE TRADING ---
+                # --- ETAPA 2: PROCESSAR COMANDOS MANUAIS ---
+                self.position_manager.process_manual_commands()
+
+                # --- ETAPA 3: EXECUTAR A LÓGICA DE TRADING AUTOMATIZADA ---
                 self.position_manager.manage_positions(current_price)
                 
-                # --- ETAPA 3: LOGAR O ESTADO ATUAL ---
+                # --- ETAPA 4: LOGAR O ESTADO ATUAL ---
                 self.log_current_state()
 
                 logger.info("--- Ciclo concluído. A aguardar 10 segundos... ---")

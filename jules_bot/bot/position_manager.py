@@ -3,6 +3,11 @@ import uuid
 from datetime import datetime, timezone
 from jules_bot.utils.logger import logger
 from jules_bot.utils.config_manager import settings
+import os
+import json
+import time
+
+COMMANDS_DIR = "commands"
 
 class PositionManager:
     def __init__(self, db_manager, account_manager, exchange_manager):
@@ -13,7 +18,94 @@ class PositionManager:
         self.strategy_config = self.config.trading_strategy
         self.recent_high_price = 0.0
         self.positions_pending_sale = set()
+        os.makedirs(COMMANDS_DIR, exist_ok=True)
         self.initialize_price_tracker()
+
+    def process_manual_commands(self):
+        """Checks for and processes command files from the UI."""
+        for command_file in os.listdir(COMMANDS_DIR):
+            if command_file.endswith(".json"):
+                filepath = os.path.join(COMMANDS_DIR, command_file)
+                try:
+                    with open(filepath, 'r') as f:
+                        command_data = json.load(f)
+
+                    logger.info(f"[COMMAND] Processing command: {command_data}")
+                    self._execute_command(command_data)
+
+                except Exception as e:
+                    logger.error(f"[ERROR] Failed to process command file {command_file}: {e}")
+                finally:
+                    # Delete the file after processing, regardless of success
+                    os.remove(filepath)
+
+    def _execute_command(self, command: dict):
+        """Routes the command to the appropriate handler function."""
+        command_type = command.get("type")
+        if command_type == "force_buy":
+            self.force_manual_buy(command.get("amount_usd"))
+        elif command_type == "force_sell":
+            self.force_manual_sell(command.get("trade_id"))
+        elif command_type == "to_treasury":
+            self.force_convert_to_treasury(command.get("trade_id"))
+        else:
+            logger.warning(f"[WARNING] Unknown command type: {command_type}")
+
+    def force_manual_sell(self, trade_id: str):
+        """Forces the immediate market sale of an entire open position."""
+        if not trade_id: return
+        logger.info(f"--> [MANUAL CMD] Forcing sell for trade ID: {trade_id}")
+
+        position = self.db_manager.get_trade_by_id(trade_id)
+        if position is None or position.get('status') != 'OPEN':
+            logger.error(f"Cannot force sell: Trade {trade_id} not found or not open.")
+            return
+
+        current_price = self.exchange_manager.get_current_price(self.config.app.symbol)
+        if not current_price:
+            logger.error(f"Cannot force sell: Could not get current price for {self.config.app.symbol}.")
+            return
+
+        self._sell_position(position, current_price)
+
+    def force_convert_to_treasury(self, trade_id: str):
+        """Manually closes a position without selling, flagging it as treasured."""
+        if not trade_id: return
+        logger.info(f"--> [MANUAL CMD] Converting trade ID: {trade_id} to treasury.")
+
+        extra_fields = {"decision_data": json.dumps({"reason": "MANUAL_TREASURY"})}
+        self.db_manager.update_trade_status(trade_id, 'CLOSED', extra_fields)
+
+    def force_manual_buy(self, amount_usd: float):
+        """Executes an immediate market buy for a specified USD amount."""
+        if amount_usd is None or amount_usd <= 0:
+            logger.error("[ERROR] Invalid amount for force_manual_buy.")
+            return
+
+        logger.info(f"--> [MANUAL CMD] Attempting to buy ${amount_usd} of BTC.")
+
+        # We can reuse the _execute_buy_order logic, but we need the current price first.
+        current_price = self.exchange_manager.get_current_price(self.config.app.symbol)
+        if not current_price:
+            logger.error("Could not get current price to execute manual buy.")
+            return
+
+        buy_successful = self.account_manager.update_on_buy(quote_order_qty=amount_usd)
+
+        if buy_successful:
+            quantity_btc = amount_usd / current_price
+            trade_data = {
+                "trade_id": str(uuid.uuid4()),
+                "status": "OPEN",
+                "entry_price": current_price,
+                "quantity_btc": quantity_btc,
+                "timestamp": datetime.now(timezone.utc),
+                "decision_data": {"reason": "FORCE_MANUAL_BUY"},
+            }
+            self.db_manager.write_trade(trade_data)
+            logger.info(f"Manual buy successful. New position opened at ${current_price:,.2f}")
+        else:
+            logger.error("Failed to execute manual buy order on the exchange.")
 
     def initialize_price_tracker(self):
         """Call this once on startup to set the initial price."""
