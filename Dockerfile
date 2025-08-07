@@ -7,6 +7,7 @@ WORKDIR /app
 # Set environment variables to prevent .pyc file generation and ensure logs appear immediately
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
+ENV PYTHONPATH=/app
 
 # --- THE CACHING TRICK ---
 # First, copy ONLY the requirements file. Docker caches this layer.

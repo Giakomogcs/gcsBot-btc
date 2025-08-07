@@ -570,3 +570,4 @@ Traceback (most recent call last):
   File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
     raise effect
 binance.exceptions.BinanceAPIException: APIError(code=-2010): Account has insufficient balance for requested action.
+2025-08-07 16:53:21,317 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
