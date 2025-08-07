@@ -30,6 +30,9 @@ RUN apt-get update && \
 
 WORKDIR /app
 
+# Adiciona o diretório da aplicação ao PYTHONPATH para que os imports funcionem
+ENV PYTHONPATH "${PYTHONPATH}:/app"
+
 # Copia o ambiente virtual com as dependências já instaladas do estágio de build
 COPY --from=builder /opt/venv /opt/venv
 
@@ -44,4 +47,4 @@ RUN chmod +x /wait-for-it.sh
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Comando para iniciar a aplicação, agora usando o ambiente virtual
-CMD ["/wait-for-it.sh", "db:8086", "--", "python", "-u", "main.py"]
+CMD ["/wait-for-it.sh", "db:8086", "--", "python", "-u", "jules_bot/main.py"]
