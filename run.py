@@ -26,39 +26,30 @@ def run_with_graceful_shutdown(bot: TradingBot):
         if bot:
             bot.shutdown()
 
-PID_FILE = "/tmp/bot.pid"
-
-@app.command()
-def trade():
-    """
-    Starts the trading bot as a background daemon process.
-    """
+def start_bot_daemon(mode: str):
+    """Helper function to start a bot process in the background."""
     if os.name != 'posix':
-        print("This command is only available on Unix-like systems (Linux, macOS).")
+        print(f"Daemon mode for '{mode}' is only available on Unix-like systems.")
         return
 
-    if os.path.exists(PID_FILE):
-        print("Bot is already running. Use 'stop' command first.")
+    pid_file = f"/tmp/{mode}_bot.pid"
+    if os.path.exists(pid_file):
+        print(f"Bot in '{mode}' mode is already running. Use 'stop' command first.")
         return
 
-    # The 'daemonize' process: launch a child process and let the parent exit.
     try:
         pid = os.fork()
         if pid > 0:
-            # This is the parent process. We exit immediately.
-            print(f"Bot started as a background process with PID: {pid}")
+            print(f"Bot started in '{mode}' mode with PID: {pid}")
             sys.exit(0)
     except OSError as e:
         sys.stderr.write(f"fork #1 failed: {e}\n")
         sys.exit(1)
 
-    # This is now the child process.
-    # It needs to set up its own environment.
-    os.chdir("/") # Change to root to avoid holding onto directories
+    os.chdir("/")
     os.setsid()
     os.umask(0)
 
-    # Second fork for complete detachment
     try:
         pid = os.fork()
         if pid > 0:
@@ -67,60 +58,65 @@ def trade():
         sys.stderr.write(f"fork #2 failed: {e}\n")
         sys.exit(1)
 
-    # Write the PID file
-    with open(PID_FILE, "w+") as f:
+    with open(pid_file, "w+") as f:
         f.write(str(os.getpid()))
 
-    # Now, finally, run the bot's main logic
     from jules_bot.bot.trading_bot import TradingBot
-    bot = TradingBot(mode="trade")
-    bot.run() # The main loop from Phase 1
+    bot = TradingBot(mode=mode)
+    bot.run()
+
+@app.command()
+def trade():
+    """Starts the trading bot in TRADING mode as a background process."""
+    start_bot_daemon(mode="trade")
+
+@app.command()
+def test():
+    """Starts the trading bot in TEST mode as a background process."""
+    start_bot_daemon(mode="test")
+
+@app.command()
+def backtest():
+    """Starts the trading bot in BACKTEST mode as a background process."""
+    start_bot_daemon(mode="backtest")
 
 @app.command()
 def stop():
-    """Stops the running background bot process."""
+    """Stops all running background bot processes."""
     if os.name != 'posix':
-        print("This command is only available on Unix-like systems (Linux, macOS).")
+        print("This command is only available on Unix-like systems.")
         return
 
-    if not os.path.exists(PID_FILE):
-        print("Bot is not running.")
-        return
+    stopped_count = 0
+    for mode in ["trade", "test", "backtest"]:
+        pid_file = f"/tmp/{mode}_bot.pid"
+        if os.path.exists(pid_file):
+            with open(pid_file) as f:
+                pid = int(f.read())
+            try:
+                os.kill(pid, signal.SIGTERM)
+                print(f"Sent shutdown signal to '{mode}' bot process {pid}.")
+                stopped_count += 1
+            except ProcessLookupError:
+                print(f"Process {pid} for '{mode}' bot not found.")
+            finally:
+                os.remove(pid_file)
 
-    with open(PID_FILE) as f:
-        pid = int(f.read())
-
-    try:
-        # Send the SIGTERM signal to trigger graceful shutdown
-        os.kill(pid, signal.SIGTERM)
-        print(f"Sent shutdown signal to bot process {pid}.")
-    except ProcessLookupError:
-        print(f"Process {pid} not found. It may have already stopped.")
-    finally:
-        os.remove(PID_FILE)
+    if stopped_count == 0:
+        print("No running bot processes found.")
 
 @app.command()
 def show():
     """Launches the TUI to display the running bot's state."""
-    if not os.path.exists(PID_FILE):
-        print("Cannot show UI: Bot is not running. Use the 'trade' command to start it.")
+    # This just checks for the main trade bot for now.
+    pid_file = "/tmp/trade_bot.pid"
+    if not os.path.exists(pid_file):
+        print("Cannot show UI: Main trade bot is not running.")
         return
 
     from jules_bot.ui.app import JulesBotApp
     app = JulesBotApp()
     app.run()
-
-@app.command()
-def backtest():
-    """Runs the bot in BACKTESTING mode."""
-    bot = setup_bot(mode="backtest")
-    run_with_graceful_shutdown(bot)
-
-@app.command()
-def test():
-    """Runs the bot in paper trading (TEST) mode."""
-    bot = setup_bot(mode="test")
-    run_with_graceful_shutdown(bot)
 
 # --- Constants ---
 TRADING_STATUS_FILE = os.path.join("logs", "trading_status.json")
@@ -307,6 +303,14 @@ def main():
     elif command == "analyze": run_script_in_container("scripts/analyze_results.py")
     elif command == "analyze-decision": run_script_in_container("scripts/analyze_decision.py", *args)
     elif command == "run-tests": run_script_in_container("pytest")
+    elif command == "logs":
+        try:
+            print_color("Showing logs... Press Ctrl+C to exit.", "yellow")
+            subprocess.run(["tail", "-f", "logs/jules_bot.log"])
+        except KeyboardInterrupt:
+            print_color("\nStopped viewing logs.", "yellow")
+        except FileNotFoundError:
+            print_color("Log file not found. Have you run the bot yet?", "red")
     else:
         print_color(f"Command '{command}' not recognized.", "red")
 
