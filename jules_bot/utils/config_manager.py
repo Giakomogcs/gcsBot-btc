@@ -45,6 +45,7 @@ class TargetConfig(BaseModel):
     stop_mult: float
 
 class DataPipelineConfig(BaseModel):
+    historical_data_bucket: str
     start_date_ingestion: str
     regime_features: list[str]
     tags_for_master_table: list[str]

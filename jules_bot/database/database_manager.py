@@ -13,11 +13,12 @@ from jules_bot.utils.config_manager import settings
 from jules_bot.utils.logger import logger
 
 class DatabaseManager:
-    def __init__(self, execution_mode: Optional[str] = "trade"):
+    def __init__(self, execution_mode: Optional[str] = None):
         self.url = settings.influxdb_connection.url
         self.token = settings.influxdb_connection.token
         self.org = settings.influxdb_connection.org
         self.mode = execution_mode
+        self.bucket = None
 
         if self.mode == "trade":
             self.bucket = settings.influxdb_trade.bucket
@@ -25,7 +26,7 @@ class DatabaseManager:
             self.bucket = settings.influxdb_test.bucket
         elif self.mode == "backtest":
             self.bucket = settings.influxdb_backtest.bucket
-        else:
+        elif self.mode is not None:
             # Fallback to trade bucket if mode is not set or invalid
             self.bucket = settings.influxdb_trade.bucket
             logger.warning(f"Invalid or no execution mode provided. Falling back to trade bucket: {self.bucket}")

@@ -10,10 +10,11 @@ import time
 COMMANDS_DIR = "commands"
 
 class PositionManager:
-    def __init__(self, db_manager, account_manager, exchange_manager):
+    def __init__(self, db_manager, account_manager, exchange_manager, market_data_provider):
         self.db_manager = db_manager
         self.account_manager = account_manager
         self.exchange_manager = exchange_manager
+        self.market_data_provider = market_data_provider
         self.config = settings
         self.strategy_config = self.config.trading_strategy
         self.recent_high_price = 0.0

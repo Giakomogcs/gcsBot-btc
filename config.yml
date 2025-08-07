@@ -39,6 +39,7 @@ data_paths:
 # Configurações do pipeline de dados
 
 data_pipeline:
+  historical_data_bucket: "btc_data"
   start_date_ingestion: "2023-01-01"
   # --- INÍCIO DA CORREÇÃO DOS NOMES DAS FEATURES ---
   # Alinhados com os nomes gerados em 'feature_engineering.py'

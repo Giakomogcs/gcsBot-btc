@@ -9,6 +9,7 @@ from jules_bot.core.exchange_connector import ExchangeManager
 from jules_bot.bot.account_manager import AccountManager
 from jules_bot.database.database_manager import DatabaseManager
 from jules_bot.database.data_manager import DataManager
+from jules_bot.core.market_data_provider import MarketDataProvider
 
 # --- Classes de Simulação para Backtesting ---
 
@@ -66,11 +67,21 @@ class TradingBot:
     def __init__(self, mode: str):
         self.is_running = False
         self.mode = mode.lower()
+        self.bot_id = "jules_bot_01" # A bot_id can be hardcoded or come from config
         logger.info(f"--- INICIALIZANDO O TRADING BOT EM MODO '{self.mode.upper()}' ---")
 
         # --- ETAPA 1: Construção dos Managers ---
         logger.info("Construindo e injetando dependências...")
+
+        # This DatabaseManager is for the bot's operational data (trades, status)
         self.db_manager = DatabaseManager(execution_mode=self.mode)
+
+        # This DatabaseManager is specifically for fetching historical market data
+        historical_db_manager = DatabaseManager() # No mode needed
+        historical_db_manager.bucket = settings.data_pipeline.historical_data_bucket
+
+        self.market_data_provider = MarketDataProvider(db_manager=historical_db_manager)
+
         self.data_manager = DataManager(db_manager=self.db_manager, config=settings, logger=logger)
         self.symbol = settings.app.symbol
 
@@ -81,25 +92,52 @@ class TradingBot:
             self.position_manager = PositionManager(
                 db_manager=self.db_manager,
                 account_manager=self.account_manager,
-                exchange_manager=self.exchange_manager
+                exchange_manager=self.exchange_manager,
+                market_data_provider=self.market_data_provider
             )
             self.position_manager.reconcile_states()
         else: # MODO BACKTEST
             logger.info("Modo Backtest: A usar gestores simulados.")
             self.exchange_manager = None
-            # CORREÇÃO: Usando o nome correto do atributo do config.yml
             initial_balance = settings.backtest.initial_capital
             self.account_manager = SimulatedAccountManager(initial_balance_usdt=initial_balance)
-            # Usa um mock para o exchange_manager para que o PositionManager possa ser inicializado
             mock_exchange_manager = MockExchangeManager()
             self.position_manager = PositionManager(
                 db_manager=self.db_manager,
                 account_manager=self.account_manager,
-                exchange_manager=mock_exchange_manager
+                exchange_manager=mock_exchange_manager,
+                market_data_provider=self.market_data_provider
             )
             logger.info("Modo Backtest: Conexão com a exchange ignorada.")
 
         logger.info("✅ Bot inicializado com sucesso.")
+
+    def run_single_cycle(self):
+        """Executes one iteration of the bot's logic."""
+        # 1. Get latest market data for strategy calculation
+        # For a live bot, this would be a short range (e.g., start='-24h')
+        # For a backtest, this step is handled by the mock exchange's price feed
+        if self.mode in ['trade', 'test']:
+            market_data_df = self.market_data_provider.get_historical_data(
+                symbol="BTC/USD",
+                start="-48h" # Example: strategy needs last 48h of data
+            )
+
+            # 2. Feed data to the strategy to get a signal (buy/sell/hold)
+            # signal = self.strategy.generate_signal(market_data_df)
+
+        # 3. Manage positions based on the signal
+        current_price = self.exchange_manager.get_current_price(self.symbol)
+        if not current_price:
+            logger.error("Não foi possível obter o preço atual. A saltar ciclo.")
+            return
+
+        logger.info(f"Preço atual de {self.symbol}: ${current_price:,.2f}")
+        self.position_manager.process_manual_commands()
+        self.position_manager.manage_positions(current_price)
+
+        # 4. Persist current state
+        self.persist_current_state()
 
     def run(self):
         """
@@ -114,17 +152,7 @@ class TradingBot:
 
         while self.is_running:
             try:
-                current_price = self.exchange_manager.get_current_price(self.symbol)
-                if not current_price:
-                    logger.error("Não foi possível obter o preço atual. A saltar ciclo.")
-                    time.sleep(10)
-                    continue
-                
-                logger.info(f"Preço atual de {self.symbol}: ${current_price:,.2f}")
-                self.position_manager.process_manual_commands()
-                self.position_manager.manage_positions(current_price)
-                self.log_current_state()
-
+                self.run_single_cycle()
                 logger.info("--- Ciclo concluído. A aguardar 10 segundos... ---")
                 time.sleep(10)
 
@@ -152,7 +180,6 @@ class TradingBot:
 
         # 2. Carrega os dados históricos da tabela mestre de features
         logger.info("A carregar dados históricos da 'features_master_table'...")
-        # CORREÇÃO: Usa o método correto e define um período padrão para o backtest.
         historical_data = self.data_manager.read_data_from_influx(
             measurement="features_master_table",
             start_date="-90d" # Carrega os últimos 90 dias para o backtest
@@ -180,7 +207,7 @@ class TradingBot:
         pnl = final_balance - initial_balance
         pnl_percent = (pnl / initial_balance) * 100 if initial_balance > 0 else 0
         
-        all_trades = self.db_manager.get_all_trades()
+        all_trades = self.db_manager.get_all_trades_in_range() # Use the correct method
         closed_trades = all_trades[all_trades['status'] == 'CLOSED']
         
         logger.info("========== RESULTADOS DO BACKTEST ==========")
@@ -205,30 +232,45 @@ class TradingBot:
 
         print("[SHUTDOWN] Limpeza completa. Adeus!")
 
-    def log_current_state(self):
+    def persist_current_state(self):
         """Salva o estado atual do bot em um arquivo JSON para a UI ler."""
         if self.mode not in ['trade', 'test']:
             return
 
-        open_positions = self.db_manager.get_open_positions()
+        open_positions_df = self.db_manager.get_open_positions()
 
-        # CORREÇÃO: Converte Timestamps para strings antes de serializar
-        if not open_positions.empty and 'timestamp' in open_positions.columns:
-            open_positions['timestamp'] = open_positions['timestamp'].apply(
-                lambda x: x.isoformat() if pd.notna(x) else None
-            )
+        if not open_positions_df.empty:
+            # Convert timestamp for JSON serialization
+            open_positions_df['timestamp'] = open_positions_df['timestamp'].apply(lambda x: x.isoformat() if pd.notna(x) else None)
+            positions_list = open_positions_df.to_dict(orient='records')
+        else:
+            positions_list = []
 
-        positions_list = open_positions.to_dict(orient='records') if not open_positions.empty else []
+        # Calculate portfolio value
+        # This is a simplified calculation. A real one would be more complex.
+        portfolio_value = self.account_manager.usdt_balance if hasattr(self.account_manager, 'usdt_balance') else 0
 
         state = {
             "timestamp": time.time(),
+            "bot_id": self.bot_id,
             "is_running": self.is_running,
             "mode": self.mode,
+            "open_positions_count": len(positions_list),
+            "portfolio_value_usd": portfolio_value,
             "open_positions": positions_list,
             "recent_high_price": self.position_manager.recent_high_price if self.position_manager else None
         }
 
+        # Write bot status to database
+        status_data = {
+            "is_running": state['is_running'],
+            "session_pnl_usd": 0, # Placeholder for now
+            "session_pnl_percent": 0, # Placeholder for now
+            "open_positions": state['open_positions_count'],
+            "portfolio_value_usd": state['portfolio_value_usd']
+        }
+        self.db_manager.write_bot_status(self.bot_id, self.mode, status_data)
+
         os.makedirs("/app/logs", exist_ok=True)
         with open("/app/logs/trading_status.json", "w") as f:
-            # Usar um default handler no json.dump é uma alternativa, mas a conversão explícita é mais clara.
             json.dump(state, f, indent=4)
