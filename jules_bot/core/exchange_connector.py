@@ -2,7 +2,7 @@
 
 from binance.client import Client
 from binance.exceptions import BinanceAPIException, BinanceRequestException
-from jules_bot.utils.config_manager import settings
+from jules_bot.utils.config_manager import config_manager
 from jules_bot.utils.logger import logger
 from typing import Optional, Union
 import pandas as pd
@@ -26,8 +26,13 @@ class ExchangeManager:
         use_testnet = self.mode == 'test'
 
         try:
-            api_key = settings.api_keys.binance_testnet_api_key if use_testnet else settings.api_keys.binance_api_key
-            api_secret = settings.api_keys.binance_testnet_api_secret if use_testnet else settings.api_keys.binance_api_secret
+            if use_testnet:
+                binance_config = config_manager.get_section('BINANCE_TESTNET')
+            else:
+                binance_config = config_manager.get_section('BINANCE_LIVE')
+
+            api_key = binance_config.get('api_key')
+            api_secret = binance_config.get('api_secret')
 
             if not api_key or not api_secret:
                 logger.error(f"API Key/Secret da Binance para o modo '{self.mode}' não encontradas.")
@@ -196,13 +201,14 @@ class ExchangeManager:
         try:
             account_info = self._client.get_account()
             # Find the balance for the base asset (e.g., BTC)
-            base_asset = settings.app.symbol.replace("USDT", "") # A bit simplistic, assumes USDT quote
+            symbol = config_manager.get('APP', 'symbol')
+            base_asset = symbol.replace("USDT", "") # A bit simplistic, assumes USDT quote
 
             positions = []
             for balance in account_info['balances']:
                 if balance['asset'] == base_asset and float(balance['free']) > 0:
                     positions.append({
-                        "symbol": settings.app.symbol,
+                        "symbol": symbol,
                         "quantity": float(balance['free']),
                         "side": "BUY" # Implied, as we are holding it
                     })

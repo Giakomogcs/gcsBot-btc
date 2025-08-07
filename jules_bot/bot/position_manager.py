@@ -2,7 +2,7 @@ import pandas as pd
 import uuid
 from datetime import datetime, timezone
 from jules_bot.utils.logger import logger
-from jules_bot.utils.config_manager import settings
+from jules_bot.utils.config_manager import config_manager
 import os
 import json
 import time
@@ -14,7 +14,7 @@ class PositionManager:
         self.db_manager = db_manager
         self.exchange_manager = exchange_manager
         self.market_data_provider = market_data_provider
-        self.strategy_config = settings.trading_strategy
+        self.strategy_config = config_manager.get_section('TRADING_STRATEGY')
 
         # CRITICAL: Load open positions from the database on startup
         self.open_positions = self._load_open_positions()
@@ -26,7 +26,7 @@ class PositionManager:
 
     def execute_buy(self, signal_data):
         """Executes a buy order and records the new open position in the database."""
-        usd_amount = self.strategy_config.usd_per_trade
+        usd_amount = float(self.strategy_config['usd_per_trade'])
         success, exchange_data = self.exchange_manager.place_buy_order(
             symbol=signal_data['symbol'],
             usd_amount=usd_amount
@@ -38,7 +38,7 @@ class PositionManager:
                 "bot_id": "jules_bot_main",
                 "mode": "backtest", # This should be dynamic based on bot's mode
                 "symbol": signal_data['symbol'],
-                "strategy": self.strategy_config.name,
+                "strategy": self.strategy_config['name'],
                 **exchange_data
             }
             self.db_manager.open_trade(trade_data)

@@ -3,7 +3,7 @@ import pandas as pd
 import json
 import os
 from jules_bot.utils.logger import logger
-from jules_bot.utils.config_manager import settings
+from jules_bot.utils.config_manager import config_manager
 from jules_bot.bot.position_manager import PositionManager
 from jules_bot.core.exchange_connector import ExchangeManager
 from jules_bot.bot.account_manager import AccountManager
@@ -79,7 +79,7 @@ class TradingBot:
         self.market_data_provider = market_data_provider
 
         # This logic remains the same: create managers if not provided (for live/test)
-        self.db_manager = db_manager or self._create_db_manager_from_config(settings, mode)
+        self.db_manager = db_manager or self._create_db_manager_from_config(mode)
         self.exchange_manager = exchange_manager or ExchangeManager(mode=self.mode)
 
         # The PositionManager will also need the data provider to value positions
@@ -88,16 +88,16 @@ class TradingBot:
             exchange_manager=self.exchange_manager,
             market_data_provider=self.market_data_provider
         )
-        self.symbol = settings.app.symbol
+        self.symbol = config_manager.get('APP', 'symbol')
 
-    def _create_db_manager_from_config(self, settings, mode):
+    def _create_db_manager_from_config(self, mode):
         """Creates a DatabaseManager instance from the configuration."""
-        db_config_name = f"influxdb_{mode}"
-        full_db_config = {
-            **settings.influxdb_connection.model_dump(),
-            **settings.model_dump()[db_config_name]
-        }
-        return DatabaseManager(config=full_db_config)
+        db_config = config_manager.get_section('INFLUXDB')
+        if mode == 'test':
+            db_config['bucket'] = 'jules_bot_test_v1'
+        elif mode == 'backtest':
+            db_config['bucket'] = 'jules_bot_backtest_v1'
+        return DatabaseManager(config=db_config)
 
     def run_single_cycle(self):
         """Executes one iteration of the bot's logic."""

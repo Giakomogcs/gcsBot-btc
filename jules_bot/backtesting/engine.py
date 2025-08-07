@@ -4,7 +4,7 @@ from jules_bot.bot.trading_bot import TradingBot
 from jules_bot.core.mock_exchange import MockExchangeManager
 from jules_bot.core.market_data_provider import MarketDataProvider
 from jules_bot.database.database_manager import DatabaseManager
-from jules_bot.utils.config_manager import settings
+from jules_bot.utils.config_manager import config_manager
 
 class Backtester:
     def __init__(self, historical_data_path: str):
@@ -13,28 +13,24 @@ class Backtester:
         logging.info(f"Initializing new backtest run with ID: {self.backtest_id}")
 
         # 1. Setup Database Connection for 'backtest' mode
-        db_config = {
-            **settings.influxdb_connection.model_dump(),
-            **settings.influxdb_backtest.model_dump()
-        }
+        db_config = config_manager.get_section('INFLUXDB')
+        db_config['bucket'] = 'jules_bot_backtest_v1'
         self.db_manager = DatabaseManager(config=db_config)
 
         # 2. Setup Market Data Provider to load all historical data
         # For backtesting, we load all data once into the MockExchange
-        market_db_config = {
-            **settings.influxdb_connection.model_dump(),
-            'bucket': settings.data_pipeline.historical_data_bucket
-        }
+        market_db_config = config_manager.get_section('INFLUXDB')
+        market_db_config['bucket'] = config_manager.get('DATA', 'historical_data_bucket')
         market_db_manager = DatabaseManager(config=market_db_config)
         data_provider = MarketDataProvider(market_db_manager)
         all_data = data_provider.get_historical_data(symbol="BTC/USD", start="-1y") # Example range
 
         # 3. Initialize the MOCK exchange with the historical data
-        backtest_settings = settings.backtest_settings
+        backtest_settings = config_manager.get_section('BACKTEST')
         self.mock_exchange = MockExchangeManager(
             historical_data=all_data,
-            initial_balance_usd=backtest_settings.initial_balance,
-            commission_fee_percent=backtest_settings.commission_fee
+            initial_balance_usd=float(backtest_settings['initial_balance']),
+            commission_fee_percent=float(backtest_settings['commission_fee'])
         )
 
         # 4. Inject all dependencies into the REAL TradingBot

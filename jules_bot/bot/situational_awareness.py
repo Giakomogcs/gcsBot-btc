@@ -4,7 +4,8 @@ import os
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from jules_bot.utils.logger import logger
-from jules_bot.utils.config_manager import settings
+from jules_bot.utils.config_manager import config_manager
+import ast
 
 class SituationalAwareness:
     def __init__(self, n_regimes: int = 4):
@@ -15,7 +16,7 @@ class SituationalAwareness:
 
     def fit(self, features_df: pd.DataFrame):
         logger.info(f"Treinando o modelo de {self.n_regimes} regimes de mercado...")
-        regime_features = settings.data_pipeline.regime_features
+        regime_features = ast.literal_eval(config_manager.get('DATA_PIPELINE', 'regime_features'))
         
         df = features_df.dropna(subset=regime_features).copy()
         if df.empty:
@@ -32,7 +33,7 @@ class SituationalAwareness:
             raise RuntimeError("O modelo de SituationalAwareness deve ser treinado (.fit()) antes de ser usado (.transform()).")
         
         logger.debug("Aplicando rótulos de regime de mercado...")
-        regime_features = settings.data_pipeline.regime_features
+        regime_features = ast.literal_eval(config_manager.get('DATA_PIPELINE', 'regime_features'))
         df = features_df.copy()
         
         # Garante que as colunas existam
