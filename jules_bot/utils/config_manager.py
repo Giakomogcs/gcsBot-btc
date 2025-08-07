@@ -72,6 +72,7 @@ class TradingStrategyConfig(BaseModel):
     ensemble_weights: dict[str, float]
     minimum_profit_for_take_profit: float
     partial_sell_percent: float = 90.0
+    legacy_hold_trigger_percent: float
     consecutive_green_candles_for_entry: int = 3
 
 class PositionSizingConfig(BaseModel):
