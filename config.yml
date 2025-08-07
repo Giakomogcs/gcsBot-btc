@@ -82,6 +82,8 @@ trading_strategy:
   minimum_profit_for_take_profit: 0.01 # Garante pelo menos 1 centavo de lucro
   partial_sell_percent: 90.0 # Vende 90% no take-profit para análise
 
+  legacy_hold_trigger_percent: -15.0 # Gatilho para marcar uma posição como "Legacy Hold"
+
   # --- NOVA ESTRATÉGIA DE TAKE PROFIT DINÂMICO ---
   dynamic_take_profit:
     enabled: true

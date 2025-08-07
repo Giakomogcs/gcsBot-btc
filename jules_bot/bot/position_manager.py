@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime, timezone
 import json
 from typing import Optional
+from jules_bot.bot.strategy import check_for_legacy_hold
 
 class PositionManager:
     def __init__(self, config, db_manager, logger, account_manager):
@@ -154,6 +155,18 @@ class PositionManager:
                 self.logger.warning(f"Trade {trade_id} não encontrado ou não está mais ABERTO no DB. Pulando.")
                 continue
 
+            # --- ESTRATÉGIA LEGACY HOLD ---
+            # Primeiro, verifica se a posição já é um 'legacy hold'. Se for, ignora.
+            if position.get('is_legacy_hold', False):
+                continue
+
+            # Segundo, verifica se a posição DEVE SE TORNAR um 'legacy hold'.
+            legacy_trigger = self.strategy_config.legacy_hold_trigger_percent
+            if check_for_legacy_hold(position, current_price, legacy_trigger):
+                self.logger.info(f"INFO: Posição {trade_id} atingiu o gatilho de Legacy Hold. Marcando e ignorando.")
+                self.db_manager.set_legacy_hold(trade_id, position.get('status'), True)
+                continue # Pula para a próxima posição neste ciclo.
+
             # --- LÓGICA DE STOP-LOSS (PRIORIDADE MÁXIMA) ---
             if 'stop_loss_price' in position and pd.notna(position['stop_loss_price']) and current_price <= position['stop_loss_price']:
                 self.logger.info(f"❌ STOP-LOSS ATINGIDO PARA O TRADE {trade_id}:")
@@ -270,24 +283,26 @@ class PositionManager:
                     sell_successful = self.account_manager.update_on_sell(quantity_btc=quantity_to_sell, current_price=current_price)
 
                     if sell_successful:
-                        # 3. Em caso de sucesso, atualiza o DB.
-                        decision_data_tp = position.get('decision_data', {})
-                        decision_data_tp['partially_closed'] = True
-                        decision_data_tp['last_partial_close_ts'] = datetime.now(timezone.utc).isoformat()
-                        total_realized_pnl = position.get('realized_pnl_usdt', 0.0) + net_pnl_sold
-                        status = "CLOSED" # O trade é considerado FECHADO após a venda parcial.
-                        update_trade_data = {
-                            "trade_id": trade_id, "status": status, "entry_price": entry_price,
-                            "quantity_btc": quantity_remaining, "realized_pnl_usdt": total_realized_pnl,
-                            "timestamp": datetime.now(timezone.utc), "decision_data": decision_data_tp
-                        }
-                        self.db_manager.write_trade(update_trade_data)
-                        summary = {
-                            'entry_price': entry_price, 'exit_price': current_price,
-                            'quantity_btc_sold': quantity_to_sell, 'quantity_btc_remaining': quantity_remaining,
-                            'pnl_usdt': net_pnl_sold, 'exit_reason': 'TAKE_PROFIT_PARTIAL'
-                        }
-                        closed_trades_summaries.append(summary)
+                        # 3. Em caso de sucesso, atualiza o DB usando a nova função atômica.
+                        split_successful = self.db_manager.execute_90_10_take_profit_split(
+                            original_position=position,
+                            treasury_quantity=quantity_remaining,
+                            realized_pnl=net_pnl_sold
+                        )
+
+                        if split_successful:
+                            summary = {
+                                'entry_price': entry_price, 'exit_price': current_price,
+                                'quantity_btc_sold': quantity_to_sell, 'quantity_btc_remaining': quantity_remaining,
+                                'pnl_usdt': net_pnl_sold, 'exit_reason': 'TAKE_PROFIT_90_10_SPLIT'
+                            }
+                            closed_trades_summaries.append(summary)
+                        else:
+                            # Se a transação no DB falhou, precisamos considerar o que fazer.
+                            # A venda na exchange já ocorreu. Isso é um estado inconsistente.
+                            # Logamos como crítico e removemos o lock para que possa ser reavaliado.
+                            self.logger.critical(f"VENDA EXECUTADA MAS FALHA AO ATUALIZAR DB PARA TRADE {trade_id}. VERIFICAÇÃO MANUAL NECESSÁRIA.")
+                            self.positions_pending_closure.remove(trade_id)
                     else:
                         # 4. Em caso de falha, remove o lock para retentativa.
                         self.logger.error(f"A ordem de venda (TAKE-PROFIT) para o trade {trade_id} falhou. O trade não será atualizado no DB.")

@@ -1,10 +1,12 @@
 # src/database_manager.py (VERSÃO FINAL COMPATÍVEL)
 
 import json
+import uuid
 from typing import Optional
 import numpy as np
 import pandas as pd
 from influxdb_client import InfluxDBClient, Point
+from datetime import datetime, timezone
 from influxdb_client.client.write_api import SYNCHRONOUS
 from jules_bot.utils.config_manager import settings
 from jules_bot.utils.logger import logger
@@ -140,6 +142,62 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Falha ao buscar trade pelo ID '{trade_id}': {e}", exc_info=True)
             return None
+
+    def set_legacy_hold(self, trade_id: str, status: str, is_legacy: bool):
+        """Sets the is_legacy_hold flag for a specific trade."""
+        try:
+            point = Point("trades") \
+                .tag("trade_id", trade_id) \
+                .tag("status", status) \
+                .field("is_legacy_hold", is_legacy) \
+                .time(datetime.now(timezone.utc))
+
+            self.write_api.write(bucket=self.bucket, org=self.org, record=point)
+            logger.info(f"Trade {trade_id} marked as legacy hold: {is_legacy}.")
+        except Exception as e:
+            logger.error(f"Falha ao marcar trade {trade_id} como legacy hold: {e}", exc_info=True)
+
+    def execute_90_10_take_profit_split(self, original_position: pd.Series, treasury_quantity: float, realized_pnl: float):
+        """
+        Atomically closes 90% of a position and creates a new 10% "treasured" position
+        by writing two points to InfluxDB in a single batch.
+        """
+        try:
+            now = datetime.now(timezone.utc)
+
+            # Ponto 1: Atualiza a posição original para 'CLOSED'
+            # Escrevemos todos os campos para garantir a consistência do último estado.
+            # A quantidade é zerada para indicar que a parte 'ativa' do trade acabou.
+            closed_point = Point("trades") \
+                .tag("trade_id", original_position.name) \
+                .tag("status", "CLOSED") \
+                .field("entry_price", float(original_position.get('entry_price', 0.0))) \
+                .field("quantity_btc", 0.0) \
+                .field("realized_pnl_usdt", float(original_position.get('realized_pnl_usdt', 0.0)) + realized_pnl) \
+                .field("profit_target_price", float(original_position.get('profit_target_price', 0.0))) \
+                .field("stop_loss_price", float(original_position.get('stop_loss_price', 0.0))) \
+                .field("is_legacy_hold", bool(original_position.get('is_legacy_hold', False))) \
+                .time(now)
+
+            # Ponto 2: Cria a nova posição "do tesouro"
+            treasured_point = Point("trades") \
+                .tag("trade_id", str(uuid.uuid4())) \
+                .tag("status", "TREASURED") \
+                .field("entry_price", float(original_position.get('entry_price', 0.0))) \
+                .field("quantity_btc", treasury_quantity) \
+                .field("realized_pnl_usdt", 0.0) \
+                .field("is_legacy_hold", False) \
+                .time(now)
+
+            # Escreve os dois pontos como um lote único para garantir a atomicidade
+            self.write_api.write(bucket=self.bucket, org=self.org, record=[closed_point, treasured_point])
+
+            logger.info(f"90/10 split executado com sucesso para o trade original {original_position.name}.")
+            return True
+
+        except Exception as e:
+            logger.error(f"CRÍTICO: A transação de split 90/10 falhou para o trade {original_position.name}. Erro: {e}", exc_info=True)
+            return False
 
     def get_all_trades_in_range(self, start_date: str = "-90d", end_date: str = "now()"):
         """Busca todos os trades (abertos e fechados) em um determinado período."""
