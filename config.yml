@@ -41,54 +41,8 @@ data_pipeline:
 
 # Estratégia de Trading: o cérebro da tomada de decisão
 trading_strategy:
-  static_confidence_threshold: 0.55 # Limiar de confiança estático para o sinal preliminar do Ensemble
-  first_entry_confidence_factor: 0.8 # Fator de redução do limiar para a primeira entrada (80% do normal)
-  dca_grid_spacing_percent: -2.0 # % de queda para acionar uma nova compra DCA (-2.0%)
-  triple_barrier:
-    profit_mult: 4.0
-    stop_mult: 2.0
-    time_limit_candles: 96
-
-  models:
-    specialists:
-      # Especialista em ação de preço e microestrutura
-      price_action:
-        features:
-          - "atr_14"
-          - "bbp_20_2_0"
-          - "volume_delta"
-          - "cvd"
-
-      # Especialista em sentimento e posicionamento de mercado
-      market_dynamics:
-        features:
-          - "funding_rate_mean_24h"
-          - "open_interest_pct_change_4h"
-          - "fng_change_3d"
-
-      # Especialista em correlações e ambiente macro
-      intermarket_analyst:
-        features:
-          - "btc_spx_corr_30d" # Correlação com o mercado de ações (risco on/off)
-          - "btc_ndx_corr_30d" # Correlação com o setor de tecnologia
-          - "btc_gold_corr_30d" # Correlação com o ouro (ativo de refúgio)
-          - "btc_dxy_corr_30d" # Correlação com a força do dólar
-          - "btc_vix_corr_30d" # Correlação com a volatilidade/medo
-
-  ensemble_weights:
-    price_action: 0.4
-    market_dynamics: 0.4
-    intermarket_analyst: 0.2
-  minimum_profit_for_take_profit: 0.01 # Garante pelo menos 1 centavo de lucro
-  partial_sell_percent: 90.0 # Vende 90% no take-profit para análise
-
-  legacy_hold_trigger_percent: -15.0 # Gatilho para marcar uma posição como "Legacy Hold"
-
-  # --- NOVA ESTRATÉGIA DE TAKE PROFIT DINÂMICO ---
-  dynamic_take_profit:
-    enabled: true
-    near_target_factor: 0.98 # Ex: 0.98 para 98% do alvo
-    rsi_overbought_threshold: 75 # Limiar de RSI para considerar o mercado "esticado"
+  take_profit_percentage: 0.8
+  buy_on_dip_percentage: -0.5
 
 # Configuração do dimensionamento de posição
 position_sizing:

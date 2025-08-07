@@ -1,457 +1,131 @@
-# Ficheiro: src/core/position_manager.py (VERSÃO ESTRATEGA GRID-DCA)
-
 import pandas as pd
 import uuid
 from datetime import datetime, timezone
-import json
-from typing import Optional
-from jules_bot.bot.strategy import check_for_legacy_hold
+from jules_bot.utils.logger import logger
+from jules_bot.utils.config_manager import settings
 
 class PositionManager:
-    def __init__(self, config, db_manager, logger, account_manager):
-        self.config = config
+    def __init__(self, db_manager, account_manager, exchange_manager):
         self.db_manager = db_manager
-        self.logger = logger
         self.account_manager = account_manager
-
-        self.position_config = self.config.position_management
-        self.sizing_config = self.config.dynamic_sizing
+        self.exchange_manager = exchange_manager
+        self.config = settings
         self.strategy_config = self.config.trading_strategy
+        self.recent_high_price = 0.0
+        self.initialize_price_tracker()
 
-        self.profit_target_mult = self.strategy_config.triple_barrier.profit_mult
-        self.stop_loss_mult = self.strategy_config.triple_barrier.stop_mult
-        
-        # --- NOVOS PARÂMETROS ESTRATÉGICOS ---
-        self.dca_grid_spacing_percent = self.strategy_config.dca_grid_spacing_percent / 100.0
-        self.partial_sell_percent = self.strategy_config.partial_sell_percent / 100.0
-        self.consecutive_green_candles_for_entry = self.strategy_config.consecutive_green_candles_for_entry
-        self.max_total_capital_allocation_percent = self.position_config.max_total_capital_allocation_percent / 100.0
-
-        # Parâmetros para Take Profit Dinâmico (com acesso seguro a atributos Pydantic)
-        if hasattr(self.strategy_config, 'dynamic_take_profit'):
-            self.dynamic_tp_enabled = self.strategy_config.dynamic_take_profit.enabled
-            self.near_target_factor = self.strategy_config.dynamic_take_profit.near_target_factor
-            self.rsi_overbought_threshold = self.strategy_config.dynamic_take_profit.rsi_overbought_threshold
+    def initialize_price_tracker(self):
+        """Call this once on startup to set the initial price."""
+        symbol = self.config.app.symbol
+        self.recent_high_price = self.exchange_manager.get_current_price(symbol)
+        if self.recent_high_price:
+            logger.info(f"Price tracker initialized at: {self.recent_high_price}")
         else:
-            self.logger.warning("Seção 'dynamic_take_profit' não encontrada no config. Usando valores padrão (desativado).")
-            self.dynamic_tp_enabled = False
-            self.near_target_factor = 0.98
-            self.rsi_overbought_threshold = 75
+            logger.warning("[WARNING] Could not initialize price tracker. Will try again on next cycle.")
 
-        self.performance_factor = 1.0
-        self.previous_candle = None
-        self.consecutive_green_candles = 0
+    def _check_and_execute_sells(self, current_price: float):
+        """Evaluates each open position independently for a potential sale."""
+        open_positions = self.db_manager.get_open_positions()
 
-        # --- CORREÇÃO DE BUG (RACE CONDITION) ---
-        # Lock para impedir que a mesma posição seja vendida múltiplas vezes no mesmo ciclo.
-        self.positions_pending_closure = set()
-
-    def _update_performance_factor(self):
-        if not self.sizing_config.enabled:
-            self.performance_factor = 1.0
+        if open_positions.empty:
             return
 
-        n_trades = self.sizing_config.performance_window_trades
-        trades_df = self.db_manager.get_last_n_trades(n=n_trades)
+        for trade_id, position in open_positions.iterrows():
+            if not current_price:
+                logger.warning(f"[WARNING] Could not get current price for {self.config.app.symbol}. Skipping sell check.")
+                continue
 
-        if trades_df.empty or len(trades_df) < n_trades:
-            self.performance_factor = 1.0
-            return
+            entry_price = position['entry_price']
+            pnl_percent = ((current_price - entry_price) / entry_price) * 100
 
-        gross_profit = trades_df[trades_df['pnl'] > 0]['pnl'].sum()
-        gross_loss = abs(trades_df[trades_df['pnl'] < 0]['pnl'].sum())
-        profit_factor = float('inf') if gross_loss == 0 else gross_profit / gross_loss
+            take_profit_target = self.strategy_config.take_profit_percentage
+            if pnl_percent >= take_profit_target:
+                logger.info(f"[SELL ACTION] Take-profit hit for position {trade_id} at {pnl_percent:.2f}%. Executing sale.")
+                self._sell_position(position, current_price)
 
-        self.logger.info(f"Análise de Performance: Últimos {len(trades_df)} trades. Profit Factor: {profit_factor:.2f}")
+    def _sell_position(self, position, current_price):
+        """Sells 100% of the position and updates the database."""
+        quantity_to_sell = position['quantity_btc']
 
-        if profit_factor > self.sizing_config.profit_factor_threshold:
-            self.performance_factor = self.sizing_config.performance_upscale_factor
+        # In a real scenario, you'd get the executed price from the exchange
+        # For simplicity, we use the current price.
+        sell_successful = self.account_manager.update_on_sell(quantity_btc=quantity_to_sell, current_price=current_price)
+
+        if sell_successful:
+            entry_cost = position['entry_price'] * quantity_to_sell
+            exit_value = current_price * quantity_to_sell
+            commission = (entry_cost + exit_value) * self.config.backtest.commission_rate
+            net_pnl = exit_value - entry_cost - commission
+
+            update_trade_data = {
+                "trade_id": position.name,
+                "status": "CLOSED",
+                "quantity_btc": 0,
+                "realized_pnl_usdt": position.get('realized_pnl_usdt', 0.0) + net_pnl,
+                "timestamp": datetime.now(timezone.utc),
+                "decision_data": {"exit_reason": "TAKE_PROFIT"}
+            }
+            self.db_manager.write_trade(update_trade_data)
+            logger.info(f"Position {position.name} closed successfully. Realized PnL: ${net_pnl:.2f}")
         else:
-            self.performance_factor = self.sizing_config.performance_downscale_factor
-            
-    def get_capital_per_trade(self, available_capital: float) -> float:
-        self._update_performance_factor()
-        base_risk_percent = self.position_config.capital_per_trade_percent / 100
-        dynamic_risk_percent = base_risk_percent * self.performance_factor
-        trade_size_usdt = available_capital * min(dynamic_risk_percent, 0.10)
-        return trade_size_usdt
+            logger.error(f"Failed to execute sell order for position {position.name} on the exchange.")
 
-    def open_position(self, candle: pd.Series, decision_data: dict = None):
-        trade_size_usdt = decision_data.get('trade_size_usdt', 0)
-        if trade_size_usdt <= 0:
-            self.logger.warning("Tamanho de trade inválido para abrir posição. Abortando.")
+
+    def _check_and_execute_buys(self, current_price: float):
+        """Observes the market for a dip to open a NEW position."""
+        if self.db_manager.has_open_positions():
             return
 
-        # 1. Executar a ordem de compra primeiro
+        if not current_price:
+            return
+
+        if self.recent_high_price == 0.0:
+            self.recent_high_price = current_price
+            logger.info(f"Buy watcher initialized. Current peak price: {self.recent_high_price}")
+            return
+
+        if current_price > self.recent_high_price:
+            self.recent_high_price = current_price
+            return
+
+        dip_percentage = ((current_price - self.recent_high_price) / self.recent_high_price) * 100
+        buy_trigger = self.strategy_config.buy_on_dip_percentage
+
+        if dip_percentage <= buy_trigger:
+            logger.info(f"[BUY ACTION] Dip of {dip_percentage:.2f}% detected from peak of {self.recent_high_price} (Trigger: {buy_trigger}%). Executing new buy.")
+
+            self._execute_buy_order(current_price)
+
+            logger.info(f"Buy attempted. Resetting price peak tracker.")
+            self.recent_high_price = 0.0
+
+    def _execute_buy_order(self, current_price):
+        """Opens a new position."""
+        trade_size_usdt = 100.0 # Fixed trade size for simplicity
+
         buy_successful = self.account_manager.update_on_buy(quote_order_qty=trade_size_usdt)
 
-        # 2. Se a compra falhar, não registrar o trade no DB
-        if not buy_successful:
-            self.logger.error("A ordem de compra falhou. O trade não será registrado no banco de dados.")
-            return
-
-        # 3. Se a compra for bem-sucedida, registrar o trade
-        try:
-            entry_price = candle['close']
-            atr = candle.get('atr_14', 0) # Use .get() para segurança
-
-            self.logger.debug(f"Calculando TP/SL: Preço Entrada=${entry_price}, ATR=${atr}, Mult={self.profit_target_mult}")
-
-            if pd.isna(atr) or atr == 0:
-                self.logger.warning("ATR inválido (NaN ou 0), não é possível calcular SL/TP. Posição não será aberta.")
-                return
-
-            profit_target_price = entry_price + (atr * self.profit_target_mult)
-            stop_loss_price = entry_price - (atr * self.stop_loss_mult)
-            # A quantidade real de BTC virá da resposta da exchange no futuro, por enquanto calculamos
-            quantity_btc = trade_size_usdt / entry_price
-
+        if buy_successful:
+            quantity_btc = trade_size_usdt / current_price
             trade_data = {
                 "trade_id": str(uuid.uuid4()),
                 "status": "OPEN",
-                "entry_price": entry_price,
+                "entry_price": current_price,
                 "quantity_btc": quantity_btc,
-                "profit_target_price": profit_target_price,
-                "stop_loss_price": stop_loss_price,
                 "timestamp": datetime.now(timezone.utc),
-                "decision_data": decision_data or {},
-                "total_realized_pnl_usdt": 0.0,
+                "decision_data": {"reason": "BUY_THE_DIP"},
             }
             self.db_manager.write_trade(trade_data)
-            self.logger.info(f"Trade {trade_data['trade_id']} aberto e registrado com sucesso.")
+            logger.info(f"New position opened at ${current_price:,.2f}")
+        else:
+            logger.error("Failed to execute buy order on the exchange.")
 
-        except Exception as e:
-            self.logger.critical(f"CRÍTICO: A ORDEM DE COMPRA FOI EXECUTADA, MAS FALHOU AO REGISTRAR NO DB! Verifique manualmente. Erro: {e}", exc_info=True)
 
-    def check_and_close_positions(self, candle: pd.Series):
-        # Limpa o lock de posições pendentes no início de cada ciclo de verificação.
-        self.positions_pending_closure.clear()
-
-        closed_trades_summaries = []
-        current_price = candle['close']
-        open_positions_df = self.db_manager.get_open_positions()
-        commission_rate = self.config.backtest.commission_rate
-        trailing_config = self.config.trailing_profit
-
-        if open_positions_df.empty:
-            return []
-
-        # Obter a lista de IDs de trade para evitar problemas com a iteração de um DataFrame mutável
-        trade_ids = open_positions_df.index.tolist()
-
-        for trade_id in trade_ids:
-            # --- CORREÇÃO DE BUG (RACE CONDITION) ---
-            # Se a posição já está sendo processada para venda neste ciclo, pule.
-            if trade_id in self.positions_pending_closure:
-                continue
-
-            # --- CORREÇÃO DE BUG CRÍTICO (KeyError) ---
-            # Carregar a versão mais recente e autoritativa do trade diretamente do banco de dados
-            # para garantir que temos todos os campos necessários (ex: 'entry_price').
-            position = self.db_manager.get_trade_by_id(trade_id)
-
-            # Verifica se o trade ainda existe e está aberto. Pode ter sido fechado por outro processo.
-            if position is None or position.get('status') != 'OPEN':
-                self.logger.warning(f"Trade {trade_id} não encontrado ou não está mais ABERTO no DB. Pulando.")
-                continue
-
-            # --- ESTRATÉGIA LEGACY HOLD ---
-            # Primeiro, verifica se a posição já é um 'legacy hold'. Se for, ignora.
-            if position.get('is_legacy_hold', False):
-                continue
-
-            # Segundo, verifica se a posição DEVE SE TORNAR um 'legacy hold'.
-            legacy_trigger = self.strategy_config.legacy_hold_trigger_percent
-            if check_for_legacy_hold(position, current_price, legacy_trigger):
-                self.logger.info(f"INFO: Posição {trade_id} atingiu o gatilho de Legacy Hold. Marcando e ignorando.")
-                self.db_manager.set_legacy_hold(trade_id, position.get('status'), True)
-                continue # Pula para a próxima posição neste ciclo.
-
-            # --- LÓGICA DE STOP-LOSS (PRIORIDADE MÁXIMA) ---
-            if 'stop_loss_price' in position and pd.notna(position['stop_loss_price']) and current_price <= position['stop_loss_price']:
-                self.logger.info(f"❌ STOP-LOSS ATINGIDO PARA O TRADE {trade_id}:")
-                self.logger.info(f"   Preço de Entrada: ${position['entry_price']:,.2f}, Stop Loss: ${position['stop_loss_price']:,.2f}, Preço Atual: ${current_price:,.2f}")
-
-                quantity_to_sell = position['quantity_btc']
-
-                # Calcula o P&L realizado
-                entry_cost = position['entry_price'] * quantity_to_sell
-                exit_value = current_price * quantity_to_sell
-                commission_entry = entry_cost * commission_rate
-                commission_exit = exit_value * commission_rate
-                net_pnl = exit_value - entry_cost - commission_entry - commission_exit
-
-                # --- CORREÇÃO DE BUG (RACE CONDITION) ---
-                # 1. Adiciona o ID da posição ao lock para impedir reprocessamento.
-                self.positions_pending_closure.add(trade_id)
-
-                # 2. Executa a ordem de venda.
-                sell_successful = self.account_manager.update_on_sell(quantity_btc=quantity_to_sell, current_price=current_price)
-
-                if sell_successful:
-                    # 3. Em caso de sucesso, o trade é atualizado no DB e o lock permanece até o próximo ciclo.
-                    decision_data = position.get('decision_data', {})
-                    decision_data['exit_reason'] = 'STOP_LOSS'
-
-                    update_trade_data = {
-                        "trade_id": trade_id,
-                        "status": "CLOSED",
-                        "entry_price": position['entry_price'], # Adicionado para consistência
-                        "quantity_btc": 0,
-                        "realized_pnl_usdt": position.get('realized_pnl_usdt', 0.0) + net_pnl,
-                        "timestamp": datetime.now(timezone.utc),
-                        "decision_data": decision_data
-                    }
-                    self.db_manager.write_trade(update_trade_data)
-
-                    summary = {
-                        'entry_price': position['entry_price'],
-                        'exit_price': current_price,
-                        'quantity_btc_sold': quantity_to_sell,
-                        'quantity_btc_remaining': 0,
-                        'pnl_usdt': net_pnl,
-                        'exit_reason': 'STOP_LOSS'
-                    }
-                    closed_trades_summaries.append(summary)
-                else:
-                    # 4. Em caso de falha na API, remove o lock para que o trade possa ser tentado novamente no próximo ciclo.
-                    self.logger.error(f"A ordem de venda de STOP-LOSS para o trade {trade_id} falhou. O trade permanecerá aberto no DB.")
-                    self.positions_pending_closure.remove(trade_id)
-
-                continue # Pula para o próximo trade, pois este foi fechado.
-
-            # --- LÓGICA DE TRAILING PROFIT TARGET ---
-            unrealized_pnl_percent = (current_price - position['entry_price']) / position['entry_price']
-            if unrealized_pnl_percent >= (trailing_config.activation_percentage / 100.0):
-                new_profit_target = current_price * (1 - (trailing_config.trailing_percentage / 100.0))
-                if new_profit_target > position['profit_target_price']:
-                    self.logger.info(f"🚀 ATUALIZANDO PROFIT TARGET PARA O TRADE {trade_id}:")
-                    self.logger.info(f"   Antigo Alvo: ${position['profit_target_price']:,.2f}")
-                    self.logger.info(f"   Novo Alvo:   ${new_profit_target:,.2f}")
-                    self.db_manager.write_trade({
-                        "trade_id": trade_id,
-                        "status": "OPEN",
-                        "profit_target_price": new_profit_target,
-                        "timestamp": datetime.now(timezone.utc)
-                    })
-                    position['profit_target_price'] = new_profit_target
-
-            # --- LÓGICA DE TAKE PROFIT (Dinâmica ou Fixa) ---
-            decision_data = position.get('decision_data', {})
-            is_partially_closed = decision_data.get('partially_closed', False)
-
-            take_profit_condition_met = False
-            if self.dynamic_tp_enabled:
-                is_near_target = current_price >= (position['profit_target_price'] * self.near_target_factor)
-                is_overbought = candle.get('rsi_14', 50) > self.rsi_overbought_threshold
-                if is_near_target and is_overbought:
-                    self.logger.info(f"TAKE PROFIT DINÂMICO para trade {trade_id}: Perto do alvo E RSI sobrecomprado ({candle.get('rsi_14', 50):.1f} > {self.rsi_overbought_threshold}).")
-                    take_profit_condition_met = True
-            else:
-                # Lógica original se o modo dinâmico estiver desativado
-                if current_price >= position['profit_target_price']:
-                    take_profit_condition_met = True
-
-            if not is_partially_closed and take_profit_condition_met:
-                entry_cost = position['entry_price'] * position['quantity_btc']
-                exit_value = current_price * position['quantity_btc']
-                commission = (entry_cost + exit_value) * commission_rate
-                net_pnl = exit_value - entry_cost - commission
-
-                if net_pnl > self.config.trading_strategy.minimum_profit_for_take_profit:
-                    # --- LÓGICA DE VENDA MOVIDA PARA CÁ ---
-                    # --- CORREÇÃO DE BUG (RACE CONDITION) ---
-                    self.logger.info(f"✅ INICIANDO VENDA PARCIAL (TAKE_PROFIT) PARA O TRADE {trade_id}:")
-                    # 1. Adiciona o ID da posição ao lock.
-                    self.positions_pending_closure.add(trade_id)
-
-                    # Calcula quantidades e P&L para a porção a ser vendida.
-                    original_quantity = position['quantity_btc']
-                    quantity_to_sell = original_quantity * self.partial_sell_percent
-                    quantity_remaining = original_quantity - quantity_to_sell
-                    if quantity_remaining < 1e-8: quantity_remaining = 0
-                    entry_price = position['entry_price']
-                    entry_cost_sold = entry_price * quantity_to_sell
-                    exit_value_sold = current_price * quantity_to_sell
-                    commission_entry_sold = entry_cost_sold * commission_rate
-                    commission_exit_sold = exit_value_sold * commission_rate
-                    net_pnl_sold = exit_value_sold - entry_cost_sold - commission_entry_sold - commission_exit_sold
-                    self.logger.info(f"   Selling {quantity_to_sell:.8f} BTC ({self.partial_sell_percent:.0%}) at ${current_price:,.2f}")
-                    self.logger.info(f"   Realized PnL: ${net_pnl_sold:,.2f}. Remaining: {quantity_remaining:.8f} BTC")
-
-                    # 2. Executa a ordem de venda.
-                    sell_successful = self.account_manager.update_on_sell(quantity_btc=quantity_to_sell, current_price=current_price)
-
-                    if sell_successful:
-                        # 3. Em caso de sucesso, atualiza o DB usando a nova função atômica.
-                        split_successful = self.db_manager.execute_90_10_take_profit_split(
-                            original_position=position,
-                            treasury_quantity=quantity_remaining,
-                            realized_pnl=net_pnl_sold
-                        )
-
-                        if split_successful:
-                            summary = {
-                                'entry_price': entry_price, 'exit_price': current_price,
-                                'quantity_btc_sold': quantity_to_sell, 'quantity_btc_remaining': quantity_remaining,
-                                'pnl_usdt': net_pnl_sold, 'exit_reason': 'TAKE_PROFIT_90_10_SPLIT'
-                            }
-                            closed_trades_summaries.append(summary)
-                        else:
-                            # Se a transação no DB falhou, precisamos considerar o que fazer.
-                            # A venda na exchange já ocorreu. Isso é um estado inconsistente.
-                            # Logamos como crítico e removemos o lock para que possa ser reavaliado.
-                            self.logger.critical(f"VENDA EXECUTADA MAS FALHA AO ATUALIZAR DB PARA TRADE {trade_id}. VERIFICAÇÃO MANUAL NECESSÁRIA.")
-                            self.positions_pending_closure.remove(trade_id)
-                    else:
-                        # 4. Em caso de falha, remove o lock para retentativa.
-                        self.logger.error(f"A ordem de venda (TAKE-PROFIT) para o trade {trade_id} falhou. O trade não será atualizado no DB.")
-                        self.positions_pending_closure.remove(trade_id)
-                else:
-                    self.logger.debug(f"TAKE PROFIT for trade {trade_id} ignored due to insufficient net profit.")
-
-        return closed_trades_summaries
-    
-    def synchronize_with_exchange(self, recent_exchange_trades: pd.DataFrame, historical_data: pd.DataFrame):
-        """
-        Compara os trades da corretora com o DB local e "adota" os trades órfãos.
-        """
-        self.logger.info("Iniciando sincronização com o histórico da corretora...")
-        open_local_positions = self.db_manager.get_open_positions()
-
-        # Extrai os IDs de trade da Binance que já estão registrados localmente
-        local_binance_ids = []
-        if not open_local_positions.empty and 'decision_data' in open_local_positions.columns:
-            for data in open_local_positions['decision_data']:
-                if isinstance(data, dict) and data.get('binance_trade_id'):
-                    local_binance_ids.append(data['binance_trade_id'])
-
-        # Filtra apenas por trades de COMPRA
-        buy_trades = recent_exchange_trades[recent_exchange_trades['isBuyer']].copy()
-        
-        trades_to_sync = 0
-        for _, exchange_trade in buy_trades.iterrows():
-            # Verifica se o trade já foi registrado
-            if exchange_trade['id'] in local_binance_ids:
-                continue
-
-            trades_to_sync += 1
-            self.logger.info(f"Trade órfão detectado: ID Binance {exchange_trade['id']}. Reconstruindo posição...")
+    def manage_positions(self, current_price: float):
+        """The main orchestrator, updated to separate buy and sell checks."""
+        if not current_price:
+            logger.warning("[WARNING] Invalid price received. Skipping position management cycle.")
+            return
             
-            trade_timestamp = pd.to_datetime(exchange_trade['time'], unit='ms', utc=True)
-            # Encontra a vela mais próxima do momento do trade para obter o ATR
-            candle = historical_data.asof(trade_timestamp)
-
-            if pd.isna(candle.get('atr_14')):
-                self.logger.warning(f"Não foi possível encontrar ATR para o trade {exchange_trade['id']}. Sincronização pulada.")
-                continue
-
-            entry_price = float(exchange_trade['price'])
-            atr_value = candle['atr_14']
-            
-            # Recria a posição com a mesma lógica de um trade novo
-            trade_data = {
-                "trade_id": str(uuid.uuid4()),
-                "status": "OPEN",
-                "entry_price": entry_price,
-                "quantity_btc": float(exchange_trade['qty']),
-                "profit_target_price": entry_price + (atr_value * self.profit_target_mult),
-                "stop_loss_price": entry_price - (atr_value * self.stop_loss_mult),
-                "timestamp": trade_timestamp,
-                "decision_data": {"reason": "SYNC_FROM_EXCHANGE", "binance_trade_id": exchange_trade['id']},
-                "total_realized_pnl_usdt": 0.0,
-            }
-            self.db_manager.write_trade(trade_data)
-            self.logger.info(f"✅ Posição para o trade Binance ID {exchange_trade['id']} sincronizada com sucesso.")
-        
-        if trades_to_sync == 0:
-            self.logger.info("Nenhum trade novo para sincronizar. O banco de dados já está alinhado.")
-
-    def get_open_positions(self) -> pd.DataFrame:
-        """Retorna um DataFrame com as posições abertas."""
-        return self.db_manager.get_open_positions()
-
-    def check_for_entry(self, candle: pd.Series) -> Optional[dict]:
-        """
-        Nova lógica de entrada estratégica AI-less, com verificação de fundos.
-        Retorna um dicionário de decisão se uma compra deve ser executada, caso contrário None.
-        """
-        open_positions = self.get_open_positions()
-
-        if not open_positions.empty:
-            total_usdt_balance = self.account_manager.get_quote_asset_balance()
-            
-            # Calcula o custo total das posições abertas
-            open_positions_cost = (open_positions['entry_price'] * open_positions['quantity_btc']).sum()
-            
-            # Calcula o valor total do portfólio (dinheiro + cripto em risco)
-            total_portfolio_value = total_usdt_balance + open_positions_cost
-            
-            # Calcula a alocação atual
-            current_allocation = open_positions_cost / total_portfolio_value
-            
-            if current_allocation >= self.max_total_capital_allocation_percent:
-                self.logger.info(f"ENTRADA BLOQUEADA: Alocação de capital ({current_allocation:.1%}) atingiu o limite de {self.max_total_capital_allocation_percent:.1%}.")
-                return None # Bloqueia qualquer nova compra
-
-        open_trades_count = len(open_positions)
-        max_trades = self.position_config.max_concurrent_trades
-
-        if open_trades_count >= max_trades:
-            return None
-
-        # Lógica de decisão de entrada
-        entry_decision = None
-        if self.previous_candle is not None:
-            if candle['close'] > self.previous_candle['close']:
-                self.consecutive_green_candles += 1
-            else:
-                self.consecutive_green_candles = 0
-
-        if open_trades_count == 0:
-            if self.previous_candle is not None and candle['close'] < self.previous_candle['close']:
-                self.logger.info("ESTRATÉGIA 'ENTRAR NO JOGO': Primeira vela de baixa detectada.")
-                entry_decision = {"reason": "FIRST_ENTRY_DIP"}
-            elif self.consecutive_green_candles >= self.consecutive_green_candles_for_entry:
-                self.logger.info(f"ESTRATÉGIA 'ENTRAR NO JOGO': {self.consecutive_green_candles} velas verdes consecutivas detectadas.")
-                entry_decision = {"reason": "UPTREND_ENTRY"}
-                self.consecutive_green_candles = 0 # Reset after entry
-        elif open_trades_count > 0:
-            average_entry_price = open_positions['entry_price'].mean()
-            price_change_percent = (candle['close'] - average_entry_price) / average_entry_price
-            
-            # LOG DE DEPURAÇÃO ESSENCIAL
-            self.logger.info(
-                f"DCA CHECK | Preço Médio: ${average_entry_price:,.2f} | "
-                f"Preço Atual: ${candle['close']:,.2f} | "
-                f"Variação: {price_change_percent:.2%} | "
-                f"Alvo P/ Compra: < {self.dca_grid_spacing_percent:.2%}"
-            )
-
-            if price_change_percent <= self.dca_grid_spacing_percent:
-                self.logger.info(f"ESTRATÉGIA 'COMPRAR NA BAIXA' ATIVADA: Preço caiu {price_change_percent:.2%}")
-                entry_decision = {"reason": "DCA_GRID_ENTRY"}
-
-        # Se não há decisão de entrada, atualiza e sai
-        if not entry_decision:
-            self.previous_candle = candle
-            return None
-
-        # --- VERIFICAÇÃO DE FUNDOS ---
-        available_balance = self.account_manager.get_quote_asset_balance()
-        required_capital = self.get_capital_per_trade(available_balance)
-
-        # Adiciona uma margem de segurança (ex: 1%) para evitar problemas com ordens de mercado
-        required_capital_with_slippage = required_capital * 1.01
-
-        if available_balance < required_capital_with_slippage:
-            self.logger.warning(f"ENTRADA IGNORADA: Saldo insuficiente. Saldo disponível: {available_balance:.2f} USDT, Capital necessário: {required_capital_with_slippage:.2f} USDT.")
-            self.previous_candle = candle
-            return None
-
-        self.logger.info(f"Decisão de COMPRA confirmada com saldo suficiente. Alocando {required_capital:.2f} USDT.")
-        # Adiciona o tamanho do trade na decisão para ser usado em open_position
-        entry_decision['trade_size_usdt'] = required_capital
-
-        self.previous_candle = candle
-        return entry_decision
+        self._check_and_execute_sells(current_price)
+        self._check_and_execute_buys(current_price)

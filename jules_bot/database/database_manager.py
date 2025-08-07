@@ -158,6 +158,15 @@ class DatabaseManager:
             logger.error(f"Falha ao buscar trade pelo ID '{trade_id}': {e}", exc_info=True)
             return None
 
+    def has_open_positions(self) -> bool:
+        """Checks if there are any open positions in the database."""
+        try:
+            open_positions_df = self.get_open_positions()
+            return not open_positions_df.empty
+        except Exception as e:
+            logger.error(f"Falha ao verificar se existem posições abertas: {e}", exc_info=True)
+            return False
+
     def set_legacy_hold(self, trade_id: str, status: str, is_legacy: bool):
         """Sets the is_legacy_hold flag for a specific trade."""
         try:

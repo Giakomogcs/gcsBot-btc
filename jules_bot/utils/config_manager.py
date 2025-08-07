@@ -55,25 +55,9 @@ class DataPipelineConfig(BaseModel):
 class SpecialistConfig(BaseModel):
     features: list[str]
 
-class ModelsConfig(BaseModel):
-    specialists: dict[str, SpecialistConfig]
-
-class TripleBarrierConfig(BaseModel):
-    profit_mult: float
-    stop_mult: float
-    time_limit_candles: int
-
 class TradingStrategyConfig(BaseModel):
-    static_confidence_threshold: float
-    first_entry_confidence_factor: float
-    dca_grid_spacing_percent: float
-    triple_barrier: TripleBarrierConfig
-    models: ModelsConfig
-    ensemble_weights: dict[str, float]
-    minimum_profit_for_take_profit: float
-    partial_sell_percent: float = 90.0
-    legacy_hold_trigger_percent: float
-    consecutive_green_candles_for_entry: int = 3
+    take_profit_percentage: float
+    buy_on_dip_percentage: float
 
 class PositionSizingConfig(BaseModel):
     method: str
@@ -137,7 +121,7 @@ def load_settings() -> Settings:
     Carrega o ficheiro YAML e o utiliza para criar a instância final de Settings.
     """
     try:
-        with open('config.yml', 'r') as f:
+        with open('config.yml', 'r', encoding='utf-8') as f:
             yaml_data = yaml.safe_load(f)
             # O Pydantic irá inteligentemente mapear o dicionário do YAML
             # para os modelos correspondentes dentro da classe Settings.
