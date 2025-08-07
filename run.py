@@ -109,7 +109,9 @@ def run_in_foreground(args):
     Ideal para tarefas com início e fim, como scripts e testes.
     """
     check_docker_running()
-    command = ["docker-compose", "run", "--rm", APP_SERVICE_NAME] + args
+    # CORREÇÃO TEMPORÁRIA: Removido o flag --rm que causa erro em algumas versões/setups do Docker Compose.
+    # O efeito colateral é que contêineres parados podem se acumular.
+    command = ["docker-compose", "run", APP_SERVICE_NAME] + args
     run_command(command)
 
 

@@ -206,6 +206,12 @@ class PositionManager:
 
         if buy_successful:
             quantity_btc = trade_size_usdt / current_price
+
+            # CORREÇÃO: Informa o simulador sobre o BTC comprado para atualizar o saldo.
+            # O `hasattr` garante que isso só aconteça no modo backtest sem quebrar o modo real.
+            if hasattr(self.account_manager, 'credit_btc'):
+                self.account_manager.credit_btc(quantity_btc)
+
             trade_data = {
                 "trade_id": str(uuid.uuid4()),
                 "status": "OPEN",

@@ -42,6 +42,11 @@ class SimulatedAccountManager:
         logger.info(f"[SIMULADOR] ORDEM DE VENDA: {quantity_btc:.8f} BTC a ${current_price:,.2f}. Saldo USDT: ${self.usdt_balance:,.2f}")
         return True
 
+    def credit_btc(self, quantity_btc):
+        """Adiciona BTC ao saldo (usado pelo PositionManager após uma compra simulada)."""
+        self.btc_balance += quantity_btc
+        logger.info(f"[SIMULADOR] Saldo BTC creditado: +{quantity_btc:.8f}. Novo Saldo: {self.btc_balance:.8f} BTC.")
+
 class MockExchangeManager:
     """
     Um gestor de exchange falso para o PositionManager não falhar durante a inicialização no backtest.
