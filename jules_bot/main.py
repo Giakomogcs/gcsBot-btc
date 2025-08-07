@@ -1,34 +1,41 @@
-# Ficheiro: main.py (VERSÃO FINAL REATORADA)
-
+import os
 import sys
-from jules_bot.utils.logger import logger
-from jules_bot.utils.config_manager import settings
 from jules_bot.bot.trading_bot import TradingBot
-from jules_bot.ui.app import JulesBotApp
+from jules_bot.utils.logger import logger
 
 def main():
     """
-    Ponto de entrada principal da aplicação.
-    Lê o modo de execução do config.yml e inicia o componente apropriado.
+    Ponto de entrada principal do bot.
+    Lê o modo de execução da variável de ambiente BOT_MODE e chama a função correta.
     """
-    mode = settings.app.execution_mode
-    logger.info(f"--- INICIANDO O BOT EM MODO '{mode.upper()}' ---")
-
-    if mode == 'backtest':
-        # No modo backtest, inicia a interface de usuário textual.
-        app = JulesBotApp(config=settings)
-        app.run()
-    elif mode in ['trade', 'test']:
-        # Nos modos de operação real ou teste, inicia o bot de trading.
-        try:
-            bot = TradingBot(mode=mode)
-            bot.run()
-        except Exception as e:
-            logger.critical(f"❌ Falha catastrófica ao inicializar o TradingBot: {e}", exc_info=True)
-            sys.exit(1)
-    else:
-        logger.error(f"Modo de execução '{mode}' inválido no config.yml. Use 'trade', 'test' ou 'backtest'.")
+    # Garante que qualquer espaço em branco seja removido antes de comparar
+    bot_mode = os.getenv('BOT_MODE', 'trade').strip().lower()
+    
+    logger.info(f"--- INICIANDO O BOT EM MODO '{bot_mode.upper()}' (via variável de ambiente) ---")
+    
+    if bot_mode not in ['trade', 'test', 'backtest']:
+        logger.error(f"Modo inválido '{bot_mode}'. Deve ser 'trade', 'test', ou 'backtest'.")
         sys.exit(1)
 
-if __name__ == '__main__':
+    bot = None
+    try:
+        bot = TradingBot(mode=bot_mode)
+        
+        # --- CORREÇÃO: Direciona para a função correta com base no modo ---
+        if bot_mode == 'backtest':
+            logger.info("Modo 'backtest' detectado. Chamando bot.run_backtest().")
+            bot.run_backtest()
+        else:
+            logger.info(f"Modo '{bot_mode}' detectado. Chamando bot.run().")
+            bot.run()
+
+    except Exception as e:
+        logger.critical(f"Erro fatal ao executar o bot: {e}", exc_info=True)
+        sys.exit(1)
+    finally:
+        logger.info("--- Encerrando o bot ---")
+        if bot:
+            bot.shutdown()
+
+if __name__ == "__main__":
     main()
