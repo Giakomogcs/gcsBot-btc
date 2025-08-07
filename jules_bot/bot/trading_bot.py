@@ -90,9 +90,14 @@ class TradingBot:
         )
         self.symbol = settings.app.symbol
 
-    def _create_db_manager_from_config(self, config, mode):
+    def _create_db_manager_from_config(self, settings, mode):
         """Creates a DatabaseManager instance from the configuration."""
-        return DatabaseManager(execution_mode=mode)
+        db_config_name = f"influxdb_{mode}"
+        full_db_config = {
+            **settings.influxdb_connection.model_dump(),
+            **settings.model_dump()[db_config_name]
+        }
+        return DatabaseManager(config=full_db_config)
 
     def run_single_cycle(self):
         """Executes one iteration of the bot's logic."""

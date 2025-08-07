@@ -13,12 +13,19 @@ class Backtester:
         logging.info(f"Initializing new backtest run with ID: {self.backtest_id}")
 
         # 1. Setup Database Connection for 'backtest' mode
-        self.db_manager = DatabaseManager(execution_mode="backtest")
+        db_config = {
+            **settings.influxdb_connection.model_dump(),
+            **settings.influxdb_backtest.model_dump()
+        }
+        self.db_manager = DatabaseManager(config=db_config)
 
         # 2. Setup Market Data Provider to load all historical data
         # For backtesting, we load all data once into the MockExchange
-        market_db_manager = DatabaseManager()
-        market_db_manager.bucket = settings.data_pipeline.historical_data_bucket
+        market_db_config = {
+            **settings.influxdb_connection.model_dump(),
+            'bucket': settings.data_pipeline.historical_data_bucket
+        }
+        market_db_manager = DatabaseManager(config=market_db_config)
         data_provider = MarketDataProvider(market_db_manager)
         all_data = data_provider.get_historical_data(symbol="BTC/USD", start="-1y") # Example range
 

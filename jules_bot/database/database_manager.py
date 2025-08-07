@@ -13,24 +13,15 @@ from jules_bot.utils.config_manager import settings
 from jules_bot.utils.logger import logger
 
 class DatabaseManager:
-    def __init__(self, execution_mode: Optional[str] = None):
-        self.url = settings.influxdb_connection.url
-        self.token = settings.influxdb_connection.token
-        self.org = settings.influxdb_connection.org
-        self.mode = execution_mode
-        self.bucket = None
+    def __init__(self, config: dict):
+        self.url = config.get("url")
+        self.token = config.get("token")
+        self.org = config.get("org")
+        self.bucket = config.get("bucket")
+        self.mode = None # Mode is not directly used in this configuration style
 
-        if self.mode == "trade":
-            self.bucket = settings.influxdb_trade.bucket
-        elif self.mode == "test":
-            self.bucket = settings.influxdb_test.bucket
-        elif self.mode == "backtest":
-            self.bucket = settings.influxdb_backtest.bucket
-        elif self.mode is not None:
-            # Fallback to trade bucket if mode is not set or invalid
-            self.bucket = settings.influxdb_trade.bucket
-            logger.warning(f"Invalid or no execution mode provided. Falling back to trade bucket: {self.bucket}")
-
+        if not all([self.url, self.token, self.org, self.bucket]):
+            raise ValueError("InfluxDB connection details are missing.")
 
         self._client = InfluxDBClient(url=self.url, token=self.token, org=self.org, timeout=30_000)
         self.query_api = self._client.query_api()
@@ -71,18 +62,19 @@ class DatabaseManager:
             logging.error(f"Failed to write open trade to InfluxDB: {e}")
 
     def close_trade(self, trade_id: str, exit_data: dict):
-        """Closes a trade by updating its status and adding exit details."""
+        """Updates an existing trade record to mark it as 'CLOSED' and adds exit data."""
+        # Note: InfluxDB doesn't have a direct update. The common pattern is to write a new
+        # point with the same tags and timestamp to overwrite the fields.
+        # For simplicity here, we'll write the 'CLOSED' status. A more complex approach
+        # would involve writing a whole new point with all final data.
         try:
             point = Point("trades") \
                 .tag("trade_id", trade_id) \
-                .tag("status", "CLOSED") \
+                .field("status", "CLOSED") \
                 .field("exit_price", float(exit_data.get("exit_price", 0.0))) \
                 .field("pnl_usd", float(exit_data.get("pnl_usd", 0.0))) \
-                .field("pnl_percent", float(exit_data.get("pnl_percent", 0.0))) \
-                .time(exit_data.get("timestamp", datetime.now(timezone.utc)))
-
+                .field("pnl_percent", float(exit_data.get("pnl_percent", 0.0)))
             self.write_api.write(bucket=self.bucket, org=self.org, record=point)
-            logging.info(f"Successfully closed trade {trade_id} in the database.")
         except Exception as e:
             logging.error(f"Failed to close trade {trade_id} in InfluxDB: {e}")
 
@@ -161,32 +153,21 @@ class DatabaseManager:
             logger.error(f"Falha ao escrever trade no DB: {e}", exc_info=True)
 
     def get_open_positions(self, bot_id: str) -> list[dict]:
-        """Fetches all trades marked as 'OPEN' for a specific bot_id."""
+        """Fetches all trades for a bot_id that are currently in 'OPEN' status."""
         try:
-            query = f'''
+            # This query gets the last known state for each trade_id and filters for OPEN ones.
+            flux_query = f'''
             from(bucket: "{self.bucket}")
-                |> range(start: -30d) 
-                |> filter(fn: (r) => r._measurement == "trades")
-                |> filter(fn: (r) => r.status == "OPEN")
-                |> filter(fn: (r) => r.bot_id == "{bot_id}")
-                |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
-                |> sort(columns: ["_time"], desc: false)
+              |> range(start: 0)
+              |> filter(fn: (r) => r._measurement == "trades" and r.bot_id == "{bot_id}")
+              |> last()
+              |> filter(fn: (r) => r._field == "status" and r._value == "OPEN")
+              |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
             '''
-            df = self.query_api.query_data_frame(query, org=self.org)
-            if isinstance(df, list):
-                df = pd.concat(df, ignore_index=True) if df else pd.DataFrame()
-
-            if df.empty:
-                return []
-            
-            # Clean up and convert to list of dicts
-            df = df.rename(columns={"_time": "timestamp"})
-            cols_to_drop = ['result', 'table', '_start', '_stop', '_measurement', 'status', 'bot_id']
-            df.drop(columns=[col for col in cols_to_drop if col in df.columns], inplace=True, errors='ignore')
-            return df.to_dict(orient='records')
-
+            result = self.query_api.query(query=flux_query, org=self.org)
+            return [record.values for table in result for record in table.records]
         except Exception as e:
-            logger.error(f"Failed to get open positions for bot {bot_id} from DB: {e}", exc_info=True)
+            logging.error(f"Error getting open positions: {e}")
             return []
 
     def get_trade_by_id(self, trade_id: str) -> Optional[pd.Series]:
@@ -427,3 +408,38 @@ class DatabaseManager:
 
 
         return trades_df[required_cols]
+
+
+    def get_latest_bot_status(self, bot_id: str) -> dict | None:
+        """Fetches the single most recent status point for a given bot_id."""
+        try:
+            flux_query = f'''
+            from(bucket: "{self.bucket}")
+              |> range(start: 0)
+              |> filter(fn: (r) => r._measurement == "bot_status" and r.bot_id == "{bot_id}")
+              |> last()
+              |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+            '''
+            result = self.query_api.query(query=flux_query, org=self.org)
+            if not result or not result[0].records:
+                return None
+            return result[0].records[0].values
+        except Exception as e:
+            logging.error(f"Error getting latest bot status: {e}")
+            return None
+
+    def get_trade_history(self, bot_id: str) -> pd.DataFrame:
+        """Retrieves all trades for a given bot and returns them as a DataFrame."""
+        try:
+            flux_query = f'''
+            from(bucket: "{self.bucket}")
+              |> range(start: 0)
+              |> filter(fn: (r) => r._measurement == "trades" and r.bot_id == "{bot_id}")
+              |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+              |> sort(columns: ["_time"], desc: true)
+            '''
+            df = self.query_api.query_data_frame(query=flux_query, org=self.org)
+            return df
+        except Exception as e:
+            logging.error(f"Error getting trade history: {e}")
+            return pd.DataFrame()
