@@ -1,50 +1,22 @@
-# Dockerfile (VERSÃO OTIMIZADA COM MULTI-STAGE)
+# Stage 1: Use a specific, slim Python version for consistency and smaller size
+FROM python:3.12-slim
 
-# --- ESTÁGIO 1: Build ---
-# Usamos uma imagem completa para compilar dependências que possam precisar de ferramentas de build
-FROM python:3.12-slim as builder
-
-# Instala dependências de sistema necessárias para compilar pacotes Python [cite: 3]
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc libgomp1 && \
-    rm -rf /var/lib/apt/lists/*
-
+# Set the working directory inside the container
 WORKDIR /app
 
-# Instala as dependências Python em um ambiente virtual isolado
-RUN python -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
+# Set environment variables to prevent .pyc file generation and ensure logs appear immediately
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
 
+# --- THE CACHING TRICK ---
+# First, copy ONLY the requirements file. Docker caches this layer.
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
 
-# --- ESTÁGIO 2: Final ---
-# Usamos a imagem slim, que é leve, para a imagem final
-FROM python:3.12-slim as final
+# Second, install the dependencies. This step uses the cache from above.
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Instala apenas a dependência de sistema necessária para rodar o LightGBM [cite: 3]
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends libgomp1 && \
-    rm -rf /var/lib/apt/lists/*
-
-WORKDIR /app
-
-# Adiciona o diretório da aplicação ao PYTHONPATH para que os imports funcionem
-ENV PYTHONPATH "${PYTHONPATH}:/app"
-
-# Copia o ambiente virtual com as dependências já instaladas do estágio de build
-COPY --from=builder /opt/venv /opt/venv
-
-# Copia o código da sua aplicação [cite: 5]
+# Third, now that dependencies are cached, copy the rest of your application code.
 COPY . .
 
-# Copia o script wait-for-it
-ADD https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh /
-RUN chmod +x /wait-for-it.sh
-
-# Define o PATH para usar o Python do ambiente virtual
-ENV PATH="/opt/venv/bin:$PATH"
-
-# Comando para iniciar a aplicação, agora usando o ambiente virtual
-CMD ["/wait-for-it.sh", "db:8086", "--", "python", "-u", "jules_bot/main.py"]
+# The command to run your application when the container starts
+CMD ["python", "jules_bot/main.py"]

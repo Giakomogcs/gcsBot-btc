@@ -1,6 +1,7 @@
 import pandas as pd
 from tqdm import tqdm
 import time
+from jules_bot.utils.logger import logger
 from jules_bot.database.database_manager import DatabaseManager
 from jules_bot.database.data_manager import DataManager
 from jules_bot.bot.position_manager import PositionManager
@@ -17,7 +18,7 @@ def run_backtest(ipc_queue, config):
 
         # --- Master Builder: Instanciando e Injetando Dependências ---
         db_manager = DatabaseManager(execution_mode='backtest')
-        data_manager = DataManager(db_manager=db_manager, config=config, logger=None) # Logger is handled by the queue
+        data_manager = DataManager(db_manager=db_manager, config=config, logger=logger)
         account_manager = AccountManager(binance_client=None)
 
         # Limpa o histórico de trades do ambiente de backtest
@@ -40,7 +41,7 @@ def run_backtest(ipc_queue, config):
         position_manager = PositionManager(
             config=config,
             db_manager=db_manager,
-            logger=None, # Logger is handled by the queue
+            logger=logger,
             account_manager=account_manager
         )
 
