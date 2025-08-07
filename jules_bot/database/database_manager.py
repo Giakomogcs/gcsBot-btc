@@ -22,6 +22,12 @@ class DatabaseManager:
         self.query_api = self._client.query_api()
         self.write_api = self._client.write_api(write_options=SYNCHRONOUS)
 
+    def close_client(self):
+        """Closes the InfluxDB client."""
+        if self._client:
+            self._client.close()
+            logger.info("Conexão com o InfluxDB fechada.")
+
     def is_measurement_empty(self, measurement: str) -> bool:
         """Verifica se uma measurement no InfluxDB está vazia."""
         try:

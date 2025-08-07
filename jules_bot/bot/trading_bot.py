@@ -26,7 +26,8 @@ class TradingBot:
     calculador de features em tempo real para tomar decisões.
     """
 
-    def __init__(self, mode: str = 'trade'):
+    def __init__(self, mode: str):
+        self.is_running = False
         self.mode = mode
         logger.info(f"--- INICIALIZANDO O TRADING BOT EM MODO '{self.mode.upper()}' ---")
 
@@ -34,8 +35,8 @@ class TradingBot:
         logger.info("Construindo e injetando dependências...")
         # Instancia o DatabaseManager com o modo de execução correto
         self.db_manager = DatabaseManager(execution_mode=self.mode)
-        exchange_manager = ExchangeManager(mode=self.mode)
-        self.account_manager = AccountManager(binance_client=exchange_manager._client)
+        self.exchange_manager = ExchangeManager(mode=self.mode)
+        self.account_manager = AccountManager(binance_client=self.exchange_manager._client)
         data_manager = DataManager(db_manager=self.db_manager, config=settings, logger=logger)
         self.feature_calculator = LiveFeatureCalculator(data_manager, mode=self.mode)
         self.position_manager = PositionManager(
@@ -136,9 +137,6 @@ class TradingBot:
 
 
         # --- ETAPA 3: Finalização da Inicialização ---
-        self.is_running = True
-        signal.signal(signal.SIGINT, self.graceful_shutdown)
-        signal.signal(signal.SIGTERM, self.graceful_shutdown)
         logger.info("✅ Bot inicializado com sucesso. Pressione Ctrl+C para encerrar.")
 
 
@@ -147,7 +145,10 @@ class TradingBot:
         """
         O loop principal que executa a lógica de trading a cada minuto.
         """
+        self.is_running = True
         logger.info(f"🚀 --- LOOP PRINCIPAL INICIADO PARA O SÍMBOLO {self.symbol} --- 🚀")
+        logger.info(f"Bot is running in {self.mode.upper()} mode. Press Ctrl+C to exit gracefully.")
+
         while self.is_running:
             try:
                 # --- ETAPA 1: OBTER A VELA ATUAL COM TODAS AS FEATURES CALCULADAS ---
@@ -183,10 +184,29 @@ class TradingBot:
                 logger.info("--- Ciclo concluído. A aguardar 60 segundos... ---")
                 time.sleep(60)
 
+            except KeyboardInterrupt:
+                logger.info("\n[SHUTDOWN] Ctrl+C detectado. A parar o loop principal...")
+                self.is_running = False
+
             except Exception as e:
                 logger.critical(f"❌ Ocorreu um erro crítico no loop principal: {e}", exc_info=True)
                 logger.info("A aguardar 5 minutos antes de reiniciar o loop para evitar spam de erros.")
                 time.sleep(300)
+
+    def shutdown(self):
+        """Handles all cleanup operations to ensure a clean exit."""
+        print("[SHUTDOWN] Starting graceful shutdown procedure...")
+
+        # Example cleanup tasks:
+        if hasattr(self, 'db_manager') and self.db_manager:
+            self.db_manager.close_client()
+            print("[SHUTDOWN] InfluxDB client closed.")
+
+        if hasattr(self, 'exchange_manager') and self.exchange_manager:
+            self.exchange_manager.close_connection()
+            print("[SHUTDOWN] Exchange connection closed.")
+
+        print("[SHUTDOWN] Cleanup complete. Goodbye!")
 
     def _update_status_file(self, current_candle: pd.Series):
         """Coleta dados de status e os escreve em um arquivo JSON."""
@@ -309,10 +329,3 @@ class TradingBot:
 
         except Exception as e:
             logger.error(f"Falha ao atualizar o arquivo de status: {e}", exc_info=True)
-
-
-    def graceful_shutdown(self, signum: int, frame: Any) -> None:
-        """Encerra o bot de forma segura."""
-        logger.warning("🚨 SINAL DE INTERRUPÇÃO RECEBIDO. ENCERRANDO... 🚨")
-        self.is_running = False
-        sys.exit(0)

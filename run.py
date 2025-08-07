@@ -3,6 +3,46 @@ import os
 import sys
 import time
 import json
+import typer
+from jules_bot.bot.trading_bot import TradingBot
+from jules_bot.utils.config_manager import settings
+
+# --- Typer App for Bot Commands ---
+app = typer.Typer()
+
+def setup_bot(mode: str) -> TradingBot:
+    """A centralized function to initialize all necessary components for the bot."""
+    print(f"--- Initializing Bot in {mode.upper()} Mode ---")
+    # ConfigManager is not needed here because settings are loaded globally
+    return TradingBot(mode=mode)
+
+def run_with_graceful_shutdown(bot: TradingBot):
+    """Wrapper to run the bot and ensure shutdown is always called."""
+    try:
+        bot.run()
+    except Exception as e:
+        print(f"\n[FATAL ERROR] An unexpected error occurred: {e}")
+    finally:
+        if bot:
+            bot.shutdown()
+
+@app.command()
+def trade():
+    """Runs the bot in live TRADING mode."""
+    bot = setup_bot(mode="trade")
+    run_with_graceful_shutdown(bot)
+
+@app.command()
+def backtest():
+    """Runs the bot in BACKTESTING mode."""
+    bot = setup_bot(mode="backtest")
+    run_with_graceful_shutdown(bot)
+
+@app.command()
+def test():
+    """Runs the bot in paper trading (TEST) mode."""
+    bot = setup_bot(mode="test")
+    run_with_graceful_shutdown(bot)
 
 # --- Constants ---
 TRADING_STATUS_FILE = os.path.join("logs", "trading_status.json")
@@ -129,18 +169,20 @@ def show_display(status_file, dashboard_func, name):
 # --- Main Command-line Interface ---
 def main():
     """Main CLI entry point."""
-    if len(sys.argv) < 2:
+    if len(sys.argv) < 2 or sys.argv[1].lower() in ['--help', '-h']:
         print_color("GCS-Bot - Control Panel", "yellow")
         print("---------------------------")
         print("\nUsage: python3 run.py [command]\n")
         print("Environment Management:")
         print("  setup           - Builds and starts the Docker environment for the first time.")
         print("  start-services  - Starts the Docker containers (app, db).")
-        print("  stop   - Stops the Docker containers.")
+        print("  stop-services   - Stops the Docker containers.")
         print("  reset-db        - DANGER! Stops and erases the database.")
+        print("\nBot Execution (Docker Override):")
+        print("  trade           - Runs the bot in live trading mode.")
+        print("  backtest        - Runs the bot in backtesting mode.")
+        print("  test            - Runs the bot in paper trading (test) mode.")
         print("\nBot Operations (via docker-compose):")
-        print("  To run the bot, edit config.yml to set the 'execution_mode' ('trade', 'test', or 'backtest'),")
-        print("  and then run 'docker-compose up --build'. The 'trade', 'test', and 'backtest' commands are deprecated.")
         print("  optimize        - Runs the model optimization process.")
         print("  update-db       - Runs the ETL pipeline to update the database.")
         print("\nDatabase Utilities:")
@@ -157,19 +199,21 @@ def main():
         return
 
     command = sys.argv[1].lower()
-    args = sys.argv[2:]
 
+    # Check if the command is a bot command
+    if command in ["trade", "backtest", "test"]:
+        # Pass control to the Typer app
+        # Typer automatically uses sys.argv, so we just call the app.
+        app()
+        return
+
+    # Handle original environment commands
+    args = sys.argv[2:]
     if command == "setup": setup()
     elif command == "start-services": start_services()
     elif command == "start": start()
     elif command == "stop": stop_services()
     elif command == "reset-db": reset_db()
-    
-    elif command in ["trade", "test", "backtest"]:
-        print_color("This command is now deprecated.", "yellow")
-        print("To run the bot, please edit the 'execution_mode' in your 'config.yml' file")
-        print("and then run 'docker-compose up --build -d app'.")
-    
     elif command == "optimize": run_script_in_container("scripts/run_optimizer.py")
     elif command == "update-db": run_script_in_container("scripts/data_pipeline.py")
     elif command == "clean-master": run_script_in_container("scripts/db_utils.py", "features_master_table")

@@ -57,6 +57,12 @@ class ExchangeManager:
             logger.error(f"❌ Ocorreu um erro inesperado ao inicializar o cliente Binance: {e}", exc_info=True)
             return None
 
+    def close_connection(self):
+        """Closes the connection to the exchange."""
+        if self._client:
+            self._client.close_connection()
+            logger.info("Conexão com a Binance fechada.")
+
     def get_account_balance(self, asset: str = 'USDT') -> float:
         """Busca o saldo livre de um ativo específico na conta da corretora."""
         if not self._client:
