@@ -30,6 +30,7 @@ class ApiKeysConfig(BaseSettings):
 # --- Modelos para o config.yml ---
 # Toda esta seção está perfeita e não precisa de alterações.
 class AppConfig(BaseModel):
+    execution_mode: str
     use_testnet: bool
     force_offline_mode: bool
     symbol: str

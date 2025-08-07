@@ -34,12 +34,6 @@ services:
       - .env
     volumes:
       - .:/app
-    command: >
-      sh -c "if [ \"$MODE\" = \"trade\" ] || [ \"$MODE\" = \"test\" ]; then
-               python jules_bot/main.py;
-             else
-               tail -f /dev/null;
-             fi"
 
 volumes:
   influxdb_data:

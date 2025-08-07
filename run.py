@@ -37,21 +37,7 @@ def run_command(command, shell=True, capture_output=False, check=False, env=None
         print_color(f"ERROR executing command: {display_command}\n{e}", "red")
         sys.exit(1)
 
-def start_bot(mode: str):
-    """Inicia o bot no modo especificado, passando o ambiente de forma robusta."""
-    check_docker_running()
-    print_color(f"--- Starting Bot in {mode.upper()} mode... ---", "yellow")
-    
-    # O comando agora usa 'docker-compose' com hífen
-    command_args = ["docker-compose", "up", "-d", "--build", "app"]
-    
-    # Cria uma cópia do ambiente atual e adiciona nossa variável
-    bot_env = os.environ.copy()
-    bot_env["MODE"] = mode
-    
-    # Passa a lista de argumentos e o ambiente personalizado para o comando
-    run_command(command_args, check=True, env=bot_env)
-    print_color(f"Bot started in {mode.upper()} mode in the background.", "green")
+# The start_bot function is removed as the bot is now started with `docker-compose up`.
 
 def check_docker_running():
     """Checks if Docker is running."""
@@ -173,11 +159,10 @@ def main():
     elif command == "stop-services": stop_services()
     elif command == "reset-db": reset_db()
     
-    elif command == "trade":
-        start_bot("trade")
-    elif command == "test":
-        start_bot("test")
-    elif command == "backtest": run_script_in_container("scripts/run_backtest.py")
+    elif command in ["trade", "test", "backtest"]:
+        print_color("This command is now deprecated.", "yellow")
+        print("To run the bot, please edit the 'execution_mode' in your 'config.yml' file")
+        print("and then run 'docker-compose up --build -d app'.")
     
     elif command == "optimize": run_script_in_container("scripts/run_optimizer.py")
     elif command == "update-db": run_script_in_container("scripts/data_pipeline.py")

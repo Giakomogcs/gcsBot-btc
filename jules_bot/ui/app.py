@@ -28,7 +28,7 @@ class JulesBotApp(App):
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
         yield Header()
-        yield Log(id="log_widget", wrap=True)
+        yield Log(id="log_widget")
         yield ProgressBar(id="progress_bar", total=1.0)
         yield Footer()
 

@@ -1,81 +1,16 @@
-# Ficheiro: run_backtest.py (VERSÃO FINAL INTEGRADA)
-
-import pandas as pd
-import sys
-import os
-
-# Adiciona a raiz do projeto ao path para que o gcs_bot seja encontrável
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-from jules_bot.utils.logger import logger
-from jules_bot.utils.config_manager import settings
-from jules_bot.database.data_manager import DataManager
-from jules_bot.backtesting.backtester import Backtester
-from jules_bot.bot.position_manager import PositionManager
-from jules_bot.bot.account_manager import AccountManager
-from jules_bot.database.database_manager import DatabaseManager
 import sys
 
 def main():
-    try:
-        logger.info("--- INICIANDO LABORATÓRIO DE BACKTEST (MODO ALTA FIDELIDADE) ---")
-
-        # Instancia o DatabaseManager com o modo 'backtest'
-        db_manager = DatabaseManager(execution_mode='backtest')
-
-        logger.info("Limpando o histórico de trades do ambiente 'backtest' para um backtest limpo...")
-        start = "1970-01-01T00:00:00Z"
-        stop = pd.Timestamp.now(tz='UTC').isoformat()
-        # Usa o predicado para deletar apenas do ambiente de backtest
-        predicate = f'_measurement="trades" AND environment="backtest"'
-        db_manager._client.delete_api().delete(start, stop, predicate, bucket=settings.database.bucket, org=settings.database.org)
-        logger.info("✅ Histórico de trades do ambiente 'backtest' limpo.")
-
-        # --- Master Builder: Instanciando e Injetando Dependências ---
-        logger.info("Construindo o ambiente do backtest com injeção de dependências...")
-
-        data_manager = DataManager(db_manager=db_manager, config=settings, logger=logger)
-        # No backtest, o cliente é None, o que é tratado pelo AccountManager
-        account_manager = AccountManager(binance_client=None)
-
-        df_features = data_manager.read_data_from_influx(
-            measurement="features_master_table",
-            start_date=settings.backtest.start_date
-        )
-
-        if df_features.empty:
-            logger.error("A 'features_master_table' está vazia ou não pôde ser carregada. Abortando backtest.")
-            return
-
-        position_manager = PositionManager(
-            config=settings,
-            db_manager=db_manager,
-            logger=logger,
-            account_manager=account_manager
-        )
-
-        backtester = Backtester(
-            data=df_features,
-            position_manager=position_manager,
-            config=settings,
-            logger=logger
-        )
-
-        backtester.run()
-
-    except Exception as e:
-        logger.error("--- ❌ ERRO CRÍTICO DURANTE O BACKTEST ❌ ---")
-        # Log da exceção completa para debug
-        logger.error(f"Ocorreu um erro inesperado: {e}", exc_info=True)
-
-        # Análise da Causa Provável para o Usuário
-        if "Failed to resolve 'db'" in str(e) or "Name or service not known" in str(e):
-            logger.error("\n--- CAUSA PROVÁVEL ---")
-            logger.error("Este erro geralmente significa que o script não consegue se conectar ao banco de dados porque não está sendo executado dentro do ambiente Docker.")
-            logger.error("Para corrigir, certifique-se de que os containers Docker estão ativos e execute o backtest usando o script de gerenciamento:")
-            logger.error("Comando Sugerido: .\\manage.ps1 backtest")
+    """
+    This script is deprecated. The backtest is now run via the main application UI.
+    """
+    print("--- DEPRECATION WARNING ---")
+    print("This script is no longer used to run the backtest.")
+    print("To run a backtest, please follow these steps:")
+    print("1. Edit your 'config.yml' and set 'app.execution_mode' to 'backtest'.")
+    print("2. Run the application using 'docker-compose up --build'.")
+    print("This will launch the Textual UI for backtesting.")
+    sys.exit(0)
 
 if __name__ == "__main__":
     main()
