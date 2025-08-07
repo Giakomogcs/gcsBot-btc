@@ -64,53 +64,35 @@ class TradingBot:
     Agora com lógicas separadas para live/test e backtest.
     """
 
-    def __init__(self, mode: str):
-        self.is_running = False
-        self.mode = mode.lower()
-        self.bot_id = "jules_bot_01" # A bot_id can be hardcoded or come from config
-        logger.info(f"--- INICIALIZANDO O TRADING BOT EM MODO '{self.mode.upper()}' ---")
+    def __init__(self,
+                 mode: str,
+                 bot_id: str,
+                 market_data_provider: MarketDataProvider,
+                 db_manager=None,
+                 exchange_manager=None):
 
-        # --- ETAPA 1: Construção dos Managers ---
-        logger.info("Construindo e injetando dependências...")
+        self.mode = mode
+        self.bot_id = bot_id
+        self.is_running = True
 
-        # This DatabaseManager is for the bot's operational data (trades, status)
-        self.db_manager = DatabaseManager(execution_mode=self.mode)
+        # === Injected Dependencies ===
+        self.market_data_provider = market_data_provider
 
-        # This DatabaseManager is specifically for fetching historical market data
-        historical_db_manager = DatabaseManager() # No mode needed
-        historical_db_manager.bucket = settings.data_pipeline.historical_data_bucket
+        # This logic remains the same: create managers if not provided (for live/test)
+        self.db_manager = db_manager or self._create_db_manager_from_config(settings, mode)
+        self.exchange_manager = exchange_manager or ExchangeManager(mode=self.mode)
 
-        self.market_data_provider = MarketDataProvider(db_manager=historical_db_manager)
-
-        self.data_manager = DataManager(db_manager=self.db_manager, config=settings, logger=logger)
+        # The PositionManager will also need the data provider to value positions
+        self.position_manager = PositionManager(
+            db_manager=self.db_manager,
+            exchange_manager=self.exchange_manager,
+            market_data_provider=self.market_data_provider
+        )
         self.symbol = settings.app.symbol
 
-        # --- Lógica de Inicialização por Modo ---
-        if self.mode in ['trade', 'test']:
-            self.exchange_manager = ExchangeManager(mode=self.mode)
-            self.account_manager = AccountManager(binance_client=self.exchange_manager._client)
-            self.position_manager = PositionManager(
-                db_manager=self.db_manager,
-                account_manager=self.account_manager,
-                exchange_manager=self.exchange_manager,
-                market_data_provider=self.market_data_provider
-            )
-            self.position_manager.reconcile_states()
-        else: # MODO BACKTEST
-            logger.info("Modo Backtest: A usar gestores simulados.")
-            self.exchange_manager = None
-            initial_balance = settings.backtest.initial_capital
-            self.account_manager = SimulatedAccountManager(initial_balance_usdt=initial_balance)
-            mock_exchange_manager = MockExchangeManager()
-            self.position_manager = PositionManager(
-                db_manager=self.db_manager,
-                account_manager=self.account_manager,
-                exchange_manager=mock_exchange_manager,
-                market_data_provider=self.market_data_provider
-            )
-            logger.info("Modo Backtest: Conexão com a exchange ignorada.")
-
-        logger.info("✅ Bot inicializado com sucesso.")
+    def _create_db_manager_from_config(self, config, mode):
+        """Creates a DatabaseManager instance from the configuration."""
+        return DatabaseManager(execution_mode=mode)
 
     def run_single_cycle(self):
         """Executes one iteration of the bot's logic."""

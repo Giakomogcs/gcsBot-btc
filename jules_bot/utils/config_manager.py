@@ -55,8 +55,14 @@ class SpecialistConfig(BaseModel):
     features: list[str]
 
 class TradingStrategyConfig(BaseModel):
+    name: str
+    usd_per_trade: float
     take_profit_percentage: float
     buy_on_dip_percentage: float
+
+class BacktestSettingsConfig(BaseModel):
+    initial_balance: int
+    commission_fee: float
 
 class PositionSizingConfig(BaseModel):
     method: str
@@ -116,6 +122,7 @@ class Settings(BaseModel):
     position_management: PositionManagementConfig
     dynamic_sizing: DynamicSizingConfig
     trailing_profit: TrailingProfitConfig
+    backtest_settings: BacktestSettingsConfig
 
 
 def load_settings() -> Settings:

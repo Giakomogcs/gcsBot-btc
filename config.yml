@@ -53,6 +53,8 @@ data_pipeline:
 
 # Estratégia de Trading: o cérebro da tomada de decisão
 trading_strategy:
+  name: "default_strategy"
+  usd_per_trade: 100.0
   take_profit_percentage: 0.8
   buy_on_dip_percentage: -0.5
 
@@ -87,3 +89,7 @@ logging:
 trailing_profit:
   activation_percentage: 2.0 # Ativa o trailing quando o lucro não realizado atingir 2%
   trailing_percentage: 1.0 # Mantém o novo alvo de lucro 1% acima do preço mais alto
+
+backtest_settings:
+  initial_balance: 10000
+  commission_fee: 0.1

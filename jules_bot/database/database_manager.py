@@ -70,6 +70,22 @@ class DatabaseManager:
         except Exception as e:
             logging.error(f"Failed to write open trade to InfluxDB: {e}")
 
+    def close_trade(self, trade_id: str, exit_data: dict):
+        """Closes a trade by updating its status and adding exit details."""
+        try:
+            point = Point("trades") \
+                .tag("trade_id", trade_id) \
+                .tag("status", "CLOSED") \
+                .field("exit_price", float(exit_data.get("exit_price", 0.0))) \
+                .field("pnl_usd", float(exit_data.get("pnl_usd", 0.0))) \
+                .field("pnl_percent", float(exit_data.get("pnl_percent", 0.0))) \
+                .time(exit_data.get("timestamp", datetime.now(timezone.utc)))
+
+            self.write_api.write(bucket=self.bucket, org=self.org, record=point)
+            logging.info(f"Successfully closed trade {trade_id} in the database.")
+        except Exception as e:
+            logging.error(f"Failed to close trade {trade_id} in InfluxDB: {e}")
+
     def close_client(self):
         """Closes the InfluxDB client."""
         if self._client:
@@ -144,40 +160,34 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Falha ao escrever trade no DB: {e}", exc_info=True)
 
-    def get_open_positions(self) -> pd.DataFrame:
+    def get_open_positions(self, bot_id: str) -> list[dict]:
+        """Fetches all trades marked as 'OPEN' for a specific bot_id."""
         try:
             query = f'''
             from(bucket: "{self.bucket}")
                 |> range(start: -30d) 
                 |> filter(fn: (r) => r._measurement == "trades")
                 |> filter(fn: (r) => r.status == "OPEN")
-                {self._get_env_filter()}
+                |> filter(fn: (r) => r.bot_id == "{bot_id}")
                 |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
                 |> sort(columns: ["_time"], desc: false)
             '''
             df = self.query_api.query_data_frame(query, org=self.org)
-            if isinstance(df, list): df = pd.concat(df, ignore_index=True) if df else pd.DataFrame()
-            if df.empty: return pd.DataFrame()
+            if isinstance(df, list):
+                df = pd.concat(df, ignore_index=True) if df else pd.DataFrame()
+
+            if df.empty:
+                return []
             
+            # Clean up and convert to list of dicts
             df = df.rename(columns={"_time": "timestamp"})
-            cols_to_drop = ['result', 'table', '_start', '_stop', '_measurement', 'status']
+            cols_to_drop = ['result', 'table', '_start', '_stop', '_measurement', 'status', 'bot_id']
             df.drop(columns=[col for col in cols_to_drop if col in df.columns], inplace=True, errors='ignore')
+            return df.to_dict(orient='records')
 
-            # Garante que as colunas numéricas são do tipo correto
-            numeric_cols = ['entry_price', 'profit_target_price', 'stop_loss_price', 'quantity_btc', 'realized_pnl_usdt', 'final_confidence']
-            for col in numeric_cols:
-                if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
-
-            # Converte a string JSON de decision_data para um dicionário
-            if 'decision_data' in df.columns:
-                df['decision_data'] = df['decision_data'].apply(lambda x: json.loads(x) if isinstance(x, str) else x)
-
-            df.set_index('trade_id', inplace=True)
-            return df
         except Exception as e:
-            logger.error(f"Falha ao buscar posições abertas do DB: {e}", exc_info=True)
-            return pd.DataFrame()
+            logger.error(f"Failed to get open positions for bot {bot_id} from DB: {e}", exc_info=True)
+            return []
 
     def get_trade_by_id(self, trade_id: str) -> Optional[pd.Series]:
         """Busca um único trade pelo seu trade_id."""
