@@ -73,6 +73,12 @@ def start_services():
     print_color("--- Starting services...", "yellow")
     run_command("docker-compose up -d", check=True) # Alterado
 
+def start():
+    """Starts the Docker services."""
+    check_docker_running()
+    print_color("--- Starting services...", "yellow")
+    run_command("docker-compose up --build -d app", check=True) 
+
 def stop_services():
     """Stops the Docker services."""
     check_docker_running()
@@ -130,7 +136,7 @@ def main():
         print("Environment Management:")
         print("  setup           - Builds and starts the Docker environment for the first time.")
         print("  start-services  - Starts the Docker containers (app, db).")
-        print("  stop-services   - Stops the Docker containers.")
+        print("  stop   - Stops the Docker containers.")
         print("  reset-db        - DANGER! Stops and erases the database.")
         print("\nBot Operations (via docker-compose):")
         print("  To run the bot, edit config.yml to set the 'execution_mode' ('trade', 'test', or 'backtest'),")
@@ -155,7 +161,8 @@ def main():
 
     if command == "setup": setup()
     elif command == "start-services": start_services()
-    elif command == "stop-services": stop_services()
+    elif command == "start": start()
+    elif command == "stop": stop_services()
     elif command == "reset-db": reset_db()
     
     elif command in ["trade", "test", "backtest"]:
