@@ -2035,3 +2035,7 @@
 {"timestamp": "2025-08-07 16:03:15,014", "level": "ERROR", "message": "Binance API Error fetching trade history: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time."}
 {"timestamp": "2025-08-07 16:03:15,020", "level": "ERROR", "message": "Binance API Error on BUY: APIError(code=-2010): Account has insufficient balance for requested action."}
 {"timestamp": "2025-08-07 16:03:15,025", "level": "ERROR", "message": "Binance API Error on SELL: APIError(code=-2010): Account has insufficient balance for requested action."}
+{"timestamp": "2025-08-07 16:18:27,844", "level": "ERROR", "message": "Binance API Error fetching open orders: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time."}
+{"timestamp": "2025-08-07 16:18:27,855", "level": "ERROR", "message": "Binance API Error fetching trade history: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time."}
+{"timestamp": "2025-08-07 16:18:27,861", "level": "ERROR", "message": "Binance API Error on BUY: APIError(code=-2010): Account has insufficient balance for requested action."}
+{"timestamp": "2025-08-07 16:18:27,867", "level": "ERROR", "message": "Binance API Error on SELL: APIError(code=-2010): Account has insufficient balance for requested action."}

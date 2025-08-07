@@ -43,7 +43,10 @@ class TradingBot:
         
         self.symbol = settings.app.symbol
 
-        # --- ETAPA 3: Finalização da Inicialização ---
+        # --- ETAPA 3: Reconciliação de Estado ---
+        self.position_manager.reconcile_states()
+
+        # --- ETAPA 4: Finalização da Inicialização ---
         logger.info("✅ Bot inicializado com sucesso. Pressione Ctrl+C para encerrar.")
 
 
@@ -71,9 +74,8 @@ class TradingBot:
                 # --- ETAPA 2: EXECUTAR A LÓGICA DE TRADING ---
                 self.position_manager.manage_positions(current_price)
                 
-                # The status file update needs a candle, which we don't have anymore.
-                # For now, we can comment this out or create a simplified version.
-                # self._update_status_file(current_candle)
+                # --- ETAPA 3: LOGAR O ESTADO ATUAL ---
+                self.log_current_state()
 
                 logger.info("--- Ciclo concluído. A aguardar 10 segundos... ---")
                 time.sleep(10)
@@ -101,3 +103,21 @@ class TradingBot:
             print("[SHUTDOWN] Exchange connection closed.")
 
         print("[SHUTDOWN] Cleanup complete. Goodbye!")
+
+    def log_current_state(self):
+        """Dumps the current state of the bot to a JSON file for the UI to read."""
+        open_positions = self.db_manager.get_open_positions()
+        # Convert DataFrame to list of dicts for JSON serialization
+        positions_list = open_positions.to_dict(orient='records') if not open_positions.empty else []
+
+        state = {
+            "timestamp": time.time(),
+            "is_running": self.is_running,
+            "mode": self.mode,
+            "open_positions": positions_list,
+            "recent_high_price": self.position_manager.recent_high_price
+        }
+        # Note: This path needs to be accessible from where the daemon is running.
+        # Since we do os.chdir("/"), we should use an absolute path.
+        with open("/tmp/bot_state.json", "w") as f:
+            json.dump(state, f, indent=4)

@@ -12,6 +12,7 @@ class PositionManager:
         self.config = settings
         self.strategy_config = self.config.trading_strategy
         self.recent_high_price = 0.0
+        self.positions_pending_sale = set()
         self.initialize_price_tracker()
 
     def initialize_price_tracker(self):
@@ -31,6 +32,9 @@ class PositionManager:
             return
 
         for trade_id, position in open_positions.iterrows():
+            if trade_id in self.positions_pending_sale:
+                continue # Skip if already being processed
+
             if not current_price:
                 logger.warning(f"[WARNING] Could not get current price for {self.config.app.symbol}. Skipping sell check.")
                 continue
@@ -41,6 +45,7 @@ class PositionManager:
             take_profit_target = self.strategy_config.take_profit_percentage
             if pnl_percent >= take_profit_target:
                 logger.info(f"[SELL ACTION] Take-profit hit for position {trade_id} at {pnl_percent:.2f}%. Executing sale.")
+                self.positions_pending_sale.add(trade_id)
                 self._sell_position(position, current_price)
 
     def _sell_position(self, position, current_price):
@@ -69,6 +74,7 @@ class PositionManager:
             logger.info(f"Position {position.name} closed successfully. Realized PnL: ${net_pnl:.2f}")
         else:
             logger.error(f"Failed to execute sell order for position {position.name} on the exchange.")
+            self.positions_pending_sale.remove(position.name) # Remove lock on failure
 
 
     def _check_and_execute_buys(self, current_price: float):
@@ -129,3 +135,27 @@ class PositionManager:
             
         self._check_and_execute_sells(current_price)
         self._check_and_execute_buys(current_price)
+
+    def reconcile_states(self):
+        """Compares the bot's internal state with the exchange's state."""
+        logger.info("--- Starting State Reconciliation ---")
+        try:
+            local_positions = self.db_manager.get_open_positions()
+            exchange_positions = self.exchange_manager.get_all_open_positions_from_exchange()
+
+            local_quantity = local_positions['quantity_btc'].sum() if not local_positions.empty else 0
+            exchange_quantity = sum(p['quantity'] for p in exchange_positions)
+
+            logger.info(f"Local state: {len(local_positions)} positions, total quantity {local_quantity:.8f}")
+            logger.info(f"Exchange state: {len(exchange_positions)} positions, total quantity {exchange_quantity:.8f}")
+
+            if not abs(local_quantity - exchange_quantity) < 1e-8: # Compare with a small tolerance
+                logger.warning("!!! STATE DISCREPANCY DETECTED !!!")
+                logger.warning(f"Local DB quantity ({local_quantity}) does not match exchange quantity ({exchange_quantity}).")
+                # In a more advanced implementation, you would trigger a process to resolve this.
+                # For now, we just log the warning.
+            else:
+                logger.info("✅ State reconciliation successful. Local and exchange states are consistent.")
+
+        except Exception as e:
+            logger.error(f"An error occurred during state reconciliation: {e}", exc_info=True)

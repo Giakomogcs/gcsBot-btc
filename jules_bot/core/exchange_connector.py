@@ -183,3 +183,30 @@ class ExchangeManager:
         except Exception as e:
             logger.error(f"ERRO INESPERADO AO COLOCAR ORDEM: {e}", exc_info=True)
             return None
+
+    def get_all_open_positions_from_exchange(self) -> list:
+        """
+        Fetches the current balance of the base asset to represent the open position.
+        In spot trading, the 'position' is just the amount of the asset you hold.
+        """
+        if not self._client:
+            logger.warning("Cliente Binance não inicializado. Não é possível buscar posições.")
+            return []
+
+        try:
+            account_info = self._client.get_account()
+            # Find the balance for the base asset (e.g., BTC)
+            base_asset = settings.app.symbol.replace("USDT", "") # A bit simplistic, assumes USDT quote
+
+            positions = []
+            for balance in account_info['balances']:
+                if balance['asset'] == base_asset and float(balance['free']) > 0:
+                    positions.append({
+                        "symbol": settings.app.symbol,
+                        "quantity": float(balance['free']),
+                        "side": "BUY" # Implied, as we are holding it
+                    })
+            return positions
+        except Exception as e:
+            logger.error(f"Erro inesperado ao buscar posições abertas na exchange: {e}", exc_info=True)
+            return []
