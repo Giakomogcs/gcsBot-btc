@@ -207,9 +207,11 @@ def print_help():
     print("  run-tests       - Executa a suíte de testes automatizados (pytest).")
     
     print_color("\nUtilitários do Banco de Dados:", "blue")
-    print("  clean-master    - Limpa a tabela 'features_master_table'.")
-    print("  reset-trades    - Limpa todos os registros de trades do banco de dados.")
-    print("  reset-sentiment - Limpa todos os dados de sentimento do banco de dados.")
+    print("  clean-master        - Limpa a tabela 'features_master_table'.")
+    print("  reset-trades-trade    - Limpa os trades do ambiente de PRODUÇÃO.")
+    print("  reset-trades-test     - Limpa os trades do ambiente de TESTE.")
+    print("  reset-trades-backtest - Limpa os trades do ambiente de BACKTEST.")
+    print("  reset-sentiment     - Limpa todos os dados de sentimento do banco de dados.")
 
     print_color("\nMonitoramento e Análise:", "blue")
     print("  logs            - Mostra os logs em tempo real do bot em execução.")
@@ -244,7 +246,9 @@ def main():
         "run-tests": lambda: run_in_foreground(["pytest"]),
         # Utilitários de DB
         "clean-master": lambda: run_in_foreground(["python", "scripts/db_utils.py", "features_master_table"]),
-        "reset-trades": lambda: run_in_foreground(["python", "scripts/db_utils.py", "trades"]),
+        "reset-trades-trade": lambda: run_in_foreground(["python", "scripts/db_utils.py", "trades", "--env", "trade"]),
+        "reset-trades-test": lambda: run_in_foreground(["python", "scripts/db_utils.py", "trades", "--env", "test"]),
+        "reset-trades-backtest": lambda: run_in_foreground(["python", "scripts/db_utils.py", "trades", "--env", "backtest"]),
         "reset-sentiment": lambda: run_in_foreground(["python", "scripts/db_utils.py", "sentiment_fear_and_greed"]),
         # Análise
         "analyze": lambda: run_in_foreground(["python", "scripts/analyze_results.py"]),
