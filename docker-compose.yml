@@ -36,7 +36,7 @@ services:
       - .:/app
     command: >
       sh -c "if [ \"$MODE\" = \"trade\" ] || [ \"$MODE\" = \"test\" ]; then
-               python main.py $MODE;
+               python jules_bot/main.py;
              else
                tail -f /dev/null;
              fi"
