@@ -18,7 +18,9 @@ The system is fully containerized using Docker, ensuring a consistent and reprod
   - Order flow data (Taker Buy/Sell Volume)
   - Market sentiment (Fear & Greed Index)
   - Macroeconomic data (DXY, VIX, Gold, etc.)
-- **Automated Data Pipeline**: A lean price collector (`collectors/core_price_collector.py`) automatically ingests and stores all required price data in an InfluxDB time-series database.
+- **Automated Setup & Data Pipeline**:
+  - A one-time setup script (`influxdb_setup/run_migrations.py`) initializes the entire InfluxDB environment, creating the organization, buckets, and application token.
+  - A lean price collector (`collectors/core_price_collector.py`) automatically ingests and stores all required price data in an InfluxDB time-series database.
 - **Situational Awareness Model**: Utilizes a K-Means clustering model to classify the market into one of several "regimes" (e.g., Bull Volatile, Bear Quiet), allowing the strategy to adapt to changing conditions. The code for this is in the `research` directory.
 - **Dockerized Environment**: The entire application stack, including the Python application and the InfluxDB database, is managed by Docker and Docker Compose for easy setup and deployment.
 - **Command-Line Interface**: A central script `run.py` provides a simple interface for managing the entire lifecycle of the bot and its environment.
@@ -78,72 +80,101 @@ The repository is organized into several key directories:
 
 ```
 gcsbot-btc/
-├── .dvc/                # Data Version Control (for large data files)
-├── collectors/          # Scripts for collecting data
-├── config/              # Configuration files for services (e.g., influxdb.conf)
-├── data/                # Local data storage (e.g., historical CSVs, models)
-├── jules_bot/           # Main Python source code for the bot application
-│   ├── bot/             # Core trading logic and position management
-│   ├── core/            # Core components like the exchange connector
-│   ├── database/        # Database interaction and data management
-│   └── utils/           # Utility modules like logging and configuration management
-├── logs/                # Log files and trading status JSONs
-├── research/            # Scripts for research and feature engineering
-├── scripts/             # Standalone Python scripts for automation and analysis
-├── tests/               # Automated tests for the application
-├── .env.example         # Example environment variables file
-├── config.ini           # Main application configuration file
-├── docker-compose.yml   # Docker service definitions
-├── Dockerfile           # Docker image definition for the application
-└── run.py               # Main command-line interface for controlling the bot
+├── .dvc/                   # Data Version Control (for large data files)
+├── collectors/             # Scripts for collecting data
+├── config/                 # Configuration files for services (e.g., influxdb.conf)
+├── data/                   # Local data storage (e.g., historical CSVs, models)
+├── influxdb_setup/         # Scripts for automated InfluxDB initialization
+│   ├── migrations/
+│   └── run_migrations.py
+├── jules_bot/              # Main Python source code for the bot application
+│   ├── bot/                # Core trading logic and position management
+│   ├── core/               # Core components like schemas and connectors
+│   ├── database/           # Database interaction and data management
+│   └── utils/              # Utility modules like logging and configuration
+├── logs/                   # Log files and trading status JSONs
+├── research/               # Scripts for research and feature engineering
+├── scripts/                # Standalone Python scripts for automation and analysis
+├── tests/                  # Automated tests for the application
+├── .env.example            # Example environment variables file
+├── config.ini              # Main application configuration file
+├── docker-compose.yml      # Docker service definitions
+├── Dockerfile              # Docker image definition for the application
+└── run.py                  # Main command-line interface for controlling the bot
 ```
 
-## 5. Setup and Installation
+## 5. The "Zero to Running" Setup Guide
+
+This guide provides the complete step-by-step instructions to get the bot running from scratch.
 
 ### Prerequisites
+- **Docker and Docker Compose**: Ensure Docker Desktop is installed and running.
+- **Python 3.10+**: Required for running the control scripts.
+- **Git**: For cloning the repository.
 
-- Docker and Docker Compose
-- Python 3.12+ (for running the `run.py` script)
+### Step 1: Clone the Repository
+Open a terminal and clone the project to your local machine.
+```bash
+git clone <YOUR_REPOSITORY_URL>
+cd gcsbot-btc
+```
 
-### Step 1: Configure Environment
-
-Create a `.env` file by copying the example:
-
+### Step 2: Create Environment and Configuration Files
+Create a `.env` file by copying the example. This file will store all your secrets.
 ```bash
 cp .env.example .env
 ```
+Now, edit the `.env` file and fill in the following values:
 
-Edit the `.env` file with your credentials:
+- **`INFLUXDB_ADMIN_TOKEN`**: This is a **temporary, high-privilege token** you create for the initial setup. You can use a simple, memorable password here (e.g., `my-super-secret-password`). This token is ONLY used once for the setup script and will not be the final application token.
+- **`INFLUXDB_ORG`**: The name for your InfluxDB organization (e.g., `my-trading-org`).
+- **`INFLUXDB_BUCKET_LIVE`**: Bucket name for live trading data (e.g., `live_trades`).
+- **`INFLUXDB_BUCKET_TESTNET`**: Bucket name for paper trading data (e.g., `testnet_trades`).
+- **`INFLUXDB_BUCKET_BACKTEST`**: Bucket name for backtesting results (e.g., `backtest_results`).
+- **`INFLUXDB_BUCKET_PRICES`**: Bucket name for historical price data (e.g., `price_history`).
+- **`BINANCE_API_KEY` / `BINANCE_API_SECRET`**: Your live Binance API keys.
+- **`BINANCE_TESTNET_API_KEY` / `BINANCE_TESTNET_API_SECRET`**: Your testnet Binance API keys.
 
-- `INFLUXDB_TOKEN`: Your desired password for the database.
-- `BINANCE_API_KEY` / `BINANCE_API_SECRET`: Your live Binance API keys.
-- `BINANCE_TESTNET_API_KEY` / `BINANCE_TESTNET_API_SECRET`: Your testnet Binance API keys.
+**Note**: The `INFLUXDB_TOKEN` variable is intentionally left blank for now. It will be generated automatically in the next step.
 
-### Step 2: Build the Docker Images
-
-Build the `app` and `db` images defined in `docker-compose.yml`.
-
+### Step 3: Build and Start Services
+Build the Docker images and start the InfluxDB service in the background.
 ```bash
 python run.py build
-```
-
-### Step 3: Start Services
-
-Start the InfluxDB database container in the background.
-
-```bash
 python run.py start
 ```
+This will start the InfluxDB container. You can check its status with `python run.py status`.
 
-### Step 4: Populate the Database
+### Step 4: Run the Automated InfluxDB Setup
+This is the most critical step. Run the migration script to automatically configure InfluxDB. This script will create your organization, buckets, and a secure application token.
 
-Run the data pipeline to download historical price data and populate the database.
+```bash
+python influxdb_setup/run_migrations.py
+```
 
+The script will output a new **`INFLUXDB_TOKEN`**. This is the application token with restricted permissions that the bot will use for daily operations.
+
+**Action Required**: Copy the generated token and paste it into your `.env` file for the `INFLUXDB_TOKEN` variable.
+
+### Step 5: Populate the Database with Price Data
+With the database configured, run the price collector to download historical OHLCV data from Binance.
 ```bash
 python collectors/core_price_collector.py
 ```
+This process may take some time depending on the `start_date_ingestion` setting in `config.ini`.
 
-The bot is now ready to be used.
+### Step 6: Verify the Setup
+The system is now fully configured. You can run a backtest to verify that all components are working correctly.
+```bash
+python run.py backtest --days 30
+```
+This command will:
+1. Fetch the last 30 days of price data for backtesting.
+2. Clear any previous backtest results from the database.
+3. Run the simulation.
+4. Print a performance summary.
+
+If the backtest completes successfully, your setup is ready!
 
 ## 6. Environment Management
 

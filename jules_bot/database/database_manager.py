@@ -10,6 +10,7 @@ from influxdb_client import InfluxDBClient, Point
 from datetime import datetime, timezone
 from influxdb_client.client.write_api import SYNCHRONOUS
 from jules_bot.utils.logger import logger
+from jules_bot.core.schemas import TradePoint
 
 class DatabaseManager:
     def __init__(self, config: dict):
@@ -41,39 +42,17 @@ class DatabaseManager:
         except Exception as e:
             logging.error(f"Failed to write bot status to InfluxDB: {e}")
 
-    def log_trade(self, trade_data: dict):
+    def log_trade(self, trade_point: TradePoint):
         """
-        Writes a trade record to the 'trades' measurement based on the new schema.
-        This handles both buy and sell orders.
+        Writes a trade record to the 'trades' measurement using the TradePoint schema.
+        This enforces a consistent data structure for all trades.
         """
         try:
-            point = Point("trades") \
-                .tag("mode", trade_data.get("mode")) \
-                .tag("strategy_name", trade_data.get("strategy_name")) \
-                .tag("symbol", trade_data.get("symbol")) \
-                .tag("trade_id", trade_data.get("trade_id")) \
-                .tag("exchange", trade_data.get("exchange")) \
-                .field("order_type", trade_data.get("order_type")) \
-                .field("price", float(trade_data.get("price", 0.0))) \
-                .field("quantity", float(trade_data.get("quantity", 0.0))) \
-                .field("usd_value", float(trade_data.get("usd_value", 0.0))) \
-                .field("commission", float(trade_data.get("commission", 0.0))) \
-                .field("commission_asset", trade_data.get("commission_asset")) \
-                .field("exchange_order_id", trade_data.get("exchange_order_id"))
-
-            # Add fields that are only present on sell orders
-            if trade_data.get("order_type") == "sell":
-                if "realized_pnl" in trade_data:
-                    point = point.field("realized_pnl", float(trade_data.get("realized_pnl")))
-                if "held_quantity" in trade_data:
-                    point = point.field("held_quantity", float(trade_data.get("held_quantity")))
-
-            # Use the timestamp from the trade data if available, otherwise use now()
-            timestamp = trade_data.get("timestamp", datetime.now(timezone.utc))
-            point = point.time(timestamp)
+            # The TradePoint dataclass has a method to convert itself to an InfluxDB point
+            point = trade_point.to_influxdb_point()
 
             self.write_api.write(bucket=self.bucket, org=self.org, record=point)
-            logger.info(f"Successfully logged {trade_data.get('order_type')} trade {trade_data.get('trade_id')} to database.")
+            logger.info(f"Successfully logged {trade_point.order_type} trade {trade_point.trade_id} to database.")
 
         except Exception as e:
             logger.error(f"Failed to log trade to InfluxDB: {e}", exc_info=True)
