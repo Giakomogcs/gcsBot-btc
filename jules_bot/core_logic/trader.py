@@ -48,8 +48,9 @@ class Trader:
             if not api_key or not api_secret:
                 logger.error(f"API Key/Secret da Binance para o modo '{self.mode}' não encontradas.")
                 return None
-
-            client = Client(api_key, api_secret, tld='com', testnet=use_testnet)
+            
+            requests_params = {"timeout": 30}
+            client = Client(api_key, api_secret, tld='com', testnet=use_testnet, requests_params=requests_params)
 
             try:
                 server_time = client.get_server_time()
@@ -69,6 +70,44 @@ class Trader:
         except Exception as e:
             logger.error(f"❌ Ocorreu um erro inesperado ao inicializar o cliente Binance: {e}", exc_info=True)
             return None
+
+    @property
+    def is_ready(self) -> bool:
+        """Returns True if the Binance client is initialized and ready."""
+        return self._client is not None
+
+    def get_current_price(self, symbol: str) -> Optional[float]:
+        """Fetches the current price for a symbol from Binance."""
+        if not self.is_ready:
+            logger.warning("Trader is not ready. Cannot fetch current price.")
+            return None
+        try:
+            ticker = self._client.get_symbol_ticker(symbol=symbol)
+            return float(ticker['price'])
+        except (BinanceAPIException, BinanceRequestException) as e:
+            logger.error(f"API error fetching current price for {symbol}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error fetching current price for {symbol}: {e}")
+            return None
+
+    def get_account_balance(self, asset: str = 'USDT') -> float:
+        """Fetches the free balance for a specific asset from the account."""
+        if not self.is_ready:
+            logger.warning("Trader is not ready. Cannot fetch account balance.")
+            return 0.0
+        try:
+            account_info = self._client.get_account()
+            for balance in account_info['balances']:
+                if balance['asset'] == asset:
+                    return float(balance['free'])
+            return 0.0
+        except (BinanceAPIException, BinanceRequestException) as e:
+            logger.error(f"API error fetching account balance for {asset}: {e}")
+            return 0.0
+        except Exception as e:
+            logger.error(f"Unexpected error fetching account balance for {asset}: {e}")
+            return 0.0
 
     def execute_buy(self, amount_usdt: float) -> Tuple[bool, Optional[dict]]:
         """

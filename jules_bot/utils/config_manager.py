@@ -76,5 +76,27 @@ class ConfigManager:
         # Mimic configparser's error.
         raise ValueError(f'Not a boolean: {value}')
 
+    def get_db_config(self) -> Dict[str, str]:
+        """
+        Constructs the database configuration from environment variables.
+        This is the single source of truth for DB connection details.
+        """
+        db_url = os.getenv("INFLUXDB_URL")
+        db_token = os.getenv("INFLUXDB_TOKEN")
+        db_org = os.getenv("INFLUXDB_ORG")
+
+        if not all([db_url, db_token, db_org]):
+            raise ValueError(
+                "One or more required InfluxDB environment variables are missing: "
+                "INFLUXDB_URL, INFLUXDB_TOKEN, INFLUXDB_ORG"
+            )
+
+        return {
+            "url": db_url,
+            "token": db_token,
+            "org": db_org
+        }
+
+
 # Instantiate the config manager for global use
 config_manager = ConfigManager()

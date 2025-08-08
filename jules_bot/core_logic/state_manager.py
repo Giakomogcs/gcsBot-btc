@@ -7,9 +7,10 @@ class StateManager:
     def __init__(self, bucket_name: str, bot_id: str):
         self.bucket_name = bucket_name
         self.bot_id = bot_id
-        db_config = config_manager.get_section('INFLUXDB')
+        # Get the base DB configuration from the environment
+        db_config = config_manager.get_db_config()
+        # Add the specific bucket for this instance
         db_config['bucket'] = self.bucket_name
-        db_config['url'] = f"http://{db_config['host']}:{db_config['port']}"
         self.db_manager = DatabaseManager(config=db_config)
         logger.info(f"StateManager initialized for bucket: {self.bucket_name}, bot_id: {self.bot_id}")
 

@@ -4298,3 +4298,253 @@ HTTP response body: b'{"code":"unauthorized","message":"unauthorized access"}'
 
 2025-08-08 12:30:43,410 - gcsBot - INFO - No existing data. Starting collection from 2023-01-01.
 2025-08-08 12:30:43,411 - gcsBot - INFO - Fetching OHLCV data for BTCUSDT from 2023-01-01 00:00:00+00:00 to 2025-08-08 15:30:43.411323+00:00...
+2025-08-08 15:48:33,398 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-08 15:48:34,245 - gcsBot - INFO - --- INICIANDO O BOT EM MODO 'TRADE' (via variável de ambiente) ---
+2025-08-08 15:48:34,245 - gcsBot - CRITICAL - Erro fatal ao executar o bot: TradingBot.__init__() missing 2 required positional arguments: 'bot_id' and 'market_data_provider'
+Traceback (most recent call last):
+  File "/app/jules_bot/main.py", line 22, in main
+    bot = TradingBot(mode=bot_mode)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: TradingBot.__init__() missing 2 required positional arguments: 'bot_id' and 'market_data_provider'
+2025-08-08 15:48:34,249 - gcsBot - INFO - --- Encerrando o bot ---
+2025-08-08 12:50:31,371 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-08 12:50:31,373 - gcsBot - INFO - Running CorePriceCollector as a standalone script to update the default prices InfluxDB...
+2025-08-08 12:50:31,373 - gcsBot - INFO - Initializing CorePriceCollector...
+2025-08-08 12:50:31,374 - gcsBot - INFO - Using default prices bucket from [DATA] section: btc_data
+2025-08-08 12:50:32,676 - gcsBot - INFO - Binance client initialized successfully in TESTNET mode.
+2025-08-08 12:50:32,677 - gcsBot - INFO - --- Starting price collection for bucket 'btc_data' ---
+2025-08-08 12:50:32,677 - gcsBot - INFO - Querying last timestamp for BTCUSDT/binance/1m in bucket 'btc_data'...
+2025-08-08 12:50:32,716 - gcsBot - INFO - Last timestamp found in DB: 2025-08-08 15:22:00+00:00
+2025-08-08 12:50:32,718 - gcsBot - INFO - Fetching OHLCV data for BTCUSDT from 2025-08-08 15:23:00+00:00 to 2025-08-08 15:50:32.718277+00:00...
+2025-08-08 12:50:33,410 - gcsBot - INFO - Fetched 28 new candles from Binance.
+2025-08-08 12:50:33,411 - gcsBot - INFO - Preparing to write 28 rows to InfluxDB measurement 'price_history'...
+2025-08-08 12:50:33,476 - gcsBot - INFO - Successfully wrote 28 new candles to 'btc_data'.
+2025-08-08 12:50:33,476 - gcsBot - INFO - --- Price collection finished ---
+2025-08-08 16:05:17,021 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-08 16:05:18,397 - gcsBot - INFO - --- INICIANDO O BOT EM MODO 'TRADE' (via variável de ambiente) ---
+2025-08-08 16:05:18,424 - gcsBot - INFO - Gerado ID único para a sessão do bot: ccc67119-15b0-4465-be6a-d9df1a65bbd4
+2025-08-08 16:05:18,424 - gcsBot - INFO - Bot instanciado com sucesso em modo 'trade'.
+2025-08-08 16:05:18,425 - gcsBot - CRITICAL - Erro fatal ao executar o bot: InfluxDB connection details are missing.
+Traceback (most recent call last):
+  File "/app/jules_bot/main.py", line 62, in main
+    bot.run()
+  File "/app/jules_bot/bot/trading_bot.py", line 35, in run
+    state_manager = StateManager(bucket_name, self.bot_id)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/jules_bot/core_logic/state_manager.py", line 13, in __init__
+    self.db_manager = DatabaseManager(config=db_config)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/jules_bot/database/database_manager.py", line 24, in __init__
+    raise ValueError("InfluxDB connection details are missing.")
+ValueError: InfluxDB connection details are missing.
+2025-08-08 16:05:18,446 - gcsBot - INFO - --- Encerrando o bot ---
+2025-08-08 16:20:22,785 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-08 16:20:24,383 - gcsBot - INFO - --- INICIANDO O BOT EM MODO 'TRADE' (via variável de ambiente) ---
+2025-08-08 16:20:24,416 - gcsBot - INFO - Gerado ID único para a sessão do bot: 1d83ccd5-09c2-4b08-b08e-602e8f555cf8
+2025-08-08 16:20:24,417 - gcsBot - INFO - Bot instanciado com sucesso em modo 'trade'.
+2025-08-08 16:20:24,417 - gcsBot - INFO - StateManager initialized for bucket: live_trades, bot_id: 1d83ccd5-09c2-4b08-b08e-602e8f555cf8
+2025-08-08 16:20:34,580 - gcsBot - ERROR - ❌ Ocorreu um erro inesperado ao inicializar o cliente Binance: HTTPSConnectionPool(host='api.binance.com', port=443): Read timed out. (read timeout=10)
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "/usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "/usr/local/lib/python3.12/site-packages/urllib3/connection.py", line 790, in connect
+    sock_and_verified = _ssl_wrap_socket_and_match_hostname(
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/urllib3/connection.py", line 969, in _ssl_wrap_socket_and_match_hostname
+    ssl_sock = ssl_wrap_socket(
+               ^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/urllib3/util/ssl_.py", line 480, in ssl_wrap_socket
+    ssl_sock = _ssl_wrap_socket_impl(sock, context, tls_in_tls, server_hostname)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/urllib3/util/ssl_.py", line 524, in _ssl_wrap_socket_impl
+    return ssl_context.wrap_socket(sock, server_hostname=server_hostname)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/ssl.py", line 455, in wrap_socket
+    return self.sslsocket_class._create(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/ssl.py", line 1041, in _create
+    self.do_handshake()
+  File "/usr/local/lib/python3.12/ssl.py", line 1319, in do_handshake
+    self._sslobj.do_handshake()
+TimeoutError: _ssl.c:993: The handshake operation timed out
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.12/site-packages/requests/adapters.py", line 667, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/urllib3/util/retry.py", line 474, in increment
+    raise reraise(type(error), error, _stacktrace)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/urllib3/util/util.py", line 39, in reraise
+    raise value
+  File "/usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 488, in _make_request
+    raise new_e
+  File "/usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 466, in _make_request
+    self._raise_timeout(err=e, url=url, timeout_value=conn.timeout)
+  File "/usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 367, in _raise_timeout
+    raise ReadTimeoutError(
+urllib3.exceptions.ReadTimeoutError: HTTPSConnectionPool(host='api.binance.com', port=443): Read timed out. (read timeout=10)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/app/jules_bot/core_logic/trader.py", line 52, in _init_binance_client
+    client = Client(api_key, api_secret, tld='com', testnet=use_testnet)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/binance/client.py", line 51, in __init__
+    self.ping()
+  File "/usr/local/lib/python3.12/site-packages/binance/client.py", line 344, in ping
+    return self._get("ping", version=self.PRIVATE_API_VERSION)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/binance/client.py", line 180, in _get
+    return self._request_api("get", path, signed, version, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/binance/client.py", line 117, in _request_api
+    return self._request(method, uri, signed, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/binance/client.py", line 88, in _request
+    self.response = getattr(self.session, method)(uri, headers=headers, data=data, **kwargs)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/requests/sessions.py", line 602, in get
+    return self.request("GET", url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/requests/sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/requests/sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/requests/adapters.py", line 713, in send
+    raise ReadTimeout(e, request=request)
+requests.exceptions.ReadTimeout: HTTPSConnectionPool(host='api.binance.com', port=443): Read timed out. (read timeout=10)
+2025-08-08 16:20:34,606 - gcsBot - INFO - 🚀 --- TRADING LOOP STARTED FOR SYMBOL BTCUSDT IN TRADE MODE --- 🚀
+2025-08-08 16:20:34,608 - gcsBot - CRITICAL - ❌ A critical error occurred in the main loop: 'MarketDataProvider' object has no attribute 'get_current_price'
+Traceback (most recent call last):
+  File "/app/jules_bot/bot/trading_bot.py", line 56, in run
+    current_price = self.market_data_provider.get_current_price(self.symbol)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'MarketDataProvider' object has no attribute 'get_current_price'
+2025-08-08 16:25:34,598 - gcsBot - CRITICAL - ❌ A critical error occurred in the main loop: 'MarketDataProvider' object has no attribute 'get_current_price'
+Traceback (most recent call last):
+  File "/app/jules_bot/bot/trading_bot.py", line 56, in run
+    current_price = self.market_data_provider.get_current_price(self.symbol)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'MarketDataProvider' object has no attribute 'get_current_price'
+2025-08-08 16:30:34,582 - gcsBot - CRITICAL - ❌ A critical error occurred in the main loop: 'MarketDataProvider' object has no attribute 'get_current_price'
+Traceback (most recent call last):
+  File "/app/jules_bot/bot/trading_bot.py", line 56, in run
+    current_price = self.market_data_provider.get_current_price(self.symbol)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'MarketDataProvider' object has no attribute 'get_current_price'
+2025-08-08 16:32:28,155 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-08 16:32:29,744 - gcsBot - INFO - --- INICIANDO O BOT EM MODO 'TRADE' (via variável de ambiente) ---
+2025-08-08 16:32:29,776 - gcsBot - INFO - Gerado ID único para a sessão do bot: dfb09ca3-f24b-4a4c-9176-06945dcdb93e
+2025-08-08 16:32:29,776 - gcsBot - INFO - Bot instanciado com sucesso em modo 'trade'.
+2025-08-08 16:32:29,777 - gcsBot - INFO - StateManager initialized for bucket: live_trades, bot_id: dfb09ca3-f24b-4a4c-9176-06945dcdb93e
+2025-08-08 16:33:00,178 - gcsBot - ERROR - ❌ Ocorreu um erro inesperado ao inicializar o cliente Binance: HTTPSConnectionPool(host='api.binance.com', port=443): Read timed out. (read timeout=30)
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "/usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "/usr/local/lib/python3.12/site-packages/urllib3/connection.py", line 790, in connect
+    sock_and_verified = _ssl_wrap_socket_and_match_hostname(
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/urllib3/connection.py", line 969, in _ssl_wrap_socket_and_match_hostname
+    ssl_sock = ssl_wrap_socket(
+               ^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/urllib3/util/ssl_.py", line 480, in ssl_wrap_socket
+    ssl_sock = _ssl_wrap_socket_impl(sock, context, tls_in_tls, server_hostname)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/urllib3/util/ssl_.py", line 524, in _ssl_wrap_socket_impl
+    return ssl_context.wrap_socket(sock, server_hostname=server_hostname)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/ssl.py", line 455, in wrap_socket
+    return self.sslsocket_class._create(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/ssl.py", line 1041, in _create
+    self.do_handshake()
+  File "/usr/local/lib/python3.12/ssl.py", line 1319, in do_handshake
+    self._sslobj.do_handshake()
+TimeoutError: _ssl.c:993: The handshake operation timed out
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.12/site-packages/requests/adapters.py", line 667, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/urllib3/util/retry.py", line 474, in increment
+    raise reraise(type(error), error, _stacktrace)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/urllib3/util/util.py", line 39, in reraise
+    raise value
+  File "/usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 488, in _make_request
+    raise new_e
+  File "/usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 466, in _make_request
+    self._raise_timeout(err=e, url=url, timeout_value=conn.timeout)
+  File "/usr/local/lib/python3.12/site-packages/urllib3/connectionpool.py", line 367, in _raise_timeout
+    raise ReadTimeoutError(
+urllib3.exceptions.ReadTimeoutError: HTTPSConnectionPool(host='api.binance.com', port=443): Read timed out. (read timeout=30)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/app/jules_bot/core_logic/trader.py", line 53, in _init_binance_client
+    client = Client(api_key, api_secret, tld='com', testnet=use_testnet, requests_params=requests_params)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/binance/client.py", line 51, in __init__
+    self.ping()
+  File "/usr/local/lib/python3.12/site-packages/binance/client.py", line 344, in ping
+    return self._get("ping", version=self.PRIVATE_API_VERSION)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/binance/client.py", line 180, in _get
+    return self._request_api("get", path, signed, version, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/binance/client.py", line 117, in _request_api
+    return self._request(method, uri, signed, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/binance/client.py", line 88, in _request
+    self.response = getattr(self.session, method)(uri, headers=headers, data=data, **kwargs)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/requests/sessions.py", line 602, in get
+    return self.request("GET", url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/requests/sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/requests/sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/requests/adapters.py", line 713, in send
+    raise ReadTimeout(e, request=request)
+requests.exceptions.ReadTimeout: HTTPSConnectionPool(host='api.binance.com', port=443): Read timed out. (read timeout=30)
+2025-08-08 16:33:00,214 - gcsBot - CRITICAL - Trader could not be initialized. Shutting down bot.
+2025-08-08 16:33:00,215 - gcsBot - INFO - --- Encerrando o bot ---
+2025-08-08 16:41:49,134 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-08 16:41:50,554 - gcsBot - INFO - --- INICIANDO O BOT EM MODO 'TRADE' (via variável de ambiente) ---
+2025-08-08 16:41:50,555 - gcsBot - CRITICAL - Erro fatal ao executar o bot: InfluxDB connection details are missing.
+Traceback (most recent call last):
+  File "/app/jules_bot/main.py", line 48, in main
+    prices_db_manager = DatabaseManager(config=prices_db_config)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/app/jules_bot/database/database_manager.py", line 24, in __init__
+    raise ValueError("InfluxDB connection details are missing.")
+ValueError: InfluxDB connection details are missing.
+2025-08-08 16:41:50,565 - gcsBot - INFO - --- Encerrando o bot ---

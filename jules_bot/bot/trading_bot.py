@@ -31,18 +31,34 @@ class TradingBot:
             return
 
         # Instantiate core components
-        bucket_name = config_manager.get('INFLUXDB', f'bucket_{self.mode}')
+        if self.mode == 'trade':
+            bucket_key = 'bucket_live'
+        elif self.mode == 'test':
+            bucket_key = 'bucket_testnet'
+        else:
+            logger.error(f"Invalid mode '{self.mode}' for determining bucket.")
+            return
+
+        bucket_name = config_manager.get('INFLUXDB', bucket_key)
+        if not bucket_name:
+            logger.error(f"Could not find bucket configuration for key '{bucket_key}' in config.ini")
+            return
+
         state_manager = StateManager(bucket_name, self.bot_id)
         trader = Trader(mode=self.mode)
         strategy_rules = StrategyRules(config_manager)
+
+        if not trader.is_ready:
+            logger.critical("Trader could not be initialized. Shutting down bot.")
+            return
 
         self.is_running = True
         logger.info(f"🚀 --- TRADING LOOP STARTED FOR SYMBOL {self.symbol} IN {self.mode.upper()} MODE --- 🚀")
 
         while self.is_running:
             try:
-                current_price = self.market_data_provider.get_current_price(self.symbol)
-                if not current_price:
+                current_price = trader.get_current_price(self.symbol)
+                if current_price is None:
                     logger.warning("Could not retrieve current price. Skipping cycle.")
                     time.sleep(10)
                     continue
