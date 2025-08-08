@@ -12,8 +12,14 @@ def main():
     Ponto de entrada principal do bot.
     Lê o modo de execução da variável de ambiente BOT_MODE e chama a função correta.
     """
+    # O modo do bot é obrigatório e deve ser definido via variável de ambiente.
+    bot_mode = os.getenv('BOT_MODE')
+    if not bot_mode:
+        logger.error("A variável de ambiente BOT_MODE não está definida. Defina-a como 'trade' ou 'test' para executar o bot.")
+        sys.exit(1)
+    
     # Garante que qualquer espaço em branco seja removido antes de comparar
-    bot_mode = os.getenv('BOT_MODE', 'trade').strip().lower()
+    bot_mode = bot_mode.strip().lower()
     
     logger.info(f"--- INICIANDO O BOT EM MODO '{bot_mode.upper()}' (via variável de ambiente) ---")
     

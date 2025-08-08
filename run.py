@@ -131,6 +131,38 @@ def get_docker_compose_command():
             
     raise FileNotFoundError("Could not find a valid 'docker-compose' or 'docker compose' command. Please ensure Docker is installed and in your PATH.")
 
+
+def _run_docker_compose_with_mode(mode: str):
+    """
+    Helper function to run 'docker-compose up' with a specific BOT_MODE.
+    """
+    print(f"🚀 Iniciando o bot em modo '{mode.upper()}'...")
+    try:
+        # Prepara o ambiente, definindo o BOT_MODE
+        env = os.environ.copy()
+        env['BOT_MODE'] = mode
+
+        # Obtém o comando base (docker-compose ou docker compose)
+        command = get_docker_compose_command() + ["up", "--build", "-d"]
+        
+        print(f"   (usando comando: `{' '.join(command)}` com BOT_MODE={mode})")
+        
+        # Executa o comando com o ambiente modificado
+        result = subprocess.run(command, env=env, capture_output=True, text=True)
+
+        if result.returncode != 0:
+            print(f"❌ Erro ao iniciar os serviços. Código de saída: {result.returncode}")
+            print(f"   Stderr:\n{result.stderr}")
+        else:
+            print(f"✅ Bot iniciado com sucesso em modo '{mode.upper()}'.")
+            print("   Use `python run.py logs` para acompanhar.")
+
+    except FileNotFoundError as e:
+        print(f"❌ Erro: {e}")
+    except Exception as e:
+        print(f"❌ Ocorreu um erro inesperado: {e}")
+
+
 # --- Comandos do Ambiente Docker ---
 
 env_app = typer.Typer(help="Gerencia o ambiente Docker.")
@@ -242,8 +274,21 @@ def logs(service_name: Optional[str] = typer.Argument(None, help="Nome do servi�
 
 @app.command()
 def trade():
-    """[NÃO IMPLEMENTADO] Inicia o bot em modo de negociação ao vivo."""
-    print("O modo de negociação ao vivo ainda não foi implementado.")
+    """Inicia o bot em modo de negociação ao vivo (live trading)."""
+    _run_docker_compose_with_mode('trade')
+
+
+@app.command()
+def test():
+    """Inicia o bot em modo de teste, usando a API de testnet da Binance."""
+    _run_docker_compose_with_mode('test')
+
+
+@app.command()
+def testnet():
+    """Alias para o comando 'test'. Inicia o bot em modo de teste (testnet)."""
+    _run_docker_compose_with_mode('test')
+
 
 @app.command()
 def backtest(
