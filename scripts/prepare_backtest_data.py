@@ -9,26 +9,36 @@ if project_root not in sys.path:
 from collectors.core_price_collector import prepare_backtest_data
 from jules_bot.utils.logger import logger
 
+import argparse
+
 def main():
     """
-    Ponto de entrada para o script de preparação de dados de backtest.
-    Espera um argumento da linha de comando para o número de dias.
+    Entry point for the backtest data preparation script.
+    Handles command-line arguments for the number of days and force reload option.
     """
-    if len(sys.argv) < 2:
-        logger.error("Erro: Número de dias para preparação não fornecido.")
-        logger.error("Uso: python scripts/prepare_backtest_data.py <numero_de_dias>")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Prepare historical data for backtesting.")
+    parser.add_argument(
+        "days",
+        type=int,
+        help="The number of days of historical data to prepare."
+    )
+    parser.add_argument(
+        "--force-reload",
+        action="store_true",
+        help="If set, the script will clear and re-populate the database even if it already contains data."
+    )
+    args = parser.parse_args()
 
     try:
-        days = int(sys.argv[1])
-        logger.info(f"Iniciando preparação de dados de backtest para os últimos {days} dias...")
-        prepare_backtest_data(days)
-        logger.info("✅ Preparação de dados de backtest concluída com sucesso.")
-    except ValueError:
-        logger.error(f"Erro: O argumento '{sys.argv[1]}' não é um número inteiro válido.")
-        sys.exit(1)
+        logger.info(f"Starting backtest data preparation for the last {args.days} days...")
+        if args.force_reload:
+            logger.info("Force reload flag is set. Data will be re-populated.")
+        
+        prepare_backtest_data(days=args.days, force_reload=args.force_reload)
+        
+        logger.info("✅ Backtest data preparation finished successfully.")
     except Exception as e:
-        logger.error(f"Ocorreu um erro inesperado durante a preparação dos dados: {e}", exc_info=True)
+        logger.error(f"An unexpected error occurred during data preparation: {e}", exc_info=True)
         sys.exit(1)
 
 if __name__ == "__main__":

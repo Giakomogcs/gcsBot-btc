@@ -63,16 +63,13 @@ class DatabaseManager:
             self._client.close()
             logger.info("Conexão com o InfluxDB fechada.")
 
-    def delete_data_by_predicate(self, predicate: str):
-        """Deletes data from the current bucket based on a custom Flux predicate."""
+    def delete_data_by_predicate(self, predicate: str, start: datetime, stop: datetime):
+        """Deletes data from the current bucket based on a custom Flux predicate within a time range."""
         if not self.bucket:
             logger.error("Bucket not configured. Cannot delete data.")
             return False
         try:
-            start = "1970-01-01T00:00:00Z"
-            stop = datetime.now(timezone.utc).isoformat()
-
-            logger.info(f"Attempting to delete data from bucket '{self.bucket}' with predicate: {predicate}")
+            logger.info(f"Attempting to delete data from bucket '{self.bucket}' with predicate: {predicate} between {start} and {stop}")
             self._client.delete_api().delete(start, stop, predicate, bucket=self.bucket, org=self.org)
             logger.info("✅ Data deletion successful.")
             return True
@@ -84,7 +81,9 @@ class DatabaseManager:
         """Deletes all records from a specific measurement in the current bucket."""
         logger.info(f"Clearing all data from measurement '{measurement}'...")
         predicate = f'_measurement="{measurement}"'
-        self.delete_data_by_predicate(predicate)
+        start = datetime(1970, 1, 1, tzinfo=timezone.utc)
+        stop = datetime.now(timezone.utc)
+        self.delete_data_by_predicate(predicate, start, stop)
 
     def clear_all_trades(self):
         """Deletes all records from the 'trades' measurement for the current mode."""
