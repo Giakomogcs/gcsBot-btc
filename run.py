@@ -1,4 +1,5 @@
 import os
+from dotenv import load_dotenv
 import sys
 import shutil
 import typer
@@ -19,17 +20,49 @@ from typing import Optional
 # from collectors.core_price_collector import prepare_backtest_data
 
 # --- Placeholders para as classes (remova ao usar seus imports reais) ---
+load_dotenv()
+
 class GCSBotConfig:
     def get(self, key):
+        """
+        Obtém uma configuração específica a partir das variáveis de ambiente.
+        """
         print(f"DEBUG: Obtendo configuração para '{key}'")
+
         if key == 'backtest.default_lookback_days':
-            return 30
+            # Lê a variável, converte para inteiro e usa 30 como padrão se não for encontrada.
+            return int(os.getenv('BACKTEST_DEFAULT_LOOKBACK_DAYS', 30))
+
         if key == 'influxdb_connection':
-            return {'url': 'http://localhost:8086', 'token': 'token-secreto', 'org': 'gcsbot_org'}
+            # Monta o dicionário de conexão com as variáveis de ambiente correspondentes.
+            return {
+                'url': os.getenv('INFLUXDB_URL'),
+                'token': os.getenv('INFLUXDB_TOKEN'),
+                'org': os.getenv('INFLUXDB_ORG')
+            }
+
         if key == 'influxdb_trade':
-            return {'bucket': 'live_trades'}
+            # No seu .env, você tem buckets para live e testnet.
+            # Aqui, estou usando o bucket de 'live' como padrão para esta chave.
+            return {'bucket': os.getenv('INFLUXDB_BUCKET_LIVE')}
+
         if key == 'influxdb_backtest':
-            return {'bucket': 'backtest_results'}
+            return {'bucket': os.getenv('INFLUXDB_BUCKET_BACKTEST')}
+
+        # Adicionei também as chaves da Binance, que estão no seu .env
+        if key == 'binance_api':
+            return {
+                'key': os.getenv('BINANCE_API_KEY'),
+                'secret': os.getenv('BINANCE_API_SECRET')
+            }
+        
+        if key == 'binance_testnet_api':
+            return {
+                'key': os.getenv('BINANCE_TESTNET_API_KEY'),
+                'secret': os.getenv('BINANCE_TESTNET_API_SECRET')
+            }
+
+        # Retorna um dicionário vazio se a chave não for reconhecida
         return {}
 
 class DatabaseManager:

@@ -4044,3 +4044,257 @@ binance.exceptions.BinanceAPIException: APIError(code=-2010): Account has insuff
 2025-08-08 13:21:02,625 - gcsBot - INFO - StateManager initialized for bucket: test_bucket, bot_id: test_bot
 2025-08-08 13:21:02,627 - gcsBot - INFO - StateManager initialized for bucket: test_bucket, bot_id: test_bot
 2025-08-08 13:21:02,629 - gcsBot - INFO - StateManager initialized for bucket: test_bucket, bot_id: test_bot
+2025-08-08 12:13:43,899 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-08 12:13:43,902 - gcsBot - INFO - Running CorePriceCollector as a standalone script to update the default prices InfluxDB...
+2025-08-08 12:13:43,902 - gcsBot - INFO - Initializing CorePriceCollector...
+2025-08-08 12:13:43,903 - gcsBot - INFO - Using default prices bucket from [DATA] section: btc_data
+2025-08-08 12:13:44,797 - gcsBot - INFO - Binance client initialized successfully in TESTNET mode.
+2025-08-08 12:13:44,797 - gcsBot - INFO - --- Starting price collection for bucket 'btc_data' ---
+2025-08-08 12:13:44,797 - gcsBot - INFO - Querying last timestamp for BTCUSDT/binance/1m in bucket 'btc_data'...
+2025-08-08 12:13:44,839 - gcsBot - ERROR - Error querying last timestamp from InfluxDB: (404)
+Reason: Not Found
+HTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'Vary': 'Accept-Encoding', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'not found', 'Date': 'Fri, 08 Aug 2025 15:13:44 GMT', 'Transfer-Encoding': 'chunked'})
+HTTP response body: b'{"code":"not found","message":"failed to initialize execute state: could not find bucket \\"btc_data\\""}'
+Traceback (most recent call last):
+  File "C:\Github\gcsBot-btc\collectors\core_price_collector.py", line 118, in _query_last_timestamp
+    result = self.db_manager.query_api.query(query)
+  File "C:\Github\gcsBot-btc\.venv\Lib\site-packages\influxdb_client\client\query_api.py", line 203, in query
+    response = self._query_api.post_query(org=org, query=self._create_query(query, self.default_dialect, params),
+                                          async_req=False, _preload_content=False, _return_http_data_only=False)
+  File "C:\Github\gcsBot-btc\.venv\Lib\site-packages\influxdb_client\service\query_service.py", line 285, in post_query
+    (data) = self.post_query_with_http_info(**kwargs)  # noqa: E501
+  File "C:\Github\gcsBot-btc\.venv\Lib\site-packages\influxdb_client\service\query_service.py", line 311, in post_query_with_http_info
+    return self.api_client.call_api(
+           ~~~~~~~~~~~~~~~~~~~~~~~~^
+        '/api/v2/query', 'POST',
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<12 lines>...
+        collection_formats={},
+        ^^^^^^^^^^^^^^^^^^^^^^
+        urlopen_kw=kwargs.get('urlopen_kw', None))
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Github\gcsBot-btc\.venv\Lib\site-packages\influxdb_client\_sync\api_client.py", line 343, in call_api
+    return self.__call_api(resource_path, method,
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+                           path_params, query_params, header_params,
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+                           _return_http_data_only, collection_formats,
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                           _preload_content, _request_timeout, urlopen_kw)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Github\gcsBot-btc\.venv\Lib\site-packages\influxdb_client\_sync\api_client.py", line 173, in __call_api
+    response_data = self.request(
+        method, url, query_params=query_params, headers=header_params,
+        post_params=post_params, body=body,
+        _preload_content=_preload_content,
+        _request_timeout=_request_timeout, **urlopen_kw)
+  File "C:\Github\gcsBot-btc\.venv\Lib\site-packages\influxdb_client\_sync\api_client.py", line 388, in request
+    return self.rest_client.POST(url,
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^
+                                 query_params=query_params,
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+                                 body=body,
+                                 ^^^^^^^^^^
+                                 **urlopen_kw)
+                                 ^^^^^^^^^^^^^
+  File "C:\Github\gcsBot-btc\.venv\Lib\site-packages\influxdb_client\_sync\rest.py", line 311, in POST
+    return self.request("POST", url,
+           ~~~~~~~~~~~~^^^^^^^^^^^^^
+                        headers=headers,
+                        ^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+                        body=body,
+                        ^^^^^^^^^^
+                        **urlopen_kw)
+                        ^^^^^^^^^^^^^
+  File "C:\Github\gcsBot-btc\.venv\Lib\site-packages\influxdb_client\_sync\rest.py", line 261, in request
+    raise ApiException(http_resp=r)
+influxdb_client.rest.ApiException: (404)
+Reason: Not Found
+HTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'Vary': 'Accept-Encoding', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'not found', 'Date': 'Fri, 08 Aug 2025 15:13:44 GMT', 'Transfer-Encoding': 'chunked'})
+HTTP response body: b'{"code":"not found","message":"failed to initialize execute state: could not find bucket \\"btc_data\\""}'
+
+2025-08-08 12:13:44,846 - gcsBot - INFO - No existing data. Starting collection from 2023-01-01.
+2025-08-08 12:13:44,846 - gcsBot - INFO - Fetching OHLCV data for BTCUSDT from 2023-01-01 00:00:00+00:00 to 2025-08-08 15:13:44.846179+00:00...
+2025-08-08 15:21:33,389 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-08 15:21:34,344 - gcsBot - INFO - --- INICIANDO O BOT EM MODO 'TRADE' (via variável de ambiente) ---
+2025-08-08 15:21:34,344 - gcsBot - CRITICAL - Erro fatal ao executar o bot: TradingBot.__init__() missing 2 required positional arguments: 'bot_id' and 'market_data_provider'
+Traceback (most recent call last):
+  File "/app/jules_bot/main.py", line 22, in main
+    bot = TradingBot(mode=bot_mode)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: TradingBot.__init__() missing 2 required positional arguments: 'bot_id' and 'market_data_provider'
+2025-08-08 15:21:34,348 - gcsBot - INFO - --- Encerrando o bot ---
+2025-08-08 12:22:37,545 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-08 12:22:37,549 - gcsBot - INFO - Running CorePriceCollector as a standalone script to update the default prices InfluxDB...
+2025-08-08 12:22:37,549 - gcsBot - INFO - Initializing CorePriceCollector...
+2025-08-08 12:22:37,549 - gcsBot - INFO - Using default prices bucket from [DATA] section: btc_data
+2025-08-08 12:22:38,204 - gcsBot - INFO - Binance client initialized successfully in TESTNET mode.
+2025-08-08 12:22:38,204 - gcsBot - INFO - --- Starting price collection for bucket 'btc_data' ---
+2025-08-08 12:22:38,204 - gcsBot - INFO - Querying last timestamp for BTCUSDT/binance/1m in bucket 'btc_data'...
+2025-08-08 12:22:38,231 - gcsBot - ERROR - Error querying last timestamp from InfluxDB: (404)
+Reason: Not Found
+HTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'Vary': 'Accept-Encoding', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'not found', 'Date': 'Fri, 08 Aug 2025 15:22:38 GMT', 'Transfer-Encoding': 'chunked'})
+HTTP response body: b'{"code":"not found","message":"failed to initialize execute state: could not find bucket \\"btc_data\\""}'
+Traceback (most recent call last):
+  File "C:\Github\gcsBot-btc\collectors\core_price_collector.py", line 118, in _query_last_timestamp
+    result = self.db_manager.query_api.query(query)
+  File "C:\Github\gcsBot-btc\.venv\Lib\site-packages\influxdb_client\client\query_api.py", line 203, in query
+    response = self._query_api.post_query(org=org, query=self._create_query(query, self.default_dialect, params),
+                                          async_req=False, _preload_content=False, _return_http_data_only=False)
+  File "C:\Github\gcsBot-btc\.venv\Lib\site-packages\influxdb_client\service\query_service.py", line 285, in post_query
+    (data) = self.post_query_with_http_info(**kwargs)  # noqa: E501
+  File "C:\Github\gcsBot-btc\.venv\Lib\site-packages\influxdb_client\service\query_service.py", line 311, in post_query_with_http_info
+    return self.api_client.call_api(
+           ~~~~~~~~~~~~~~~~~~~~~~~~^
+        '/api/v2/query', 'POST',
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<12 lines>...
+        collection_formats={},
+        ^^^^^^^^^^^^^^^^^^^^^^
+        urlopen_kw=kwargs.get('urlopen_kw', None))
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Github\gcsBot-btc\.venv\Lib\site-packages\influxdb_client\_sync\api_client.py", line 343, in call_api
+    return self.__call_api(resource_path, method,
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+                           path_params, query_params, header_params,
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+                           _return_http_data_only, collection_formats,
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                           _preload_content, _request_timeout, urlopen_kw)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Github\gcsBot-btc\.venv\Lib\site-packages\influxdb_client\_sync\api_client.py", line 173, in __call_api
+    response_data = self.request(
+        method, url, query_params=query_params, headers=header_params,
+        post_params=post_params, body=body,
+        _preload_content=_preload_content,
+        _request_timeout=_request_timeout, **urlopen_kw)
+  File "C:\Github\gcsBot-btc\.venv\Lib\site-packages\influxdb_client\_sync\api_client.py", line 388, in request
+    return self.rest_client.POST(url,
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^
+                                 query_params=query_params,
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+                                 body=body,
+                                 ^^^^^^^^^^
+                                 **urlopen_kw)
+                                 ^^^^^^^^^^^^^
+  File "C:\Github\gcsBot-btc\.venv\Lib\site-packages\influxdb_client\_sync\rest.py", line 311, in POST
+    return self.request("POST", url,
+           ~~~~~~~~~~~~^^^^^^^^^^^^^
+                        headers=headers,
+                        ^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+                        body=body,
+                        ^^^^^^^^^^
+                        **urlopen_kw)
+                        ^^^^^^^^^^^^^
+  File "C:\Github\gcsBot-btc\.venv\Lib\site-packages\influxdb_client\_sync\rest.py", line 261, in request
+    raise ApiException(http_resp=r)
+influxdb_client.rest.ApiException: (404)
+Reason: Not Found
+HTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'Vary': 'Accept-Encoding', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'not found', 'Date': 'Fri, 08 Aug 2025 15:22:38 GMT', 'Transfer-Encoding': 'chunked'})
+HTTP response body: b'{"code":"not found","message":"failed to initialize execute state: could not find bucket \\"btc_data\\""}'
+
+2025-08-08 12:22:38,243 - gcsBot - INFO - No existing data. Starting collection from 2023-01-01.
+2025-08-08 12:22:38,243 - gcsBot - INFO - Fetching OHLCV data for BTCUSDT from 2023-01-01 00:00:00+00:00 to 2025-08-08 15:22:38.243454+00:00...
+2025-08-08 12:22:58,382 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-08 12:22:58,385 - gcsBot - INFO - Running CorePriceCollector as a standalone script to update the default prices InfluxDB...
+2025-08-08 12:22:58,385 - gcsBot - INFO - Initializing CorePriceCollector...
+2025-08-08 12:22:58,385 - gcsBot - INFO - Using default prices bucket from [DATA] section: btc_data
+2025-08-08 12:22:59,004 - gcsBot - INFO - Binance client initialized successfully in TESTNET mode.
+2025-08-08 12:22:59,005 - gcsBot - INFO - --- Starting price collection for bucket 'btc_data' ---
+2025-08-08 12:22:59,005 - gcsBot - INFO - Querying last timestamp for BTCUSDT/binance/1m in bucket 'btc_data'...
+2025-08-08 12:22:59,027 - gcsBot - INFO - No existing data found in measurement.
+2025-08-08 12:22:59,031 - gcsBot - INFO - No existing data. Starting collection from 2023-01-01.
+2025-08-08 12:22:59,031 - gcsBot - INFO - Fetching OHLCV data for BTCUSDT from 2023-01-01 00:00:00+00:00 to 2025-08-08 15:22:59.031381+00:00...
+2025-08-08 12:23:38,737 - gcsBot - INFO - Fetched 53488 new candles from Binance.
+2025-08-08 12:23:38,751 - gcsBot - INFO - Preparing to write 53488 rows to InfluxDB measurement 'price_history'...
+2025-08-08 12:23:39,682 - gcsBot - INFO - Successfully wrote 53488 new candles to 'btc_data'.
+2025-08-08 12:23:39,682 - gcsBot - INFO - --- Price collection finished ---
+2025-08-08 15:30:36,005 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-08 15:30:36,951 - gcsBot - INFO - --- INICIANDO O BOT EM MODO 'TRADE' (via variável de ambiente) ---
+2025-08-08 15:30:36,951 - gcsBot - CRITICAL - Erro fatal ao executar o bot: TradingBot.__init__() missing 2 required positional arguments: 'bot_id' and 'market_data_provider'
+Traceback (most recent call last):
+  File "/app/jules_bot/main.py", line 22, in main
+    bot = TradingBot(mode=bot_mode)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: TradingBot.__init__() missing 2 required positional arguments: 'bot_id' and 'market_data_provider'
+2025-08-08 15:30:36,955 - gcsBot - INFO - --- Encerrando o bot ---
+2025-08-08 12:30:42,717 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-08 12:30:42,720 - gcsBot - INFO - Running CorePriceCollector as a standalone script to update the default prices InfluxDB...
+2025-08-08 12:30:42,720 - gcsBot - INFO - Initializing CorePriceCollector...
+2025-08-08 12:30:42,720 - gcsBot - INFO - Using default prices bucket from [DATA] section: btc_data
+2025-08-08 12:30:43,385 - gcsBot - INFO - Binance client initialized successfully in TESTNET mode.
+2025-08-08 12:30:43,385 - gcsBot - INFO - --- Starting price collection for bucket 'btc_data' ---
+2025-08-08 12:30:43,385 - gcsBot - INFO - Querying last timestamp for BTCUSDT/binance/1m in bucket 'btc_data'...
+2025-08-08 12:30:43,399 - gcsBot - ERROR - Error querying last timestamp from InfluxDB: (401)
+Reason: Unauthorized
+HTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unauthorized', 'Date': 'Fri, 08 Aug 2025 15:30:43 GMT', 'Content-Length': '55'})
+HTTP response body: b'{"code":"unauthorized","message":"unauthorized access"}'
+Traceback (most recent call last):
+  File "C:\Github\gcsBot-btc\collectors\core_price_collector.py", line 118, in _query_last_timestamp
+    result = self.db_manager.query_api.query(query)
+  File "C:\Github\gcsBot-btc\.venv\Lib\site-packages\influxdb_client\client\query_api.py", line 203, in query
+    response = self._query_api.post_query(org=org, query=self._create_query(query, self.default_dialect, params),
+                                          async_req=False, _preload_content=False, _return_http_data_only=False)
+  File "C:\Github\gcsBot-btc\.venv\Lib\site-packages\influxdb_client\service\query_service.py", line 285, in post_query
+    (data) = self.post_query_with_http_info(**kwargs)  # noqa: E501
+  File "C:\Github\gcsBot-btc\.venv\Lib\site-packages\influxdb_client\service\query_service.py", line 311, in post_query_with_http_info
+    return self.api_client.call_api(
+           ~~~~~~~~~~~~~~~~~~~~~~~~^
+        '/api/v2/query', 'POST',
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<12 lines>...
+        collection_formats={},
+        ^^^^^^^^^^^^^^^^^^^^^^
+        urlopen_kw=kwargs.get('urlopen_kw', None))
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Github\gcsBot-btc\.venv\Lib\site-packages\influxdb_client\_sync\api_client.py", line 343, in call_api
+    return self.__call_api(resource_path, method,
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+                           path_params, query_params, header_params,
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+                           _return_http_data_only, collection_formats,
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                           _preload_content, _request_timeout, urlopen_kw)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Github\gcsBot-btc\.venv\Lib\site-packages\influxdb_client\_sync\api_client.py", line 173, in __call_api
+    response_data = self.request(
+        method, url, query_params=query_params, headers=header_params,
+        post_params=post_params, body=body,
+        _preload_content=_preload_content,
+        _request_timeout=_request_timeout, **urlopen_kw)
+  File "C:\Github\gcsBot-btc\.venv\Lib\site-packages\influxdb_client\_sync\api_client.py", line 388, in request
+    return self.rest_client.POST(url,
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^
+                                 query_params=query_params,
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+                                 body=body,
+                                 ^^^^^^^^^^
+                                 **urlopen_kw)
+                                 ^^^^^^^^^^^^^
+  File "C:\Github\gcsBot-btc\.venv\Lib\site-packages\influxdb_client\_sync\rest.py", line 311, in POST
+    return self.request("POST", url,
+           ~~~~~~~~~~~~^^^^^^^^^^^^^
+                        headers=headers,
+                        ^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+                        body=body,
+                        ^^^^^^^^^^
+                        **urlopen_kw)
+                        ^^^^^^^^^^^^^
+  File "C:\Github\gcsBot-btc\.venv\Lib\site-packages\influxdb_client\_sync\rest.py", line 261, in request
+    raise ApiException(http_resp=r)
+influxdb_client.rest.ApiException: (401)
+Reason: Unauthorized
+HTTP response headers: HTTPHeaderDict({'Content-Type': 'application/json; charset=utf-8', 'X-Influxdb-Build': 'OSS', 'X-Influxdb-Version': 'v2.7.12', 'X-Platform-Error-Code': 'unauthorized', 'Date': 'Fri, 08 Aug 2025 15:30:43 GMT', 'Content-Length': '55'})
+HTTP response body: b'{"code":"unauthorized","message":"unauthorized access"}'
+
+2025-08-08 12:30:43,410 - gcsBot - INFO - No existing data. Starting collection from 2023-01-01.
+2025-08-08 12:30:43,411 - gcsBot - INFO - Fetching OHLCV data for BTCUSDT from 2023-01-01 00:00:00+00:00 to 2025-08-08 15:30:43.411323+00:00...
