@@ -5,6 +5,7 @@ from jules_bot.config import GCSBotConfig
 from jules_bot.backtesting.engine import Backtester
 from jules_bot.database.database_manager import DatabaseManager
 from jules_bot.ui.display_manager import JulesBotApp
+from collectors.core_price_collector import prepare_backtest_data
 
 app = typer.Typer()
 config_manager = GCSBotConfig()
@@ -19,16 +20,35 @@ def trade():
 
 @app.command()
 def backtest(
-    data_path: str = typer.Argument(..., help="Path to the historical market data CSV file.")
+    days: Optional[int] = typer.Option(
+        None,
+        "--days",
+        "-d",
+        help="Number of days of recent data to fetch for the backtest."
+    )
 ):
     """
-    Runs a full backtest using the provided historical data.
+    Runs a full backtest using the latest market data from the database.
     """
+    print("🚀 Starting new backtest run...")
     try:
-        backtester = Backtester(data_path)
+        # If days are not specified, get from config
+        if days is None:
+            days = config_manager.getint('BACKTEST', 'default_lookback_days')
+            print(f"No --days specified. Using default of {days} days from config.ini.")
+
+        # 1. Prepare the data: fetch latest N days and write to backtest DB
+        print(f"Preparing data: fetching last {days} days of market data...")
+        prepare_backtest_data(days=days)
+
+        # 2. Run the backtester, which now reads from the DB
+        print("Data preparation complete. Starting backtesting engine...")
+        backtester = Backtester(days=days)
         backtester.run()
+        print("✅ Backtest finished successfully.")
+
     except Exception as e:
-        print(f"An error occurred during backtest: {e}")
+        print(f"❌ An error occurred during backtest: {e}")
 
 @app.command()
 def show(

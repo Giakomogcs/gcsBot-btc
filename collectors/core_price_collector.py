@@ -1,6 +1,7 @@
 import os
 import sys
 import datetime
+from datetime import timedelta
 import pandas as pd
 import time
 from binance.client import Client
@@ -17,14 +18,24 @@ from jules_bot.database.database_manager import DatabaseManager
 from jules_bot.utils.logger import logger
 
 class CorePriceCollector:
-    def __init__(self):
+    def __init__(self, bucket_name: Optional[str] = None):
         logger.info("Initializing CorePriceCollector...")
         db_config = config_manager.get_section('INFLUXDB')
+
+        # Allow overriding the bucket name, otherwise use the default prices bucket
+        if bucket_name:
+            db_config['bucket'] = bucket_name
+            logger.info(f"Using provided bucket: {bucket_name}")
+        else:
+            default_bucket = db_config.get('bucket_prices')
+            db_config['bucket'] = default_bucket
+            logger.info(f"Using default prices bucket: {default_bucket}")
+
         db_config['url'] = f"http://{db_config['host']}:{db_config['port']}"
         self.db_manager = DatabaseManager(config=db_config)
         self.binance_client = self._init_binance_client()
         self.symbol = config_manager.get('APP', 'symbol')
-        self.measurement = f"btc_prices"
+        self.measurement = "btc_prices"
 
     def _init_binance_client(self) -> Optional[Client]:
         if config_manager.getboolean('APP', 'force_offline_mode', fallback=False):
@@ -57,33 +68,27 @@ class CorePriceCollector:
 
     def _write_dataframe_to_influx(self, df: pd.DataFrame, measurement: str):
         logger.info(f"Preparing to write {len(df)} rows to InfluxDB measurement '{measurement}'...")
-        write_api = self.db_manager.get_write_api()
-        if not write_api:
-            logger.error("InfluxDB write API is not available. Aborting write operation.")
-            return
-
+        # This check is important because the db_manager is tied to a specific bucket
+        if not self.db_manager.bucket:
+             logger.error("DatabaseManager has no bucket configured. Aborting write.")
+             return
         try:
-            write_api.write(
+            self.db_manager.write_api.write(
                 bucket=self.db_manager.bucket,
                 record=df,
                 data_frame_measurement_name=measurement,
                 data_frame_timestamp_column="timestamp"
             )
-            logger.info(f"Successfully wrote {len(df)} new candles to InfluxDB.")
+            logger.info(f"Successfully wrote {len(df)} new candles to '{self.db_manager.bucket}'.")
         except Exception as e:
             logger.error(f"Error writing data to InfluxDB: {e}", exc_info=True)
 
     def _query_last_timestamp(self) -> Optional[pd.Timestamp]:
-        logger.info(f"Querying last timestamp from measurement '{self.measurement}'...")
-        query_api = self.db_manager.get_query_api()
-        if not query_api:
-            logger.error("InfluxDB query API is not available.")
-            return None
-
+        logger.info(f"Querying last timestamp from measurement '{self.measurement}' in bucket '{self.db_manager.bucket}'...")
         query = f'from(bucket:"{self.db_manager.bucket}") |> range(start: 0) |> filter(fn: (r) => r._measurement == "{self.measurement}") |> last() |> keep(columns: ["_time"])'
 
         try:
-            result = query_api.query(query)
+            result = self.db_manager.query_api.query(query)
             if not result or not result[0].records:
                 logger.info("No existing data found in measurement.")
                 return None
@@ -118,10 +123,8 @@ class CorePriceCollector:
             return pd.DataFrame()
 
     def run(self):
-        logger.info("--- Starting price collection ---")
-
+        logger.info(f"--- Starting price collection for bucket '{self.db_manager.bucket}' ---")
         last_timestamp = self._query_last_timestamp()
-
         if last_timestamp:
             start_date = last_timestamp + pd.Timedelta(minutes=1)
         else:
@@ -136,12 +139,44 @@ class CorePriceCollector:
             return
 
         df_new_prices = self._get_historical_klines(start_date, end_date)
-
         if not df_new_prices.empty:
             self._write_dataframe_to_influx(df_new_prices, self.measurement)
-
         logger.info("--- Price collection finished ---")
 
+def prepare_backtest_data(days: int):
+    """
+    Ensures the backtest database has fresh data for the last N days.
+    - Clears any old data in the backtest bucket.
+    - Fetches the latest data from Binance.
+    - Writes the new data to the backtest bucket.
+    """
+    logger.info(f"--- Preparing backtest data for the last {days} days ---")
+
+    backtest_bucket = config_manager.get('INFLUXDB', 'bucket_backtest')
+    collector = CorePriceCollector(bucket_name=backtest_bucket)
+
+    if not collector.binance_client:
+        logger.error("Binance client not available. Cannot prepare backtest data.")
+        return
+
+    # 1. Clear all previous data from the measurement in the backtest bucket
+    collector.db_manager.clear_measurement(collector.measurement)
+
+    # 2. Fetch new data
+    end_date = datetime.datetime.now(datetime.timezone.utc)
+    start_date = end_date - timedelta(days=days)
+    df_data = collector._get_historical_klines(start_date, end_date)
+
+    # 3. Write new data to the backtest bucket
+    if not df_data.empty:
+        collector._write_dataframe_to_influx(df_data, collector.measurement)
+    else:
+        logger.warning("No new data was fetched for the backtest period.")
+
+    logger.info("--- Backtest data preparation finished ---")
+
+
 if __name__ == '__main__':
+    logger.info("Running CorePriceCollector as a standalone script to update the default prices InfluxDB...")
     collector = CorePriceCollector()
     collector.run()

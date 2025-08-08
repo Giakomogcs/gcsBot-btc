@@ -90,6 +90,22 @@ class DatabaseManager:
             self._client.close()
             logger.info("Conexão com o InfluxDB fechada.")
 
+    def clear_measurement(self, measurement: str):
+        """Deletes all records from a specific measurement in the current bucket."""
+        if not self.bucket:
+            logger.warning("Bucket not configured. Cannot clear measurement.")
+            return
+        try:
+            start = "1970-01-01T00:00:00Z"
+            stop = datetime.now(timezone.utc).isoformat()
+            predicate = f'_measurement="{measurement}"'
+
+            logger.info(f"Clearing all data from measurement '{measurement}' in bucket '{self.bucket}'...")
+            self._client.delete_api().delete(start, stop, predicate, bucket=self.bucket, org=self.org)
+            logger.info(f"✅ Measurement '{measurement}' cleared successfully.")
+        except Exception as e:
+            logger.error(f"Failed to clear measurement '{measurement}': {e}", exc_info=True)
+
     def clear_all_trades(self):
         """Deletes all records from the 'trades' measurement for the current mode."""
         if not self.mode:
@@ -132,6 +148,34 @@ class DatabaseManager:
 
     def get_query_api(self): # Função mantida para compatibilidade
         return self.query_api
+
+    def get_price_data(self, measurement: str, start_date: str = "-30d", end_date: str = "now()") -> pd.DataFrame:
+        """Fetches OHLCV price data from a specific measurement in the current bucket."""
+        logger.info(f"Fetching price data from '{measurement}' in bucket '{self.bucket}' from {start_date} to {end_date}...")
+        try:
+            query = f'''
+            from(bucket: "{self.bucket}")
+                |> range(start: {start_date}, stop: {end_date})
+                |> filter(fn: (r) => r._measurement == "{measurement}")
+                |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+                |> keep(columns: ["_time", "open", "high", "low", "close", "volume"])
+                |> sort(columns: ["_time"])
+            '''
+            df = self.query_api.query_data_frame(query=query, org=self.org)
+            if isinstance(df, list):
+                df = pd.concat(df, ignore_index=True) if df else pd.DataFrame()
+
+            if df.empty:
+                logger.warning("No price data found for the specified period.")
+                return pd.DataFrame()
+
+            df = df.rename(columns={"_time": "timestamp"})
+            df.set_index('timestamp', inplace=True)
+            logger.info(f"Successfully fetched {len(df)} price records.")
+            return df
+        except Exception as e:
+            logger.error(f"Failed to get price data: {e}", exc_info=True)
+            return pd.DataFrame()
 
     def get_open_positions(self, bot_id: str) -> list[dict]:
         """Fetches all trades for a bot_id that are currently in 'OPEN' status."""
