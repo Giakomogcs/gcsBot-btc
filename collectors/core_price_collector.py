@@ -76,8 +76,7 @@ class CorePriceCollector:
             self.db_manager.write_api.write(
                 bucket=self.db_manager.bucket,
                 record=df,
-                data_frame_measurement_name=measurement,
-                data_frame_timestamp_column="timestamp"
+                data_frame_measurement_name=measurement
             )
             logger.info(f"Successfully wrote {len(df)} new candles to '{self.db_manager.bucket}'.")
         except Exception as e:
