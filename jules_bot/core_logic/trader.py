@@ -92,22 +92,25 @@ class Trader:
             commission = sum(float(f['commission']) for f in order['fills'])
             commission_asset = order['fills'][0]['commissionAsset'] if order['fills'] else None
 
-            trade_data = {
-                "mode": self.mode,
-                "strategy_name": self.strategy_name,
-                "symbol": self.symbol,
-                "trade_id": trade_id,
-                "exchange": "binance_testnet" if self.mode == 'test' else "binance",
-                "order_type": "buy",
-                "price": price,
-                "quantity": quantity,
-                "usd_value": usd_value,
-                "commission": commission,
-                "commission_asset": commission_asset,
-                "exchange_order_id": order.get('orderId'),
-                "timestamp": pd.to_datetime(order['transactTime'], unit='ms', utc=True)
-            }
-            self.db_manager.log_trade(trade_data)
+            from jules_bot.core.schemas import TradePoint
+            import pandas as pd
+
+            trade_point = TradePoint(
+                mode=self.mode,
+                strategy_name=self.strategy_name,
+                symbol=self.symbol,
+                trade_id=trade_id,
+                exchange="binance_testnet" if self.mode == 'test' else "binance",
+                order_type="buy",
+                price=price,
+                quantity=quantity,
+                usd_value=usd_value,
+                commission=commission,
+                commission_asset=commission_asset,
+                exchange_order_id=order.get('orderId'),
+                timestamp=pd.to_datetime(order['transactTime'], unit='ms', utc=True).to_pydatetime()
+            )
+            self.db_manager.log_trade(trade_point)
 
             # Adiciona o trade_id ao dicionário de retorno
             order['trade_id'] = trade_id
@@ -144,24 +147,27 @@ class Trader:
             commission = sum(float(f['commission']) for f in order['fills'])
             commission_asset = order['fills'][0]['commissionAsset'] if order['fills'] else None
 
-            trade_data = {
-                "mode": self.mode,
-                "strategy_name": self.strategy_name,
-                "symbol": self.symbol,
-                "trade_id": trade_id,
-                "exchange": "binance_testnet" if self.mode == 'test' else "binance",
-                "order_type": "sell",
-                "price": price,
-                "quantity": quantity,
-                "usd_value": usd_value,
-                "commission": commission,
-                "commission_asset": commission_asset,
-                "exchange_order_id": order.get('orderId'),
-                "realized_pnl": position_data.get("realized_pnl"), # Deve ser calculado e passado em `position_data`
-                "held_quantity": position_data.get("held_quantity"), # Deve ser calculado e passado em `position_data`
-                "timestamp": pd.to_datetime(order['transactTime'], unit='ms', utc=True)
-            }
-            self.db_manager.log_trade(trade_data)
+            from jules_bot.core.schemas import TradePoint
+            import pandas as pd
+
+            trade_point = TradePoint(
+                mode=self.mode,
+                strategy_name=self.strategy_name,
+                symbol=self.symbol,
+                trade_id=trade_id,
+                exchange="binance_testnet" if self.mode == 'test' else "binance",
+                order_type="sell",
+                price=price,
+                quantity=quantity,
+                usd_value=usd_value,
+                commission=commission,
+                commission_asset=commission_asset,
+                exchange_order_id=order.get('orderId'),
+                realized_pnl=position_data.get("realized_pnl"),
+                held_quantity=position_data.get("held_quantity"),
+                timestamp=pd.to_datetime(order['transactTime'], unit='ms', utc=True).to_pydatetime()
+            )
+            self.db_manager.log_trade(trade_point)
 
             order['trade_id'] = trade_id
             return True, order

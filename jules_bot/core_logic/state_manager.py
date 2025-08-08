@@ -71,23 +71,55 @@ class StateManager:
         # For now, we adapt it to call the new log_trade function.
         # The logic for calculating sell_target_price should be moved to the bot/strategy itself.
 
-        # The `buy_result` dictionary is expected to contain all necessary fields for logging.
-        # We just add the bot_id for now.
-        trade_data = {
-            **buy_result,
-            'bot_id': self.bot_id # Note: bot_id is not in the new primary schema, but keeping for now.
-        }
-        self.db_manager.log_trade(trade_data)
+        from jules_bot.core.schemas import TradePoint
+
+        # The bot_id is not part of the TradePoint schema. It is used for status, not individual trades.
+        # We now create a TradePoint object to enforce the schema.
+        try:
+            trade_point = TradePoint(
+                mode=buy_result.get('mode', 'backtest'), # Assume backtest if not provided
+                strategy_name=buy_result.get('strategy_name', 'default'),
+                symbol=buy_result['symbol'],
+                trade_id=buy_result['trade_id'],
+                exchange=buy_result.get('exchange', 'simulated'),
+                order_type='buy',
+                price=buy_result['price'],
+                quantity=buy_result['quantity'],
+                usd_value=buy_result['usd_value'],
+                commission=buy_result.get('commission', 0.0),
+                commission_asset=buy_result.get('commission_asset', 'USDT'),
+                exchange_order_id=buy_result.get('exchange_order_id')
+            )
+            self.db_manager.log_trade(trade_point)
+        except KeyError as e:
+            logger.error(f"Missing essential key in buy_result to create TradePoint: {e}")
+        except Exception as e:
+            logger.error(f"Failed to create or log TradePoint: {e}")
 
     def close_position(self, trade_id: str, exit_data: dict):
         """
-        Logs the closing part of a trade.
-        This function is now a passthrough and should be refactored.
+        Logs the closing part of a trade using the TradePoint schema.
         """
-        # The `exit_data` dictionary is expected to contain all necessary fields for logging.
-        # We just add the trade_id to it.
-        trade_data = {
-            **exit_data,
-            'trade_id': trade_id
-        }
-        self.db_manager.log_trade(trade_data)
+        from jules_bot.core.schemas import TradePoint
+
+        try:
+            trade_point = TradePoint(
+                mode=exit_data.get('mode', 'backtest'),
+                strategy_name=exit_data.get('strategy_name', 'default'),
+                symbol=exit_data['symbol'],
+                trade_id=trade_id, # The ID of the trade being closed
+                exchange=exit_data.get('exchange', 'simulated'),
+                order_type='sell',
+                price=exit_data['price'],
+                quantity=exit_data['quantity'],
+                usd_value=exit_data['usd_value'],
+                commission=exit_data.get('commission', 0.0),
+                commission_asset=exit_data.get('commission_asset', 'USDT'),
+                exchange_order_id=exit_data.get('exchange_order_id'),
+                realized_pnl=exit_data.get('realized_pnl')
+            )
+            self.db_manager.log_trade(trade_point)
+        except KeyError as e:
+            logger.error(f"Missing essential key in exit_data to create TradePoint: {e}")
+        except Exception as e:
+            logger.error(f"Failed to create or log closing TradePoint: {e}")

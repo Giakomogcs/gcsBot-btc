@@ -3501,3 +3501,29 @@
 {"timestamp": "2025-08-08 12:50:58,206", "level": "WARNING", "message": "Force offline mode is enabled. Binance client will not be initialized."}
 {"timestamp": "2025-08-08 12:50:58,206", "level": "ERROR", "message": "Binance client not available. Cannot prepare backtest data."}
 {"timestamp": "2025-08-08 12:50:58,209", "level": "ERROR", "message": "Erro ao executar a query no InfluxDB para 'price_history': <urllib3.connection.HTTPConnection object at 0x7fd000243ec0>: Failed to establish a new connection: [Errno 111] Connection refused"}
+{"timestamp": "2025-08-08 13:18:42,022", "level": "ERROR", "message": "Binance API Error fetching open orders: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time."}
+{"timestamp": "2025-08-08 13:18:42,031", "level": "ERROR", "message": "Binance API Error fetching trade history: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time."}
+{"timestamp": "2025-08-08 13:18:42,036", "level": "ERROR", "message": "Binance API Error on BUY: APIError(code=-2010): Account has insufficient balance for requested action."}
+{"timestamp": "2025-08-08 13:18:42,040", "level": "ERROR", "message": "Binance API Error on SELL: APIError(code=-2010): Account has insufficient balance for requested action."}
+{"timestamp": "2025-08-08 13:19:46,156", "level": "ERROR", "message": "Binance API Error fetching open orders: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time."}
+{"timestamp": "2025-08-08 13:19:46,161", "level": "ERROR", "message": "Binance API Error fetching trade history: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time."}
+{"timestamp": "2025-08-08 13:19:46,165", "level": "ERROR", "message": "Binance API Error on BUY: APIError(code=-2010): Account has insufficient balance for requested action."}
+{"timestamp": "2025-08-08 13:19:46,169", "level": "ERROR", "message": "Binance API Error on SELL: APIError(code=-2010): Account has insufficient balance for requested action."}
+{"timestamp": "2025-08-08 13:19:46,173", "level": "ERROR", "message": "Failed to create or log TradePoint: type object 'datetime.datetime' has no attribute 'timezone'"}
+{"timestamp": "2025-08-08 13:19:46,356", "level": "ERROR", "message": "Failed to create or log closing TradePoint: type object 'datetime.datetime' has no attribute 'timezone'"}
+{"timestamp": "2025-08-08 13:20:11,615", "level": "ERROR", "message": "Binance API Error fetching open orders: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time."}
+{"timestamp": "2025-08-08 13:20:11,620", "level": "ERROR", "message": "Binance API Error fetching trade history: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time."}
+{"timestamp": "2025-08-08 13:20:11,624", "level": "ERROR", "message": "Binance API Error on BUY: APIError(code=-2010): Account has insufficient balance for requested action."}
+{"timestamp": "2025-08-08 13:20:11,629", "level": "ERROR", "message": "Binance API Error on SELL: APIError(code=-2010): Account has insufficient balance for requested action."}
+{"timestamp": "2025-08-08 13:20:11,633", "level": "ERROR", "message": "Failed to create or log TradePoint: type object 'datetime.datetime' has no attribute 'timezone'"}
+{"timestamp": "2025-08-08 13:20:11,819", "level": "ERROR", "message": "Failed to create or log closing TradePoint: type object 'datetime.datetime' has no attribute 'timezone'"}
+{"timestamp": "2025-08-08 13:20:34,703", "level": "ERROR", "message": "Binance API Error fetching open orders: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time."}
+{"timestamp": "2025-08-08 13:20:34,708", "level": "ERROR", "message": "Binance API Error fetching trade history: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time."}
+{"timestamp": "2025-08-08 13:20:34,712", "level": "ERROR", "message": "Binance API Error on BUY: APIError(code=-2010): Account has insufficient balance for requested action."}
+{"timestamp": "2025-08-08 13:20:34,717", "level": "ERROR", "message": "Binance API Error on SELL: APIError(code=-2010): Account has insufficient balance for requested action."}
+{"timestamp": "2025-08-08 13:20:34,720", "level": "ERROR", "message": "Failed to create or log TradePoint: type object 'datetime.datetime' has no attribute 'timezone'"}
+{"timestamp": "2025-08-08 13:20:34,927", "level": "ERROR", "message": "Failed to create or log closing TradePoint: type object 'datetime.datetime' has no attribute 'timezone'"}
+{"timestamp": "2025-08-08 13:21:02,605", "level": "ERROR", "message": "Binance API Error fetching open orders: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time."}
+{"timestamp": "2025-08-08 13:21:02,610", "level": "ERROR", "message": "Binance API Error fetching trade history: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time."}
+{"timestamp": "2025-08-08 13:21:02,614", "level": "ERROR", "message": "Binance API Error on BUY: APIError(code=-2010): Account has insufficient balance for requested action."}
+{"timestamp": "2025-08-08 13:21:02,618", "level": "ERROR", "message": "Binance API Error on SELL: APIError(code=-2010): Account has insufficient balance for requested action."}
