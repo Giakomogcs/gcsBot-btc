@@ -1,16 +1,21 @@
+import os
 import sys
+
+# Adiciona a raiz do projeto ao path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from jules_bot.backtesting.engine import Backtester
+from jules_bot.utils.config_manager import config_manager
 
 def main():
     """
-    This script is deprecated. The backtest is now run via the main application UI.
+    Runs a full backtest using the provided historical data.
     """
-    print("--- DEPRECATION WARNING ---")
-    print("This script is no longer used to run the backtest.")
-    print("To run a backtest, please follow these steps:")
-    print("1. Edit your 'config.yml' and set 'app.execution_mode' to 'backtest'.")
-    print("2. Run the application using 'docker-compose up --build'.")
-    print("This will launch the Textual UI for backtesting.")
-    sys.exit(0)
+    historical_data_path = config_manager.get('DATA_PATHS', 'historical_data_file')
+    backtester = Backtester(historical_data_path)
+    backtester.run()
 
 if __name__ == "__main__":
     main()

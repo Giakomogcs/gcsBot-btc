@@ -167,7 +167,7 @@ All interaction with the bot and its environment is handled by `run.py`.
 
   - Starts the bot in the background, trading on the Binance testnet.
 
-- **Run a Backtest**: `python run.py backtest`
+- **Run a Backtest**: `python scripts/run_backtest.py`
 
   - Starts a backtest run using historical data.
 
@@ -191,7 +191,11 @@ The `config.ini` file allows you to tune the bot's behavior without changing the
 - **`[INFLUXDB]`**: Configures the connection details for InfluxDB.
 - **`[BINANCE_LIVE]`**: Your live Binance API keys.
 - **`[BINANCE_TESTNET]`**: Your testnet Binance API keys.
-- **`[STRATEGY_RULES]`**: To be populated in Sprint 2.
+- **`[STRATEGY_RULES]`**: Configures the dynamic EAMG strategy.
+  - `buy_trigger_few_positions`: The percentage drop required for the next buy when there are few open positions.
+  - `buy_trigger_many_positions`: The percentage drop required for the next buy when there are many open positions.
+  - `buy_amount_low_allocation_multiplier`: The multiplier for the base buy amount when capital allocation is low.
+  - `buy_amount_high_allocation_multiplier`: The multiplier for the base buy amount when capital allocation is high.
 - **`[BACKTEST]`**: Parameters for backtesting simulations.
 - **`[DATA]`**: Paths for data files.
 - **`[APP]`**: Main application settings.
