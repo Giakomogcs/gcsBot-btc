@@ -3463,3 +3463,35 @@
 {"timestamp": "2025-08-07 23:36:54,698", "level": "WARNING", "message": "Force offline mode is enabled. Binance client will not be initialized."}
 {"timestamp": "2025-08-07 23:36:54,702", "level": "ERROR", "message": "Error querying last timestamp from InfluxDB: <urllib3.connection.HTTPConnection object at 0x7f157bf91430>: Failed to establish a new connection: [Errno 111] Connection refused"}
 {"timestamp": "2025-08-07 23:36:54,710", "level": "WARNING", "message": "Binance client not initialized. Cannot fetch historical klines."}
+{"timestamp": "2025-08-08 01:18:10,432", "level": "WARNING", "message": "OFFLINE MODE: Cannot fetch open orders."}
+{"timestamp": "2025-08-08 01:18:10,525", "level": "WARNING", "message": "OFFLINE MODE: Cannot fetch open orders."}
+{"timestamp": "2025-08-08 01:18:10,527", "level": "WARNING", "message": "OFFLINE MODE: Cannot fetch trade history."}
+{"timestamp": "2025-08-08 01:18:10,537", "level": "WARNING", "message": "OFFLINE MODE: Cannot fetch trade history."}
+{"timestamp": "2025-08-08 01:18:10,539", "level": "WARNING", "message": "OFFLINE MODE: Simulating buy with 1000.00 USDT."}
+{"timestamp": "2025-08-08 01:18:10,620", "level": "WARNING", "message": "OFFLINE MODE: Simulating buy with 1000.00 USDT."}
+{"timestamp": "2025-08-08 01:18:10,628", "level": "WARNING", "message": "OFFLINE MODE: Simulating sell of 0.10000000 BTC."}
+{"timestamp": "2025-08-08 01:18:10,635", "level": "WARNING", "message": "OFFLINE MODE: Simulating sell of 0.10000000 BTC."}
+{"timestamp": "2025-08-08 01:19:00,312", "level": "WARNING", "message": "OFFLINE MODE: Cannot fetch open orders."}
+{"timestamp": "2025-08-08 01:19:00,406", "level": "WARNING", "message": "OFFLINE MODE: Cannot fetch open orders."}
+{"timestamp": "2025-08-08 01:19:00,409", "level": "WARNING", "message": "OFFLINE MODE: Cannot fetch trade history."}
+{"timestamp": "2025-08-08 01:19:00,418", "level": "WARNING", "message": "OFFLINE MODE: Cannot fetch trade history."}
+{"timestamp": "2025-08-08 01:19:00,421", "level": "WARNING", "message": "OFFLINE MODE: Simulating buy with 1000.00 USDT."}
+{"timestamp": "2025-08-08 01:19:00,491", "level": "WARNING", "message": "OFFLINE MODE: Simulating buy with 1000.00 USDT."}
+{"timestamp": "2025-08-08 01:19:00,498", "level": "WARNING", "message": "OFFLINE MODE: Simulating sell of 0.10000000 BTC."}
+{"timestamp": "2025-08-08 01:19:00,506", "level": "WARNING", "message": "OFFLINE MODE: Simulating sell of 0.10000000 BTC."}
+{"timestamp": "2025-08-08 01:19:30,800", "level": "WARNING", "message": "OFFLINE MODE: Cannot fetch open orders."}
+{"timestamp": "2025-08-08 01:19:30,901", "level": "WARNING", "message": "OFFLINE MODE: Cannot fetch open orders."}
+{"timestamp": "2025-08-08 01:19:30,904", "level": "WARNING", "message": "OFFLINE MODE: Cannot fetch trade history."}
+{"timestamp": "2025-08-08 01:19:30,942", "level": "WARNING", "message": "OFFLINE MODE: Cannot fetch trade history."}
+{"timestamp": "2025-08-08 01:19:30,945", "level": "WARNING", "message": "OFFLINE MODE: Simulating buy with 1000.00 USDT."}
+{"timestamp": "2025-08-08 01:19:31,083", "level": "WARNING", "message": "OFFLINE MODE: Simulating buy with 1000.00 USDT."}
+{"timestamp": "2025-08-08 01:19:31,090", "level": "WARNING", "message": "OFFLINE MODE: Simulating sell of 0.10000000 BTC."}
+{"timestamp": "2025-08-08 01:19:31,097", "level": "WARNING", "message": "OFFLINE MODE: Simulating sell of 0.10000000 BTC."}
+{"timestamp": "2025-08-08 01:21:16,921", "level": "ERROR", "message": "Binance API Error fetching open orders: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time."}
+{"timestamp": "2025-08-08 01:21:16,926", "level": "ERROR", "message": "Binance API Error fetching trade history: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time."}
+{"timestamp": "2025-08-08 01:21:16,930", "level": "ERROR", "message": "Binance API Error on BUY: APIError(code=-2010): Account has insufficient balance for requested action."}
+{"timestamp": "2025-08-08 01:21:16,934", "level": "ERROR", "message": "Binance API Error on SELL: APIError(code=-2010): Account has insufficient balance for requested action."}
+{"timestamp": "2025-08-08 01:23:05,937", "level": "ERROR", "message": "Binance API Error fetching open orders: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time."}
+{"timestamp": "2025-08-08 01:23:05,945", "level": "ERROR", "message": "Binance API Error fetching trade history: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time."}
+{"timestamp": "2025-08-08 01:23:05,949", "level": "ERROR", "message": "Binance API Error on BUY: APIError(code=-2010): Account has insufficient balance for requested action."}
+{"timestamp": "2025-08-08 01:23:05,954", "level": "ERROR", "message": "Binance API Error on SELL: APIError(code=-2010): Account has insufficient balance for requested action."}

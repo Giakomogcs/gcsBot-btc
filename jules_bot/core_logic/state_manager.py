@@ -48,9 +48,9 @@ class StateManager:
         """
         logger.info(f"Attempting to create new position from buy result: {buy_result}")
 
-        commission_rate = config_manager.getfloat('STRATEGY_RULES', 'commission_rate')
-        sell_factor = config_manager.getfloat('STRATEGY_RULES', 'sell_factor')
-        target_profit = config_manager.getfloat('STRATEGY_RULES', 'target_profit')
+        commission_rate = float(config_manager.get('STRATEGY_RULES', 'commission_rate'))
+        sell_factor = float(config_manager.get('STRATEGY_RULES', 'sell_factor'))
+        target_profit = float(config_manager.get('STRATEGY_RULES', 'target_profit'))
 
         purchase_price = buy_result['price']
 
