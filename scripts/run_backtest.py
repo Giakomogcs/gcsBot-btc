@@ -44,14 +44,28 @@ def main():
     """
     Runs a full backtest using the provided historical data.
     """
-    # CRITICAL: Ensure the environment is clean before running a new backtest
-    clear_previous_backtest_trades()
+    if len(sys.argv) < 2:
+        logger.error("Erro: Número de dias para o backtest não fornecido.")
+        logger.error("Uso: python scripts/run_backtest.py <numero_de_dias>")
+        sys.exit(1)
 
-    logger.info("--- Starting New Backtest Simulation ---")
-    lookback_days = int(config_manager.get('BACKTEST', 'default_lookback_days'))
-    backtester = Backtester(days=lookback_days)
-    backtester.run()
-    logger.info("--- Backtest Simulation Finished ---")
+    try:
+        days = int(sys.argv[1])
+
+        # CRITICAL: Ensure the environment is clean before running a new backtest
+        clear_previous_backtest_trades()
+
+        logger.info("--- Starting New Backtest Simulation ---")
+        backtester = Backtester(days=days)
+        backtester.run()
+        logger.info("--- Backtest Simulation Finished ---")
+
+    except ValueError:
+        logger.error(f"Erro: O argumento '{sys.argv[1]}' não é um número inteiro válido.")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"Ocorreu um erro inesperado durante a execução do backtest: {e}", exc_info=True)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

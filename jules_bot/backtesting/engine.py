@@ -8,6 +8,7 @@ from jules_bot.utils.config_manager import config_manager
 from jules_bot.core_logic.state_manager import StateManager
 from jules_bot.core_logic.strategy_rules import StrategyRules
 from jules_bot.utils.logger import logger
+from jules_bot.core.schemas import TradePoint
 
 class Backtester:
     def __init__(self, days: int):
@@ -38,7 +39,8 @@ class Backtester:
         self.mock_trader = MockTrader(
             historical_data=price_data,
             initial_balance_usd=float(backtest_settings['initial_balance']),
-            commission_fee_percent=float(backtest_settings['commission_fee'])
+            commission_fee_percent=float(backtest_settings['commission_fee']),
+            symbol=symbol
         )
 
     def run(self):
@@ -53,12 +55,11 @@ class Backtester:
         last_buy_price = float('inf')
 
         while self.mock_trader.advance_time():
-            current_price_info = self.mock_trader.get_current_price_info()
-            if current_price_info is None:
-                continue
+            current_price = self.mock_trader.get_current_price()
+            current_time = self.mock_trader.get_current_timestamp()
 
-            current_price = current_price_info['price']
-            current_time = current_price_info['time']
+            if current_price is None:
+                continue
 
             # 1. Check for potential sales
             # Iterate over a copy of items, as we may modify the dict during iteration
@@ -95,7 +96,7 @@ class Backtester:
                             "timestamp": current_time,
                             "backtest_id": self.backtest_id # Add backtest_id for traceability
                         }
-                        self.db_manager.log_trade(trade_data)
+                        self.db_manager.log_trade(TradePoint(**trade_data))
                         del open_positions[trade_id] # Position is now closed
 
             # 2. Check for a potential buy
@@ -126,7 +127,7 @@ class Backtester:
                         "timestamp": current_time,
                         "backtest_id": self.backtest_id # Add backtest_id for traceability
                     }
-                    self.db_manager.log_trade(trade_data)
+                    self.db_manager.log_trade(TradePoint(**trade_data))
 
                     # Store position details for later
                     open_positions[new_trade_id] = trade_data

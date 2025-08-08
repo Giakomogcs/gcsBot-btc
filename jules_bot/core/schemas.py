@@ -24,28 +24,24 @@ class TradePoint:
 
     This schema acts as a contract for what constitutes a valid trade record.
     """
-    # Tags (indexed for fast queries)
-    mode: str  # 'live', 'testnet', or 'backtest'
+    # Required fields (no default value)
+    mode: str
     strategy_name: str
     symbol: str
     trade_id: str
     exchange: str
-
-    # Fields (the actual data points)
-    order_type: str  # 'buy' or 'sell'
+    order_type: str
     price: float
     quantity: float
     usd_value: float
     commission: float
     commission_asset: str
+
+    # Optional fields (with default values)
+    backtest_id: Optional[str] = None
     exchange_order_id: Optional[str] = None
-
-    # Fields specific to 'sell' orders
     realized_pnl: Optional[float] = None
-    held_quantity: Optional[float] = None # The amount of the asset held before this sell
-
-    # Timestamp for the record
-    # Using field to ensure a UTC timestamp is generated if not provided
+    held_quantity: Optional[float] = None
     timestamp: datetime.datetime = field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     def to_influxdb_point(self):
@@ -65,6 +61,9 @@ class TradePoint:
             .field("commission", self.commission) \
             .field("commission_asset", self.commission_asset) \
             .time(self.timestamp)
+        
+        if self.backtest_id:
+            p = p.tag("backtest_id", self.backtest_id)
 
         if self.exchange_order_id is not None:
             p = p.field("exchange_order_id", self.exchange_order_id)

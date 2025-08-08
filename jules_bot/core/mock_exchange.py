@@ -8,8 +8,9 @@ class MockTrader(Trader):
     Simulates a cryptocurrency exchange for backtesting purposes.
     It uses a historical data feed and manages a simulated account balance.
     """
-    def __init__(self, historical_data: pd.DataFrame, initial_balance_usd: float, commission_fee_percent: float):
+    def __init__(self, historical_data: pd.DataFrame, initial_balance_usd: float, commission_fee_percent: float, symbol: str):
         self.historical_data = historical_data
+        self.symbol = symbol
         self.current_step = 0
         self.initial_balance = initial_balance_usd
         self.usd_balance = initial_balance_usd
@@ -17,7 +18,7 @@ class MockTrader(Trader):
         self.commission_rate = commission_fee_percent / 100.0
         logging.info(f"MockTrader initialized. Initial balance: ${self.usd_balance:,.2f} USD.")
 
-    def get_current_price(self, symbol: str) -> float:
+    def get_current_price(self) -> float:
         """Returns the 'close' price for the current simulation step."""
         return self.historical_data['close'].iloc[self.current_step]
 
@@ -31,7 +32,7 @@ class MockTrader(Trader):
             logging.warning(f"Insufficient funds to place buy order of ${amount_usdt:,.2f}.")
             return False, {"error": "Insufficient USD balance."}
 
-        price = self.get_current_price(self.symbol)
+        price = self.get_current_price()
         commission = amount_usdt * self.commission_rate
         net_usd_amount = amount_usdt - commission
         quantity_bought = net_usd_amount / price
@@ -42,7 +43,7 @@ class MockTrader(Trader):
         trade_data = {
             "trade_id": str(uuid.uuid4()),
             "symbol": self.symbol,
-            "entry_price": price,
+            "price": price,
             "quantity": quantity_bought,
             "usd_value": amount_usdt,
             "commission": commission,
@@ -57,7 +58,7 @@ class MockTrader(Trader):
             logging.warning(f"Insufficient BTC to sell. Required: {quantity_to_sell}, Available: {self.btc_balance}")
             return False, {"error": "Insufficient BTC balance."}
 
-        price = self.get_current_price(self.symbol)
+        price = self.get_current_price()
         usd_value = quantity_to_sell * price
         commission = usd_value * self.commission_rate
         net_usd_value = usd_value - commission
@@ -66,7 +67,7 @@ class MockTrader(Trader):
         self.usd_balance += net_usd_value
 
         exit_data = {
-            "exit_price": price,
+            "price": price,
             "quantity": quantity_to_sell,
             "usd_value": net_usd_value,
             "commission": commission,

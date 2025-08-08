@@ -171,7 +171,7 @@ def backtest(
         return
 
     print("\n--- Etapa 2 de 2: Rodando o backtest ---")
-    if not _run_in_container(["scripts/run_backtest.py"]):
+    if not _run_in_container(["scripts/run_backtest.py", str(days)]):
         print("❌ Falha na execução do backtest.")
         return
         
