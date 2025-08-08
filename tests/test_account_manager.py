@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from jules_bot.bot.account_manager import AccountManager
 from binance.exceptions import BinanceAPIException
+from jules_bot.utils.config_manager import config_manager as real_config_manager
 
 @pytest.fixture
 def mock_binance_client():
@@ -17,10 +18,19 @@ def mock_binance_client():
 @pytest.fixture
 def account_manager(mock_binance_client):
     """Pytest fixture for AccountManager with a mocked client."""
-    with patch('jules_bot.utils.config_manager.settings') as mock_settings:
-        mock_settings.app.symbol = 'BTCUSDT'
-        mock_settings.app.force_offline_mode = False
-        return AccountManager(binance_client=mock_binance_client)
+    # Store original methods
+    original_get = real_config_manager.get
+    original_getboolean = real_config_manager.getboolean
+
+    # Monkeypatch the methods directly
+    real_config_manager.get = Mock(return_value='BTCUSDT')
+    real_config_manager.getboolean = Mock(return_value=False)
+
+    yield AccountManager(binance_client=mock_binance_client)
+
+    # Restore original methods after the test
+    real_config_manager.get = original_get
+    real_config_manager.getboolean = original_getboolean
 
 def test_get_open_orders_success(account_manager, mock_binance_client):
     """Test get_open_orders successfully retrieves open orders."""

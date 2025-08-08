@@ -1,5 +1,11 @@
 import pytest
+import sys
+import os
 from unittest.mock import Mock, patch
+
+# Add project root to path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from jules_bot.core_logic.state_manager import StateManager
 from jules_bot.utils.config_manager import config_manager
 
@@ -35,9 +41,9 @@ def test_create_new_position_calculation(state_manager, mock_db_manager):
     }
 
     # These values are pulled from the config.ini file
-    commission_rate = config_manager.getfloat('STRATEGY_RULES', 'commission_rate')
-    sell_factor = config_manager.getfloat('STRATEGY_RULES', 'sell_factor')
-    target_profit = config_manager.getfloat('STRATEGY_RULES', 'target_profit')
+    commission_rate = float(config_manager.get('STRATEGY_RULES', 'commission_rate'))
+    sell_factor = float(config_manager.get('STRATEGY_RULES', 'sell_factor'))
+    target_profit = float(config_manager.get('STRATEGY_RULES', 'target_profit'))
 
     # Expected sell price based on the formula
     numerator = buy_result['price'] * (1 + commission_rate)

@@ -3406,3 +3406,183 @@ urllib3.exceptions.NewConnectionError: <urllib3.connection.HTTPConnection object
 2025-08-07 23:55:34,698 - gcsBot - INFO - StateManager initialized for bucket: @env/INFLUXDB_BUCKET_BACKTEST
 2025-08-07 23:56:01,961 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
 2025-08-07 23:56:02,293 - gcsBot - INFO - StateManager initialized for bucket: @env/INFLUXDB_BUCKET_BACKTEST
+2025-08-08 01:13:37,866 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-08 01:13:39,489 - gcsBot - INFO - StateManager initialized for bucket: test_bucket, bot_id: test_bot
+2025-08-08 01:13:39,496 - gcsBot - INFO - StateManager initialized for bucket: test_bucket, bot_id: test_bot
+2025-08-08 01:13:39,498 - gcsBot - INFO - StateManager initialized for bucket: test_bucket, bot_id: test_bot
+2025-08-08 01:17:35,217 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-08 01:18:10,421 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-08 01:18:10,432 - gcsBot - WARNING - OFFLINE MODE: Cannot fetch open orders.
+2025-08-08 01:18:10,525 - gcsBot - WARNING - OFFLINE MODE: Cannot fetch open orders.
+2025-08-08 01:18:10,527 - gcsBot - WARNING - OFFLINE MODE: Cannot fetch trade history.
+2025-08-08 01:18:10,537 - gcsBot - WARNING - OFFLINE MODE: Cannot fetch trade history.
+2025-08-08 01:18:10,539 - gcsBot - WARNING - OFFLINE MODE: Simulating buy with 1000.00 USDT.
+2025-08-08 01:18:10,620 - gcsBot - WARNING - OFFLINE MODE: Simulating buy with 1000.00 USDT.
+2025-08-08 01:18:10,628 - gcsBot - WARNING - OFFLINE MODE: Simulating sell of 0.10000000 BTC.
+2025-08-08 01:18:10,635 - gcsBot - WARNING - OFFLINE MODE: Simulating sell of 0.10000000 BTC.
+2025-08-08 01:19:00,301 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-08 01:19:00,312 - gcsBot - WARNING - OFFLINE MODE: Cannot fetch open orders.
+2025-08-08 01:19:00,406 - gcsBot - WARNING - OFFLINE MODE: Cannot fetch open orders.
+2025-08-08 01:19:00,409 - gcsBot - WARNING - OFFLINE MODE: Cannot fetch trade history.
+2025-08-08 01:19:00,418 - gcsBot - WARNING - OFFLINE MODE: Cannot fetch trade history.
+2025-08-08 01:19:00,421 - gcsBot - WARNING - OFFLINE MODE: Simulating buy with 1000.00 USDT.
+2025-08-08 01:19:00,491 - gcsBot - WARNING - OFFLINE MODE: Simulating buy with 1000.00 USDT.
+2025-08-08 01:19:00,498 - gcsBot - WARNING - OFFLINE MODE: Simulating sell of 0.10000000 BTC.
+2025-08-08 01:19:00,506 - gcsBot - WARNING - OFFLINE MODE: Simulating sell of 0.10000000 BTC.
+2025-08-08 01:19:30,784 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-08 01:19:30,800 - gcsBot - WARNING - OFFLINE MODE: Cannot fetch open orders.
+2025-08-08 01:19:30,901 - gcsBot - WARNING - OFFLINE MODE: Cannot fetch open orders.
+2025-08-08 01:19:30,904 - gcsBot - WARNING - OFFLINE MODE: Cannot fetch trade history.
+2025-08-08 01:19:30,942 - gcsBot - WARNING - OFFLINE MODE: Cannot fetch trade history.
+2025-08-08 01:19:30,945 - gcsBot - WARNING - OFFLINE MODE: Simulating buy with 1000.00 USDT.
+2025-08-08 01:19:31,083 - gcsBot - WARNING - OFFLINE MODE: Simulating buy with 1000.00 USDT.
+2025-08-08 01:19:31,090 - gcsBot - INFO - DEBUG: is_offline_by_client = False
+2025-08-08 01:19:31,090 - gcsBot - INFO - DEBUG: is_offline_by_config = True
+2025-08-08 01:19:31,090 - gcsBot - INFO - DEBUG: config_manager object is: <jules_bot.utils.config_manager.ConfigManager object at 0x7fd730f8f800>
+2025-08-08 01:19:31,090 - gcsBot - WARNING - OFFLINE MODE: Simulating sell of 0.10000000 BTC.
+2025-08-08 01:19:31,097 - gcsBot - INFO - DEBUG: is_offline_by_client = False
+2025-08-08 01:19:31,097 - gcsBot - INFO - DEBUG: is_offline_by_config = True
+2025-08-08 01:19:31,097 - gcsBot - INFO - DEBUG: config_manager object is: <jules_bot.utils.config_manager.ConfigManager object at 0x7fd730f8f800>
+2025-08-08 01:19:31,097 - gcsBot - WARNING - OFFLINE MODE: Simulating sell of 0.10000000 BTC.
+2025-08-08 01:21:16,909 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-08 01:21:16,921 - gcsBot - ERROR - Binance API Error fetching open orders: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time.
+Traceback (most recent call last):
+  File "/app/jules_bot/bot/account_manager.py", line 189, in get_open_orders
+    open_orders = self.client.get_open_orders(symbol=config_manager.get('APP', 'symbol'))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+binance.exceptions.BinanceAPIException: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time.
+2025-08-08 01:21:16,926 - gcsBot - ERROR - Binance API Error fetching trade history: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time.
+Traceback (most recent call last):
+  File "/app/jules_bot/bot/account_manager.py", line 207, in get_trade_history
+    trades = self.client.get_my_trades(symbol=config_manager.get('APP', 'symbol'), limit=limit)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+binance.exceptions.BinanceAPIException: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time.
+2025-08-08 01:21:16,928 - gcsBot - INFO - Attempting to place market BUY order for 1000.00 USDT...
+2025-08-08 01:21:16,928 - gcsBot - INFO - SUCCESS: Market BUY order placed: {'symbol': 'BTCUSDT', 'orderId': 124, 'status': 'FILLED'}
+2025-08-08 01:21:16,930 - gcsBot - INFO - Attempting to place market BUY order for 1000.00 USDT...
+2025-08-08 01:21:16,930 - gcsBot - ERROR - Binance API Error on BUY: APIError(code=-2010): Account has insufficient balance for requested action.
+Traceback (most recent call last):
+  File "/app/jules_bot/bot/account_manager.py", line 170, in update_on_buy
+    order = self.client.order_market_buy(symbol=config_manager.get('APP', 'symbol'), quoteOrderQty=rounded_qty)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+binance.exceptions.BinanceAPIException: APIError(code=-2010): Account has insufficient balance for requested action.
+2025-08-08 01:21:16,932 - gcsBot - INFO - Attempting to place market SELL order for 0.10000000 BTC...
+2025-08-08 01:21:16,932 - gcsBot - INFO - SUCCESS: Market SELL order placed: {'symbol': 'BTCUSDT', 'orderId': 125, 'status': 'FILLED'}
+2025-08-08 01:21:16,934 - gcsBot - INFO - Attempting to place market SELL order for 0.10000000 BTC...
+2025-08-08 01:21:16,934 - gcsBot - ERROR - Binance API Error on SELL: APIError(code=-2010): Account has insufficient balance for requested action.
+Traceback (most recent call last):
+  File "/app/jules_bot/bot/account_manager.py", line 144, in update_on_sell
+    order = self.client.order_market_sell(symbol=config_manager.get('APP', 'symbol'), quantity=formatted_quantity)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+binance.exceptions.BinanceAPIException: APIError(code=-2010): Account has insufficient balance for requested action.
+2025-08-08 01:22:24,564 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-08 01:22:24,861 - gcsBot - INFO - StateManager initialized for bucket: test_bucket, bot_id: test_bot
+2025-08-08 01:22:24,861 - gcsBot - INFO - Attempting to create new position from buy result: {'price': 100.0, 'qty': 1.0, 'cummulative_quote_qty': 100.0, 'order_id': 'test-order-123', 'symbol': 'BTCUSDT'}
+2025-08-08 01:22:24,970 - gcsBot - INFO - StateManager initialized for bucket: test_bucket, bot_id: test_bot
+2025-08-08 01:22:24,972 - gcsBot - INFO - StateManager initialized for bucket: test_bucket, bot_id: test_bot
+2025-08-08 01:22:51,247 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-08 01:22:51,739 - gcsBot - INFO - StateManager initialized for bucket: test_bucket, bot_id: test_bot
+2025-08-08 01:22:51,740 - gcsBot - INFO - Attempting to create new position from buy result: {'price': 100.0, 'qty': 1.0, 'cummulative_quote_qty': 100.0, 'order_id': 'test-order-123', 'symbol': 'BTCUSDT'}
+2025-08-08 01:22:51,740 - gcsBot - INFO - Calculated sell_target_price: 111.8902235568902 for purchase_price: 100.0
+2025-08-08 01:22:51,744 - gcsBot - INFO - StateManager initialized for bucket: test_bucket, bot_id: test_bot
+2025-08-08 01:22:51,746 - gcsBot - INFO - StateManager initialized for bucket: test_bucket, bot_id: test_bot
+2025-08-08 01:23:05,649 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-08 01:23:05,937 - gcsBot - ERROR - Binance API Error fetching open orders: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time.
+Traceback (most recent call last):
+  File "/app/jules_bot/bot/account_manager.py", line 189, in get_open_orders
+    open_orders = self.client.get_open_orders(symbol=config_manager.get('APP', 'symbol'))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+binance.exceptions.BinanceAPIException: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time.
+2025-08-08 01:23:05,945 - gcsBot - ERROR - Binance API Error fetching trade history: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time.
+Traceback (most recent call last):
+  File "/app/jules_bot/bot/account_manager.py", line 207, in get_trade_history
+    trades = self.client.get_my_trades(symbol=config_manager.get('APP', 'symbol'), limit=limit)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+binance.exceptions.BinanceAPIException: APIError(code=-1021): Timestamp for this request was 1000ms ahead of the server time.
+2025-08-08 01:23:05,947 - gcsBot - INFO - Attempting to place market BUY order for 1000.00 USDT...
+2025-08-08 01:23:05,947 - gcsBot - INFO - SUCCESS: Market BUY order placed: {'symbol': 'BTCUSDT', 'orderId': 124, 'status': 'FILLED'}
+2025-08-08 01:23:05,949 - gcsBot - INFO - Attempting to place market BUY order for 1000.00 USDT...
+2025-08-08 01:23:05,949 - gcsBot - ERROR - Binance API Error on BUY: APIError(code=-2010): Account has insufficient balance for requested action.
+Traceback (most recent call last):
+  File "/app/jules_bot/bot/account_manager.py", line 170, in update_on_buy
+    order = self.client.order_market_buy(symbol=config_manager.get('APP', 'symbol'), quoteOrderQty=rounded_qty)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+binance.exceptions.BinanceAPIException: APIError(code=-2010): Account has insufficient balance for requested action.
+2025-08-08 01:23:05,952 - gcsBot - INFO - Attempting to place market SELL order for 0.10000000 BTC...
+2025-08-08 01:23:05,952 - gcsBot - INFO - SUCCESS: Market SELL order placed: {'symbol': 'BTCUSDT', 'orderId': 125, 'status': 'FILLED'}
+2025-08-08 01:23:05,954 - gcsBot - INFO - Attempting to place market SELL order for 0.10000000 BTC...
+2025-08-08 01:23:05,954 - gcsBot - ERROR - Binance API Error on SELL: APIError(code=-2010): Account has insufficient balance for requested action.
+Traceback (most recent call last):
+  File "/app/jules_bot/bot/account_manager.py", line 144, in update_on_sell
+    order = self.client.order_market_sell(symbol=config_manager.get('APP', 'symbol'), quantity=formatted_quantity)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+binance.exceptions.BinanceAPIException: APIError(code=-2010): Account has insufficient balance for requested action.
+2025-08-08 01:23:05,957 - gcsBot - INFO - StateManager initialized for bucket: test_bucket, bot_id: test_bot
+2025-08-08 01:23:05,958 - gcsBot - INFO - Attempting to create new position from buy result: {'price': 100.0, 'qty': 1.0, 'cummulative_quote_qty': 100.0, 'order_id': 'test-order-123', 'symbol': 'BTCUSDT'}
+2025-08-08 01:23:05,958 - gcsBot - INFO - Calculated sell_target_price: 111.8902235568902 for purchase_price: 100.0
+2025-08-08 01:23:05,960 - gcsBot - INFO - StateManager initialized for bucket: test_bucket, bot_id: test_bot
+2025-08-08 01:23:05,962 - gcsBot - INFO - StateManager initialized for bucket: test_bucket, bot_id: test_bot

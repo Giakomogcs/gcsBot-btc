@@ -151,21 +151,21 @@ The entire lifecycle of the application's environment (Docker containers) is man
 
 ### Common Commands
 
--   **Start Services**: `python run.py env start`
+-   **Start Services**: `python run.py start`
     -   Builds the Docker images if they don't exist and starts the `app` and `db` services in detached mode. This is the standard way to start the application.
 
--   **Stop Services**: `python run.py env stop`
+-   **Stop Services**: `python run.py stop`
     -   Stops and removes all running containers, networks, and volumes associated with the project. This provides a clean shutdown of the environment.
 
--   **Check Status**: `python run.py env status`
+-   **Check Status**: `python run.py status`
     -   Shows the current status of all project containers (e.g., whether they are running, stopped, and on which ports).
 
--   **View Logs**: `python run.py env logs [service_name]`
+-   **View Logs**: `python run.py logs [service_name]`
     -   Follows the real-time logs of the services.
     -   If a `service_name` (e.g., `app` or `db`) is provided, it will only show logs for that specific service.
     -   If no service name is given, it will show logs for all services.
 
--   **Force Rebuild**: `python run.py env rebuild`
+-   **Build Images**: `python run.py build`
     -   Forces a rebuild of the Docker images without using the cache. This is useful when you have changed the `Dockerfile` or suspect caching issues.
 
 ### Application Commands
