@@ -18,23 +18,17 @@ def clear_previous_backtest_trades():
     """
     logger.info("--- Starting Backtest Environment Cleanup ---")
     try:
-        # Load the specific backtest configuration for the database
-        db_config = config_manager.get_section('INFLUXDB')
+        # Get the base InfluxDB connection details from environment variables
+        db_connection_config = config_manager.get_db_config()
 
-        # We need to construct a config dictionary suitable for DatabaseManager
-        # The manager expects url, token, org, and the specific bucket
-        db_connection_config = {
-            "url": f"http://{db_config['host']}:{db_config['port']}",
-            "token": db_config['token'],
-            "org": db_config['org'],
-            "bucket": db_config['bucket_backtest']
-        }
+        # Get the specific bucket for backtesting from the config file
+        db_connection_config['bucket'] = config_manager.get('INFLUXDB', 'bucket_backtest')
 
         db_manager = DatabaseManager(config=db_connection_config)
 
         # The 'trades' measurement is where trade data is stored.
         # Clearing this ensures that reports are not contaminated by previous runs.
-        logger.info(f"Attempting to clear 'trades' measurement from bucket '{db_config['bucket_backtest']}'...")
+        logger.info(f"Attempting to clear 'trades' measurement from bucket '{db_connection_config['bucket']}'...")
         db_manager.clear_measurement("trades")
 
         db_manager.close_client()
@@ -54,8 +48,8 @@ def main():
     clear_previous_backtest_trades()
 
     logger.info("--- Starting New Backtest Simulation ---")
-    historical_data_path = config_manager.get('DATA_PATHS', 'historical_data_file')
-    backtester = Backtester(historical_data_path)
+    lookback_days = int(config_manager.get('BACKTEST', 'default_lookback_days'))
+    backtester = Backtester(days=lookback_days)
     backtester.run()
     logger.info("--- Backtest Simulation Finished ---")
 

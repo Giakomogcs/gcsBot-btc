@@ -63,21 +63,28 @@ class DatabaseManager:
             self._client.close()
             logger.info("Conexão com o InfluxDB fechada.")
 
-    def clear_measurement(self, measurement: str):
-        """Deletes all records from a specific measurement in the current bucket."""
+    def delete_data_by_predicate(self, predicate: str):
+        """Deletes data from the current bucket based on a custom Flux predicate."""
         if not self.bucket:
-            logger.warning("Bucket not configured. Cannot clear measurement.")
-            return
+            logger.error("Bucket not configured. Cannot delete data.")
+            return False
         try:
             start = "1970-01-01T00:00:00Z"
             stop = datetime.now(timezone.utc).isoformat()
-            predicate = f'_measurement="{measurement}"'
 
-            logger.info(f"Clearing all data from measurement '{measurement}' in bucket '{self.bucket}'...")
+            logger.info(f"Attempting to delete data from bucket '{self.bucket}' with predicate: {predicate}")
             self._client.delete_api().delete(start, stop, predicate, bucket=self.bucket, org=self.org)
-            logger.info(f"✅ Measurement '{measurement}' cleared successfully.")
+            logger.info("✅ Data deletion successful.")
+            return True
         except Exception as e:
-            logger.error(f"Failed to clear measurement '{measurement}': {e}", exc_info=True)
+            logger.error(f"Failed to delete data with predicate '{predicate}': {e}", exc_info=True)
+            return False
+
+    def clear_measurement(self, measurement: str):
+        """Deletes all records from a specific measurement in the current bucket."""
+        logger.info(f"Clearing all data from measurement '{measurement}'...")
+        predicate = f'_measurement="{measurement}"'
+        self.delete_data_by_predicate(predicate)
 
     def clear_all_trades(self):
         """Deletes all records from the 'trades' measurement for the current mode."""

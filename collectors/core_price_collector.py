@@ -20,18 +20,19 @@ from jules_bot.utils.logger import logger
 class CorePriceCollector:
     def __init__(self, bucket_name: Optional[str] = None):
         logger.info("Initializing CorePriceCollector...")
-        db_config = config_manager.get_section('INFLUXDB')
+        # This single method now fetches all necessary InfluxDB connection details
+        db_config = config_manager.get_db_config()
 
-        # Allow overriding the bucket name, otherwise use the default prices bucket
+        # Allow overriding the bucket name, otherwise use a default from the config
         if bucket_name:
             bucket = bucket_name
-            logger.info(f"Using provided bucket: {bucket}")
+            logger.info(f"Using provided bucket: {bucket_name}")
         else:
-            bucket = config_manager.get('DATA', 'historical_data_bucket')
-            logger.info(f"Using default prices bucket from [DATA] section: {bucket}")
+            # Fallback to the prices bucket defined in config.ini if no specific bucket is provided
+            bucket = config_manager.get('INFLUXDB', 'bucket_prices')
+            logger.info(f"Using default prices bucket from [INFLUXDB] section: {bucket}")
 
         db_config['bucket'] = bucket
-        db_config['url'] = f"http://{db_config['host']}:{db_config['port']}"
         self.db_manager = DatabaseManager(config=db_config)
         self.binance_client = self._init_binance_client()
         self.symbol = config_manager.get('APP', 'symbol')
@@ -189,13 +190,7 @@ def prepare_backtest_data(days: int):
     # 1. Clear previous data for this specific series to avoid conflicts
     logger.info(f"Deleting existing data for {collector.symbol}/{collector.source}/{collector.interval} in bucket '{backtest_bucket}'...")
     predicate = f'_measurement="{collector.measurement}" AND symbol="{collector.symbol}" AND source="{collector.source}" AND interval="{collector.interval}"'
-    collector.db_manager.delete_api.delete(
-        start="1970-01-01T00:00:00Z",
-        stop=datetime.datetime.now(datetime.timezone.utc),
-        predicate=predicate,
-        bucket=backtest_bucket
-    )
-    logger.info("Deletion complete.")
+    collector.db_manager.delete_data_by_predicate(predicate)
 
     # 2. Fetch new data
     end_date = datetime.datetime.now(datetime.timezone.utc)

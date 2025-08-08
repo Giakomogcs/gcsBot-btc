@@ -16,9 +16,8 @@ class Backtester:
         logger.info(f"Initializing new backtest run with ID: {self.backtest_id} for the last {self.days} days.")
 
         # 1. Connect to the backtest database
-        db_config = config_manager.get_section('INFLUXDB')
+        db_config = config_manager.get_db_config()
         db_config['bucket'] = config_manager.get('INFLUXDB', 'bucket_backtest')
-        db_config['url'] = f"http://{db_config['host']}:{db_config['port']}"
         self.db_manager = DatabaseManager(config=db_config)
         self.data_manager = DataManager(self.db_manager, config_manager, logger) # Pass config and logger
 

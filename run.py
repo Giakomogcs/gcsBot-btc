@@ -166,7 +166,7 @@ def backtest(
     print(f"🚀 Iniciando execução de backtest para {days} dias...")
     
     print("\n--- Etapa 1 de 2: Preparando dados ---")
-    if not _run_in_container(["collectors/core_price_collector.py", str(days)]):
+    if not _run_in_container(["scripts/prepare_backtest_data.py", str(days)]):
         print("❌ Falha na preparação dos dados. Abortando backtest.")
         return
 
