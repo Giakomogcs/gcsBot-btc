@@ -24,18 +24,18 @@ class CorePriceCollector:
 
         # Allow overriding the bucket name, otherwise use the default prices bucket
         if bucket_name:
-            db_config['bucket'] = bucket_name
-            logger.info(f"Using provided bucket: {bucket_name}")
+            bucket = bucket_name
+            logger.info(f"Using provided bucket: {bucket}")
         else:
-            default_bucket = db_config.get('bucket_prices')
-            db_config['bucket'] = default_bucket
-            logger.info(f"Using default prices bucket: {default_bucket}")
+            bucket = config_manager.get('DATA', 'historical_data_bucket')
+            logger.info(f"Using default prices bucket from [DATA] section: {bucket}")
 
+        db_config['bucket'] = bucket
         db_config['url'] = f"http://{db_config['host']}:{db_config['port']}"
         self.db_manager = DatabaseManager(config=db_config)
         self.binance_client = self._init_binance_client()
         self.symbol = config_manager.get('APP', 'symbol')
-        self.measurement = "btc_prices"
+        self.measurement = "btc_btcusdt_1m"
 
     def _init_binance_client(self) -> Optional[Client]:
         if config_manager.getboolean('APP', 'force_offline_mode', fallback=False):

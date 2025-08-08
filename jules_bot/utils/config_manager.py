@@ -2,13 +2,7 @@ import configparser
 import os
 from pathlib import Path
 from typing import Dict, Optional
-
 from dotenv import load_dotenv
-
-# Load environment variables from .env file at the start
-load_dotenv()
-
-
 
 class ConfigManager:
     """
@@ -21,6 +15,7 @@ class ConfigManager:
         Args:
             config_file: The path to the configuration file.
         """
+        load_dotenv()
         self.config = configparser.ConfigParser()
         if not config_file.exists():
             raise FileNotFoundError(f"Configuration file not found: {config_file}")
