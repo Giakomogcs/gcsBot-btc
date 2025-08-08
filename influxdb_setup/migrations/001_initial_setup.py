@@ -144,10 +144,11 @@ def main():
         print(f"Buckets: {', '.join(valid_buckets)}")
 
         if app_token:
-            print("\nIMPORTANT: Your application token is printed below.")
-            print("You MUST add this token to your .env file as INFLUXDB_TOKEN for the application.")
+            print("\nIMPORTANT: Your application token and organization are printed below.")
+            print("You MUST add these values to your .env file for the application to work correctly.")
             print("-" * 40)
             print(f"INFLUXDB_TOKEN={app_token}")
+            print(f"INFLUXDB_ORG={org_name}")
             print("-" * 40)
         
         print("\nSetup script finished.")
