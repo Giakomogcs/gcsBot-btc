@@ -145,44 +145,37 @@ python collectors/core_price_collector.py
 
 The bot is now ready to be used.
 
-## 6. Usage
+## 6. Environment Management
 
-All interaction with the bot and its environment is handled by `run.py`.
+The entire lifecycle of the application's environment (Docker containers) is managed via the `run.py` script. These commands are wrappers around `docker-compose` and provide a simple, unified interface for all environment-related tasks.
 
-**Common Commands:**
+### Common Commands
 
-- **Start Services**: `python run.py start`
+-   **Start Services**: `python run.py env start`
+    -   Builds the Docker images if they don't exist and starts the `app` and `db` services in detached mode. This is the standard way to start the application.
 
-  - Starts the InfluxDB container.
+-   **Stop Services**: `python run.py env stop`
+    -   Stops and removes all running containers, networks, and volumes associated with the project. This provides a clean shutdown of the environment.
 
-- **Update Database**: `python collectors/core_price_collector.py`
+-   **Check Status**: `python run.py env status`
+    -   Shows the current status of all project containers (e.g., whether they are running, stopped, and on which ports).
 
-  - Runs the price data collector. Should be run periodically to keep data fresh.
+-   **View Logs**: `python run.py env logs [service_name]`
+    -   Follows the real-time logs of the services.
+    -   If a `service_name` (e.g., `app` or `db`) is provided, it will only show logs for that specific service.
+    -   If no service name is given, it will show logs for all services.
 
-- **Run the Bot (Live Trading)**: `python run.py trade`
+-   **Force Rebuild**: `python run.py env rebuild`
+    -   Forces a rebuild of the Docker images without using the cache. This is useful when you have changed the `Dockerfile` or suspect caching issues.
 
-  - Starts the bot in the background, trading with real money.
+### Application Commands
 
-- **Run the Bot (Paper Trading)**: `python run.py test`
+-   **Run a Backtest**: `python run.py backtest <path_to_data.csv>`
+    -   Executes a backtest using the historical data from the provided CSV file.
 
-  - Starts the bot in the background, trading on the Binance testnet.
-
-- **Run a Backtest**: `python scripts/run_backtest.py`
-
-  - Starts a backtest run using historical data.
-
-- **View Logs**: `python run.py logs`
-
-  - Tails the logs of the running bot application.
-
-- **Stop the Bot and Services**: `python run.py stop`
-
-  - Stops and removes all running containers.
-
-- **Reset the Database**: `python run.py reset-db`
-  - **WARNING:** This is a destructive operation. It stops all services and permanently deletes all data stored in the InfluxDB volume.
-
-For a full list of commands, run `python run.py help`.
+-   **Launch the UI**: `python run.py show <mode>`
+    -   Launches the terminal user interface to display the state of the bot.
+    -   `<mode>` can be `trade` or `backtest`.
 
 ## 7. Configuration (`config.ini`)
 
@@ -191,11 +184,20 @@ The `config.ini` file allows you to tune the bot's behavior without changing the
 - **`[INFLUXDB]`**: Configures the connection details for InfluxDB.
 - **`[BINANCE_LIVE]`**: Your live Binance API keys.
 - **`[BINANCE_TESTNET]`**: Your testnet Binance API keys.
-- **`[STRATEGY_RULES]`**: Configures the dynamic EAMG strategy.
+- **`[STRATEGY_RULES]`**: Configures the dynamic trading strategy.
   - `buy_trigger_few_positions`: The percentage drop required for the next buy when there are few open positions.
   - `buy_trigger_many_positions`: The percentage drop required for the next buy when there are many open positions.
   - `buy_amount_low_allocation_multiplier`: The multiplier for the base buy amount when capital allocation is low.
   - `buy_amount_high_allocation_multiplier`: The multiplier for the base buy amount when capital allocation is high.
+  - `commission_rate`: The broker's commission rate (e.g., `0.001` for 0.1%). Used to calculate the break-even price.
+  - `sell_factor`: The percentage of the position to be sold (e.g., `0.9` for 90%). The remaining part is held as a long-term asset.
+  - `target_profit`: The desired net profit margin for each trade (e.g., `0.005` for 0.5%).
+
+The `sell_target_price` is calculated automatically when a new position is created, using the following formula:
+
+```
+Sell Target = (Purchase Price * (1 + Commission Rate)) / (Sell Factor * (1 - Commission Rate)) * (1 + Target Profit)
+```
 - **`[BACKTEST]`**: Parameters for backtesting simulations.
 - **`[DATA]`**: Paths for data files.
 - **`[APP]`**: Main application settings.
