@@ -1,215 +1,78 @@
 import os
-from dotenv import load_dotenv
 import sys
 import shutil
 import typer
 import subprocess
 from typing import Optional
 
-# Adiciona o caminho do projeto para permitir importações locais
-# Supondo que este script esteja em um subdiretório como 'cli/'
-# sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-# --- Importações da sua aplicação (substitua pelos seus caminhos reais se necessário) ---
-# Como não tenho os arquivos, estou usando placeholders. 
-# Descomente e ajuste os imports conforme a estrutura do seu projeto.
-# from jules_bot.config import GCSBotConfig
-# from jules_bot.backtesting.engine import Backtester
-# from jules_bot.database.database_manager import DatabaseManager
-# from jules_bot.ui.display_manager import JulesBotApp
-# from collectors.core_price_collector import prepare_backtest_data
-
-# --- Placeholders para as classes (remova ao usar seus imports reais) ---
-load_dotenv()
-
-class GCSBotConfig:
-    def get(self, key):
-        """
-        Obtém uma configuração específica a partir das variáveis de ambiente.
-        """
-        print(f"DEBUG: Obtendo configuração para '{key}'")
-
-        if key == 'backtest.default_lookback_days':
-            # Lê a variável, converte para inteiro e usa 30 como padrão se não for encontrada.
-            return int(os.getenv('BACKTEST_DEFAULT_LOOKBACK_DAYS', 30))
-
-        if key == 'influxdb_connection':
-            # Monta o dicionário de conexão com as variáveis de ambiente correspondentes.
-            return {
-                'url': os.getenv('INFLUXDB_URL'),
-                'token': os.getenv('INFLUXDB_TOKEN'),
-                'org': os.getenv('INFLUXDB_ORG')
-            }
-
-        if key == 'influxdb_trade':
-            # No seu .env, você tem buckets para live e testnet.
-            # Aqui, estou usando o bucket de 'live' como padrão para esta chave.
-            return {'bucket': os.getenv('INFLUXDB_BUCKET_LIVE')}
-
-        if key == 'influxdb_backtest':
-            return {'bucket': os.getenv('INFLUXDB_BUCKET_BACKTEST')}
-
-        # Adicionei também as chaves da Binance, que estão no seu .env
-        if key == 'binance_api':
-            return {
-                'key': os.getenv('BINANCE_API_KEY'),
-                'secret': os.getenv('BINANCE_API_SECRET')
-            }
-        
-        if key == 'binance_testnet_api':
-            return {
-                'key': os.getenv('BINANCE_TESTNET_API_KEY'),
-                'secret': os.getenv('BINANCE_TESTNET_API_SECRET')
-            }
-
-        # Retorna um dicionário vazio se a chave não for reconhecida
-        return {}
-
-class DatabaseManager:
-    def __init__(self, config):
-        print(f"DEBUG: DatabaseManager inicializado com config: {config}")
-
-class JulesBotApp:
-    def __init__(self, db_manager, display_mode):
-        self.db_manager = db_manager
-        self.display_mode = display_mode
-        print(f"DEBUG: JulesBotApp UI inicializada no modo '{display_mode}'")
-    def run(self):
-        print(f"--- UI rodando no modo {self.display_mode} ---")
-        print("Pressione Ctrl+C para sair.")
-        try:
-            while True:
-                pass
-        except KeyboardInterrupt:
-            print("\nUI encerrada.")
-
-class Backtester:
-    def __init__(self, days):
-        self.days = days
-        print(f"DEBUG: Backtester inicializado para {days} dias.")
-    def run(self):
-        print(f"--- Rodando backtest para {self.days} dias ---")
-        # Simula um processo de backtest
-        import time
-        time.sleep(2)
-        print("Backtest concluído.")
-
-def prepare_backtest_data(days):
-    print(f"DEBUG: Preparando dados de backtest para {days} dias.")
-    # Simula o download e preparação de dados
-    import time
-    time.sleep(1)
-    print("Dados preparados.")
-
-# --- Fim dos Placeholders ---
-
 app = typer.Typer()
-config_manager = GCSBotConfig()
 
 # --- Lógica de Detecção do Docker Compose ---
 
 def get_docker_compose_command():
     """
     Verifica se 'docker-compose' (V1) ou 'docker compose' (V2) está disponível.
-    
-    Retorna:
-        list: A lista de argumentos de comando base a ser usada (ex: ['docker-compose'] ou ['docker', 'compose']).
-    
-    Raises:
-        FileNotFoundError: Se nem 'docker' nem 'docker-compose' forem encontrados no PATH do sistema.
     """
     if shutil.which("docker-compose"):
         return ["docker-compose"]
     elif shutil.which("docker"):
-        # Verifica se 'compose' é um subcomando válido para evitar erros
         try:
             result = subprocess.run(["docker", "compose", "--version"], capture_output=True, text=True, check=True)
             if "Docker Compose version" in result.stdout:
                 return ["docker", "compose"]
         except (subprocess.CalledProcessError, FileNotFoundError):
-            pass # Continua para o erro final se 'docker compose' não for válido
-            
+            pass
     raise FileNotFoundError("Could not find a valid 'docker-compose' or 'docker compose' command. Please ensure Docker is installed and in your PATH.")
 
-
-def _run_docker_compose_with_mode(mode: str):
-    """
-    Helper function to run 'docker-compose up' with a specific BOT_MODE.
-    """
-    print(f"🚀 Iniciando o bot em modo '{mode.upper()}'...")
+def run_docker_command(command_args: list, **kwargs):
+    """Helper para executar comandos docker e lidar com erros."""
     try:
-        # Prepara o ambiente, definindo o BOT_MODE
-        env = os.environ.copy()
-        env['BOT_MODE'] = mode
-
-        # Obtém o comando base (docker-compose ou docker compose)
-        command = get_docker_compose_command() + ["up", "--build", "-d"]
-        
-        print(f"   (usando comando: `{' '.join(command)}` com BOT_MODE={mode})")
-        
-        # Executa o comando com o ambiente modificado
-        result = subprocess.run(command, env=env, capture_output=True, text=True)
-
-        if result.returncode != 0:
-            print(f"❌ Erro ao iniciar os serviços. Código de saída: {result.returncode}")
-            print(f"   Stderr:\n{result.stderr}")
-        else:
-            print(f"✅ Bot iniciado com sucesso em modo '{mode.upper()}'.")
-            print("   Use `python run.py logs` para acompanhar.")
-
+        base_command = get_docker_compose_command()
+        full_command = base_command + command_args
+        print(f"   (usando comando: `{' '.join(full_command)}`)")
+        # Para comandos de ambiente, não precisamos de output em tempo real, então 'run' é ok.
+        subprocess.run(full_command, check=True, **kwargs)
+        return True
     except FileNotFoundError as e:
         print(f"❌ Erro: {e}")
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Erro ao executar comando. Código de saída: {e.returncode}")
+        if e.stderr:
+            # Em alguns casos, o stderr é usado para output normal, então decodificamos se possível
+            print(f"   Stderr:\n{e.stderr.decode('utf-8', 'ignore')}")
+        if e.stdout:
+            print(f"   Stdout:\n{e.stdout.decode('utf-8', 'ignore')}")
     except Exception as e:
         print(f"❌ Ocorreu um erro inesperado: {e}")
+    return False
 
 
 # --- Comandos do Ambiente Docker ---
 
-env_app = typer.Typer(help="Gerencia o ambiente Docker.")
-
-@env_app.command("start")
-def env_start():
+@app.command("start")
+def start():
     """Constrói e inicia todos os serviços em modo detached."""
     print("🚀 Iniciando serviços Docker...")
-    try:
-        command = get_docker_compose_command() + ["up", "--build", "-d"]
-        print(f"   (usando comando: `{' '.join(command)}`)")
-        subprocess.run(command, check=True, capture_output=True)
+    if run_docker_command(["up", "--build", "-d"], capture_output=True):
         print("✅ Serviços iniciados com sucesso.")
-    except FileNotFoundError as e:
-        print(f"❌ Erro: {e}")
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Erro ao iniciar os serviços. Código de saída: {e.returncode}")
-        print(f"   Stderr:\n{e.stderr.decode()}")
+        print("   O container 'app' está rodando em modo idle.")
+        print("   Use `python run.py trade`, `test`, ou `backtest` para executar tarefas.")
 
-@env_app.command("stop")
-def env_stop():
+@app.command("stop")
+def stop():
     """Para e remove todos os serviços."""
     print("🔥 Parando serviços Docker...")
-    try:
-        command = get_docker_compose_command() + ["down"]
-        print(f"   (usando comando: `{' '.join(command)}`)")
-        subprocess.run(command, check=True, capture_output=True)
+    if run_docker_command(["down"], capture_output=True):
         print("✅ Serviços parados com sucesso.")
-    except FileNotFoundError as e:
-        print(f"❌ Erro: {e}")
-    except subprocess.CalledProcessError as e:
-        print(f"❌ Erro ao parar os serviços. Código de saída: {e.returncode}")
-        print(f"   Stderr:\n{e.stderr.decode()}")
 
-@env_app.command("status")
-def env_status():
+@app.command("status")
+def status():
     """Mostra o status de todos os serviços."""
     print("📊 Verificando status dos serviços Docker...")
-    try:
-        command = get_docker_compose_command() + ["ps"]
-        print(f"   (usando comando: `{' '.join(command)}`)")
-        subprocess.run(command, check=True)
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        print(f"❌ Erro ao verificar status: {e}")
+    run_docker_command(["ps"])
 
-@env_app.command("logs")
-def env_logs(service_name: Optional[str] = typer.Argument(None, help="Nome do serviço para ver os logs (ex: 'app', 'db').")):
+@app.command("logs")
+def logs(service_name: Optional[str] = typer.Argument(None, help="Nome do serviço para ver os logs (ex: 'app', 'db').")):
     """Acompanha os logs de um serviço específico ou de todos."""
     try:
         base_command = get_docker_compose_command()
@@ -226,124 +89,93 @@ def env_logs(service_name: Optional[str] = typer.Argument(None, help="Nome do se
         
     except KeyboardInterrupt:
         print("\n🛑 Acompanhamento de logs interrompido.")
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+    except Exception as e:
         print(f"❌ Erro ao obter logs: {e}")
-
-@env_app.command("rebuild")
-def env_rebuild():
-    """Força a reconstrução das imagens Docker sem iniciá-las."""
-    print("🛠️ Forçando reconstrução das imagens Docker...")
-    try:
-        command = get_docker_compose_command() + ["build", "--no-cache"]
-        print(f"   (usando comando: `{' '.join(command)}`)")
-        subprocess.run(command, check=True)
-        print("✅ Imagens reconstruídas com sucesso.")
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        print(f"❌ Erro ao reconstruir imagens: {e}")
-
-app.add_typer(env_app, name="env")
-
-# --- Comandos de Atalho (Aliases) ---
-
-@app.command("start")
-def start():
-    """Constrói e inicia todos os serviços em modo detached."""
-    env_start()
-
-@app.command("stop")
-def stop():
-    """Para e remove todos os serviços."""
-    env_stop()
 
 @app.command("build")
 def build():
     """Força a reconstrução das imagens Docker sem iniciá-las."""
-    env_rebuild()
-
-@app.command("status")
-def status():
-    """Mostra o status de todos os serviços."""
-    env_status()
-
-@app.command("logs")
-def logs(service_name: Optional[str] = typer.Argument(None, help="Nome do serviço para ver os logs.")):
-    """Acompanha os logs de um serviço específico ou de todos."""
-    env_logs(service_name)
+    print("🛠️ Forçando reconstrução das imagens Docker...")
+    if run_docker_command(["build", "--no-cache"]):
+        print("✅ Imagens reconstruídas com sucesso.")
 
 # --- Comandos da Aplicação ---
 
+def _run_in_container(command: list, env_vars: dict = {}):
+    """Executa um comando Python dentro do container 'app', mostrando o output em tempo real."""
+    try:
+        docker_cmd = get_docker_compose_command()
+        
+        exec_cmd = docker_cmd + ["exec"]
+        for key, value in env_vars.items():
+            exec_cmd.extend(["-e", f"{key}={value}"])
+        
+        # Comando final a ser executado no container
+        container_command = ["app", "python"] + command
+        exec_cmd.extend(container_command)
+        
+        print(f"   (executando: `{' '.join(docker_cmd)} exec {' '.join(container_command)}`)")
+
+        # Usamos Popen para streaming de output em tempo real
+        process = subprocess.Popen(exec_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, encoding='utf-8', errors='replace')
+        
+        # Lê e imprime cada linha de output assim que ela aparece
+        for line in iter(process.stdout.readline, ''):
+            print(line, end='')
+        
+        process.wait()
+        process.stdout.close()
+        
+        if process.returncode != 0:
+            print(f"\n❌ Comando falhou com código de saída: {process.returncode}")
+            return False
+        return True
+
+    except Exception as e:
+        print(f"❌ Ocorreu um erro ao executar o comando no container: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
 @app.command()
 def trade():
-    """Inicia o bot em modo de negociação ao vivo (live trading)."""
-    _run_docker_compose_with_mode('trade')
-
+    """Inicia o bot em modo de negociação (live) dentro do container."""
+    print("🚀 Iniciando o bot em modo 'TRADE'...")
+    _run_in_container(
+        command=["jules_bot/main.py"],
+        env_vars={"BOT_MODE": "trade"}
+    )
 
 @app.command()
 def test():
-    """Inicia o bot em modo de teste, usando a API de testnet da Binance."""
-    _run_docker_compose_with_mode('test')
-
-
-@app.command()
-def testnet():
-    """Alias para o comando 'test'. Inicia o bot em modo de teste (testnet)."""
-    _run_docker_compose_with_mode('test')
-
+    """Inicia o bot em modo de teste (testnet) dentro do container."""
+    print("🚀 Iniciando o bot em modo 'TEST'...")
+    _run_in_container(
+        command=["jules_bot/main.py"],
+        env_vars={"BOT_MODE": "test"}
+    )
 
 @app.command()
 def backtest(
-    days: Optional[int] = typer.Option(
-        None, "--days", "-d", help="Número de dias de dados recentes para buscar para o backtest."
+    days: int = typer.Option(
+        30, "--days", "-d", help="Número de dias de dados recentes para o backtest."
     )
 ):
-    """Executa um backtest completo usando os dados mais recentes do banco de dados."""
-    print("🚀 Iniciando nova execução de backtest...")
-    try:
-        if days is None:
-            days = int(config_manager.get('backtest.default_lookback_days'))
-            print(f"Nenhum --days especificado. Usando o padrão de {days} dias do config.ini.")
-
-        print(f"Preparando dados: buscando os últimos {days} dias de dados de mercado...")
-        prepare_backtest_data(days=days)
-
-        print("Preparação de dados concluída. Iniciando o motor de backtesting...")
-        backtester = Backtester(days=days)
-        backtester.run()
-        print("✅ Backtest finalizado com sucesso.")
-
-    except Exception as e:
-        print(f"❌ Ocorreu um erro durante o backtest: {e}")
-        import traceback
-        traceback.print_exc()
-
-@app.command()
-def show(
-    mode: str = typer.Argument("trade", help="O modo a ser exibido: 'trade' ou 'backtest'")
-):
-    """Inicia a UI do Terminal para exibir o estado de um bot ou os resultados do backtest."""
-    if mode not in ['trade', 'backtest']:
-        print(f"❌ Erro: Modo inválido '{mode}'. Use 'trade' ou 'backtest'.")
-        raise typer.Exit()
-
-    print(f"🚀 Lançando UI no modo '{mode}'...")
+    """Prepara os dados e executa um backtest completo dentro do container."""
+    print(f"🚀 Iniciando execução de backtest para {days} dias...")
     
-    try:
-        db_config_name = f"influxdb_{mode}"
-        db_config = config_manager.get(db_config_name)
-        
-        full_db_config = {
-            **config_manager.get('influxdb_connection'),
-            **db_config
-        }
-        
-        db_manager = DatabaseManager(config=full_db_config)
-        app_ui = JulesBotApp(db_manager=db_manager, display_mode=mode)
-        app_ui.run()
+    print("\n--- Etapa 1 de 2: Preparando dados ---")
+    if not _run_in_container(["collectors/core_price_collector.py", str(days)]):
+        print("❌ Falha na preparação dos dados. Abortando backtest.")
+        return
 
-    except Exception as e:
-        print(f"❌ Erro ao lançar a UI: {e}")
-        import traceback
-        traceback.print_exc()
+    print("\n--- Etapa 2 de 2: Rodando o backtest ---")
+    if not _run_in_container(["scripts/run_backtest.py"]):
+        print("❌ Falha na execução do backtest.")
+        return
+        
+    print("\n✅ Backtest finalizado com sucesso.")
 
 
 if __name__ == "__main__":

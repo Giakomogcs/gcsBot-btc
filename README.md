@@ -103,140 +103,100 @@ gcsbot-btc/
 └── run.py                  # Main command-line interface for controlling the bot
 ```
 
-## 5. The "Zero to Running" Setup Guide
+## 5. Usage Guide
 
-This guide provides the complete step-by-step instructions to get the bot running from scratch.
+This guide provides the step-by-step instructions to set up the environment and run the bot.
 
 ### Prerequisites
-- **Docker and Docker Compose**: Ensure Docker Desktop is installed and running.
-- **Python 3.10+**: Required for running the control scripts.
+
+- **Docker and Docker Compose**: Ensure Docker is installed and running. The script will automatically use `sudo` if required.
+- **Python 3.10+**: Required for running the control script `run.py`.
 - **Git**: For cloning the repository.
 
-### Step 1: Clone the Repository
-Open a terminal and clone the project to your local machine.
+### Step 1: Clone and Configure
+
+First, clone the repository and create your `.env` file from the example.
+
 ```bash
 git clone <YOUR_REPOSITORY_URL>
 cd gcsbot-btc
-```
-
-### Step 2: Create Environment and Configuration Files
-Create a `.env` file by copying the example. This file will store all your secrets.
-```bash
 cp .env.example .env
 ```
-Now, edit the `.env` file and fill in the following values:
 
-- **`INFLUXDB_ADMIN_TOKEN`**: This is a **temporary, high-privilege token** you create for the initial setup. You can use a simple, memorable password here (e.g., `my-super-secret-password`). This token is ONLY used once for the setup script and will not be the final application token.
-- **`INFLUXDB_ORG`**: The name for your InfluxDB organization (e.g., `my-trading-org`).
-- **`INFLUXDB_BUCKET_LIVE`**: Bucket name for live trading data (e.g., `live_trades`).
-- **`INFLUXDB_BUCKET_TESTNET`**: Bucket name for paper trading data (e.g., `testnet_trades`).
-- **`INFLUXDB_BUCKET_BACKTEST`**: Bucket name for backtesting results (e.g., `backtest_results`).
-- **`INFLUXDB_BUCKET_PRICES`**: Bucket name for historical price data (e.g., `price_history`).
-- **`BINANCE_API_KEY` / `BINANCE_API_SECRET`**: Your live Binance API keys.
-- **`BINANCE_TESTNET_API_KEY` / `BINANCE_TESTNET_API_SECRET`**: Your testnet Binance API keys.
+Next, edit the `.env` file with your details. You will need to provide your Binance API keys and choose names for your InfluxDB organization and buckets.
 
-**Note**: The `INFLUXDB_TOKEN` variable is intentionally left blank for now. It will be generated automatically in the next step.
+### Step 2: Start the Environment
 
-### Step 3: Build and Start Services
-Build the Docker images and start the InfluxDB service in the background.
+The `start` command builds the Docker images and launches the `app` and `db` services in the background. The `app` container will start in an idle state, waiting for your commands.
+
 ```bash
-python run.py build
 python run.py start
 ```
-This will start the InfluxDB container. You can check its status with `python run.py status`.
 
-### Step 4: Run the Automated InfluxDB Setup
-This is the most critical step. Run the migration script to automatically configure InfluxDB. This script will create your organization, buckets, and a secure application token.
+You can check the status of the services at any time:
+
+```bash
+python run.py status
+```
+
+### Step 3: Initial Database Setup
+
+The first time you run the bot, you need to set up the InfluxDB database. The following command runs a one-time migration script that creates the necessary buckets and tokens.
 
 ```bash
 python influxdb_setup/run_migrations.py
 ```
 
-The script will output a new **`INFLUXDB_TOKEN`**. This is the application token with restricted permissions that the bot will use for daily operations.
+This script will output a new `INFLUXDB_TOKEN`. **You must copy this token and paste it into your `.env` file.**
 
-**Action Required**: Copy the generated token and paste it into your `.env` file for the `INFLUXDB_TOKEN` variable.
+### Step 4: Running the Bot
 
-### Step 5: Populate the Database with Price Data
-With the database configured, run the price collector to download historical OHLCV data from Binance.
+With the environment running and the database configured, you can now execute commands inside the application container.
+
+**A. Run a Backtest**
+To run a backtest, you first need to collect some historical data. The `backtest` command handles this for you.
+
 ```bash
-python collectors/core_price_collector.py
-```
-This process may take some time depending on the `start_date_ingestion` setting in `config.ini`.
-
-### Step 6: Verify the Setup
-The system is now fully configured. You can run a backtest to verify that all components are working correctly.
-```bash
+# Prepare data for the last 30 days and run a backtest
 python run.py backtest --days 30
 ```
+
 This command will:
-1. Fetch the last 30 days of price data for backtesting.
-2. Clear any previous backtest results from the database.
-3. Run the simulation.
-4. Print a performance summary.
 
-If the backtest completes successfully, your setup is ready!
+1.  Execute a script inside the container to fetch the last 30 days of price data.
+2.  Execute the backtesting engine using that data.
 
-## 6. Environment Management
+**B. Run in Test Mode (Testnet)**
+To run the bot using your Binance testnet account:
 
-The entire lifecycle of the application's environment (Docker containers) is managed via the `run.py` script. These commands are wrappers around `docker-compose` and provide a simple, unified interface for all environment-related tasks.
-
-### Common Commands
-
--   **Start Services**: `python run.py start`
-    -   Builds the Docker images if they don't exist and starts the `app` and `db` services in detached mode. This is the standard way to start the application.
-
--   **Stop Services**: `python run.py stop`
-    -   Stops and removes all running containers, networks, and volumes associated with the project. This provides a clean shutdown of the environment.
-
--   **Check Status**: `python run.py status`
-    -   Shows the current status of all project containers (e.g., whether they are running, stopped, and on which ports).
-
--   **View Logs**: `python run.py logs [service_name]`
-    -   Follows the real-time logs of the services.
-    -   If a `service_name` (e.g., `app` or `db`) is provided, it will only show logs for that specific service.
-    -   If no service name is given, it will show logs for all services.
-
--   **Build Images**: `python run.py build`
-    -   Forces a rebuild of the Docker images without using the cache. This is useful when you have changed the `Dockerfile` or suspect caching issues.
-
-### Application Commands
-
--   **Run a Backtest**: `python run.py backtest [--days <number_of_days>]`
-    -   Runs a backtest using recent market data from the database.
-    -   `--days`: Optional. Specifies the number of recent days of data to fetch for the backtest.
-    -   If not provided, it defaults to the `default_lookback_days` value in `config.ini`.
-    -   Example: `python run.py backtest --days 30`
-
--   **Launch the UI**: `python run.py show <mode>`
-    -   Launches the terminal user interface to display the state of the bot.
-    -   `<mode>` can be `trade` or `backtest`.
-
-## 7. Configuration (`config.ini`)
-
-The `config.ini` file allows you to tune the bot's behavior without changing the code.
-
-- **`[INFLUXDB]`**: Configures the connection details for InfluxDB.
-- **`[BINANCE_LIVE]`**: Your live Binance API keys.
-- **`[BINANCE_TESTNET]`**: Your testnet Binance API keys.
-- **`[STRATEGY_RULES]`**: Configures the dynamic trading strategy.
-  - `buy_trigger_few_positions`: The percentage drop required for the next buy when there are few open positions.
-  - `buy_trigger_many_positions`: The percentage drop required for the next buy when there are many open positions.
-  - `buy_amount_low_allocation_multiplier`: The multiplier for the base buy amount when capital allocation is low.
-  - `buy_amount_high_allocation_multiplier`: The multiplier for the base buy amount when capital allocation is high.
-  - `commission_rate`: The broker's commission rate (e.g., `0.001` for 0.1%). Used to calculate the break-even price.
-  - `sell_factor`: The percentage of the position to be sold (e.g., `0.9` for 90%). The remaining part is held as a long-term asset.
-  - `target_profit`: The desired net profit margin for each trade (e.g., `0.005` for 0.5%).
-
-The `sell_target_price` is calculated automatically when a new position is created, using the following formula:
-
+```bash
+python run.py test
 ```
-Sell Target = (Purchase Price * (1 + Commission Rate)) / (Sell Factor * (1 - Commission Rate)) * (1 + Target Profit)
+
+The bot will start, and you will see its log output directly in your terminal. Press `Ctrl+C` to stop the bot.
+
+**C. Run in Live Trading Mode**
+To run the bot with real funds on your main Binance account:
+
+```bash
+python run.py trade
 ```
-- **`[BACKTEST]`**: Parameters for backtesting simulations.
-- **`[DATA]`**: Paths for data files.
-- **`[APP]`**: Main application settings.
-- **`[DATA_PIPELINE]`**: Settings for the data pipeline.
 
-## 8. Data Pipeline In-Depth
+The bot will start, and its logs will be streamed to your terminal. Press `Ctrl+C` to stop it.
 
-The data pipeline is orchestrated by `collectors/core_price_collector.py` and is the foundation of the bot's trading strategy. It is responsible for fetching OHLCV price data from Binance and storing it in InfluxDB.
+### Step 5: Managing the Environment
+
+- **View Logs**: To see the real-time logs from any service (e.g., `app` or `db`):
+  ```bash
+  python run.py logs <service_name>
+  # Example:
+  python run.py logs app
+  ```
+- **Stop Services**: To stop all services and remove the containers:
+  ```bash
+  python run.py stop
+  ```
+- **Rebuild Images**: If you make changes to the `Dockerfile`, you can force a rebuild:
+  ```bash
+  python run.py build
+  ```
