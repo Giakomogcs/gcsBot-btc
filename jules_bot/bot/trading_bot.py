@@ -32,7 +32,7 @@ class TradingBot:
 
         # Instantiate core components
         bucket_name = config_manager.get('INFLUXDB', f'bucket_{self.mode}')
-        state_manager = StateManager(bucket_name)
+        state_manager = StateManager(bucket_name, self.bot_id)
         trader = Trader(mode=self.mode)
         strategy_rules = StrategyRules(config_manager)
 
@@ -47,32 +47,56 @@ class TradingBot:
                     time.sleep(10)
                     continue
 
-                # 1. Check for potential sales
+                # 1. Check for potential sales (Read -> Act -> Update State)
+                logger.debug("--- SELL CYCLE START ---")
+                logger.info("[Read] Fetching open positions.")
                 open_positions = state_manager.get_open_positions()
+                logger.info(f"Found {len(open_positions)} open position(s).")
+
                 for position in open_positions:
-                    # This is a placeholder for the actual sell logic, which will be more complex
-                    if current_price >= position.get('entry_price', 0) * 1.02: # Simple 2% take profit
+                    trade_id = position.get('trade_id')
+                    target_price = position.get('sell_target_price', float('inf'))
+                    logger.debug(f"Checking position {trade_id}: current_price={current_price}, target_price={target_price}")
+
+                    if current_price >= target_price:
+                        logger.info(f"[Act] Sell condition met for position {trade_id}. Executing sell.")
                         sell_result = trader.execute_sell(position)
+
                         if sell_result:
-                            state_manager.close_trade(position['trade_id'], sell_result)
+                            logger.info(f"[Update State] Sell successful for {trade_id}. Closing position in database.")
+                            state_manager.close_position(trade_id, sell_result)
+                            logger.info(f"Position {trade_id} successfully closed.")
+                        else:
+                            logger.error(f"Sell execution failed for position {trade_id}. State remains OPEN.")
+                logger.debug("--- SELL CYCLE END ---")
 
                 # 2. Check for a potential buy
-                last_buy_price = state_manager.get_last_purchase_price() # This method needs to be implemented in StateManager
+                logger.debug("--- BUY CYCLE START ---")
+                last_buy_price = state_manager.get_last_purchase_price()
                 open_positions_count = state_manager.get_open_positions_count()
 
                 buy_trigger_percentage = strategy_rules.get_next_buy_trigger(open_positions_count)
 
                 if current_price <= last_buy_price * (1 - buy_trigger_percentage):
+                    logger.info("Buy condition met. Evaluating capital for new trade.")
                     capital_allocated = state_manager.get_total_capital_allocated()
                     total_balance = trader.get_account_balance()
-                    capital_allocated_percent = (capital_allocated / (total_balance + capital_allocated)) * 100
-                    base_amount = float(config_manager.get('TRADING_STRATEGY', 'usd_per_trade'))
 
+                    # Avoid division by zero if total balance is 0
+                    if total_balance + capital_allocated == 0:
+                        capital_allocated_percent = 0
+                    else:
+                        capital_allocated_percent = (capital_allocated / (total_balance + capital_allocated)) * 100
+
+                    base_amount = float(config_manager.get('TRADING_STRATEGY', 'usd_per_trade'))
                     buy_amount_usdt = strategy_rules.get_next_buy_amount(capital_allocated_percent, base_amount)
 
+                    logger.info(f"Executing buy for ${buy_amount_usdt} USD.")
                     buy_result = trader.execute_buy(buy_amount_usdt)
                     if buy_result:
-                        state_manager.open_trade(buy_result)
+                        logger.info("Buy successful. Creating new position with calculated sell target.")
+                        state_manager.create_new_position(buy_result)
+                logger.debug("--- BUY CYCLE END ---")
 
                 logger.info("--- Cycle complete. Waiting 10 seconds... ---")
                 time.sleep(10)

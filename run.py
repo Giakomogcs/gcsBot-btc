@@ -1,4 +1,6 @@
 import typer
+import subprocess
+from typing import Optional
 from jules_bot.config import GCSBotConfig
 from jules_bot.backtesting.engine import Backtester
 from jules_bot.database.database_manager import DatabaseManager
@@ -55,3 +57,63 @@ def show(
 
 if __name__ == "__main__":
     app()
+
+env_app = typer.Typer()
+app.add_typer(env_app, name="env")
+
+@env_app.command("start")
+def env_start():
+    """Builds and starts all services in detached mode."""
+    print("🚀 Starting Docker services via docker-compose up --build -d...")
+    try:
+        subprocess.run(["docker-compose", "up", "--build", "-d"], check=True)
+        print("✅ Services started successfully.")
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        print(f"❌ Error starting services: {e}")
+        print("Is Docker and docker-compose installed and running?")
+
+@env_app.command("stop")
+def env_stop():
+    """Stops and removes all services."""
+    print("🔥 Stopping Docker services via docker-compose down...")
+    try:
+        subprocess.run(["docker-compose", "down"], check=True)
+        print("✅ Services stopped successfully.")
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        print(f"❌ Error stopping services: {e}")
+
+@env_app.command("status")
+def env_status():
+    """Shows the status of all services."""
+    print("📊 Checking Docker services status via docker-compose ps...")
+    try:
+        subprocess.run(["docker-compose", "ps"], check=True)
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        print(f"❌ Error checking status: {e}")
+
+@env_app.command("logs")
+def env_logs(service_name: Optional[str] = typer.Argument(None, help="Name of the service to show logs for (e.g., 'app', 'db').")):
+    """Follows the logs of a specific service or all services."""
+    command = ["docker-compose", "logs", "-f"]
+    if service_name:
+        print(f"📄 Following logs for service '{service_name}'...")
+        command.append(service_name)
+    else:
+        print("📄 Following logs for all services...")
+
+    try:
+        subprocess.run(command, check=True)
+    except KeyboardInterrupt:
+        print("\n🛑 Stopped following logs.")
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        print(f"❌ Error getting logs: {e}")
+
+@env_app.command("rebuild")
+def env_rebuild():
+    """Forces a rebuild of the Docker images without starting them."""
+    print("🛠️ Forcing rebuild of Docker images via docker-compose build --no-cache...")
+    try:
+        subprocess.run(["docker-compose", "build", "--no-cache"], check=True)
+        print("✅ Images rebuilt successfully.")
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        print(f"❌ Error rebuilding images: {e}")

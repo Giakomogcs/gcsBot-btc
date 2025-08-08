@@ -41,26 +41,33 @@ class DatabaseManager:
         except Exception as e:
             logging.error(f"Failed to write bot status to InfluxDB: {e}")
 
-    def open_trade(self, trade_data: dict):
+    def write_trade(self, trade_data: dict):
         """Writes a new trade with status OPEN to the 'trades' measurement."""
         try:
+            # The original buy_result from the exchange might not have the correct names.
+            # We standardize them here. `price` becomes `entry_price`.
+            entry_price = trade_data.get('price', 0.0)
+            quantity = trade_data.get('qty', 0.0)
+            usd_value = trade_data.get('cummulative_quote_qty', 0.0)
+            trade_id = trade_data.get('order_id', str(uuid.uuid4()))
+
             point = Point("trades") \
                 .tag("bot_id", trade_data.get("bot_id")) \
-                .tag("mode", trade_data.get("mode")) \
                 .tag("symbol", trade_data.get("symbol")) \
-                .tag("strategy", trade_data.get("strategy")) \
-                .tag("trade_id", trade_data.get("trade_id")) \
-                .field("trade_type", "BUY") \
-                .field("status", "OPEN") \
-                .field("entry_price", float(trade_data.get("entry_price", 0.0))) \
-                .field("quantity", float(trade_data.get("quantity", 0.0))) \
-                .field("usd_value", float(trade_data.get("usd_value", 0.0))) \
-                .field("commission", float(trade_data.get("commission", 0.0)))
-            self.write_api.write(bucket=self.bucket, org=self.org, record=point)
-        except Exception as e:
-            logging.error(f"Failed to write open trade to InfluxDB: {e}")
+                .tag("status", "OPEN") \
+                .tag("trade_id", trade_id) \
+                .field("entry_price", float(entry_price)) \
+                .field("purchase_price", float(entry_price)) \
+                .field("quantity", float(quantity)) \
+                .field("usd_value", float(usd_value)) \
+                .field("sell_target_price", float(trade_data.get("sell_target_price", 0.0)))
 
-    def close_trade(self, trade_id: str, exit_data: dict):
+            self.write_api.write(bucket=self.bucket, org=self.org, record=point)
+            logger.info(f"Successfully wrote open trade {trade_id} to database.")
+        except Exception as e:
+            logger.error(f"Failed to write open trade to InfluxDB: {e}", exc_info=True)
+
+    def update_trade_status(self, trade_id: str, exit_data: dict):
         """Updates an existing trade record to mark it as 'CLOSED' and adds exit data."""
         # Note: InfluxDB doesn't have a direct update. The common pattern is to write a new
         # point with the same tags and timestamp to overwrite the fields.
@@ -125,31 +132,6 @@ class DatabaseManager:
 
     def get_query_api(self): # Função mantida para compatibilidade
         return self.query_api
-
-    def write_trade(self, trade_data: dict):
-        """Escreve um único registo de trade no InfluxDB."""
-        try:
-            # Extrai a confiança final para ser guardada como um campo numérico separado
-            final_confidence = trade_data.get("decision_data", {}).get("final_confidence", 0.0)
-
-            point = Point("trades") \
-                .tag("status", trade_data["status"]) \
-                .tag("trade_id", trade_data["trade_id"])
-            if self.mode:
-                point = point.tag("environment", self.mode)
-            point = point.field("entry_price", float(trade_data["entry_price"])) \
-                .field("profit_target_price", float(trade_data.get("profit_target_price", 0.0))) \
-                .field("stop_loss_price", float(trade_data.get("stop_loss_price", 0.0))) \
-                .field("quantity_btc", float(trade_data.get("quantity_btc", 0.0))) \
-                .field("realized_pnl_usdt", float(trade_data.get("realized_pnl_usdt", 0.0))) \
-                .field("final_confidence", float(final_confidence)) \
-                .field("decision_data", json.dumps(trade_data.get("decision_data", {}))) \
-                .time(trade_data["timestamp"])
-            
-            self.write_api.write(bucket=self.bucket, org=self.org, record=point)
-            logger.info(f"Trade {trade_data['trade_id']} escrito no DB com status {trade_data['status']}.")
-        except Exception as e:
-            logger.error(f"Falha ao escrever trade no DB: {e}", exc_info=True)
 
     def get_open_positions(self, bot_id: str) -> list[dict]:
         """Fetches all trades for a bot_id that are currently in 'OPEN' status."""
@@ -236,23 +218,6 @@ class DatabaseManager:
             logger.info(f"Trade {trade_id} marked as legacy hold: {is_legacy}.")
         except Exception as e:
             logger.error(f"Falha ao marcar trade {trade_id} como legacy hold: {e}", exc_info=True)
-
-    def update_trade_status(self, trade_id: str, new_status: str, extra_fields: dict = None):
-        """Updates the status and other fields of a specific trade."""
-        try:
-            point = Point("trades").tag("trade_id", trade_id).tag("status", new_status)
-            if self.mode:
-                point = point.tag("environment", self.mode)
-
-            if extra_fields:
-                for key, value in extra_fields.items():
-                    point = point.field(key, value)
-
-            point = point.time(datetime.now(timezone.utc))
-            self.write_api.write(bucket=self.bucket, org=self.org, record=point)
-            logger.info(f"Trade {trade_id} status updated to {new_status}.")
-        except Exception as e:
-            logger.error(f"Failed to update trade status for {trade_id}: {e}", exc_info=True)
 
     def execute_90_10_take_profit_split(self, original_position: pd.Series, treasury_quantity: float, realized_pnl: float):
         """
