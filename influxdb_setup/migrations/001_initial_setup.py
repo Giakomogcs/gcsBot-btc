@@ -1,6 +1,6 @@
 import os
 import sys
-from influxdb_client import InfluxDBClient, Bucket, Organization
+from influxdb_client import InfluxDBClient, Bucket, Organization, Authorization
 from influxdb_client.client.authorizations_api import AuthorizationsApi
 from influxdb_client.client.bucket_api import BucketsApi
 from influxdb_client.client.organizations_api import OrganizationsApi
@@ -18,6 +18,7 @@ def main():
     - Creates required buckets.
     - Creates an application token with specific permissions.
     """
+    client = None  # Initialize client to None for the finally block
     try:
         # --- 1. Load Configuration ---
         config_manager = ConfigManager()
@@ -27,9 +28,9 @@ def main():
         org_name = influx_config['org']
 
         # Admin token must be provided via environment variable for initial setup
-        admin_token = os.getenv("INFLUXDB_ADMIN_TOKEN")
+        admin_token = os.getenv("INFLUXDB_TOKEN")
         if not admin_token:
-            print("❌ ERROR: INFLUXDB_ADMIN_TOKEN environment variable not set.")
+            print("❌ ERROR: INFLUXDB_TOKEN environment variable not set.")
             print("Please set this to your InfluxDB admin token to run the initial setup.")
             sys.exit(1)
 
@@ -44,8 +45,8 @@ def main():
         org = None
         try:
             orgs = org_api.find_organizations(org=org_name)
-            if orgs.orgs:
-                org = orgs.orgs[0]
+            if orgs:
+                org = orgs[0]
                 print(f"✅ Organization '{org_name}' already exists (ID: {org.id}).")
             else:
                 print(f"Organization '{org_name}' not found. Creating it...")
@@ -55,8 +56,12 @@ def main():
         except ApiException as e:
             if "organization name is already taken" in str(e.body):
                  orgs = org_api.find_organizations(org=org_name)
-                 org = orgs.orgs[0]
-                 print(f"✅ Organization '{org_name}' already exists (ID: {org.id}).")
+                 if orgs:
+                    org = orgs[0]
+                    print(f"✅ Organization '{org_name}' already exists (ID: {org.id}).")
+                 else:
+                    print(f"❌ ERROR: Organization '{org_name}' reported as taken, but could not be found.")
+                    sys.exit(1)
             else:
                 print(f"❌ ERROR: Could not create or find organization '{org_name}'.")
                 print(f"   Reason: {e}")
@@ -64,16 +69,16 @@ def main():
 
         # --- 3. Create Buckets ---
         buckets_to_create = [
-            influx_config['bucket_live'],
-            influx_config['bucket_testnet'],
-            influx_config['bucket_backtest'],
-            influx_config['bucket_prices']
+            influx_config.get('bucket_live'),
+            influx_config.get('bucket_testnet'),
+            influx_config.get('bucket_backtest'),
+            influx_config.get('bucket_prices')
         ]
 
         print("\nChecking for required buckets...")
         for bucket_name in buckets_to_create:
             if not bucket_name:
-                print(f"⚠️ WARNING: Bucket name is not defined in config.ini. Skipping.")
+                print(f"⚠️ WARNING: A bucket name is not defined in config.ini. Skipping.")
                 continue
 
             try:
@@ -97,50 +102,64 @@ def main():
         app_token_description = "JulesBot Application Token"
         print(f"\nChecking for application token: '{app_token_description}'...")
 
-        # Define permissions for the token
         permissions = [
-            # Read access to all buckets
             {"action": "read", "resource": {"type": "buckets", "orgID": org.id}},
-            # Write access to the application-specific buckets
-            {"action": "write", "resource": {"type": "buckets", "orgID": org.id, "name": influx_config['bucket_live']}},
-            {"action": "write", "resource": {"type": "buckets", "orgID": org.id, "name": influx_config['bucket_testnet']}},
-            {"action": "write", "resource": {"type": "buckets", "orgID": org.id, "name": influx_config['bucket_backtest']}},
-            {"action": "write", "resource": {"type": "buckets", "orgID": org.id, "name": influx_config['bucket_prices']}},
+            {"action": "write", "resource": {"type": "buckets", "orgID": org.id, "name": influx_config.get('bucket_live')}},
+            {"action": "write", "resource": {"type": "buckets", "orgID": org.id, "name": influx_config.get('bucket_testnet')}},
+            {"action": "write", "resource": {"type": "buckets", "orgID": org.id, "name": influx_config.get('bucket_backtest')}},
+            {"action": "write", "resource": {"type": "buckets", "orgID": org.id, "name": influx_config.get('bucket_prices')}},
         ]
+        permissions = [p for p in permissions if p['resource'].get('name')]
 
         # Check if a token with this description already exists
-        authorizations = auth_api.find_authorizations(user_id=None, user=None, org_id=org.id)
+        authorizations = auth_api.find_authorizations(org_id=org.id)
         existing_token = None
-        for auth in authorizations.authorizations:
-            if auth.description == app_token_description:
-                existing_token = auth
-                break
+        if authorizations:
+            for auth in authorizations:
+                if auth.description == app_token_description:
+                    existing_token = auth
+                    break
 
+        app_token = None # Initialize app_token
         if existing_token:
             print(f"✅ Application token '{app_token_description}' already exists.")
             print("   To regenerate the token, please delete it from the InfluxDB UI first.")
-            app_token = existing_token.token
+            # The token value is not available when listing authorizations.
+            # We can't retrieve the old token here.
+            print("   WARNING: Existing token value cannot be retrieved. You may need to create a new one manually if the old one is lost.")
         else:
             print("Application token not found. Creating it...")
-            created_auth = auth_api.create_authorization(org_id=org.id, permissions=permissions)
-            created_auth.description = app_token_description # Description must be set after creation
-            auth_api.update_authorization(created_auth.id, created_auth)
+            # --- FIX: Create the authorization request body ---
+            authorization_request = Authorization(org_id=org.id, permissions=permissions, description=app_token_description, status="active")
+            
+            # --- FIX: Call create_authorization with the request body ---
+            created_auth = auth_api.create_authorization(authorization=authorization_request)
+            
             app_token = created_auth.token
             print(f"✅ Application token created successfully.")
 
         print("\n--- Initial Setup Complete ---")
         print(f"Organization: {org_name}")
-        print(f"Buckets: {', '.join(buckets_to_create)}")
-        print("\nIMPORTANT: Your application token is printed below.")
-        print("You MUST add this token to your .env file as INFLUXDB_TOKEN.")
-        print("-" * 30)
-        print(f"INFLUXDB_TOKEN={app_token}")
-        print("-" * 30)
+        valid_buckets = [b for b in buckets_to_create if b]
+        print(f"Buckets: {', '.join(valid_buckets)}")
+
+        if app_token:
+            print("\nIMPORTANT: Your application token is printed below.")
+            print("You MUST add this token to your .env file as INFLUXDB_TOKEN for the application.")
+            print("-" * 40)
+            print(f"INFLUXDB_TOKEN={app_token}")
+            print("-" * 40)
+        
         print("\nSetup script finished.")
 
     except FileNotFoundError as e:
         print(f"❌ ERROR: Configuration file not found at '{e.filename}'.")
         print("   Please ensure config.ini exists in the root directory.")
+        sys.exit(1)
+    except ApiException as e:
+        # More specific error handling for API exceptions
+        print(f"❌ An InfluxDB API error occurred: {e.reason} (Status: {e.status})")
+        print(f"   Body: {e.body}")
         sys.exit(1)
     except Exception as e:
         print(f"❌ An unexpected error occurred: {e}")
@@ -148,7 +167,7 @@ def main():
         traceback.print_exc()
         sys.exit(1)
     finally:
-        if 'client' in locals() and client:
+        if client:
             client.close()
 
 if __name__ == "__main__":
