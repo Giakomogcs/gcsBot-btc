@@ -170,8 +170,11 @@ The entire lifecycle of the application's environment (Docker containers) is man
 
 ### Application Commands
 
--   **Run a Backtest**: `python run.py backtest <path_to_data.csv>`
-    -   Executes a backtest using the historical data from the provided CSV file.
+-   **Run a Backtest**: `python run.py backtest [--days <number_of_days>]`
+    -   Runs a backtest using recent market data from the database.
+    -   `--days`: Optional. Specifies the number of recent days of data to fetch for the backtest.
+    -   If not provided, it defaults to the `default_lookback_days` value in `config.ini`.
+    -   Example: `python run.py backtest --days 30`
 
 -   **Launch the UI**: `python run.py show <mode>`
     -   Launches the terminal user interface to display the state of the bot.

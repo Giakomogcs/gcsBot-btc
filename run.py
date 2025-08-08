@@ -123,7 +123,7 @@ def backtest(
     try:
         # If days are not specified, get from config
         if days is None:
-            days = config_manager.getint('BACKTEST', 'default_lookback_days')
+            days = int(config_manager.get('backtest.default_lookback_days'))
             print(f"No --days specified. Using default of {days} days from config.ini.")
 
         # 1. Prepare the data: fetch latest N days and write to backtest DB
