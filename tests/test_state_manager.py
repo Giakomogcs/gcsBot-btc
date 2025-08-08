@@ -26,48 +26,50 @@ def state_manager(mock_db_manager):
         sm.db_manager = mock_db_manager # Ensure the instance has the mock
         return sm
 
-def test_create_new_position_calculation(state_manager, mock_db_manager):
+def test_create_new_position_logs_trade(state_manager, mock_db_manager):
     """
-    Verify that `create_new_position` correctly calculates `sell_target_price`
-    using the formula and parameters from the config.
+    Verify that `create_new_position` calls the `log_trade` method on the db_manager.
     """
     # Arrange
     buy_result = {
         'price': 100.0,
-        'qty': 1.0,
-        'cummulative_quote_qty': 100.0,
-        'order_id': 'test-order-123',
-        'symbol': 'BTCUSDT'
+        'quantity': 1.0,
+        'usd_value': 100.0,
+        'trade_id': 'test-trade-123',
+        'symbol': 'BTCUSDT',
+        'order_type': 'buy'
     }
-
-    # These values are pulled from the config.ini file
-    commission_rate = float(config_manager.get('STRATEGY_RULES', 'commission_rate'))
-    sell_factor = float(config_manager.get('STRATEGY_RULES', 'sell_factor'))
-    target_profit = float(config_manager.get('STRATEGY_RULES', 'target_profit'))
-
-    # Expected sell price based on the formula
-    numerator = buy_result['price'] * (1 + commission_rate)
-    denominator = sell_factor * (1 - commission_rate)
-    break_even_price = numerator / denominator
-    expected_sell_target = break_even_price * (1 + target_profit)
 
     # Act
     state_manager.create_new_position(buy_result)
 
     # Assert
-    # 1. Ensure that the method to write to the database was called once
-    mock_db_manager.write_trade.assert_called_once()
+    mock_db_manager.log_trade.assert_called_once_with(buy_result)
 
-    # 2. Extract the data that was passed to the database write method
-    call_args = mock_db_manager.write_trade.call_args[0][0]
+def test_close_position_logs_trade(state_manager, mock_db_manager):
+    """
+    Verify that `close_position` calls the `log_trade` method on the db_manager.
+    """
+    # Arrange
+    trade_id = "test-trade-123"
+    exit_data = {
+        'price': 110.0,
+        'quantity': 1.0,
+        'usd_value': 110.0,
+        'order_type': 'sell',
+        'realized_pnl': 10.0
+    }
 
-    # 3. Verify the calculated sell_target_price is correct (using pytest.approx for float comparison)
-    assert 'sell_target_price' in call_args
-    assert call_args['sell_target_price'] == pytest.approx(expected_sell_target)
+    expected_log_data = {
+        **exit_data,
+        'trade_id': trade_id
+    }
 
-    # 4. Verify that other important data was passed through correctly
-    assert call_args['price'] == buy_result['price']
-    assert call_args['bot_id'] == "test_bot"
+    # Act
+    state_manager.close_position(trade_id, exit_data)
+
+    # Assert
+    mock_db_manager.log_trade.assert_called_once_with(expected_log_data)
 
 def test_get_last_purchase_price_with_open_positions(state_manager):
     """

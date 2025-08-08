@@ -35,7 +35,9 @@ class CorePriceCollector:
         self.db_manager = DatabaseManager(config=db_config)
         self.binance_client = self._init_binance_client()
         self.symbol = config_manager.get('APP', 'symbol')
-        self.measurement = "btc_btcusdt_1m"
+        self.interval = config_manager.get('DATA', 'interval', fallback='1m')
+        self.source = config_manager.get('DATA', 'source', fallback='binance')
+        self.measurement = "price_history"
 
     def _init_binance_client(self) -> Optional[Client]:
         if config_manager.getboolean('APP', 'force_offline_mode', fallback=False):
@@ -66,25 +68,51 @@ class CorePriceCollector:
             logger.error(f"An unexpected error occurred during Binance client initialization: {e}", exc_info=True)
             return None
 
-    def _write_dataframe_to_influx(self, df: pd.DataFrame, measurement: str):
-        logger.info(f"Preparing to write {len(df)} rows to InfluxDB measurement '{measurement}'...")
-        # This check is important because the db_manager is tied to a specific bucket
+    def _write_dataframe_to_influx(self, df: pd.DataFrame):
+        """
+        Writes a DataFrame to InfluxDB, adding the required tags.
+        """
+        if df.empty:
+            logger.info("DataFrame is empty, nothing to write.")
+            return
+
+        logger.info(f"Preparing to write {len(df)} rows to InfluxDB measurement '{self.measurement}'...")
         if not self.db_manager.bucket:
-             logger.error("DatabaseManager has no bucket configured. Aborting write.")
-             return
+            logger.error("DatabaseManager has no bucket configured. Aborting write.")
+            return
+
+        # Add tags to the DataFrame
+        df['symbol'] = self.symbol
+        df['source'] = self.source
+        df['interval'] = self.interval
+
         try:
             self.db_manager.write_api.write(
                 bucket=self.db_manager.bucket,
                 record=df,
-                data_frame_measurement_name=measurement
+                data_frame_measurement_name=self.measurement,
+                data_frame_tag_columns=['symbol', 'source', 'interval']
             )
             logger.info(f"Successfully wrote {len(df)} new candles to '{self.db_manager.bucket}'.")
         except Exception as e:
             logger.error(f"Error writing data to InfluxDB: {e}", exc_info=True)
 
     def _query_last_timestamp(self) -> Optional[pd.Timestamp]:
-        logger.info(f"Querying last timestamp from measurement '{self.measurement}' in bucket '{self.db_manager.bucket}'...")
-        query = f'from(bucket:"{self.db_manager.bucket}") |> range(start: 0) |> filter(fn: (r) => r._measurement == "{self.measurement}") |> last() |> keep(columns: ["_time"])'
+        """
+        Queries the last timestamp for the specific symbol, source, and interval.
+        """
+        logger.info(f"Querying last timestamp for {self.symbol}/{self.source}/{self.interval} in bucket '{self.db_manager.bucket}'...")
+
+        query = f'''
+        from(bucket:"{self.db_manager.bucket}")
+            |> range(start: 0)
+            |> filter(fn: (r) => r._measurement == "{self.measurement}")
+            |> filter(fn: (r) => r.symbol == "{self.symbol}")
+            |> filter(fn: (r) => r.source == "{self.source}")
+            |> filter(fn: (r) => r.interval == "{self.interval}")
+            |> last()
+            |> keep(columns: ["_time"])
+        '''
 
         try:
             result = self.db_manager.query_api.query(query)
@@ -139,13 +167,13 @@ class CorePriceCollector:
 
         df_new_prices = self._get_historical_klines(start_date, end_date)
         if not df_new_prices.empty:
-            self._write_dataframe_to_influx(df_new_prices, self.measurement)
+            self._write_dataframe_to_influx(df_new_prices)
         logger.info("--- Price collection finished ---")
 
 def prepare_backtest_data(days: int):
     """
     Ensures the backtest database has fresh data for the last N days.
-    - Clears any old data in the backtest bucket.
+    - Deletes any old data for the specific symbol/source/interval in the backtest bucket.
     - Fetches the latest data from Binance.
     - Writes the new data to the backtest bucket.
     """
@@ -158,8 +186,16 @@ def prepare_backtest_data(days: int):
         logger.error("Binance client not available. Cannot prepare backtest data.")
         return
 
-    # 1. Clear all previous data from the measurement in the backtest bucket
-    collector.db_manager.clear_measurement(collector.measurement)
+    # 1. Clear previous data for this specific series to avoid conflicts
+    logger.info(f"Deleting existing data for {collector.symbol}/{collector.source}/{collector.interval} in bucket '{backtest_bucket}'...")
+    predicate = f'_measurement="{collector.measurement}" AND symbol="{collector.symbol}" AND source="{collector.source}" AND interval="{collector.interval}"'
+    collector.db_manager.delete_api.delete(
+        start="1970-01-01T00:00:00Z",
+        stop=datetime.datetime.now(datetime.timezone.utc),
+        predicate=predicate,
+        bucket=backtest_bucket
+    )
+    logger.info("Deletion complete.")
 
     # 2. Fetch new data
     end_date = datetime.datetime.now(datetime.timezone.utc)
@@ -168,7 +204,7 @@ def prepare_backtest_data(days: int):
 
     # 3. Write new data to the backtest bucket
     if not df_data.empty:
-        collector._write_dataframe_to_influx(df_data, collector.measurement)
+        collector._write_dataframe_to_influx(df_data)
     else:
         logger.warning("No new data was fetched for the backtest period.")
 

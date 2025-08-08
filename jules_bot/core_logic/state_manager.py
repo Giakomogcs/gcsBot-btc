@@ -67,13 +67,27 @@ class StateManager:
 
         logger.info(f"Calculated sell_target_price: {sell_target_price} for purchase_price: {purchase_price}")
 
+        # This function is now a passthrough and should be refactored.
+        # For now, we adapt it to call the new log_trade function.
+        # The logic for calculating sell_target_price should be moved to the bot/strategy itself.
+
+        # The `buy_result` dictionary is expected to contain all necessary fields for logging.
+        # We just add the bot_id for now.
         trade_data = {
             **buy_result,
-            'sell_target_price': sell_target_price,
-            'bot_id': self.bot_id
+            'bot_id': self.bot_id # Note: bot_id is not in the new primary schema, but keeping for now.
         }
-        self.db_manager.write_trade(trade_data)
+        self.db_manager.log_trade(trade_data)
 
     def close_position(self, trade_id: str, exit_data: dict):
-        """Updates an existing trade record to mark it as 'CLOSED' and adds exit data."""
-        self.db_manager.update_trade_status(trade_id, exit_data)
+        """
+        Logs the closing part of a trade.
+        This function is now a passthrough and should be refactored.
+        """
+        # The `exit_data` dictionary is expected to contain all necessary fields for logging.
+        # We just add the trade_id to it.
+        trade_data = {
+            **exit_data,
+            'trade_id': trade_id
+        }
+        self.db_manager.log_trade(trade_data)

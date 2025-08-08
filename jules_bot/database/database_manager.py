@@ -41,48 +41,42 @@ class DatabaseManager:
         except Exception as e:
             logging.error(f"Failed to write bot status to InfluxDB: {e}")
 
-    def write_trade(self, trade_data: dict):
-        """Writes a new trade with status OPEN to the 'trades' measurement."""
+    def log_trade(self, trade_data: dict):
+        """
+        Writes a trade record to the 'trades' measurement based on the new schema.
+        This handles both buy and sell orders.
+        """
         try:
-            # The original buy_result from the exchange might not have the correct names.
-            # We standardize them here. `price` becomes `entry_price`.
-            entry_price = trade_data.get('price', 0.0)
-            quantity = trade_data.get('qty', 0.0)
-            usd_value = trade_data.get('cummulative_quote_qty', 0.0)
-            trade_id = trade_data.get('order_id', str(uuid.uuid4()))
-
             point = Point("trades") \
-                .tag("bot_id", trade_data.get("bot_id")) \
+                .tag("mode", trade_data.get("mode")) \
+                .tag("strategy_name", trade_data.get("strategy_name")) \
                 .tag("symbol", trade_data.get("symbol")) \
-                .tag("status", "OPEN") \
-                .tag("trade_id", trade_id) \
-                .field("entry_price", float(entry_price)) \
-                .field("purchase_price", float(entry_price)) \
-                .field("quantity", float(quantity)) \
-                .field("usd_value", float(usd_value)) \
-                .field("sell_target_price", float(trade_data.get("sell_target_price", 0.0)))
+                .tag("trade_id", trade_data.get("trade_id")) \
+                .tag("exchange", trade_data.get("exchange")) \
+                .field("order_type", trade_data.get("order_type")) \
+                .field("price", float(trade_data.get("price", 0.0))) \
+                .field("quantity", float(trade_data.get("quantity", 0.0))) \
+                .field("usd_value", float(trade_data.get("usd_value", 0.0))) \
+                .field("commission", float(trade_data.get("commission", 0.0))) \
+                .field("commission_asset", trade_data.get("commission_asset")) \
+                .field("exchange_order_id", trade_data.get("exchange_order_id"))
+
+            # Add fields that are only present on sell orders
+            if trade_data.get("order_type") == "sell":
+                if "realized_pnl" in trade_data:
+                    point = point.field("realized_pnl", float(trade_data.get("realized_pnl")))
+                if "held_quantity" in trade_data:
+                    point = point.field("held_quantity", float(trade_data.get("held_quantity")))
+
+            # Use the timestamp from the trade data if available, otherwise use now()
+            timestamp = trade_data.get("timestamp", datetime.now(timezone.utc))
+            point = point.time(timestamp)
 
             self.write_api.write(bucket=self.bucket, org=self.org, record=point)
-            logger.info(f"Successfully wrote open trade {trade_id} to database.")
-        except Exception as e:
-            logger.error(f"Failed to write open trade to InfluxDB: {e}", exc_info=True)
+            logger.info(f"Successfully logged {trade_data.get('order_type')} trade {trade_data.get('trade_id')} to database.")
 
-    def update_trade_status(self, trade_id: str, exit_data: dict):
-        """Updates an existing trade record to mark it as 'CLOSED' and adds exit data."""
-        # Note: InfluxDB doesn't have a direct update. The common pattern is to write a new
-        # point with the same tags and timestamp to overwrite the fields.
-        # For simplicity here, we'll write the 'CLOSED' status. A more complex approach
-        # would involve writing a whole new point with all final data.
-        try:
-            point = Point("trades") \
-                .tag("trade_id", trade_id) \
-                .field("status", "CLOSED") \
-                .field("exit_price", float(exit_data.get("exit_price", 0.0))) \
-                .field("pnl_usd", float(exit_data.get("pnl_usd", 0.0))) \
-                .field("pnl_percent", float(exit_data.get("pnl_percent", 0.0)))
-            self.write_api.write(bucket=self.bucket, org=self.org, record=point)
         except Exception as e:
-            logging.error(f"Failed to close trade {trade_id} in InfluxDB: {e}")
+            logger.error(f"Failed to log trade to InfluxDB: {e}", exc_info=True)
 
     def close_client(self):
         """Closes the InfluxDB client."""

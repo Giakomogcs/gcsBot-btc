@@ -3678,3 +3678,17 @@ urllib3.exceptions.NewConnectionError: <urllib3.connection.HTTPConnection object
 2025-08-08 02:37:21,405 - gcsBot - INFO - Fetching OHLCV data for BTCUSDT from 2023-01-01 00:00:00+00:00 to 2025-08-08 02:37:21.405105+00:00...
 2025-08-08 02:37:21,405 - gcsBot - WARNING - Binance client not initialized. Cannot fetch historical klines.
 2025-08-08 02:37:21,406 - gcsBot - INFO - --- Price collection finished ---
+2025-08-08 12:50:58,170 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.
+2025-08-08 12:50:58,183 - gcsBot - INFO - --- Starting Data Architecture Verification ---
+2025-08-08 12:50:58,183 - gcsBot - INFO - Step 1: Preparing backtest data...
+2025-08-08 12:50:58,183 - gcsBot - INFO - --- Preparing backtest data for the last 2 days ---
+2025-08-08 12:50:58,183 - gcsBot - INFO - Initializing CorePriceCollector...
+2025-08-08 12:50:58,183 - gcsBot - INFO - Using provided bucket: backtest_results
+2025-08-08 12:50:58,206 - gcsBot - WARNING - Force offline mode is enabled. Binance client will not be initialized.
+2025-08-08 12:50:58,206 - gcsBot - ERROR - Binance client not available. Cannot prepare backtest data.
+2025-08-08 12:50:58,207 - gcsBot - INFO - Step 1: Complete.
+2025-08-08 12:50:58,207 - gcsBot - INFO - Step 2: Running a short backtest...
+2025-08-08 12:50:58,207 - gcsBot - INFO - Initializing new backtest run with ID: backtest_843a0ad0-9d32-4b16-9937-2c505e316996 for the last 1 days.
+2025-08-08 12:50:58,207 - gcsBot - INFO - Executando query para BTCUSDT/binance/1m de -1d até now()...
+2025-08-08 12:50:58,209 - gcsBot - ERROR - Erro ao executar a query no InfluxDB para 'price_history': <urllib3.connection.HTTPConnection object at 0x7fd000243ec0>: Failed to establish a new connection: [Errno 111] Connection refused
+2025-08-08 12:51:27,002 - gcsBot - INFO - Logger configurado. Logs de console a partir do nível INFO.

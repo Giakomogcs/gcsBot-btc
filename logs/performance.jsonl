@@ -3498,3 +3498,6 @@
 {"timestamp": "2025-08-08 02:37:21,390", "level": "WARNING", "message": "Force offline mode is enabled. Binance client will not be initialized."}
 {"timestamp": "2025-08-08 02:37:21,394", "level": "ERROR", "message": "Error querying last timestamp from InfluxDB: <urllib3.connection.HTTPConnection object at 0x7f0e9d3bc680>: Failed to establish a new connection: [Errno 111] Connection refused"}
 {"timestamp": "2025-08-08 02:37:21,405", "level": "WARNING", "message": "Binance client not initialized. Cannot fetch historical klines."}
+{"timestamp": "2025-08-08 12:50:58,206", "level": "WARNING", "message": "Force offline mode is enabled. Binance client will not be initialized."}
+{"timestamp": "2025-08-08 12:50:58,206", "level": "ERROR", "message": "Binance client not available. Cannot prepare backtest data."}
+{"timestamp": "2025-08-08 12:50:58,209", "level": "ERROR", "message": "Erro ao executar a query no InfluxDB para 'price_history': <urllib3.connection.HTTPConnection object at 0x7fd000243ec0>: Failed to establish a new connection: [Errno 111] Connection refused"}
