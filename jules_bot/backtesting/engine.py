@@ -73,7 +73,9 @@ class Backtester:
                         commission_usd = sell_result['commission']
                         realized_pnl_usd = (sell_result['price'] - position['price']) * sell_result['quantity'] - commission_usd
                         hodl_asset_value_at_sell = hodl_asset_amount * sell_result['price']
+
                         decision_context = candle.to_dict()
+                        decision_context.pop('symbol', None)
 
                         trade_point = TradePoint(
                             run_id=self.run_id, environment="backtest", strategy_name=strategy_name,
@@ -118,6 +120,8 @@ class Backtester:
                     sell_target_price = break_even_price * (1 + target_profit)
 
                     decision_context = candle.to_dict()
+                    decision_context.pop('symbol', None)
+
                     trade_point = TradePoint(
                         run_id=self.run_id, environment="backtest", strategy_name=strategy_name,
                         symbol=symbol, trade_id=new_trade_id, exchange="backtest_engine",
