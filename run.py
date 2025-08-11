@@ -53,7 +53,7 @@ def run_docker_command(command_args: list, **kwargs):
 def start():
     """Constrói e inicia todos os serviços em modo detached."""
     print("🚀 Iniciando serviços Docker...")
-    if run_docker_command(["up", "--build", "-d"], capture_output=True):
+    if run_docker_command(["up", "-d"], capture_output=True):
         print("✅ Serviços iniciados com sucesso.")
         print("   O container 'app' está rodando em modo idle.")
         print("   Use `python run.py trade`, `test`, ou `backtest` para executar tarefas.")

@@ -76,8 +76,8 @@ class TradingBot:
 
                         # Add financial details to the position data for logging
                         original_quantity = float(position.get('quantity', 0))
-                        sell_quantity = original_quantity * 0.9  # Sell 90%
-                        hodl_asset_amount = original_quantity * 0.1 # Keep 10%
+                        sell_quantity = original_quantity * strategy_rules.sell_factor
+                        hodl_asset_amount = original_quantity - sell_quantity
 
                         # Create a copy to avoid modifying the original dict from state_manager
                         sell_position_data = position.copy()
@@ -120,56 +120,43 @@ class TradingBot:
                 open_positions_count = state_manager.get_open_positions_count()
                 max_open_positions = int(config_manager.get('STRATEGY_RULES', 'max_open_positions', fallback=20))
 
-                if open_positions_count >= max_open_positions:
-                    logger.info(f"Maximum open positions ({max_open_positions}) reached. No new buys will be considered.")
-                else:
-                    # Extract features needed for the new logic
-                    ema_100 = final_candle.get('ema_100')
-                    ema_20 = final_candle.get('ema_20')
-                    bbl = final_candle.get('bbl_20_2_0') # Lower Bollinger Band
-                    high_price = final_candle.get('high')
+                if open_positions_count < max_open_positions:
+                    market_data = final_candle.to_dict()
+                    should_buy, regime, reason = strategy_rules.evaluate_buy_signal(market_data)
 
-                    if any(v is None for v in [ema_100, ema_20, bbl, high_price]):
-                        logger.warning("One or more required indicators (EMA100, EMA20, BBL, High) are missing. Skipping buy check.")
-                    else:
-                        is_uptrend = current_price > ema_100
-                        buy_signal = False
+                    if should_buy:
+                        logger.info(f"Buy signal triggered. Reason: {reason}. Evaluating capital.")
+                        available_balance = trader.get_account_balance()
 
-                        if is_uptrend:
-                            # Uptrend Regime: Buy on pullback to EMA20.
-                            # Condition: The candle's high is above the EMA, but the close is below it.
-                            # This captures a dip/pullback more effectively than a strict open/close cross.
-                            if high_price > ema_20 and current_price < ema_20:
-                                logger.info(f"UPTREND REGIME: Buy signal triggered. Price pulled back below EMA20 ({current_price} < {ema_20:.2f}).")
-                                buy_signal = True
+                        if available_balance <= 0:
+                            logger.warning("Available balance is zero or less. Cannot execute buy.")
                         else:
-                            # Downtrend Regime: Buy on dip below Lower Bollinger Band
-                            if current_price < bbl:
-                                logger.info(f"DOWNTREND REGIME: Buy signal triggered. Price touched/crossed below BBL ({current_price} < {bbl:.2f}).")
-                                buy_signal = True
+                            buy_amount_usdt = strategy_rules.get_next_buy_amount(available_balance)
+                            min_trade_size = float(config_manager.get('TRADING_STRATEGY', 'min_trade_size_usdt', fallback=10.0))
 
-                        if buy_signal:
-                            logger.info("Buy condition met. Evaluating capital for 'Adaptive Momentum Grid' strategy.")
-                            available_balance = trader.get_account_balance()
+                            if buy_amount_usdt > min_trade_size:
+                                logger.info(f"Executing buy for ${buy_amount_usdt:.2f} USD.")
 
-                            if available_balance <= 0:
-                                logger.warning("Available balance is zero or less. Cannot execute buy.")
+                                # Enhanced data logging
+                                decision_context = {
+                                    "market_regime": regime,
+                                    "buy_trigger_reason": reason,
+                                    "ema_100_value": market_data.get('ema_100'),
+                                    "ema_20_value": market_data.get('ema_20'),
+                                    "lower_bollinger_band": market_data.get('bbl_20_2_0'),
+                                    "regime_strength": None # Placeholder
+                                }
+
+                                success, buy_result = trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
+                                if success:
+                                    logger.info("Buy successful. Calculating sell target and creating new position.")
+                                    purchase_price = float(buy_result.get('price'))
+                                    sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
+                                    state_manager.create_new_position(buy_result, sell_target_price)
                             else:
-                                buy_amount_usdt = strategy_rules.get_next_buy_amount(available_balance)
-                                min_trade_size = float(config_manager.get('TRADING_STRATEGY', 'min_trade_size_usdt', fallback=10.0))
-
-                                if buy_amount_usdt > min_trade_size:
-                                    logger.info(f"Executing buy for ${buy_amount_usdt:.2f} USD.")
-                                    success, buy_result = trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
-                                    if success:
-                                        logger.info("Buy successful. Calculating sell target and creating new position.")
-
-                                        purchase_price = float(buy_result.get('price'))
-                                        sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
-
-                                        state_manager.create_new_position(buy_result, sell_target_price)
-                                else:
-                                    logger.warning(f"Calculated buy amount (${buy_amount_usdt:.2f}) is below the minimum threshold of ${min_trade_size}. Skipping buy.")
+                                logger.warning(f"Calculated buy amount (${buy_amount_usdt:.2f}) is below the minimum threshold of ${min_trade_size}. Skipping buy.")
+                else:
+                    logger.info(f"Maximum open positions ({max_open_positions}) reached. No new buys will be considered.")
 
                 logger.info("--- Cycle complete. Waiting 60 seconds... ---")
                 time.sleep(60)

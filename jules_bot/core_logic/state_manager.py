@@ -22,27 +22,6 @@ class StateManager:
         """Queries the database and returns the number of currently open trades."""
         return len(self.get_open_positions())
 
-    def get_total_capital_allocated(self) -> float:
-        """Queries all open trades and returns the sum of their initial USDT cost."""
-        open_positions = self.get_open_positions()
-        total_capital = 0.0
-        for position in open_positions:
-            total_capital += position.get('usd_value', 0.0)
-        return total_capital
-
-    def get_last_purchase_price(self) -> float:
-        """
-        Retrieves the purchase price of the most recent 'OPEN' trade.
-        Returns a default high price if no open trades are found.
-        """
-        open_positions = self.get_open_positions()
-        if not open_positions:
-            return float('inf')
-
-        # In a robust system, the query itself should order by time
-        last_position = sorted(open_positions, key=lambda p: p['time'], reverse=True)[0]
-        return last_position.get('purchase_price', float('inf'))
-
     def create_new_position(self, buy_result: dict, sell_target_price: float):
         """
         Records a new open position in the database.
