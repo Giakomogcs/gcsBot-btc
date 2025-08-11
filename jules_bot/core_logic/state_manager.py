@@ -22,63 +22,18 @@ class StateManager:
         """Queries the database and returns the number of currently open trades."""
         return len(self.get_open_positions())
 
-    def get_total_capital_allocated(self) -> float:
-        """Queries all open trades and returns the sum of their initial USDT cost."""
-        open_positions = self.get_open_positions()
-        total_capital = 0.0
-        for position in open_positions:
-            total_capital += position.get('usd_value', 0.0)
-        return total_capital
-
-    def get_last_purchase_price(self) -> float:
+    def create_new_position(self, buy_result: dict, sell_target_price: float):
         """
-        Retrieves the purchase price of the most recent 'OPEN' trade.
-        Returns a default high price if no open trades are found.
+        Records a new open position in the database.
         """
-        open_positions = self.get_open_positions()
-        if not open_positions:
-            return float('inf')
-
-        # In a robust system, the query itself should order by time
-        last_position = sorted(open_positions, key=lambda p: p['time'], reverse=True)[0]
-        return last_position.get('purchase_price', float('inf'))
-
-    def create_new_position(self, buy_result: dict):
-        """
-        Calculates the target sell price and records a new open position in the database.
-        """
-        logger.info(f"Attempting to create new position from buy result: {buy_result}")
-
-        commission_rate = float(config_manager.get('STRATEGY_RULES', 'commission_rate'))
-        sell_factor = float(config_manager.get('STRATEGY_RULES', 'sell_factor'))
-        target_profit = float(config_manager.get('STRATEGY_RULES', 'target_profit'))
-
-        purchase_price = buy_result['price']
-
-        # Formula Implementation
-        numerator = purchase_price * (1 + commission_rate)
-        denominator = sell_factor * (1 - commission_rate)
-
-        if denominator == 0:
-            logger.error("Denominator is zero in sell target price calculation. Aborting.")
-            return
-
-        break_even_price = numerator / denominator
-        sell_target_price = break_even_price * (1 + target_profit)
-
-        logger.info(f"Calculated sell_target_price: {sell_target_price} for purchase_price: {purchase_price}")
-
-        # This function is now a passthrough and should be refactored.
-        # For now, we adapt it to call the new log_trade function.
-        # The logic for calculating sell_target_price should be moved to the bot/strategy itself.
+        logger.info(f"Creating new position for trade_id: {buy_result.get('trade_id')} with target sell price: {sell_target_price}")
 
         from jules_bot.core.schemas import TradePoint
 
-        # The bot_id is not part of the TradePoint schema. It is used for status, not individual trades.
-        # We now create a TradePoint object to enforce the schema.
         try:
             trade_point = TradePoint(
-                mode=buy_result.get('mode', 'backtest'), # Assume backtest if not provided
+                run_id=self.bot_id,
+                environment=buy_result.get('environment', 'backtest'),
                 strategy_name=buy_result.get('strategy_name', 'default'),
                 symbol=buy_result['symbol'],
                 trade_id=buy_result['trade_id'],
@@ -89,7 +44,8 @@ class StateManager:
                 usd_value=buy_result['usd_value'],
                 commission=buy_result.get('commission', 0.0),
                 commission_asset=buy_result.get('commission_asset', 'USDT'),
-                exchange_order_id=buy_result.get('exchange_order_id')
+                exchange_order_id=buy_result.get('exchange_order_id'),
+                sell_target_price=sell_target_price  # Pass the pre-calculated target price
             )
             self.db_manager.log_trade(trade_point)
         except KeyError as e:
@@ -105,7 +61,8 @@ class StateManager:
 
         try:
             trade_point = TradePoint(
-                mode=exit_data.get('mode', 'backtest'),
+                run_id=self.bot_id,
+                environment=exit_data.get('environment', 'backtest'),
                 strategy_name=exit_data.get('strategy_name', 'default'),
                 symbol=exit_data['symbol'],
                 trade_id=trade_id, # The ID of the trade being closed

@@ -70,8 +70,19 @@ class Backtester:
 
                     success, sell_result = self.mock_trader.execute_sell({'quantity': sell_quantity})
                     if success:
-                        commission_usd = sell_result['commission']
-                        realized_pnl_usd = (sell_result['price'] - position['price']) * sell_result['quantity'] - commission_usd
+                        # --- CORRECTED PNL CALCULATION ---
+                        buy_price = position['price']
+                        sell_price = sell_result['price']
+
+                        # Note: The mock_trader uses a 'commission_fee' from the [BACKTEST] section,
+                        # but for consistency in PnL calculation, we use the same commission_rate
+                        # as the live bot from [STRATEGY_RULES].
+                        commission_rate = float(strategy_rules.rules.get('commission_rate'))
+
+                        realized_pnl_usd = ((sell_price * (1 - commission_rate)) - (buy_price * (1 + commission_rate))) * sell_result['quantity']
+                        # --- END CORRECTED PNL CALCULATION ---
+
+                        commission_usd = sell_result['commission'] # This is the actual commission charged by mock_trader
                         hodl_asset_value_at_sell = hodl_asset_amount * sell_result['price']
 
                         decision_context = candle.to_dict()
@@ -97,52 +108,56 @@ class Backtester:
                         total_capital_allocated -= position['usd_value']
                         del open_positions[trade_id]
 
-            # 2. Check for a potential buy
+            # 2. Check for a potential buy (New "Adaptive Momentum Grid" Strategy)
             open_positions_count = len(open_positions)
-            buy_trigger_percentage = strategy_rules.get_next_buy_trigger(open_positions_count)
+            max_open_positions = int(config_manager.get('STRATEGY_RULES', 'max_open_positions', fallback=20))
 
-            if current_price <= last_buy_price * (1 - buy_trigger_percentage):
-                logger.info("Backtest: Buy condition met. Evaluating capital.")
+            if open_positions_count < max_open_positions:
+                market_data = candle.to_dict()
+                should_buy, regime, reason = strategy_rules.evaluate_buy_signal(market_data)
 
-                total_balance = self.mock_trader.get_account_balance()
-                capital_allocated_percent = (total_capital_allocated / (total_balance + total_capital_allocated)) * 100 if (total_balance + total_capital_allocated) > 0 else 0
-                base_amount = float(config_manager.get('TRADING_STRATEGY', 'usd_per_trade'))
-                buy_amount_usdt = strategy_rules.get_next_buy_amount(capital_allocated_percent, base_amount)
+                if should_buy:
+                    available_balance = self.mock_trader.get_account_balance()
+                    buy_amount_usdt = strategy_rules.get_next_buy_amount(available_balance)
+                    min_trade_size = float(config_manager.get('TRADING_STRATEGY', 'min_trade_size_usdt', fallback=10.0))
 
-                logger.debug(f"Backtest: Attempting to buy ${buy_amount_usdt}")
-                success, buy_result = self.mock_trader.execute_buy(buy_amount_usdt)
+                    if available_balance > 10 and buy_amount_usdt > min_trade_size:
+                        logger.debug(f"Backtest: {reason}. Attempting to buy ${buy_amount_usdt:.2f}")
+                        success, buy_result = self.mock_trader.execute_buy(buy_amount_usdt)
 
-                if success:
-                    new_trade_id = str(uuid.uuid4())
-                    buy_price = buy_result['price']
+                        if success:
+                            new_trade_id = str(uuid.uuid4())
+                            buy_price = buy_result['price']
+                            sell_target_price = strategy_rules.calculate_sell_target_price(buy_price)
 
-                    # Calculate sell target price
-                    commission_rate = float(strategy_rules.rules['commission_rate'])
-                    sell_factor = float(strategy_rules.rules['sell_factor'])
-                    target_profit = float(strategy_rules.rules['target_profit'])
-                    numerator = buy_price * (1 + commission_rate)
-                    denominator = sell_factor * (1 - commission_rate)
-                    break_even_price = numerator / denominator if denominator != 0 else float('inf')
-                    sell_target_price = break_even_price * (1 + target_profit)
+                            # Enhanced data logging
+                            decision_context = {
+                                "market_regime": regime,
+                                "buy_trigger_reason": reason,
+                                "ema_100_value": market_data.get('ema_100'),
+                                "ema_20_value": market_data.get('ema_20'),
+                                "lower_bollinger_band": market_data.get('bbl_20_2_0'),
+                                "regime_strength": None # Placeholder as per implementation
+                            }
 
-                    decision_context = candle.to_dict()
-                    decision_context.pop('symbol', None)
+                            trade_point = TradePoint(
+                                run_id=self.run_id, environment="backtest", strategy_name=strategy_name,
+                                symbol=symbol, trade_id=new_trade_id, exchange="backtest_engine",
+                                order_type="buy", price=buy_price, quantity=buy_result['quantity'],
+                                usd_value=buy_result['usd_value'], commission=buy_result['commission'],
+                                commission_asset="USDT", timestamp=current_time, decision_context=decision_context,
+                                sell_target_price=sell_target_price
+                            )
+                            self.db_manager.log_trade(trade_point)
 
-                    trade_point = TradePoint(
-                        run_id=self.run_id, environment="backtest", strategy_name=strategy_name,
-                        symbol=symbol, trade_id=new_trade_id, exchange="backtest_engine",
-                        order_type="buy", price=buy_price, quantity=buy_result['quantity'],
-                        usd_value=buy_result['usd_value'], commission=buy_result['commission'],
-                        commission_asset="USDT", timestamp=current_time, decision_context=decision_context,
-                        sell_target_price=sell_target_price
-                    )
-                    self.db_manager.log_trade(trade_point)
-
-                    position_data = trade_point.to_dict()
-                    position_data['sell_target_price'] = sell_target_price # Ensure it's in the dict for sell logic
-                    open_positions[new_trade_id] = position_data
-                    last_buy_price = buy_price
-                    total_capital_allocated += buy_result['usd_value']
+                            position_data = {
+                                'price': buy_price,
+                                'quantity': buy_result['quantity'],
+                                'usd_value': buy_result['usd_value'],
+                                'sell_target_price': sell_target_price
+                            }
+                            open_positions[new_trade_id] = position_data
+                            total_capital_allocated += buy_result['usd_value']
 
         self._generate_and_save_summary()
         logger.info(f"--- Backtest {self.run_id} finished ---")

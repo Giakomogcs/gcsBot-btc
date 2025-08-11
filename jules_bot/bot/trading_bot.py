@@ -76,8 +76,8 @@ class TradingBot:
 
                         # Add financial details to the position data for logging
                         original_quantity = float(position.get('quantity', 0))
-                        sell_quantity = original_quantity * 0.9  # Sell 90%
-                        hodl_asset_amount = original_quantity * 0.1 # Keep 10%
+                        sell_quantity = original_quantity * strategy_rules.sell_factor
+                        hodl_asset_amount = original_quantity - sell_quantity
 
                         # Create a copy to avoid modifying the original dict from state_manager
                         sell_position_data = position.copy()
@@ -86,14 +86,26 @@ class TradingBot:
                         success, sell_result = trader.execute_sell(sell_position_data, self.run_id, decision_context)
 
                         if success:
-                            # Calculate PnL and other details after successful sell
-                            commission_usd = sell_result.get('commission', 0) # Assuming commission is in USDT
-                            realized_pnl_usd = (current_price - float(position.get('price', 0))) * sell_quantity - commission_usd
+                            # --- CORRECTED PNL CALCULATION ---
+                            buy_price = float(position.get('price', 0))
+                            sell_price = float(sell_result.get('price'))
+
+                            commission_rate = float(strategy_rules.rules.get('commission_rate'))
+
+                            # This formula correctly accounts for commissions on both buy and sell side
+                            # for the portion of the asset that was sold.
+                            realized_pnl_usd = ((sell_price * (1 - commission_rate)) - (buy_price * (1 + commission_rate))) * sell_quantity
+
+                            # --- END CORRECTED PNL CALCULATION ---
+
                             hodl_asset_value_at_sell = hodl_asset_amount * current_price
+
+                            # The total commission for this sell transaction
+                            commission_usd = float(sell_result.get('commission', 0))
 
                             # Update sell_result with the calculated financial details for state update
                             sell_result.update({
-                                "commission_usd": commission_usd,
+                                "commission_usd": commission_usd, # Log the actual commission for the sell
                                 "realized_pnl_usd": realized_pnl_usd,
                                 "hodl_asset_amount": hodl_asset_amount,
                                 "hodl_asset_value_at_sell": hodl_asset_value_at_sell
@@ -104,25 +116,47 @@ class TradingBot:
                         else:
                             logger.error(f"Sell execution failed for position {trade_id}.")
 
-                # 3. Check for a potential buy
-                last_buy_price = state_manager.get_last_purchase_price()
+                # 3. Check for a potential buy (New "Adaptive Momentum Grid" Strategy)
                 open_positions_count = state_manager.get_open_positions_count()
-                buy_trigger_percentage = strategy_rules.get_next_buy_trigger(open_positions_count)
+                max_open_positions = int(config_manager.get('STRATEGY_RULES', 'max_open_positions', fallback=20))
 
-                if current_price <= last_buy_price * (1 - buy_trigger_percentage):
-                    logger.info("Buy condition met. Evaluating capital.")
-                    capital_allocated = state_manager.get_total_capital_allocated()
-                    total_balance = trader.get_account_balance()
-                    capital_allocated_percent = (capital_allocated / (total_balance + capital_allocated)) * 100 if (total_balance + capital_allocated) > 0 else 0
+                if open_positions_count < max_open_positions:
+                    market_data = final_candle.to_dict()
+                    should_buy, regime, reason = strategy_rules.evaluate_buy_signal(market_data)
 
-                    base_amount = float(config_manager.get('TRADING_STRATEGY', 'usd_per_trade'))
-                    buy_amount_usdt = strategy_rules.get_next_buy_amount(capital_allocated_percent, base_amount)
+                    if should_buy:
+                        logger.info(f"Buy signal triggered. Reason: {reason}. Evaluating capital.")
+                        available_balance = trader.get_account_balance()
 
-                    logger.info(f"Executing buy for ${buy_amount_usdt} USD.")
-                    success, buy_result = trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
-                    if success:
-                        logger.info("Buy successful. Creating new position.")
-                        state_manager.create_new_position(buy_result)
+                        if available_balance <= 0:
+                            logger.warning("Available balance is zero or less. Cannot execute buy.")
+                        else:
+                            buy_amount_usdt = strategy_rules.get_next_buy_amount(available_balance)
+                            min_trade_size = float(config_manager.get('TRADING_STRATEGY', 'min_trade_size_usdt', fallback=10.0))
+
+                            if buy_amount_usdt > min_trade_size:
+                                logger.info(f"Executing buy for ${buy_amount_usdt:.2f} USD.")
+
+                                # Enhanced data logging
+                                decision_context = {
+                                    "market_regime": regime,
+                                    "buy_trigger_reason": reason,
+                                    "ema_100_value": market_data.get('ema_100'),
+                                    "ema_20_value": market_data.get('ema_20'),
+                                    "lower_bollinger_band": market_data.get('bbl_20_2_0'),
+                                    "regime_strength": None # Placeholder
+                                }
+
+                                success, buy_result = trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
+                                if success:
+                                    logger.info("Buy successful. Calculating sell target and creating new position.")
+                                    purchase_price = float(buy_result.get('price'))
+                                    sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
+                                    state_manager.create_new_position(buy_result, sell_target_price)
+                            else:
+                                logger.warning(f"Calculated buy amount (${buy_amount_usdt:.2f}) is below the minimum threshold of ${min_trade_size}. Skipping buy.")
+                else:
+                    logger.info(f"Maximum open positions ({max_open_positions}) reached. No new buys will be considered.")
 
                 logger.info("--- Cycle complete. Waiting 60 seconds... ---")
                 time.sleep(60)

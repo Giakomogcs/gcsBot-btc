@@ -160,6 +160,7 @@ class Trader:
             self.db_manager.log_trade(trade_point)
 
             order['trade_id'] = trade_id
+            order['environment'] = self.environment # Add environment to the result
             return True, order
 
         except Exception as e:
@@ -219,6 +220,7 @@ class Trader:
             self.db_manager.log_trade(trade_point)
 
             order['trade_id'] = trade_id
+            order['environment'] = self.environment # Add environment to the result
             return True, order
 
         except Exception as e:

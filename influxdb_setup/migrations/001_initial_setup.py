@@ -24,8 +24,18 @@ def main():
         config_manager = ConfigManager()
         influx_config = config_manager.get_section('INFLUXDB')
 
-        url = f"http://{influx_config['host']}:{influx_config['port']}"
-        org_name = influx_config['org']
+        # Get host, port, and org from environment variables with sensible defaults
+        # This makes the script runnable both locally and in a container
+        host = os.getenv('INFLUXDB_HOST', 'localhost')
+        port = os.getenv('INFLUXDB_PORT', '8086')
+        org_name = os.getenv('INFLUXDB_ORG')
+
+        if not org_name:
+            print("❌ ERROR: INFLUXDB_ORG environment variable not set.")
+            print("Please set this to your desired InfluxDB organization name.")
+            sys.exit(1)
+
+        url = f"http://{host}:{port}"
 
         # Admin token must be provided via environment variable for initial setup
         admin_token = os.getenv("INFLUXDB_TOKEN")

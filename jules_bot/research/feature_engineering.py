@@ -34,6 +34,8 @@ def add_all_features(df: pd.DataFrame, live_mode: bool = False) -> pd.DataFrame:
     df_copy.ta.macd(fast=12, slow=26, signal=9, append=True, col_names=('macd_12_26_9', 'macd_hist_12_26_9', 'macd_signal_12_26_9'))
     df_copy.ta.atr(length=14, append=True, col_names=('atr_14',))
     df_copy.ta.bbands(length=20, std=2, append=True, col_names=('bbl_20_2_0', 'bbm_20_2_0', 'bbu_20_2_0', 'bbb_20_2_0', 'bbp_20_2_0'))
+    df_copy.ta.ema(length=20, append=True, col_names=('ema_20',))
+    df_copy.ta.ema(length=100, append=True, col_names=('ema_100',))
     if 'macd_hist_12_26_9' in df_copy.columns:
         df_copy.rename(columns={'macd_hist_12_26_9': 'macd_diff_12_26_9'}, inplace=True)
 
