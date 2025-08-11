@@ -12,9 +12,9 @@ class StrategyRules:
         """
         few_positions_threshold = int(self.rules.get('few_positions_threshold', 5))
         if open_positions_count < few_positions_threshold:
-            return float(self.rules['buy_trigger_few_positions'])
+            return float(self.rules.get('buy_trigger_few_positions', 0.01))
         else:
-            return float(self.rules['buy_trigger_many_positions'])
+            return float(self.rules.get('buy_trigger_many_positions', 0.02))
 
     def get_next_buy_amount(self, capital_allocated_percent: float, base_amount: float) -> float:
         """
@@ -24,6 +24,6 @@ class StrategyRules:
         """
         low_allocation_threshold = float(self.rules.get('low_allocation_threshold', 0.5))
         if capital_allocated_percent < low_allocation_threshold:
-            return base_amount * float(self.rules['buy_amount_low_allocation_multiplier'])
+            return base_amount * float(self.rules.get('buy_amount_low_allocation_multiplier', 1.0))
         else:
-            return base_amount * float(self.rules['buy_amount_high_allocation_multiplier'])
+            return base_amount * float(self.rules.get('buy_amount_high_allocation_multiplier', 0.6))
