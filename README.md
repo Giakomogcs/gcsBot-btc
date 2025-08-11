@@ -184,6 +184,22 @@ python run.py trade
 
 The bot will start, and its logs will be streamed to your terminal. Press `Ctrl+C` to stop it.
 
+**D. Using the Terminal User Interface (TUI)**
+The bot includes a terminal-based user interface (TUI) for monitoring status and performing manual actions.
+
+To use the TUI, you must have the bot running in either `test` or `trade` mode in one terminal. Then, in a **second terminal**, run the following command:
+
+```bash
+python run.py ui
+```
+
+This will launch the TUI, which will display:
+
+- The current bot status (mode, symbol, last update).
+- A table of all open positions.
+- An input field to manually buy a specific USD amount of the asset.
+- Buttons to force sell a selected position.
+
 ### Step 5: Managing the Environment
 
 - **View Logs**: To see the real-time logs from any service (e.g., `app` or `db`):
