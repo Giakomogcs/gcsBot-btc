@@ -66,6 +66,13 @@ class DisplayManager(App):
                     yield Static("Current Value: $0.00", id="current_value")
                     yield Static("Unrealized PnL: $0.00", id="unrealized_pnl")
 
+                yield Static("Strategy", classes="title")
+                with VerticalScroll(id="strategy_bar"):
+                    yield Static("Total Realized Profit: $0.00", id="total_realized_pnl")
+                    yield Static("BTC Saved (HODL): 0.00000000", id="total_btc_saved")
+                    yield Static("Next Buy Target: N/A", id="price_to_buy")
+                    yield Static("Next Sell Target: N/A", id="price_to_sell")
+
                 yield Static("Open Positions", classes="title")
                 yield DataTable(id="positions_table")
 
@@ -187,6 +194,32 @@ class DisplayManager(App):
         self.query_one("#total_investment").update(f"Total Investment: ${total_investment:,.2f}")
         self.query_one("#current_value").update(f"Current Value: ${current_value:,.2f}")
         self.query_one("#unrealized_pnl").update(f"Unrealized PnL: [bold {pnl_color}]${unrealized_pnl:,.2f}[/]")
+
+        # Update Strategy section
+        total_pnl = Decimal(state.get("total_realized_pnl", 0))
+        pnl_color = "green" if total_pnl >= 0 else "red"
+        self.query_one("#total_realized_pnl").update(f"Total Realized Profit: [bold {pnl_color}]${total_pnl:,.2f}[/]")
+
+        total_btc_saved = Decimal(state.get("total_btc_saved", 0))
+        self.query_one("#total_btc_saved").update(f"BTC Saved (HODL): {total_btc_saved:.8f}")
+
+        next_buy_price = Decimal(state.get("next_buy_price", 0))
+        if next_buy_price > 0 and self.current_btc_price > 0:
+            diff = self.current_btc_price - next_buy_price
+            diff_percent = (diff / self.current_btc_price) * 100
+            color = "red" if diff > 0 else "green"
+            self.query_one("#price_to_buy").update(f"Next Buy Target: ${next_buy_price:,.2f} ([{color}]{diff:,.2f} / {diff_percent:,.2f}%[/])")
+        else:
+            self.query_one("#price_to_buy").update("Next Buy Target: N/A")
+
+        next_sell_price = Decimal(state.get("next_sell_price", 0))
+        if next_sell_price > 0 and self.current_btc_price > 0:
+            diff = next_sell_price - self.current_btc_price
+            diff_percent = (diff / self.current_btc_price) * 100
+            color = "green" if diff > 0 else "red"
+            self.query_one("#price_to_sell").update(f"Next Sell Target: ${next_sell_price:,.2f} ([{color}]{diff:,.2f} / {diff_percent:,.2f}%[/])")
+        else:
+            self.query_one("#price_to_sell").update("Next Sell Target: N/A")
 
         # Restore selection if it still exists
         if current_selection in table.rows:
