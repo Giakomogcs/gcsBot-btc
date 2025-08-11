@@ -55,6 +55,7 @@ class StateManager:
                 trade_id=buy_result['trade_id'],
                 exchange=buy_result.get('exchange', 'simulated'),
                 order_type='buy',
+                status='OPEN',
                 price=buy_result['price'],
                 quantity=buy_result['quantity'],
                 usd_value=buy_result['usd_value'],

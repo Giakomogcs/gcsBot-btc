@@ -31,6 +31,7 @@ class TradePoint:
     symbol: str
     trade_id: str
     exchange: str
+    status: str # e.g., 'OPEN', 'CLOSED', 'TREASURED'
 
     # --- FIELDS (not indexed) ---
     order_type: str  # 'buy' or 'sell'
@@ -70,6 +71,7 @@ class TradePoint:
             .tag("symbol", self.symbol) \
             .tag("trade_id", self.trade_id) \
             .tag("exchange", self.exchange) \
+            .tag("status", self.status) \
             .field("order_type", self.order_type) \
             .field("price", self.price) \
             .field("quantity", self.quantity) \

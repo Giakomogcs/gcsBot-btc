@@ -166,7 +166,7 @@ class Trader:
                 timestamp=pd.to_datetime(order['transactTime'], unit='ms', utc=True).to_pydatetime(),
                 decision_context=decision_context
             )
-            self.db_manager.log_trade(trade_point)
+            # self.db_manager.log_trade(trade_point) # This is now handled by the StateManager
 
             # Standardize the output
             trade_result = {
@@ -237,7 +237,7 @@ class Trader:
                 hodl_asset_amount=position_data.get("hodl_asset_amount"),
                 hodl_asset_value_at_sell=position_data.get("hodl_asset_value_at_sell")
             )
-            self.db_manager.log_trade(trade_point)
+            # self.db_manager.log_trade(trade_point) # This is now handled by the StateManager
 
             # Standardize the output
             trade_result = {
