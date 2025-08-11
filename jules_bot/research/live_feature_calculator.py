@@ -9,7 +9,7 @@ from jules_bot.utils.logger import logger
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.core.exchange_connector import ExchangeManager
 from jules_bot.database.data_manager import DataManager
-from jules_bot.bot.feature_engineering import add_all_features
+from jules_bot.research.feature_engineering import add_all_features
 
 class LiveFeatureCalculator:
     """
