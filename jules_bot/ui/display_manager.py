@@ -1,61 +1,203 @@
-from textual.app import App
-from textual.widgets import Header, Footer, DataTable, Static
-from jules_bot.database.database_manager import DatabaseManager
+from datetime import datetime
+import json
+import sys
+import os
+import time
+from decimal import Decimal, InvalidOperation
 
-class StatusWidget(Static):
-    """A widget to display bot status."""
+from textual.app import App, ComposeResult
+from textual.containers import VerticalScroll, Horizontal
+from textual.widgets import Header, Footer, DataTable, Input, Button, Label, Static, RichLog
+from textual.timer import Timer
+from textual.validation import Validator, ValidationResult
+
+# Add project root to path for imports if running as a script
+if __name__ == "__main__":
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
+class NumberValidator(Validator):
+    """A validator to ensure the input is a positive number."""
+    def validate(self, value: str) -> ValidationResult:
+        try:
+            if float(value) > 0:
+                return self.success()
+            else:
+                return self.failure("Must be a positive number.")
+        except ValueError:
+            return self.failure("Invalid number format.")
+
+class DisplayManager(App):
+    """A Textual app to display and control the trading bot's status."""
+
+    BINDINGS = [("d", "toggle_dark", "Toggle dark mode")]
+    CSS_PATH = "jules_bot.css" # Assumes CSS is in the same directory
+    STATE_FILE = "/tmp/bot_state.json"
+    COMMAND_DIR = "commands"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.border_title = "Bot Status"
+        self.update_timer: Timer | None = None
+        self.selected_trade_id: str | None = None
+        self.current_btc_price: Decimal = Decimal(0)
+        os.makedirs(self.COMMAND_DIR, exist_ok=True)
 
-    def update_status(self, status: dict):
-        if status:
-            self.update(
-                f"Bot ID: {status.get('bot_id', 'N/A')}\n"
-                f"Is Running: {status.get('is_running', 'N/A')}\n"
-                f"Mode: {status.get('mode', 'N/A')}\n"
-                f"Open Positions: {status.get('open_positions', 'N/A')}\n"
-                f"Portfolio Value (USD): {status.get('portfolio_value_usd', 'N/A')}"
-            )
-        else:
-            self.update("No status data available.")
-
-class JulesBotApp(App):
-    def __init__(self, db_manager: DatabaseManager, display_mode: str, **kwargs):
-        super().__init__(**kwargs)
-        self.db_manager = db_manager
-        self.display_mode = display_mode
-        self.status_widget = StatusWidget()
-        self.history_table = DataTable()
-
-    def compose(self):
+    def compose(self) -> ComposeResult:
+        """Create child widgets for the app."""
         yield Header()
-        yield self.status_widget
-        yield self.history_table
+        with Horizontal(id="main_container"):
+            with VerticalScroll(id="left_pane"):
+                yield Static("Bot Control", classes="title")
+                yield Label("Manual Buy (USD):")
+                yield Input(placeholder="e.g., 100.00", id="manual_buy_input", validators=[NumberValidator()])
+                yield Button("FORCE BUY", id="force_buy_button", variant="primary")
+                yield Static("Live Log", classes="title", id="log_title")
+                yield RichLog(id="log_display", wrap=True, markup=True)
+
+            with VerticalScroll(id="right_pane"):
+                yield Static("Bot Status", classes="title")
+                with Horizontal(id="status_bar"):
+                    yield Static("Mode: N/A", id="status_mode")
+                    yield Static("Symbol: N/A", id="status_symbol")
+                    yield Static("Price: N/A", id="status_price")
+
+                yield Static("Portfolio", classes="title")
+                with Horizontal(id="portfolio_bar"):
+                    yield Static("Total Investment: $0.00", id="total_investment")
+                    yield Static("Current Value: $0.00", id="current_value")
+                    yield Static("Unrealized PnL: $0.00", id="unrealized_pnl")
+
+                yield Static("Open Positions", classes="title")
+                yield DataTable(id="positions_table")
+
+                with Horizontal(id="action_bar", classes="hidden"):
+                    yield Button("Force Sell Selected", id="force_sell_button", variant="error")
+                    yield Button("Mark as Treasury", id="to_treasury_button", variant="success")
         yield Footer()
 
     def on_mount(self) -> None:
-        """Called when the app is mounted."""
-        # Set a timer to refresh the data every few seconds
-        self.set_interval(5, self.update_dashboard)
-        self.update_dashboard() # Initial update
+        """Called when the app is first mounted."""
+        table = self.query_one(DataTable)
+        table.cursor_type = "row"
+        table.add_columns("ID", "Entry Price", "Quantity", "Value", "Status")
+        self.update_timer = self.set_interval(1.0, self.update_dashboard)
+        self.query_one("#manual_buy_input").focus()
+        self.log_display = self.query_one(RichLog)
+        self.log_display.write("[bold green]UI mounted. Waiting for bot state...[/]")
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected):
+        self.selected_trade_id = event.row_key.value
+        self.query_one("#action_bar").remove_class("hidden")
+
+    def write_command_file(self, command: dict):
+        """Writes a command to a uniquely named JSON file."""
+        filename = f"cmd_{int(time.time() * 1000)}.json"
+        filepath = os.path.join(self.COMMAND_DIR, filename)
+        try:
+            with open(filepath, "w") as f:
+                json.dump(command, f)
+            self.log_display.write(f"[blue]UI: Sent command -> {command}[/]")
+        except IOError as e:
+            self.log_display.write(f"[bold red]UI ERROR: Could not write command file: {e}[/]")
+
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "force_buy_button":
+            input_widget = self.query_one("#manual_buy_input", Input)
+            validation_result = input_widget.validate(input_widget.value)
+
+            if not validation_result.is_valid:
+                self.log_display.write(f"[bold red]UI ERROR: {validation_result.failure_description}[/]")
+                return
+
+            try:
+                amount_usd = float(input_widget.value)
+                command = {"type": "force_buy", "amount_usd": amount_usd}
+                self.write_command_file(command)
+                input_widget.value = ""
+            except ValueError:
+                self.log_display.write("[bold red]UI ERROR: Invalid amount for buy command.[/]")
+
+        elif self.selected_trade_id:
+            if event.button.id == "force_sell_button":
+                command = {"type": "force_sell", "trade_id": self.selected_trade_id}
+                self.write_command_file(command)
+            elif event.button.id == "to_treasury_button":
+                command = {"type": "to_treasury", "trade_id": self.selected_trade_id}
+                self.write_command_file(command)
+
+            self.query_one("#action_bar").add_class("hidden")
+            self.query_one(DataTable).cursor_row = -1
+            self.selected_trade_id = None
 
     def update_dashboard(self) -> None:
-        """
-        Fetches fresh data from InfluxDB and updates all UI widgets.
-        This is the core of the dynamic dashboard.
-        """
-        if self.display_mode == "trade":
-            bot_status = self.db_manager.get_latest_bot_status("jules_bot_main")
-            self.status_widget.update_status(bot_status)
+        """Reads the state file and updates all UI widgets."""
+        try:
+            with open(self.STATE_FILE, "r") as f:
+                state = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return
 
-        # For both modes, we can show the trade history
-        trade_history_df = self.db_manager.get_trade_history("jules_bot_main") # or a backtest_id
+        header = self.query_one(Header)
+        header.sub_title = f"Last Update: {datetime.fromtimestamp(state.get('timestamp', 0)).strftime('%Y-%m-%d %H:%M:%S')}"
         
-        self.history_table.clear()
-        if not trade_history_df.empty:
-            self.history_table.add_columns(*trade_history_df.columns)
-            self.history_table.add_rows(trade_history_df.to_records())
+        self.query_one("#status_mode").update(f"Mode: {state.get('mode', 'N/A').upper()}")
+        self.query_one("#status_symbol").update(f"Symbol: {state.get('symbol', 'N/A')}")
 
-        self.screen.refresh()
+        try:
+            self.current_btc_price = Decimal(state.get('current_price', '0'))
+            self.query_one("#status_price").update(f"Price: ${self.current_btc_price:,.2f}")
+        except (InvalidOperation, TypeError):
+            self.current_btc_price = Decimal(0)
+
+        table = self.query_one(DataTable)
+        current_selection = self.selected_trade_id
+        table.clear()
+
+        total_investment = Decimal(0)
+        current_value = Decimal(0)
+
+        positions = state.get("open_positions", [])
+        if not positions:
+            table.add_row("No open positions.")
+        else:
+            for pos in positions:
+                try:
+                    entry_price = Decimal(pos.get('price', '0'))
+                    quantity = Decimal(pos.get('quantity', '0'))
+                    pos_value = quantity * self.current_btc_price
+
+                    total_investment += Decimal(pos.get('usd_value', '0'))
+                    current_value += pos_value
+
+                    short_id = pos.get('trade_id', 'N/A').split('-')[0]
+
+                    table.add_row(
+                        short_id,
+                        f"${entry_price:,.2f}",
+                        f"{quantity:.8f}",
+                        f"${pos_value:,.2f}",
+                        pos.get('status', 'OPEN'),
+                        key=pos.get('trade_id')
+                    )
+                except (InvalidOperation, TypeError):
+                    table.add_row(pos.get('trade_id', 'ERR'), "Data Error", "", "", "", key=pos.get('trade_id'))
+
+        unrealized_pnl = current_value - total_investment
+        pnl_color = "green" if unrealized_pnl >= 0 else "red"
+
+        self.query_one("#total_investment").update(f"Total Investment: ${total_investment:,.2f}")
+        self.query_one("#current_value").update(f"Current Value: ${current_value:,.2f}")
+        self.query_one("#unrealized_pnl").update(f"Unrealized PnL: [bold {pnl_color}]${unrealized_pnl:,.2f}[/]")
+
+        # Restore selection if it still exists
+        if current_selection in table.rows:
+            self.selected_trade_id = current_selection
+            table.cursor_row = table.get_row_index(current_selection)
+            self.query_one("#action_bar").remove_class("hidden")
+        else:
+            self.selected_trade_id = None
+            self.query_one("#action_bar").add_class("hidden")
+
+
+if __name__ == '__main__':
+    app = DisplayManager()
+    app.run()

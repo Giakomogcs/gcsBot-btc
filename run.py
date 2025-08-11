@@ -101,12 +101,20 @@ def build():
 
 # --- Comandos da Aplicação ---
 
-def _run_in_container(command: list, env_vars: dict = {}):
-    """Executa um comando Python dentro do container 'app', mostrando o output em tempo real."""
+def _run_in_container(command: list, env_vars: dict = {}, interactive: bool = False):
+    """
+    Executa um comando Python dentro do container 'app'.
+    - Modo Padrão (interactive=False): Captura e exibe o output em tempo real, ideal para logs.
+    - Modo Interativo (interactive=True): Anexa o terminal ao processo, necessário para TUIs.
+    """
     try:
         docker_cmd = get_docker_compose_command()
         
         exec_cmd = docker_cmd + ["exec"]
+        # O modo interativo do Docker requer -it para alocar um pseudo-TTY
+        if interactive:
+            exec_cmd.append("-it")
+
         for key, value in env_vars.items():
             exec_cmd.extend(["-e", f"{key}={value}"])
         
@@ -114,22 +122,31 @@ def _run_in_container(command: list, env_vars: dict = {}):
         container_command = ["app", "python"] + command
         exec_cmd.extend(container_command)
         
-        print(f"   (executando: `{' '.join(docker_cmd)} exec {' '.join(container_command)}`)")
+        print(f"   (executando: `{' '.join(exec_cmd)}`)")
 
-        # Usamos Popen para streaming de output em tempo real
-        process = subprocess.Popen(exec_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, encoding='utf-8', errors='replace')
-        
-        # Lê e imprime cada linha de output assim que ela aparece
-        for line in iter(process.stdout.readline, ''):
-            print(line, end='')
-        
-        process.wait()
-        process.stdout.close()
-        
-        if process.returncode != 0:
-            print(f"\n❌ Comando falhou com código de saída: {process.returncode}")
-            return False
-        return True
+        if interactive:
+            # Para TUIs, precisamos que o processo anexe ao terminal do host.
+            # `subprocess.run` sem capturar output e com `check=False` é ideal.
+            # Deixamos o processo filho controlar o terminal.
+            result = subprocess.run(exec_cmd, check=False)
+            if result.returncode != 0:
+                print(f"\n❌ Comando interativo finalizado com código de saída: {result.returncode}")
+            return result.returncode == 0
+        else:
+            # Para logs, usamos Popen para streaming de output em tempo real
+            process = subprocess.Popen(exec_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, encoding='utf-8', errors='replace')
+
+            # Lê e imprime cada linha de output assim que ela aparece
+            for line in iter(process.stdout.readline, ''):
+                print(line, end='')
+
+            process.wait()
+            process.stdout.close()
+
+            if process.returncode != 0:
+                print(f"\n❌ Comando falhou com código de saída: {process.returncode}")
+                return False
+            return True
 
     except Exception as e:
         print(f"❌ Ocorreu um erro ao executar o comando no container: {e}")
@@ -183,7 +200,8 @@ def ui():
     print("🖥️  Iniciando a Interface de Usuário (TUI)...")
     print("   Lembre-se que o bot (usando 'trade' ou 'test') deve estar rodando em outro terminal.")
     _run_in_container(
-        command=["jules_bot/ui/app.py"]
+        command=["jules_bot/ui/app.py"],
+        interactive=True
     )
 
 if __name__ == "__main__":

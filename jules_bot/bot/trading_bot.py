@@ -25,19 +25,23 @@ class TradingBot:
         self.symbol = config_manager.get('APP', 'symbol')
         self.state_file_path = "/tmp/bot_state.json"
 
-    def _write_state_to_file(self, open_positions: list):
+    def _write_state_to_file(self, open_positions: list, current_price: float):
         """Saves the current bot state to a JSON file for the UI to read."""
         state = {
             "mode": self.mode,
             "run_id": self.run_id,
             "symbol": self.symbol,
             "timestamp": time.time(),
+            "current_price": str(current_price),
             "open_positions": open_positions
         }
         try:
-            with open(self.state_file_path, "w") as f:
+            # Use atomic write to prevent partial reads from the UI
+            temp_path = self.state_file_path + ".tmp"
+            with open(temp_path, "w") as f:
                 json.dump(state, f, indent=4)
-        except IOError as e:
+            os.rename(temp_path, self.state_file_path)
+        except (IOError, OSError) as e:
             logger.error(f"Could not write to state file {self.state_file_path}: {e}")
 
     def _handle_ui_commands(self, trader, state_manager, strategy_rules):
@@ -133,7 +137,7 @@ class TradingBot:
                 logger.info(f"Found {len(open_positions)} open position(s).")
 
                 # Update UI state file
-                self._write_state_to_file(open_positions)
+                self._write_state_to_file(open_positions, float(current_price))
 
                 for position in open_positions:
                     trade_id = position.get('trade_id')

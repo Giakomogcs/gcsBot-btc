@@ -52,8 +52,18 @@ class Trader:
             api_secret = binance_config.get('api_secret')
 
             if not api_key or not api_secret:
-                logger.error(f"Binance API Key/Secret for '{self.mode}' mode not found.")
-                return None
+                mode_name = 'TESTNET' if use_testnet else 'LIVE'
+                key_name = 'BINANCE_TESTNET_API_KEY' if use_testnet else 'BINANCE_API_KEY'
+                secret_name = 'BINANCE_TESTNET_API_SECRET' if use_testnet else 'BINANCE_API_SECRET'
+
+                error_msg = (
+                    f"Binance API Key/Secret for '{mode_name}' mode not found.\n"
+                    f"Please ensure the following environment variables are set in your .env file:\n"
+                    f"  - {key_name}\n"
+                    f"  - {secret_name}"
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg)
             
             requests_params = {"timeout": 30}
             client = Client(api_key, api_secret, tld='com', testnet=use_testnet, requests_params=requests_params)
