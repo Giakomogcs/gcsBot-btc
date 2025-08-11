@@ -168,9 +168,20 @@ class Trader:
             )
             self.db_manager.log_trade(trade_point)
 
-            order['trade_id'] = trade_id
-            order['environment'] = self.environment # Add environment to the result
-            return True, order
+            # Standardize the output
+            trade_result = {
+                "trade_id": trade_id,
+                "environment": self.environment,
+                "symbol": self.symbol,
+                "price": price,
+                "quantity": quantity,
+                "usd_value": usd_value,
+                "commission": commission,
+                "commission_asset": commission_asset,
+                "exchange_order_id": order.get('orderId'),
+                "timestamp": order['transactTime']
+            }
+            return True, trade_result
 
         except Exception as e:
             logger.error(f"ERROR EXECUTING BUY (Trade ID: {trade_id}): {e}", exc_info=True)
@@ -228,9 +239,21 @@ class Trader:
             )
             self.db_manager.log_trade(trade_point)
 
-            order['trade_id'] = trade_id
-            order['environment'] = self.environment # Add environment to the result
-            return True, order
+            # Standardize the output
+            trade_result = {
+                "trade_id": trade_id,
+                "environment": self.environment,
+                "symbol": self.symbol,
+                "price": price,
+                "quantity": quantity,
+                "usd_value": usd_value,
+                "commission": commission,
+                "commission_asset": commission_asset,
+                "exchange_order_id": order.get('orderId'),
+                "timestamp": order['transactTime'],
+                **decision_context # Pass through any extra data like PnL
+            }
+            return True, trade_result
 
         except Exception as e:
             logger.error(f"ERROR EXECUTING SELL (Trade ID: {trade_id}): {e}", exc_info=True)

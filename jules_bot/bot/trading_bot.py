@@ -25,19 +25,15 @@ class TradingBot:
         self.symbol = config_manager.get('APP', 'symbol')
         self.state_file_path = "/tmp/bot_state.json"
 
-    def _write_state_to_file(self, open_positions: list, current_price: float, enhanced_metrics: dict = None):
+    def _write_state_to_file(self, open_positions: list, current_price: float):
         """Saves the current bot state to a JSON file for the UI to read."""
-        if enhanced_metrics is None:
-            enhanced_metrics = {}
-
         state = {
             "mode": self.mode,
             "run_id": self.run_id,
             "symbol": self.symbol,
             "timestamp": time.time(),
             "current_price": str(current_price),
-            "open_positions": open_positions,
-            **enhanced_metrics
+            "open_positions": open_positions
         }
         try:
             # Use atomic write to prevent partial reads from the UI
@@ -48,77 +44,46 @@ class TradingBot:
         except (IOError, OSError) as e:
             logger.error(f"Could not write to state file {self.state_file_path}: {e}")
 
-    def _handle_ui_commands(self, trader: Trader, state_manager: StateManager, strategy_rules: StrategyRules, current_price: float):
+    def _handle_ui_commands(self, trader, state_manager, strategy_rules):
         """Checks for and processes command files from the UI."""
         command_dir = "commands"
         if not os.path.exists(command_dir):
             return
 
-        state_changed = False
         for filename in os.listdir(command_dir):
-            if not filename.endswith(".json"):
-                continue
+            if filename.endswith(".json"):
+                filepath = os.path.join(command_dir, filename)
+                try:
+                    with open(filepath, "r") as f:
+                        command = json.load(f)
 
-            filepath = os.path.join(command_dir, filename)
-            try:
-                with open(filepath, "r") as f:
-                    command = json.load(f)
+                    cmd_type = command.get("type")
+                    logger.info(f"Processing UI command: {command}")
 
-                cmd_type = command.get("type")
-                logger.info(f"Processing UI command: {command}")
+                    if cmd_type == "force_buy":
+                        amount_usd = command.get("amount_usd")
+                        if amount_usd:
+                            trader.execute_buy(amount_usd, self.run_id, {"reason": "manual_override"})
 
-                if cmd_type == "force_buy":
-                    amount_usd = command.get("amount_usd")
-                    if amount_usd:
-                        success, buy_result = trader.execute_buy(amount_usd, self.run_id, {"reason": "manual_override"})
-                        if success:
-                            purchase_price = float(buy_result.get('price'))
-                            sell_target = strategy_rules.calculate_sell_target_price(purchase_price)
-                            state_manager.create_new_position(buy_result, sell_target)
-                            state_changed = True
-                        else:
-                            logger.error("Manual buy command failed to execute.")
-
-                elif cmd_type == "force_sell":
-                    trade_id = command.get("trade_id")
-                    if trade_id:
-                        open_positions = state_manager.get_open_positions()
-                        position_to_sell = next((p for p in open_positions if p.get('trade_id') == trade_id), None)
-                        if position_to_sell:
-                            # Replicate main loop's sell logic for consistency
-                            sell_position_data = position_to_sell.copy()
-                            sell_position_data['quantity'] = float(position_to_sell.get('quantity', 0))
-                            
-                            success, sell_result = trader.execute_sell(sell_position_data, self.run_id, {"reason": "manual_override"})
-                            if success:
-                                # This is a simplified PnL calculation for manual sells.
-                                # A more robust implementation might need more context.
-                                buy_price = float(position_to_sell.get('price', 0))
-                                sell_price = float(sell_result.get('price'))
-                                quantity = float(sell_result.get('quantity'))
-                                commission_rate = float(strategy_rules.rules.get('commission_rate', 0.001))
-                                pnl = ((sell_price * (1 - commission_rate)) - (buy_price * (1 + commission_rate))) * quantity
-                                sell_result['realized_pnl'] = pnl
-
-                                state_manager.close_position(trade_id, sell_result)
-                                state_changed = True
+                    elif cmd_type == "force_sell":
+                        trade_id = command.get("trade_id")
+                        if trade_id:
+                            open_positions = state_manager.get_open_positions()
+                            position_to_sell = next((p for p in open_positions if p.get('trade_id') == trade_id), None)
+                            if position_to_sell:
+                                # Mimic the data structure needed for trader.execute_sell
+                                sell_position_data = position_to_sell.copy()
+                                sell_position_data['quantity'] = float(position_to_sell.get('quantity', 0))
+                                trader.execute_sell(sell_position_data, self.run_id, {"reason": "manual_override"})
                             else:
-                                logger.error(f"Manual sell for trade_id {trade_id} failed to execute.")
-                        else:
-                            logger.warning(f"Could not find open position with trade_id: {trade_id} for force_sell.")
+                                logger.warning(f"Could not find open position with trade_id: {trade_id} for force_sell.")
 
-                os.remove(filepath)
+                    os.remove(filepath) # Remove command file after processing
 
-            except Exception as e:
-                logger.error(f"Error processing command file {filename}: {e}", exc_info=True)
-
-        if state_changed:
-            logger.info("State changed by UI command, updating dashboard immediately.")
-            # Fetch fresh data and update the UI
-            open_positions = state_manager.get_open_positions()
-            # For immediate updates, we don't calculate all enhanced metrics to save time.
-            # The next full cycle will provide them.
-            self._write_state_to_file(open_positions, current_price, enhanced_metrics={})
+                except Exception as e:
+                    logger.error(f"Error processing command file {filename}: {e}", exc_info=True)
+                    # Optionally, move to an 'error' directory instead of deleting
+                    # os.rename(filepath, os.path.join(command_dir, "error", filename))
 
 
     def run(self):
@@ -154,48 +119,26 @@ class TradingBot:
             try:
                 logger.info("--- Starting new trading cycle ---")
 
-                # 1. Get the latest market data first to have current_price
+                # 0. Check for and handle any UI commands
+                self._handle_ui_commands(trader, state_manager, strategy_rules)
+
+                # 1. Get the latest market data with all features
                 final_candle = feature_calculator.get_current_candle_with_features()
                 if final_candle.empty:
                     logger.warning("Could not generate final candle with features. Skipping cycle.")
                     time.sleep(10)
                     continue
 
-                current_price = float(final_candle['close'])
+                current_price = final_candle['close']
                 decision_context = final_candle.to_dict()
 
-                # 2. Check for and handle any UI commands now that we have the price
-                self._handle_ui_commands(trader, state_manager, strategy_rules, current_price)
-
-                # 3. Gather data for state update
+                # 2. Check for potential sales
                 open_positions = state_manager.get_open_positions()
                 logger.info(f"Found {len(open_positions)} open position(s).")
-                
-                # 4. Calculate enhanced metrics for the UI
-                trade_history = state_manager.db_manager.get_trade_history(self.run_id)
-                total_pnl = 0
-                total_btc_saved = 0
-                if not trade_history.empty:
-                    sell_trades = trade_history[trade_history['order_type'] == 'sell']
-                    total_pnl = sell_trades['realized_pnl_usd'].sum()
-                    total_btc_saved = sell_trades['hodl_asset_amount'].sum()
 
-                next_sell_price = min([p.get('sell_target_price', float('inf')) for p in open_positions]) if open_positions else 0
-                
-                # Proxy for next buy price based on strategy inspection
-                next_buy_price = final_candle.get('bbl_20_2.0', 0)
+                # Update UI state file
+                self._write_state_to_file(open_positions, float(current_price))
 
-                enhanced_metrics = {
-                    "total_realized_pnl": total_pnl,
-                    "total_btc_saved": total_btc_saved,
-                    "next_sell_price": next_sell_price,
-                    "next_buy_price": next_buy_price,
-                }
-
-                # 5. Update UI state file for the regular interval
-                self._write_state_to_file(open_positions, current_price, enhanced_metrics)
-
-                # 6. Check for potential sales
                 for position in open_positions:
                     trade_id = position.get('trade_id')
                     target_price = position.get('sell_target_price', float('inf'))
