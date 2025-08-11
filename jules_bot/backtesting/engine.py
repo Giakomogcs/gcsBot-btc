@@ -11,10 +11,23 @@ from jules_bot.core.schemas import TradePoint
 from jules_bot.research.feature_engineering import add_all_features
 
 class Backtester:
-    def __init__(self, days: int):
-        self.days = days
+    def __init__(self, days: int = None, start_date: str = None, end_date: str = None):
         self.run_id = f"backtest_{uuid.uuid4()}"
-        logger.info(f"Initializing new backtest run with ID: {self.run_id} for the last {self.days} days.")
+        
+        log_msg = ""
+        if days:
+            self.start_date_str = f"-{days}d"
+            self.end_date_str = "now()"
+            log_msg = f"Initializing new backtest run with ID: {self.run_id} for the last {days} days."
+        elif start_date and end_date:
+            # Format dates to RFC3339 format for InfluxDB, which is timezone-aware
+            self.start_date_str = f"{start_date}T00:00:00Z"
+            self.end_date_str = f"{end_date}T23:59:59Z"
+            log_msg = f"Initializing new backtest run with ID: {self.run_id} from {start_date} to {end_date}."
+        else:
+            raise ValueError("Backtester must be initialized with either 'days' or both 'start_date' and 'end_date'.")
+
+        logger.info(log_msg)
 
         db_config = config_manager.get_db_config()
         db_config['bucket'] = config_manager.get('INFLUXDB', 'bucket_backtest')
@@ -23,10 +36,12 @@ class Backtester:
 
         symbol = config_manager.get('APP', 'symbol')
         interval = config_manager.get('DATA', 'interval', fallback='1m')
+        
         price_data = self.data_manager.get_price_history(
             symbol=symbol,
             interval=interval,
-            start_date=f"-{self.days}d"
+            start_date=self.start_date_str,
+            end_date=self.end_date_str
         )
 
         if price_data.empty:

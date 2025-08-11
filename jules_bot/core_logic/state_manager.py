@@ -22,6 +22,22 @@ class StateManager:
         """Queries the database and returns the number of currently open trades."""
         return len(self.get_open_positions())
 
+    def get_last_purchase_price(self) -> float:
+        """
+        Retrieves the purchase price of the most recent 'buy' trade.
+        Returns float('inf') if no open positions are found.
+        """
+        open_positions = self.get_open_positions()
+        if not open_positions:
+            return float('inf')
+
+        # Sort by time to find the most recent position.
+        # The field name for time in the dictionary from InfluxDB is '_time'.
+        latest_position = sorted(open_positions, key=lambda p: p['_time'], reverse=True)[0]
+        
+        # The field for price is 'price'.
+        return latest_position.get('price', float('inf'))
+
     def create_new_position(self, buy_result: dict, sell_target_price: float):
         """
         Records a new open position in the database.

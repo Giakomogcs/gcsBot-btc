@@ -7,9 +7,10 @@ class StrategyRules:
         self.base_usd_per_trade = float(self.rules.get('base_usd_per_trade', 20.0))
         self.sell_factor = float(self.rules.get('sell_factor', 0.9))
 
-    def evaluate_buy_signal(self, market_data: dict) -> (bool, str, str):
+    def evaluate_buy_signal(self, market_data: dict, open_positions_count: int) -> (bool, str, str):
         """
         Evaluates if a buy signal is present based on the market regime.
+        Uses a more aggressive strategy if there are no open positions.
         Returns a tuple of (should_buy, regime, reason).
         """
         current_price = market_data.get('close')
@@ -21,19 +22,30 @@ class StrategyRules:
         if any(v is None for v in [current_price, high_price, ema_100, ema_20, bbl]):
             return False, "unknown", "Not enough indicator data"
 
-        # Determine market regime
+        # --- Aggressive Strategy for First Entry ---
+        if open_positions_count == 0:
+            if current_price > ema_100:
+                # Aggressive uptrend entry: Buy if price is simply above the 20 EMA
+                if current_price > ema_20:
+                    return True, "uptrend", "Aggressive first entry (price > ema_20)"
+            else:
+                # Aggressive downtrend entry: Use existing volatility breakout signal
+                if current_price <= bbl:
+                    return True, "downtrend", "Aggressive first entry (volatility breakout)"
+
+        # --- Standard Strategy for Subsequent Entries ---
         if current_price > ema_100:
             regime = "uptrend"
-            # Uptrend Regime Logic
+            # Standard Uptrend Logic: Wait for a pullback to the 20 EMA
             if high_price > ema_20 and current_price < ema_20:
                 return True, regime, "Uptrend pullback"
         else:
             regime = "downtrend"
-            # Downtrend Regime Logic
+            # Standard Downtrend Logic: Volatility breakout
             if current_price <= bbl:
                 return True, regime, "Downtrend volatility breakout"
 
-        return False, regime, "No signal"
+        return False, "unknown", "No signal"
 
     def get_next_buy_amount(self, available_balance: float) -> float:
         """

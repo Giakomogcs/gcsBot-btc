@@ -35,9 +35,17 @@ class DataManager:
         if not self.query_api:
             self.logger.error("Query API do InfluxDB não inicializada. Leitura abortada.")
             return pd.DataFrame()
+
+        # --- CORREÇÃO ---
+        # O bucket correto é obtido a partir do db_manager, que já foi 
+        # configurado com o bucket certo (seja de backtest ou de produção).
+        bucket = self.db_manager.bucket
+        if not bucket:
+            self.logger.error("Bucket do InfluxDB não configurado no db_manager.")
+            return pd.DataFrame()
         
         flux_query = f'''
-            from(bucket:"{self.config.database.bucket}")
+            from(bucket:"{bucket}")
                 |> range(start: {start_date}, stop: {end_date}) 
                 |> filter(fn: (r) => r._measurement == "{measurement}") 
                 |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
