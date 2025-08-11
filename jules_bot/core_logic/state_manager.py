@@ -55,9 +55,9 @@ class StateManager:
 
         purchase_price = buy_result['price']
 
-        # Formula Implementation
+        # Corrected Formula Implementation
         numerator = purchase_price * (1 + commission_rate)
-        denominator = sell_factor * (1 - commission_rate)
+        denominator = (1 - commission_rate) # sell_factor should not be here
 
         if denominator == 0:
             logger.error("Denominator is zero in sell target price calculation. Aborting.")

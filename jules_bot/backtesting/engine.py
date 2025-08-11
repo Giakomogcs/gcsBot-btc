@@ -139,10 +139,9 @@ class Backtester:
 
                                 # Calculate sell target price
                                 commission_rate = float(strategy_rules.rules['commission_rate'])
-                                sell_factor = float(strategy_rules.rules['sell_factor'])
                                 target_profit = float(strategy_rules.rules['target_profit'])
                                 numerator = buy_price * (1 + commission_rate)
-                                denominator = sell_factor * (1 - commission_rate)
+                                denominator = (1 - commission_rate) # sell_factor should not be here
                                 break_even_price = numerator / denominator if denominator != 0 else float('inf')
                                 sell_target_price = break_even_price * (1 + target_profit)
 
