@@ -97,52 +97,76 @@ class Backtester:
                         total_capital_allocated -= position['usd_value']
                         del open_positions[trade_id]
 
-            # 2. Check for a potential buy
+            # 2. Check for a potential buy (New "Adaptive Momentum Grid" Strategy)
             open_positions_count = len(open_positions)
-            buy_trigger_percentage = strategy_rules.get_next_buy_trigger(open_positions_count)
+            max_open_positions = int(config_manager.get('STRATEGY_RULES', 'max_open_positions', fallback=20))
 
-            if current_price <= last_buy_price * (1 - buy_trigger_percentage):
-                logger.info("Backtest: Buy condition met. Evaluating capital.")
+            if open_positions_count >= max_open_positions:
+                pass # Silently skip buying if max positions are reached in backtesting
+            else:
+                # Extract features from the candle
+                ema_100 = candle.get('ema_100')
+                ema_20 = candle.get('ema_20')
+                bbl = candle.get('bbl_20_2_0')
+                open_price = candle.get('open')
 
-                total_balance = self.mock_trader.get_account_balance()
-                capital_allocated_percent = (total_capital_allocated / (total_balance + total_capital_allocated)) * 100 if (total_balance + total_capital_allocated) > 0 else 0
-                base_amount = float(config_manager.get('TRADING_STRATEGY', 'usd_per_trade'))
-                buy_amount_usdt = strategy_rules.get_next_buy_amount(capital_allocated_percent, base_amount)
+                if any(v is None for v in [ema_100, ema_20, bbl, open_price]):
+                    # Not enough data for indicators yet, skip
+                    continue
 
-                logger.debug(f"Backtest: Attempting to buy ${buy_amount_usdt}")
-                success, buy_result = self.mock_trader.execute_buy(buy_amount_usdt)
+                is_uptrend = current_price > ema_100
+                buy_signal = False
 
-                if success:
-                    new_trade_id = str(uuid.uuid4())
-                    buy_price = buy_result['price']
+                if is_uptrend:
+                    if open_price > ema_20 and current_price < ema_20:
+                        buy_signal = True
+                else:
+                    if current_price < bbl:
+                        buy_signal = True
 
-                    # Calculate sell target price
-                    commission_rate = float(strategy_rules.rules['commission_rate'])
-                    sell_factor = float(strategy_rules.rules['sell_factor'])
-                    target_profit = float(strategy_rules.rules['target_profit'])
-                    numerator = buy_price * (1 + commission_rate)
-                    denominator = sell_factor * (1 - commission_rate)
-                    break_even_price = numerator / denominator if denominator != 0 else float('inf')
-                    sell_target_price = break_even_price * (1 + target_profit)
+                if buy_signal:
+                    available_balance = self.mock_trader.get_account_balance()
+                    if available_balance > 10: # Ensure there is some balance to trade
+                        buy_amount_usdt = strategy_rules.get_next_buy_amount(available_balance)
 
-                    decision_context = candle.to_dict()
-                    decision_context.pop('symbol', None)
+                        if buy_amount_usdt > 10: # Minimum trade size check
+                            logger.debug(f"Backtest: Attempting to buy ${buy_amount_usdt:.2f}")
+                            success, buy_result = self.mock_trader.execute_buy(buy_amount_usdt)
 
-                    trade_point = TradePoint(
-                        run_id=self.run_id, environment="backtest", strategy_name=strategy_name,
-                        symbol=symbol, trade_id=new_trade_id, exchange="backtest_engine",
-                        order_type="buy", price=buy_price, quantity=buy_result['quantity'],
-                        usd_value=buy_result['usd_value'], commission=buy_result['commission'],
-                        commission_asset="USDT", timestamp=current_time, decision_context=decision_context,
-                        sell_target_price=sell_target_price
-                    )
-                    self.db_manager.log_trade(trade_point)
+                            if success:
+                                new_trade_id = str(uuid.uuid4())
+                                buy_price = buy_result['price']
 
-                    position_data = trade_point.to_dict()
-                    position_data['sell_target_price'] = sell_target_price # Ensure it's in the dict for sell logic
-                    open_positions[new_trade_id] = position_data
-                    last_buy_price = buy_price
-                    total_capital_allocated += buy_result['usd_value']
+                                # Calculate sell target price
+                                commission_rate = float(strategy_rules.rules['commission_rate'])
+                                sell_factor = float(strategy_rules.rules['sell_factor'])
+                                target_profit = float(strategy_rules.rules['target_profit'])
+                                numerator = buy_price * (1 + commission_rate)
+                                denominator = sell_factor * (1 - commission_rate)
+                                break_even_price = numerator / denominator if denominator != 0 else float('inf')
+                                sell_target_price = break_even_price * (1 + target_profit)
+
+                                decision_context = candle.to_dict()
+                                decision_context.pop('symbol', None)
+
+                                trade_point = TradePoint(
+                                    run_id=self.run_id, environment="backtest", strategy_name=strategy_name,
+                                    symbol=symbol, trade_id=new_trade_id, exchange="backtest_engine",
+                                    order_type="buy", price=buy_price, quantity=buy_result['quantity'],
+                                    usd_value=buy_result['usd_value'], commission=buy_result['commission'],
+                                    commission_asset="USDT", timestamp=current_time, decision_context=decision_context,
+                                    sell_target_price=sell_target_price
+                                )
+                                self.db_manager.log_trade(trade_point)
+
+                                position_data = {
+                                    'price': buy_price,
+                                    'quantity': buy_result['quantity'],
+                                    'usd_value': buy_result['usd_value'],
+                                    'sell_target_price': sell_target_price
+                                }
+                                open_positions[new_trade_id] = position_data
+                                total_capital_allocated += buy_result['usd_value']
 
         self._generate_and_save_summary()
         logger.info(f"--- Backtest {self.run_id} finished ---")
