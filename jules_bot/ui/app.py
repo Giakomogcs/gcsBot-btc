@@ -27,7 +27,7 @@ class JulesBotApp(App):
         yield Header()
         yield Horizontal(
             Label("Manual Buy (USD):"),
-            Input(placeholder="e.g., 100.00", id="manual_buy_input"),
+            Input(placeholder="e.g., 100.00", id="manual_buy_input", type="number"),
             Button("FORCE BUY", id="force_buy_button", variant="primary"),
         )
         yield DataTable(id="positions_table")
