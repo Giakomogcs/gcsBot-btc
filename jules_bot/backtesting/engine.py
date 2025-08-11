@@ -129,7 +129,7 @@ class Backtester:
 
             if open_positions_count < max_open_positions:
                 market_data = candle.to_dict()
-                should_buy, regime, reason = strategy_rules.evaluate_buy_signal(market_data)
+                should_buy, regime, reason = strategy_rules.evaluate_buy_signal(market_data, open_positions_count)
 
                 if should_buy:
                     available_balance = self.mock_trader.get_account_balance()

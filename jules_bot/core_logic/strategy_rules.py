@@ -7,7 +7,7 @@ class StrategyRules:
         self.base_usd_per_trade = float(self.rules.get('base_usd_per_trade', 20.0))
         self.sell_factor = float(self.rules.get('sell_factor', 0.9))
 
-    def evaluate_buy_signal(self, market_data: dict, open_positions_count: int) -> (bool, str, str):
+    def evaluate_buy_signal(self, market_data: dict, open_positions_count: int) -> tuple[bool, str, str]:
         """
         Evaluates if a buy signal is present based on the market regime.
         Uses a more aggressive strategy if there are no open positions.
