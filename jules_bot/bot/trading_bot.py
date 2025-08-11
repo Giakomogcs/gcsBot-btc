@@ -115,19 +115,20 @@ class TradingBot:
                     ema_100 = final_candle.get('ema_100')
                     ema_20 = final_candle.get('ema_20')
                     bbl = final_candle.get('bbl_20_2_0') # Lower Bollinger Band
-                    open_price = final_candle.get('open')
+                    high_price = final_candle.get('high')
 
-                    if any(v is None for v in [ema_100, ema_20, bbl, open_price]):
-                        logger.warning("One or more required indicators (EMA100, EMA20, BBL, Open) are missing. Skipping buy check.")
+                    if any(v is None for v in [ema_100, ema_20, bbl, high_price]):
+                        logger.warning("One or more required indicators (EMA100, EMA20, BBL, High) are missing. Skipping buy check.")
                     else:
                         is_uptrend = current_price > ema_100
                         buy_signal = False
 
                         if is_uptrend:
-                            # Uptrend Regime: Buy on pullback to EMA20
-                            # We check if the price crossed below the EMA in the current candle
-                            if open_price > ema_20 and current_price < ema_20:
-                                logger.info(f"UPTREND REGIME: Buy signal triggered. Price crossed below EMA20 ({current_price} < {ema_20:.2f}).")
+                            # Uptrend Regime: Buy on pullback to EMA20.
+                            # Condition: The candle's high is above the EMA, but the close is below it.
+                            # This captures a dip/pullback more effectively than a strict open/close cross.
+                            if high_price > ema_20 and current_price < ema_20:
+                                logger.info(f"UPTREND REGIME: Buy signal triggered. Price pulled back below EMA20 ({current_price} < {ema_20:.2f}).")
                                 buy_signal = True
                         else:
                             # Downtrend Regime: Buy on dip below Lower Bollinger Band

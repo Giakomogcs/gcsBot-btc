@@ -108,9 +108,9 @@ class Backtester:
                 ema_100 = candle.get('ema_100')
                 ema_20 = candle.get('ema_20')
                 bbl = candle.get('bbl_20_2_0')
-                open_price = candle.get('open')
+                high_price = candle.get('high')
 
-                if any(v is None for v in [ema_100, ema_20, bbl, open_price]):
+                if any(v is None for v in [ema_100, ema_20, bbl, high_price]):
                     # Not enough data for indicators yet, skip
                     continue
 
@@ -118,7 +118,7 @@ class Backtester:
                 buy_signal = False
 
                 if is_uptrend:
-                    if open_price > ema_20 and current_price < ema_20:
+                    if high_price > ema_20 and current_price < ema_20:
                         buy_signal = True
                 else:
                     if current_price < bbl:
