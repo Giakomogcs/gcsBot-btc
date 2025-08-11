@@ -14,9 +14,9 @@ class TradingBot:
     The maestro that orchestrates all the components of the bot.
     """
 
-    def __init__(self, mode: str, market_data_provider: MarketDataProvider):
+    def __init__(self, mode: str, bot_id: str, market_data_provider: MarketDataProvider):
         self.mode = mode
-        self.run_id = f"{self.mode}_{uuid.uuid4()}"
+        self.run_id = bot_id
         self.is_running = True
         self.market_data_provider = market_data_provider
         self.symbol = config_manager.get('APP', 'symbol')
