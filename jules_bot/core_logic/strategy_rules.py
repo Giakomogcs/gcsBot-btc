@@ -10,7 +10,8 @@ class StrategyRules:
         Based on the number of open positions, it will return the required
         percentage drop for the next buy (e.g., 0.01 for 1%, 0.015 for 1.5%).
         """
-        if open_positions_count < 5:
+        few_positions_threshold = int(self.rules.get('few_positions_threshold', 5))
+        if open_positions_count < few_positions_threshold:
             return float(self.rules['buy_trigger_few_positions'])
         else:
             return float(self.rules['buy_trigger_many_positions'])
@@ -21,7 +22,8 @@ class StrategyRules:
         Based on the percentage of capital already in use, it will return
         the calculated USDT amount for the next purchase (e.g., base_amount * 0.8).
         """
-        if capital_allocated_percent < 0.5:
+        low_allocation_threshold = float(self.rules.get('low_allocation_threshold', 0.5))
+        if capital_allocated_percent < low_allocation_threshold:
             return base_amount * float(self.rules['buy_amount_low_allocation_multiplier'])
         else:
             return base_amount * float(self.rules['buy_amount_high_allocation_multiplier'])
