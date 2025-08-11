@@ -70,8 +70,19 @@ class Backtester:
 
                     success, sell_result = self.mock_trader.execute_sell({'quantity': sell_quantity})
                     if success:
-                        commission_usd = sell_result['commission']
-                        realized_pnl_usd = (sell_result['price'] - position['price']) * sell_result['quantity'] - commission_usd
+                        # --- CORRECTED PNL CALCULATION ---
+                        buy_price = position['price']
+                        sell_price = sell_result['price']
+
+                        # Note: The mock_trader uses a 'commission_fee' from the [BACKTEST] section,
+                        # but for consistency in PnL calculation, we use the same commission_rate
+                        # as the live bot from [STRATEGY_RULES].
+                        commission_rate = float(strategy_rules.rules.get('commission_rate'))
+
+                        realized_pnl_usd = ((sell_price * (1 - commission_rate)) - (buy_price * (1 + commission_rate))) * sell_result['quantity']
+                        # --- END CORRECTED PNL CALCULATION ---
+
+                        commission_usd = sell_result['commission'] # This is the actual commission charged by mock_trader
                         hodl_asset_value_at_sell = hodl_asset_amount * sell_result['price']
 
                         decision_context = candle.to_dict()
@@ -138,13 +149,8 @@ class Backtester:
                                 new_trade_id = str(uuid.uuid4())
                                 buy_price = buy_result['price']
 
-                                # Calculate sell target price
-                                commission_rate = float(strategy_rules.rules['commission_rate'])
-                                target_profit = float(strategy_rules.rules['target_profit'])
-                                numerator = buy_price * (1 + commission_rate)
-                                denominator = (1 - commission_rate) # sell_factor should not be here
-                                break_even_price = numerator / denominator if denominator != 0 else float('inf')
-                                sell_target_price = break_even_price * (1 + target_profit)
+                                # Calculate sell target price using the centralized method
+                                sell_target_price = strategy_rules.calculate_sell_target_price(buy_price)
 
                                 decision_context = candle.to_dict()
                                 decision_context.pop('symbol', None)
