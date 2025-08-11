@@ -88,6 +88,12 @@ class Backtester:
                         )
                         self.db_manager.log_trade(trade_point)
 
+                        logger.info(f"SELL EXECUTED: TradeID: {trade_id} | "
+                                    f"Buy Price: ${position['price']:,.2f} | "
+                                    f"Sell Price: ${sell_result['price']:,.2f} | "
+                                    f"Realized PnL: ${realized_pnl_usd:,.2f} | "
+                                    f"HODL Amount: {hodl_asset_amount:.8f} BTC")
+
                         total_capital_allocated -= position['usd_value']
                         del open_positions[trade_id]
 
