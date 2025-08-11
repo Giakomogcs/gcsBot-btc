@@ -7,6 +7,7 @@ from jules_bot.core_logic.trader import Trader
 from jules_bot.core_logic.strategy_rules import StrategyRules
 from jules_bot.core.market_data_provider import MarketDataProvider
 from jules_bot.database.data_manager import DataManager
+from jules_bot.database.database_manager import DatabaseManager
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
 
 class TradingBot:
@@ -14,9 +15,9 @@ class TradingBot:
     The maestro that orchestrates all the components of the bot.
     """
 
-    def __init__(self, mode: str, market_data_provider: MarketDataProvider):
+    def __init__(self, mode: str, bot_id: str, market_data_provider: MarketDataProvider):
         self.mode = mode
-        self.run_id = f"{self.mode}_{uuid.uuid4()}"
+        self.run_id = bot_id
         self.is_running = True
         self.market_data_provider = market_data_provider
         self.symbol = config_manager.get('APP', 'symbol')
@@ -36,7 +37,8 @@ class TradingBot:
         else: # test mode
             db_config['bucket'] = config_manager.get('INFLUXDB', 'bucket_backtest')
 
-        data_manager = DataManager(db_manager=None, config=config_manager, logger=logger)
+        db_manager = DatabaseManager(config=db_config)
+        data_manager = DataManager(db_manager=db_manager, config=config_manager, logger=logger)
         feature_calculator = LiveFeatureCalculator(data_manager, mode=self.mode)
         state_manager = StateManager(db_config['bucket'], self.run_id)
         trader = Trader(mode=self.mode)
@@ -122,7 +124,10 @@ class TradingBot:
 
                 if open_positions_count < max_open_positions:
                     market_data = final_candle.to_dict()
-                    should_buy, regime, reason = strategy_rules.evaluate_buy_signal(market_data)
+                    should_buy, regime, reason = strategy_rules.evaluate_buy_signal(
+                        market_data,
+                        open_positions_count=open_positions_count
+                    )
 
                     if should_buy:
                         logger.info(f"Buy signal triggered. Reason: {reason}. Evaluating capital.")

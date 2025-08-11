@@ -49,7 +49,7 @@ def test_create_new_position_logs_trade(state_manager, mock_db_manager):
     }
 
     # Act
-    state_manager.create_new_position(buy_result)
+    state_manager.create_new_position(buy_result, sell_target_price=101.0)
 
     # Assert
     mock_db_manager.log_trade.assert_called_once()
@@ -100,9 +100,9 @@ def test_get_last_purchase_price_with_open_positions(state_manager):
     """
     # Arrange: Mock the return value of get_open_positions
     state_manager.get_open_positions = Mock(return_value=[
-        {'time': '2023-01-01T12:00:00Z', 'purchase_price': 100.0},
-        {'time': '2023-01-01T13:00:00Z', 'purchase_price': 105.0}, # Most recent
-        {'time': '2023-01-01T11:00:00Z', 'purchase_price': 99.0}
+        {'_time': '2023-01-01T12:00:00Z', 'price': 100.0},
+        {'_time': '2023-01-01T13:00:00Z', 'price': 105.0}, # Most recent
+        {'_time': '2023-01-01T11:00:00Z', 'price': 99.0}
     ])
 
     # Act

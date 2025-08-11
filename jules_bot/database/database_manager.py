@@ -430,3 +430,27 @@ class DatabaseManager:
         except Exception as e:
             logging.error(f"Error getting trade history: {e}")
             return pd.DataFrame()
+
+    def query_first_timestamp(self, measurement: str) -> Optional[pd.Timestamp]:
+        """
+        Queries the very first timestamp for a specific measurement in the bucket.
+        """
+        logger.info(f"Querying first timestamp for measurement '{measurement}' in bucket '{self.bucket}'...")
+        query = f'''
+        from(bucket:"{self.bucket}")
+            |> range(start: 0)
+            |> filter(fn: (r) => r._measurement == "{measurement}")
+            |> first()
+            |> keep(columns: ["_time"])
+        '''
+        try:
+            result = self.query_api.query(query)
+            if not result or not result[0].records:
+                logger.info("No data found in measurement '{measurement}'.")
+                return None
+            first_timestamp = pd.to_datetime(result[0].records[0].get_time()).tz_convert('UTC')
+            logger.info(f"First timestamp found in DB: {first_timestamp}")
+            return first_timestamp
+        except Exception as e:
+            logger.error(f"Error querying first timestamp from InfluxDB for measurement '{measurement}': {e}", exc_info=True)
+            return None

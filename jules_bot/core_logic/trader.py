@@ -19,8 +19,7 @@ class Trader:
         self.symbol = config_manager.get('APP', 'symbol')
         self.strategy_name = config_manager.get('APP', 'strategy_name', fallback='default_strategy')
 
-        db_config = config_manager.get_section('INFLUXDB')
-        db_config['url'] = f"http://{db_config['host']}:{db_config['port']}"
+        db_config = config_manager.get_db_config()
 
         if self.mode in ['test', 'backtest']:
             db_config['bucket'] = config_manager.get('INFLUXDB', 'bucket_backtest')

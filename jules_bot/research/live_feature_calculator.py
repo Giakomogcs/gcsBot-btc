@@ -54,17 +54,21 @@ class LiveFeatureCalculator:
             logger.error("Falha ao obter velas históricas da Binance. Abortando ciclo.")
             return pd.Series(dtype=float)
 
-        # 2. Dados Macro do nosso DB (fonte mais estável)
-        df_macro = self.data_manager.read_data_from_influx("macro_data_1m", start_date="-3d")
-
-        # 3. Dados de Sentimento (buscamos ao vivo e do DB para ter histórico)
-        df_sentiment_live = self._get_live_sentiment_data()
-        df_sentiment_db = self.data_manager.read_data_from_influx("sentiment_fear_and_greed", start_date="-3d")
-        # Previne erro se uma das fontes falhar
-        if df_sentiment_db.empty and df_sentiment_live.empty:
-            df_sentiment = pd.DataFrame()
+        # 2. Dados Macro e de Sentimento (Apenas para modo 'trade')
+        if self.mode == 'trade':
+            df_macro = self.data_manager.read_data_from_influx("macro_data_1m", start_date="-3d")
+            
+            df_sentiment_live = self._get_live_sentiment_data()
+            df_sentiment_db = self.data_manager.read_data_from_influx("sentiment_fear_and_greed", start_date="-3d")
+            
+            if df_sentiment_db.empty and df_sentiment_live.empty:
+                df_sentiment = pd.DataFrame()
+            else:
+                df_sentiment = pd.concat([df_sentiment_db, df_sentiment_live]).drop_duplicates()
         else:
-            df_sentiment = pd.concat([df_sentiment_db, df_sentiment_live]).drop_duplicates()
+            # Em modo 'test', não usamos esses dados
+            df_macro = pd.DataFrame()
+            df_sentiment = pd.DataFrame()
 
 
         # 4. Combinar todas as fontes de dados
@@ -80,7 +84,9 @@ class LiveFeatureCalculator:
             df_combined.fillna(0, inplace=True)
 
         # 5. Calcular todas as features usando a função centralizada
-        df_with_features = add_all_features(df_combined, live_mode=True)
+        # O modo 'trade' é o único modo verdadeiramente "live"
+        is_live_mode = self.mode == 'trade'
+        df_with_features = add_all_features(df_combined, live_mode=is_live_mode)
         
         if df_with_features.empty:
             logger.error("O DataFrame ficou vazio após o cálculo de features. Abortando ciclo.")

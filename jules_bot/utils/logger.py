@@ -36,6 +36,7 @@ os.makedirs(LOGS_DIR, exist_ok=True)
 
 logger = logging.getLogger("gcsBot")
 logger.setLevel(logging.DEBUG)
+logger.propagate = False # Impede que os logs sejam passados para o logger root
 
 if not logger.handlers:
     # 1. Handler para o ARQUIVO DE DEBUG (gcs_bot.log)
