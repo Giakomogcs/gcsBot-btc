@@ -208,50 +208,58 @@ class CorePriceCollector:
 def prepare_backtest_data(days: int, force_reload: bool = False):
     """
     Acts as a smart guardian for the historical database. It ensures the database
-    is up-to-date by downloading only missing data from Binance.
+    contains AT LEAST the required number of days of data, and that this data is
+    up-to-date by downloading only missing data from Binance.
     """
     logger.info("--- Starting Intelligent Data Preparation ---")
     
     collector = CorePriceCollector(bucket_name=config_manager.get('INFLUXDB', 'bucket_backtest'))
+    online_mode = collector.connect_binance_client()
 
     if force_reload:
         logger.warning("`--force-reload` flag detected. Deleting all existing price data for a full refresh.")
         collector.db_manager.clear_measurement(collector.measurement)
 
-    online_mode = collector.connect_binance_client()
-
-    last_ts = collector._query_last_timestamp()
+    # --- New Logic to ensure sufficient historical data ---
+    end_date = datetime.datetime.now(datetime.timezone.utc)
+    required_start_date = end_date - timedelta(days=days)
     
-    if last_ts is None:
-        # Case 1: Database is empty
-        logger.info("Database is empty. Performing initial data download.")
+    first_ts_in_db = collector.db_manager.query_first_timestamp(collector.measurement)
+
+    # If DB is empty or its oldest record is newer than what we need, we must do a full historical download.
+    if first_ts_in_db is None or first_ts_in_db > required_start_date:
+        logger.info("Database is empty or does not contain the required historical range.")
         if not online_mode:
-            logger.error("CRITICAL: Database is empty and Binance is offline. Cannot proceed.")
+            logger.error(f"CRITICAL: Database needs {days} days of data, but Binance is offline. Cannot proceed.")
             return
+
+        logger.info(f"Clearing existing data (if any) and downloading full {days}-day history from {required_start_date} to {end_date}.")
+        collector.db_manager.clear_measurement(collector.measurement)
         
-        end_date = datetime.datetime.now(datetime.timezone.utc)
-        start_date = end_date - timedelta(days=days)
-        logger.info(f"Downloading data for the last {days} days (from {start_date} to {end_date}).")
-        
-        df_to_write = collector._get_historical_klines(start_date, end_date)
+        df_to_write = collector._get_historical_klines(required_start_date, end_date)
         if not df_to_write.empty:
             collector._write_dataframe_to_influx(df_to_write)
-
-    else:
-        # Case 2: Database has data, check for updates
-        if not online_mode:
-            logger.warning(f"Binance is offline. Backtest will use existing data up to {last_ts}.")
-            logger.info("--- Data Preparation Finished (Offline Mode) ---")
-            return
-
-        start_date = last_ts + timedelta(minutes=1)
-        end_date = datetime.datetime.now(datetime.timezone.utc)
-
-        if start_date >= end_date:
-            logger.info(f"Data is already up-to-date. Last record at {last_ts}. No action needed.")
         else:
-            logger.info(f"Data is outdated. Synchronizing new data from {start_date} to {end_date}.")
-            df_to_write = collector._get_historical_klines(start_date, end_date)
+            logger.warning("Failed to download any historical data. The database will remain empty.")
+            return # Stop if we couldn't get the base data
+
+    # --- Incremental update logic (runs after ensuring history is sufficient) ---
+    if not online_mode:
+        logger.warning("Binance is offline. Cannot perform incremental update. Using existing data.")
+        logger.info("--- Data Preparation Finished (Offline Mode) ---")
+        return
+
+    last_ts_in_db = collector._query_last_timestamp()
+
+    # This should always find a timestamp now, unless the initial download failed
+    if last_ts_in_db:
+        incremental_start_date = last_ts_in_db + timedelta(minutes=1)
+
+        if incremental_start_date >= end_date:
+            logger.info(f"Data is already up-to-date. Last record at {last_ts_in_db}. No action needed.")
+        else:
+            logger.info(f"History is sufficient. Synchronizing new data from {incremental_start_date} to {end_date}.")
+            df_to_write = collector._get_historical_klines(incremental_start_date, end_date)
             if not df_to_write.empty:
                 collector._write_dataframe_to_influx(df_to_write)
     
