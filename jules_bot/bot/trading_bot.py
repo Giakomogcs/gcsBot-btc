@@ -144,15 +144,16 @@ class TradingBot:
                                 logger.warning("Available balance is zero or less. Cannot execute buy.")
                             else:
                                 buy_amount_usdt = strategy_rules.get_next_buy_amount(available_balance)
+                                min_trade_size = float(config_manager.get('TRADING_STRATEGY', 'min_trade_size_usdt', fallback=10.0))
 
-                                if buy_amount_usdt > 10: # Minimum trade size check
+                                if buy_amount_usdt > min_trade_size:
                                     logger.info(f"Executing buy for ${buy_amount_usdt:.2f} USD.")
                                     success, buy_result = trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
                                     if success:
                                         logger.info("Buy successful. Creating new position.")
                                         state_manager.create_new_position(buy_result)
                                 else:
-                                    logger.warning(f"Calculated buy amount (${buy_amount_usdt:.2f}) is below the minimum threshold of $10. Skipping buy.")
+                                    logger.warning(f"Calculated buy amount (${buy_amount_usdt:.2f}) is below the minimum threshold of ${min_trade_size}. Skipping buy.")
 
                 logger.info("--- Cycle complete. Waiting 60 seconds... ---")
                 time.sleep(60)

@@ -128,8 +128,9 @@ class Backtester:
                     available_balance = self.mock_trader.get_account_balance()
                     if available_balance > 10: # Ensure there is some balance to trade
                         buy_amount_usdt = strategy_rules.get_next_buy_amount(available_balance)
+                        min_trade_size = float(config_manager.get('TRADING_STRATEGY', 'min_trade_size_usdt', fallback=10.0))
 
-                        if buy_amount_usdt > 10: # Minimum trade size check
+                        if buy_amount_usdt > min_trade_size:
                             logger.debug(f"Backtest: Attempting to buy ${buy_amount_usdt:.2f}")
                             success, buy_result = self.mock_trader.execute_buy(buy_amount_usdt)
 
