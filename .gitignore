@@ -33,4 +33,5 @@ venv/
 /data
 
 # Command files
-/commands/
+# Ignore command files but keep the directory
+commands/*.json

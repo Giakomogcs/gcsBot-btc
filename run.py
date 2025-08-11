@@ -177,6 +177,14 @@ def backtest(
         
     print("\n✅ Backtest finalizado com sucesso.")
 
+@app.command()
+def ui():
+    """Inicia a interface de usuário (TUI) para monitorar e controlar o bot."""
+    print("🖥️  Iniciando a Interface de Usuário (TUI)...")
+    print("   Lembre-se que o bot (usando 'trade' ou 'test') deve estar rodando em outro terminal.")
+    _run_in_container(
+        command=["jules_bot/ui/app.py"]
+    )
 
 if __name__ == "__main__":
     app()

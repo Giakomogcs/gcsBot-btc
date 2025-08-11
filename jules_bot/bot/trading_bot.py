@@ -1,5 +1,7 @@
 import time
 import uuid
+import json
+import os
 from jules_bot.utils.logger import logger
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.core_logic.state_manager import StateManager
@@ -21,6 +23,64 @@ class TradingBot:
         self.is_running = True
         self.market_data_provider = market_data_provider
         self.symbol = config_manager.get('APP', 'symbol')
+        self.state_file_path = "/tmp/bot_state.json"
+
+    def _write_state_to_file(self, open_positions: list):
+        """Saves the current bot state to a JSON file for the UI to read."""
+        state = {
+            "mode": self.mode,
+            "run_id": self.run_id,
+            "symbol": self.symbol,
+            "timestamp": time.time(),
+            "open_positions": open_positions
+        }
+        try:
+            with open(self.state_file_path, "w") as f:
+                json.dump(state, f, indent=4)
+        except IOError as e:
+            logger.error(f"Could not write to state file {self.state_file_path}: {e}")
+
+    def _handle_ui_commands(self, trader, state_manager, strategy_rules):
+        """Checks for and processes command files from the UI."""
+        command_dir = "commands"
+        if not os.path.exists(command_dir):
+            return
+
+        for filename in os.listdir(command_dir):
+            if filename.endswith(".json"):
+                filepath = os.path.join(command_dir, filename)
+                try:
+                    with open(filepath, "r") as f:
+                        command = json.load(f)
+
+                    cmd_type = command.get("type")
+                    logger.info(f"Processing UI command: {command}")
+
+                    if cmd_type == "force_buy":
+                        amount_usd = command.get("amount_usd")
+                        if amount_usd:
+                            trader.execute_buy(amount_usd, self.run_id, {"reason": "manual_override"})
+
+                    elif cmd_type == "force_sell":
+                        trade_id = command.get("trade_id")
+                        if trade_id:
+                            open_positions = state_manager.get_open_positions()
+                            position_to_sell = next((p for p in open_positions if p.get('trade_id') == trade_id), None)
+                            if position_to_sell:
+                                # Mimic the data structure needed for trader.execute_sell
+                                sell_position_data = position_to_sell.copy()
+                                sell_position_data['quantity'] = float(position_to_sell.get('quantity', 0))
+                                trader.execute_sell(sell_position_data, self.run_id, {"reason": "manual_override"})
+                            else:
+                                logger.warning(f"Could not find open position with trade_id: {trade_id} for force_sell.")
+
+                    os.remove(filepath) # Remove command file after processing
+
+                except Exception as e:
+                    logger.error(f"Error processing command file {filename}: {e}", exc_info=True)
+                    # Optionally, move to an 'error' directory instead of deleting
+                    # os.rename(filepath, os.path.join(command_dir, "error", filename))
+
 
     def run(self):
         """
@@ -55,6 +115,9 @@ class TradingBot:
             try:
                 logger.info("--- Starting new trading cycle ---")
 
+                # 0. Check for and handle any UI commands
+                self._handle_ui_commands(trader, state_manager, strategy_rules)
+
                 # 1. Get the latest market data with all features
                 final_candle = feature_calculator.get_current_candle_with_features()
                 if final_candle.empty:
@@ -68,6 +131,9 @@ class TradingBot:
                 # 2. Check for potential sales
                 open_positions = state_manager.get_open_positions()
                 logger.info(f"Found {len(open_positions)} open position(s).")
+
+                # Update UI state file
+                self._write_state_to_file(open_positions)
 
                 for position in open_positions:
                     trade_id = position.get('trade_id')
