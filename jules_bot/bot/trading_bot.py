@@ -104,25 +104,54 @@ class TradingBot:
                         else:
                             logger.error(f"Sell execution failed for position {trade_id}.")
 
-                # 3. Check for a potential buy
-                last_buy_price = state_manager.get_last_purchase_price()
+                # 3. Check for a potential buy (New "Adaptive Momentum Grid" Strategy)
                 open_positions_count = state_manager.get_open_positions_count()
-                buy_trigger_percentage = strategy_rules.get_next_buy_trigger(open_positions_count)
+                max_open_positions = int(config_manager.get('STRATEGY_RULES', 'max_open_positions', fallback=20))
 
-                if current_price <= last_buy_price * (1 - buy_trigger_percentage):
-                    logger.info("Buy condition met. Evaluating capital.")
-                    capital_allocated = state_manager.get_total_capital_allocated()
-                    total_balance = trader.get_account_balance()
-                    capital_allocated_percent = (capital_allocated / (total_balance + capital_allocated)) * 100 if (total_balance + capital_allocated) > 0 else 0
+                if open_positions_count >= max_open_positions:
+                    logger.info(f"Maximum open positions ({max_open_positions}) reached. No new buys will be considered.")
+                else:
+                    # Extract features needed for the new logic
+                    ema_100 = final_candle.get('ema_100')
+                    ema_20 = final_candle.get('ema_20')
+                    bbl = final_candle.get('bbl_20_2_0') # Lower Bollinger Band
+                    open_price = final_candle.get('open')
 
-                    base_amount = float(config_manager.get('TRADING_STRATEGY', 'usd_per_trade'))
-                    buy_amount_usdt = strategy_rules.get_next_buy_amount(capital_allocated_percent, base_amount)
+                    if any(v is None for v in [ema_100, ema_20, bbl, open_price]):
+                        logger.warning("One or more required indicators (EMA100, EMA20, BBL, Open) are missing. Skipping buy check.")
+                    else:
+                        is_uptrend = current_price > ema_100
+                        buy_signal = False
 
-                    logger.info(f"Executing buy for ${buy_amount_usdt} USD.")
-                    success, buy_result = trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
-                    if success:
-                        logger.info("Buy successful. Creating new position.")
-                        state_manager.create_new_position(buy_result)
+                        if is_uptrend:
+                            # Uptrend Regime: Buy on pullback to EMA20
+                            # We check if the price crossed below the EMA in the current candle
+                            if open_price > ema_20 and current_price < ema_20:
+                                logger.info(f"UPTREND REGIME: Buy signal triggered. Price crossed below EMA20 ({current_price} < {ema_20:.2f}).")
+                                buy_signal = True
+                        else:
+                            # Downtrend Regime: Buy on dip below Lower Bollinger Band
+                            if current_price < bbl:
+                                logger.info(f"DOWNTREND REGIME: Buy signal triggered. Price touched/crossed below BBL ({current_price} < {bbl:.2f}).")
+                                buy_signal = True
+
+                        if buy_signal:
+                            logger.info("Buy condition met. Evaluating capital for 'Adaptive Momentum Grid' strategy.")
+                            available_balance = trader.get_account_balance()
+
+                            if available_balance <= 0:
+                                logger.warning("Available balance is zero or less. Cannot execute buy.")
+                            else:
+                                buy_amount_usdt = strategy_rules.get_next_buy_amount(available_balance)
+
+                                if buy_amount_usdt > 10: # Minimum trade size check
+                                    logger.info(f"Executing buy for ${buy_amount_usdt:.2f} USD.")
+                                    success, buy_result = trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
+                                    if success:
+                                        logger.info("Buy successful. Creating new position.")
+                                        state_manager.create_new_position(buy_result)
+                                else:
+                                    logger.warning(f"Calculated buy amount (${buy_amount_usdt:.2f}) is below the minimum threshold of $10. Skipping buy.")
 
                 logger.info("--- Cycle complete. Waiting 60 seconds... ---")
                 time.sleep(60)

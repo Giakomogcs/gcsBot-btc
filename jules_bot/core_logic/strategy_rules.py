@@ -3,27 +3,19 @@ from jules_bot.utils.config_manager import ConfigManager
 class StrategyRules:
     def __init__(self, config_manager: ConfigManager):
         self.rules = config_manager.get_section('STRATEGY_RULES')
+        self.trading_strategy_config = config_manager.get_section('TRADING_STRATEGY')
 
-    def get_next_buy_trigger(self, open_positions_count: int) -> float:
+    def get_next_buy_amount(self, available_balance: float) -> float:
         """
-        This method will contain the logic for the "Dynamic Grid Scaling".
-        Based on the number of open positions, it will return the required
-        percentage drop for the next buy (e.g., 0.01 for 1%, 0.015 for 1.5%).
+        Calculates the USDT amount for the next purchase based on risk management rules.
+        The amount is the lesser of a fixed base amount and a percentage of the total available capital.
         """
-        few_positions_threshold = int(self.rules.get('few_positions_threshold', 5))
-        if open_positions_count < few_positions_threshold:
-            return float(self.rules.get('buy_trigger_few_positions', 0.01))
-        else:
-            return float(self.rules.get('buy_trigger_many_positions', 0.02))
+        base_amount = float(self.trading_strategy_config.get('usd_per_trade', 100.0))
 
-    def get_next_buy_amount(self, capital_allocated_percent: float, base_amount: float) -> float:
-        """
-        This method will contain the logic for "Dynamic Capital Allocation".
-        Based on the percentage of capital already in use, it will return
-        the calculated USDT amount for the next purchase (e.g., base_amount * 0.8).
-        """
-        low_allocation_threshold = float(self.rules.get('low_allocation_threshold', 0.5))
-        if capital_allocated_percent < low_allocation_threshold:
-            return base_amount * float(self.rules.get('buy_amount_low_allocation_multiplier', 1.0))
-        else:
-            return base_amount * float(self.rules.get('buy_amount_high_allocation_multiplier', 0.6))
+        max_capital_percent = float(self.rules.get('max_capital_per_trade_percent', 0.02))
+
+        # Calculate the maximum trade size based on the available balance
+        max_trade_size_from_balance = available_balance * max_capital_percent
+
+        # Return the smaller of the two values to ensure we don't risk too much
+        return min(base_amount, max_trade_size_from_balance)

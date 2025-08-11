@@ -78,7 +78,8 @@ class StateManager:
         # We now create a TradePoint object to enforce the schema.
         try:
             trade_point = TradePoint(
-                mode=buy_result.get('mode', 'backtest'), # Assume backtest if not provided
+                run_id=self.bot_id,
+                environment=buy_result.get('environment', 'backtest'),
                 strategy_name=buy_result.get('strategy_name', 'default'),
                 symbol=buy_result['symbol'],
                 trade_id=buy_result['trade_id'],
@@ -105,7 +106,8 @@ class StateManager:
 
         try:
             trade_point = TradePoint(
-                mode=exit_data.get('mode', 'backtest'),
+                run_id=self.bot_id,
+                environment=exit_data.get('environment', 'backtest'),
                 strategy_name=exit_data.get('strategy_name', 'default'),
                 symbol=exit_data['symbol'],
                 trade_id=trade_id, # The ID of the trade being closed
