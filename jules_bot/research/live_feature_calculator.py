@@ -6,10 +6,10 @@ from datetime import datetime, timedelta
 
 from jules_bot.utils.logger import logger
 # --- IMPORTAÇÃO CORRIGIDA ---
-from jules_bot.utils.config_manager import settings
+from jules_bot.utils.config_manager import config_manager
 from jules_bot.core.exchange_connector import ExchangeManager
 from jules_bot.database.data_manager import DataManager
-from jules_bot.bot.feature_engineering import add_all_features
+from jules_bot.research.feature_engineering import add_all_features
 
 class LiveFeatureCalculator:
     """
@@ -20,7 +20,7 @@ class LiveFeatureCalculator:
         self.data_manager = data_manager
         self.mode = mode
         self.exchange_manager = ExchangeManager(mode=self.mode)
-        self.symbol = settings.app.symbol
+        self.symbol = config_manager.get('APP', 'symbol')
 
     def _get_live_sentiment_data(self) -> pd.DataFrame:
         """Busca o dado mais recente de Fear & Greed."""

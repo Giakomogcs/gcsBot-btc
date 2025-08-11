@@ -6,7 +6,7 @@ import pandas_ta as ta
 from tqdm import tqdm
 
 from jules_bot.utils.logger import logger
-from jules_bot.utils.config_manager import settings
+from jules_bot.utils.config_manager import config_manager
 
 def add_all_features(df: pd.DataFrame, live_mode: bool = False) -> pd.DataFrame:
     """
@@ -78,8 +78,8 @@ def add_all_features(df: pd.DataFrame, live_mode: bool = False) -> pd.DataFrame:
     # Só executa se não estiver em modo live
     if not live_mode:
         logger.info("Calculando o alvo com o método da Barreira Tripla...")
-        cfg = settings.data_pipeline.target
-        future_periods, profit_mult, stop_mult = cfg.future_periods, cfg.profit_mult, cfg.stop_mult
+        cfg = config_manager.get_section('DATA_PIPELINE')
+        future_periods, profit_mult, stop_mult = int(cfg['future_periods']), float(cfg['profit_mult']), float(cfg['stop_mult'])
 
         if 'atr_14' not in df_copy.columns or df_copy['atr_14'].isnull().all():
             logger.error("A coluna 'atr_14' não pôde ser calculada. Impossível criar o target.")

@@ -3,13 +3,13 @@
 from binance.client import Client
 from binance.exceptions import BinanceAPIException
 from jules_bot.utils.logger import logger
-from jules_bot.utils.config_manager import settings
+from jules_bot.utils.config_manager import config_manager
 
 class AccountManager:
     def __init__(self, binance_client: Client):
         self.client = binance_client
         self.base_asset = "BTC"
-        self.quote_asset = settings.app.symbol.replace("BTC", "")
+        self.quote_asset = config_manager.get('APP', 'symbol').replace("BTC", "")
 
     def get_base_asset_balance(self) -> float:
         """Busca o saldo livre do ativo base (ex: BTC) na conta da Binance."""
@@ -126,14 +126,14 @@ class AccountManager:
         """
         Places a market sell order on Binance after full validation.
         """
-        if not self.client or settings.app.force_offline_mode:
+        if not self.client or config_manager.getboolean('APP', 'force_offline_mode'):
             logger.warning(f"OFFLINE MODE: Simulating sell of {quantity_btc:.8f} BTC.")
             return {"status": "FILLED"} # Simula uma ordem bem-sucedida
 
         try:
             # Valida e formata a quantidade usando a nova função robusta
             formatted_quantity = self._format_quantity_for_symbol(
-                symbol=settings.app.symbol, 
+                symbol=config_manager.get('APP', 'symbol'),
                 quantity=quantity_btc, 
                 current_price=current_price
             )
@@ -141,7 +141,7 @@ class AccountManager:
             # Apenas tenta vender se a quantidade for válida (maior que zero)
             if formatted_quantity > 0:
                 logger.info(f"Attempting to place market SELL order for {formatted_quantity:.8f} BTC...")
-                order = self.client.order_market_sell(symbol=settings.app.symbol, quantity=formatted_quantity)
+                order = self.client.order_market_sell(symbol=config_manager.get('APP', 'symbol'), quantity=formatted_quantity)
                 logger.info(f"SUCCESS: Market SELL order placed: {order}")
                 return order # Retorna a ordem para o PositionManager
             else:
@@ -160,14 +160,14 @@ class AccountManager:
         """
         Places a market buy order on Binance.
         """
-        if not self.client or settings.app.force_offline_mode:
+        if not self.client or config_manager.getboolean('APP', 'force_offline_mode'):
             logger.warning(f"OFFLINE MODE: Simulating buy with {quote_order_qty:.2f} USDT.")
             return True # Simulate success
 
         try:
             rounded_qty = round(quote_order_qty, 2)
             logger.info(f"Attempting to place market BUY order for {rounded_qty:.2f} USDT...")
-            order = self.client.order_market_buy(symbol=settings.app.symbol, quoteOrderQty=rounded_qty)
+            order = self.client.order_market_buy(symbol=config_manager.get('APP', 'symbol'), quoteOrderQty=rounded_qty)
             logger.info(f"SUCCESS: Market BUY order placed: {order}")
             return True
         except BinanceAPIException as e:
@@ -181,12 +181,12 @@ class AccountManager:
         """
         Fetches open orders from Binance for the current symbol.
         """
-        if not self.client or settings.app.force_offline_mode:
+        if not self.client or config_manager.getboolean('APP', 'force_offline_mode'):
             logger.warning("OFFLINE MODE: Cannot fetch open orders.")
             return []
 
         try:
-            open_orders = self.client.get_open_orders(symbol=settings.app.symbol)
+            open_orders = self.client.get_open_orders(symbol=config_manager.get('APP', 'symbol'))
             return open_orders
         except BinanceAPIException as e:
             logger.error(f"Binance API Error fetching open orders: {e}", exc_info=True)
@@ -199,12 +199,12 @@ class AccountManager:
         """
         Fetches trade history from Binance for the current symbol.
         """
-        if not self.client or settings.app.force_offline_mode:
+        if not self.client or config_manager.getboolean('APP', 'force_offline_mode'):
             logger.warning("OFFLINE MODE: Cannot fetch trade history.")
             return []
 
         try:
-            trades = self.client.get_my_trades(symbol=settings.app.symbol, limit=limit)
+            trades = self.client.get_my_trades(symbol=config_manager.get('APP', 'symbol'), limit=limit)
             return trades
         except BinanceAPIException as e:
             logger.error(f"Binance API Error fetching trade history: {e}", exc_info=True)

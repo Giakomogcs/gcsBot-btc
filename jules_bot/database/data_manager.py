@@ -74,3 +74,70 @@ class DataManager:
         except Exception as e:
             self.logger.error(f"Erro ao executar a query no InfluxDB para '{measurement}': {e}")
             return pd.DataFrame()
+
+    def get_price_history(self, symbol: str, interval: str, start_date: str, end_date: str = "now()", source: str = "binance") -> pd.DataFrame:
+        """
+        Lê a série histórica de preços (OHLCV) do InfluxDB, filtrando por tags.
+
+        Args:
+            symbol (str): O símbolo do par de negociação (ex: "BTCUSDT").
+            interval (str): O intervalo da vela (ex: "1m", "5m").
+            start_date (str): O início do intervalo de tempo (ex: "-1y", "-180d").
+            end_date (str, optional): O fim do intervalo de tempo. Padrão "now()".
+            source (str, optional): A fonte dos dados. Padrão "binance".
+
+        Returns:
+            pd.DataFrame: Um DataFrame com os dados solicitados, indexado por tempo (UTC),
+                          ou um DataFrame vazio se nenhum dado for encontrado ou ocorrer um erro.
+        """
+        if not self.query_api:
+            self.logger.error("Query API do InfluxDB não inicializada. Leitura abortada.")
+            return pd.DataFrame()
+
+        # Usando o bucket do db_manager que já está configurado
+        bucket = self.db_manager.bucket
+        if not bucket:
+            self.logger.error("Bucket do InfluxDB não configurado no db_manager.")
+            return pd.DataFrame()
+
+        flux_query = f'''
+            from(bucket:"{bucket}")
+                |> range(start: {start_date}, stop: {end_date})
+                |> filter(fn: (r) => r._measurement == "price_history")
+                |> filter(fn: (r) => r.symbol == "{symbol}")
+                |> filter(fn: (r) => r.source == "{source}")
+                |> filter(fn: (r) => r.interval == "{interval}")
+                |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+            '''
+
+        try:
+            self.logger.info(f"Executando query para {symbol}/{source}/{interval} de {start_date} até {end_date}...")
+            result = self.query_api.query_data_frame(query=flux_query)
+
+            if result.empty:
+                self.logger.warning(f"Nenhum dado encontrado para os filtros especificados.")
+                return pd.DataFrame()
+
+            # Limpeza e formatação do DataFrame
+            df = result.copy()
+            df.rename(columns={'_time': 'timestamp'}, inplace=True)
+            df.set_index('timestamp', inplace=True)
+            df = df.drop(columns=['result', 'table', '_start', '_stop', '_measurement'], errors='ignore')
+
+            # Garante que o índice é do tipo datetime e está em UTC
+            if not pd.api.types.is_datetime64_any_dtype(df.index):
+                 df.index = pd.to_datetime(df.index)
+
+            if df.index.tz is None:
+                df = df.tz_localize('UTC')
+            else:
+                df = df.tz_convert('UTC')
+
+            df = df.sort_index()
+
+            self.logger.info(f"{len(df)} registros carregados da measurement 'price_history'.")
+            return df
+
+        except Exception as e:
+            self.logger.error(f"Erro ao executar a query no InfluxDB para 'price_history': {e}")
+            return pd.DataFrame()

@@ -9,7 +9,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from jules_bot.utils.config_manager import settings
+from jules_bot.utils.config_manager import config_manager
 from jules_bot.utils.logger import logger
 from influxdb_client import InfluxDBClient
 
@@ -23,10 +23,16 @@ def delete_measurement(measurement_name: str, environment: Optional[str] = None)
     logger.info(log_message)
     
     try:
+        db_config = config_manager.get_section('INFLUXDB')
+        if environment == 'test':
+            db_config['bucket'] = 'jules_bot_test_v1'
+        elif environment == 'backtest':
+            db_config['bucket'] = 'jules_bot_backtest_v1'
+
         client = InfluxDBClient(
-            url=settings.database.url,
-            token=settings.database.token,
-            org=settings.database.org,
+            url=db_config['url'],
+            token=db_config['token'],
+            org=db_config['org'],
             timeout=300_000 
         )
         
@@ -34,8 +40,8 @@ def delete_measurement(measurement_name: str, environment: Optional[str] = None)
         
         start = "1970-01-01T00:00:00Z"
         stop = datetime.now(timezone.utc).isoformat()
-        bucket = settings.database.bucket
-        org = settings.database.org
+        bucket = db_config['bucket']
+        org = db_config['org']
         
         predicate = f'_measurement="{measurement_name}"'
         if measurement_name == "trades" and environment:

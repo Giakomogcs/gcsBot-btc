@@ -1,53 +1,34 @@
 # Ficheiro: requirements.txt (VERSÃO DEFINITIVA E ALINHADA)
 
-# --- Forçar a instalação do PyTorch para CPU (se necessário para RL futura) ---
---extra-index-url https://download.pytorch.org/whl/cpu
-
 # --- Core Libraries ---
 numpy==1.26.4
 pandas
-scipy
 
 # --- Machine Learning & AI ---
 scikit-learn
-lightgbm
-optuna
 # optuna-integration # Comentado - Descomente apenas se o seu código o usar explicitamente
-torch
 # stable-baselines3 # Comentado - Para uso futuro em Reinforcement Learning
 # gymnasium # Comentado - Para uso futuro em Reinforcement Learning
 
 # --- Data & APIs ---
 python-binance
 influxdb-client
-yfinance
 requests # Essencial para o pipeline de sentimento
-ccxt==4.4.97
-numba
 
 # --- Technical Analysis ---
 # ta # Comentado - pandas-ta geralmente cobre tudo
 pandas_ta # Sem versão para instalar a mais recente e compatível
 
 # --- Config & Utilities ---
-python-daemon
 typer
-pydantic
-pydantic-settings
 python-dotenv
-PyYAML
 tqdm
 joblib
-colorlog
 tabulate
-setuptools<81
-plotly
 
 # --- Plotting ---
-shap # Para a análise de "explicabilidade" da IA
 matplotlib
 seaborn
-rich
 textual
 
 # --- Testing ---

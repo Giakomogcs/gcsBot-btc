@@ -12,12 +12,13 @@ if project_root not in sys.path:
 
 from jules_bot.database.database_manager import DatabaseManager
 from jules_bot.utils.logger import logger
-from jules_bot.utils.config_manager import settings
+from jules_bot.utils.config_manager import config_manager
 
 def check_measurement_data(measurement: str, start_date: str, end_date: str):
     """Verifica a contagem de registros em uma medição para um determinado período."""
     logger.info(f"Verificando dados para '{measurement}' de {start_date} a {end_date}...")
-    db_manager = DatabaseManager()
+    db_config = config_manager.get_section('INFLUXDB')
+    db_manager = DatabaseManager(config=db_config)
     query_api = db_manager.get_query_api()
     if not query_api:
         logger.error("API de consulta do InfluxDB indisponível.")
@@ -25,7 +26,7 @@ def check_measurement_data(measurement: str, start_date: str, end_date: str):
 
     # Query para contar registros de forma eficiente
     query = f'''
-        from(bucket: "{settings.database.bucket}")
+        from(bucket: "{db_manager.bucket}")
             |> range(start: {start_date}, stop: {end_date})
             |> filter(fn: (r) => r._measurement == "{measurement}")
             |> filter(fn: (r) => r._field == "close") 

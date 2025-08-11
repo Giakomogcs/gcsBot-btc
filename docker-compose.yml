@@ -11,7 +11,7 @@ services:
       # Estas variáveis agora vêm diretamente do ficheiro .env
       - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG}
       - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET}
-      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN}
+      - DOCKER_INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
     ports:
       - "8086:8086"
     volumes:
@@ -34,6 +34,9 @@ services:
       - .env
     volumes:
       - .:/app
+    # Mantém o contentor a correr em segundo plano sem executar um comando por defeito
+    # Permite-nos usar 'docker-compose exec' para executar comandos específicos
+    command: ["tail", "-f", "/dev/null"]
 
 volumes:
   influxdb_data:

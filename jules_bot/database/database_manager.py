@@ -9,8 +9,8 @@ import pandas as pd
 from influxdb_client import InfluxDBClient, Point
 from datetime import datetime, timezone
 from influxdb_client.client.write_api import SYNCHRONOUS
-from jules_bot.utils.config_manager import settings
 from jules_bot.utils.logger import logger
+from jules_bot.core.schemas import TradePoint
 
 class DatabaseManager:
     def __init__(self, config: dict):
@@ -42,47 +42,48 @@ class DatabaseManager:
         except Exception as e:
             logging.error(f"Failed to write bot status to InfluxDB: {e}")
 
-    def open_trade(self, trade_data: dict):
-        """Writes a new trade with status OPEN to the 'trades' measurement."""
+    def log_trade(self, trade_point: TradePoint):
+        """
+        Writes a trade record to the 'trades' measurement using the TradePoint schema.
+        This enforces a consistent data structure for all trades.
+        """
         try:
-            point = Point("trades") \
-                .tag("bot_id", trade_data.get("bot_id")) \
-                .tag("mode", trade_data.get("mode")) \
-                .tag("symbol", trade_data.get("symbol")) \
-                .tag("strategy", trade_data.get("strategy")) \
-                .tag("trade_id", trade_data.get("trade_id")) \
-                .field("trade_type", "BUY") \
-                .field("status", "OPEN") \
-                .field("entry_price", float(trade_data.get("entry_price", 0.0))) \
-                .field("quantity", float(trade_data.get("quantity", 0.0))) \
-                .field("usd_value", float(trade_data.get("usd_value", 0.0))) \
-                .field("commission", float(trade_data.get("commission", 0.0)))
-            self.write_api.write(bucket=self.bucket, org=self.org, record=point)
-        except Exception as e:
-            logging.error(f"Failed to write open trade to InfluxDB: {e}")
+            # The TradePoint dataclass has a method to convert itself to an InfluxDB point
+            point = trade_point.to_influxdb_point()
 
-    def close_trade(self, trade_id: str, exit_data: dict):
-        """Updates an existing trade record to mark it as 'CLOSED' and adds exit data."""
-        # Note: InfluxDB doesn't have a direct update. The common pattern is to write a new
-        # point with the same tags and timestamp to overwrite the fields.
-        # For simplicity here, we'll write the 'CLOSED' status. A more complex approach
-        # would involve writing a whole new point with all final data.
-        try:
-            point = Point("trades") \
-                .tag("trade_id", trade_id) \
-                .field("status", "CLOSED") \
-                .field("exit_price", float(exit_data.get("exit_price", 0.0))) \
-                .field("pnl_usd", float(exit_data.get("pnl_usd", 0.0))) \
-                .field("pnl_percent", float(exit_data.get("pnl_percent", 0.0)))
             self.write_api.write(bucket=self.bucket, org=self.org, record=point)
+            logger.info(f"Successfully logged {trade_point.order_type} trade {trade_point.trade_id} to database.")
+
         except Exception as e:
-            logging.error(f"Failed to close trade {trade_id} in InfluxDB: {e}")
+            logger.error(f"Failed to log trade to InfluxDB: {e}", exc_info=True)
 
     def close_client(self):
         """Closes the InfluxDB client."""
         if self._client:
             self._client.close()
             logger.info("Conexão com o InfluxDB fechada.")
+
+    def delete_data_by_predicate(self, predicate: str, start: datetime, stop: datetime):
+        """Deletes data from the current bucket based on a custom Flux predicate within a time range."""
+        if not self.bucket:
+            logger.error("Bucket not configured. Cannot delete data.")
+            return False
+        try:
+            logger.info(f"Attempting to delete data from bucket '{self.bucket}' with predicate: {predicate} between {start} and {stop}")
+            self._client.delete_api().delete(start, stop, predicate, bucket=self.bucket, org=self.org)
+            logger.info("✅ Data deletion successful.")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete data with predicate '{predicate}': {e}", exc_info=True)
+            return False
+
+    def clear_measurement(self, measurement: str):
+        """Deletes all records from a specific measurement in the current bucket."""
+        logger.info(f"Clearing all data from measurement '{measurement}'...")
+        predicate = f'_measurement="{measurement}"'
+        start = datetime(1970, 1, 1, tzinfo=timezone.utc)
+        stop = datetime.now(timezone.utc)
+        self.delete_data_by_predicate(predicate, start, stop)
 
     def clear_all_trades(self):
         """Deletes all records from the 'trades' measurement for the current mode."""
@@ -127,30 +128,33 @@ class DatabaseManager:
     def get_query_api(self): # Função mantida para compatibilidade
         return self.query_api
 
-    def write_trade(self, trade_data: dict):
-        """Escreve um único registo de trade no InfluxDB."""
+    def get_price_data(self, measurement: str, start_date: str = "-30d", end_date: str = "now()") -> pd.DataFrame:
+        """Fetches OHLCV price data from a specific measurement in the current bucket."""
+        logger.info(f"Fetching price data from '{measurement}' in bucket '{self.bucket}' from {start_date} to {end_date}...")
         try:
-            # Extrai a confiança final para ser guardada como um campo numérico separado
-            final_confidence = trade_data.get("decision_data", {}).get("final_confidence", 0.0)
+            query = f'''
+            from(bucket: "{self.bucket}")
+                |> range(start: {start_date}, stop: {end_date})
+                |> filter(fn: (r) => r._measurement == "{measurement}")
+                |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+                |> keep(columns: ["_time", "open", "high", "low", "close", "volume"])
+                |> sort(columns: ["_time"])
+            '''
+            df = self.query_api.query_data_frame(query=query, org=self.org)
+            if isinstance(df, list):
+                df = pd.concat(df, ignore_index=True) if df else pd.DataFrame()
 
-            point = Point("trades") \
-                .tag("status", trade_data["status"]) \
-                .tag("trade_id", trade_data["trade_id"])
-            if self.mode:
-                point = point.tag("environment", self.mode)
-            point = point.field("entry_price", float(trade_data["entry_price"])) \
-                .field("profit_target_price", float(trade_data.get("profit_target_price", 0.0))) \
-                .field("stop_loss_price", float(trade_data.get("stop_loss_price", 0.0))) \
-                .field("quantity_btc", float(trade_data.get("quantity_btc", 0.0))) \
-                .field("realized_pnl_usdt", float(trade_data.get("realized_pnl_usdt", 0.0))) \
-                .field("final_confidence", float(final_confidence)) \
-                .field("decision_data", json.dumps(trade_data.get("decision_data", {}))) \
-                .time(trade_data["timestamp"])
-            
-            self.write_api.write(bucket=self.bucket, org=self.org, record=point)
-            logger.info(f"Trade {trade_data['trade_id']} escrito no DB com status {trade_data['status']}.")
+            if df.empty:
+                logger.warning("No price data found for the specified period.")
+                return pd.DataFrame()
+
+            df = df.rename(columns={"_time": "timestamp"})
+            df.set_index('timestamp', inplace=True)
+            logger.info(f"Successfully fetched {len(df)} price records.")
+            return df
         except Exception as e:
-            logger.error(f"Falha ao escrever trade no DB: {e}", exc_info=True)
+            logger.error(f"Failed to get price data: {e}", exc_info=True)
+            return pd.DataFrame()
 
     def get_open_positions(self, bot_id: str) -> list[dict]:
         """Fetches all trades for a bot_id that are currently in 'OPEN' status."""
@@ -237,23 +241,6 @@ class DatabaseManager:
             logger.info(f"Trade {trade_id} marked as legacy hold: {is_legacy}.")
         except Exception as e:
             logger.error(f"Falha ao marcar trade {trade_id} como legacy hold: {e}", exc_info=True)
-
-    def update_trade_status(self, trade_id: str, new_status: str, extra_fields: dict = None):
-        """Updates the status and other fields of a specific trade."""
-        try:
-            point = Point("trades").tag("trade_id", trade_id).tag("status", new_status)
-            if self.mode:
-                point = point.tag("environment", self.mode)
-
-            if extra_fields:
-                for key, value in extra_fields.items():
-                    point = point.field(key, value)
-
-            point = point.time(datetime.now(timezone.utc))
-            self.write_api.write(bucket=self.bucket, org=self.org, record=point)
-            logger.info(f"Trade {trade_id} status updated to {new_status}.")
-        except Exception as e:
-            logger.error(f"Failed to update trade status for {trade_id}: {e}", exc_info=True)
 
     def execute_90_10_take_profit_split(self, original_position: pd.Series, treasury_quantity: float, realized_pnl: float):
         """

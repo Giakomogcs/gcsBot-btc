@@ -13,7 +13,7 @@ project_root = os.path.dirname(script_dir)
 sys.path.append(project_root)
 
 from jules_bot.database.database_manager import DatabaseManager
-from jules_bot.utils.config_manager import settings
+from jules_bot.utils.config_manager import config_manager
 
 def analyze_confidence_performance(environment: str):
     """
@@ -23,7 +23,13 @@ def analyze_confidence_performance(environment: str):
     print(f"--- Iniciando Análise de Confiança vs. Performance do ambiente '{environment}' ---")
 
     # Instancia o DatabaseManager com o modo de execução correto
-    db_manager = DatabaseManager(execution_mode=environment)
+    db_config = config_manager.get_section('INFLUXDB')
+    if environment == 'test':
+        db_config['bucket'] = 'jules_bot_test_v1'
+    elif environment == 'backtest':
+        db_config['bucket'] = 'jules_bot_backtest_v1'
+    db_manager = DatabaseManager(config=db_config)
+
 
     # Carrega os dados diretamente do banco de dados
     analysis_df = db_manager.get_all_trades_for_analysis()
