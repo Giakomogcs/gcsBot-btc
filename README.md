@@ -24,6 +24,7 @@ The system is fully containerized using Docker, ensuring a consistent and reprod
 - **Situational Awareness Model**: Utilizes a K-Means clustering model to classify the market into one of several "regimes" (e.g., Bull Volatile, Bear Quiet), allowing the strategy to adapt to changing conditions. The code for this is in the `research` directory.
 - **Dockerized Environment**: The entire application stack, including the Python application and the InfluxDB database, is managed by Docker and Docker Compose for easy setup and deployment.
 - **Command-Line Interface**: A central script `run.py` provides a simple interface for managing the entire lifecycle of the bot and its environment.
+- **Interactive Terminal UI (TUI)**: A sophisticated, real-time dashboard built with Textual that allows you to monitor bot status, view portfolio performance (including unrealized PnL), and intervene manually by forcing buys or sells.
 - **Resilient and Modular Architecture**: The code is organized into decoupled components (bot logic, database management, exchange connection), making it easier to maintain and extend.
 
 ## 3. Architecture
@@ -184,21 +185,46 @@ python run.py trade
 
 The bot will start, and its logs will be streamed to your terminal. Press `Ctrl+C` to stop it.
 
-**D. Using the Terminal User Interface (TUI)**
-The bot includes a terminal-based user interface (TUI) for monitoring status and performing manual actions.
+**D. Using the Interactive Terminal UI (TUI)**
+The bot includes a powerful, real-time Terminal User Interface (TUI) for monitoring and manual control.
 
-To use the TUI, you must have the bot running in either `test` or `trade` mode in one terminal. Then, in a **second terminal**, run the following command:
+To use the TUI, you must have the bot running in either `test` or `trade` mode in one terminal. Then, in a **second terminal**, run:
 
 ```bash
 python run.py ui
 ```
 
-This will launch the TUI, which will display:
+This will launch the dashboard, which provides:
+- **Live Status & Portfolio**: Real-time updates on the bot's mode, the current asset price, total investment, current portfolio value, and unrealized Profit & Loss (PnL).
+- **Bot Control**: A panel to manually trigger a buy order for a specific USD amount.
+- **Live Log**: A stream of the latest log messages from the bot.
+- **Open Positions Table**: A detailed list of all open trades, including entry price, quantity, and current value.
+- **Manual Intervention**: Select a trade in the table to bring up options to **Force Sell** it or mark it as **Treasury** (a long-term hold).
 
-- The current bot status (mode, symbol, last update).
-- A table of all open positions.
-- An input field to manually buy a specific USD amount of the asset.
-- Buttons to force sell a selected position.
+A preview of the TUI layout:
+```
++-----------------------------------------------------------------------------+
+| Jules Bot        Last Update: 2023-10-27 10:30:00                           |
++-----------------------------------------------------------------------------+
+| Left Pane (Bot Control & Logs)      | Right Pane (Status & Positions)       |
+|                                     |                                       |
+| Bot Control                         | Bot Status                            |
+| Manual Buy (USD): [ 100.00 ]        | Mode: TEST   Symbol: BTCUSDT          |
+| [ FORCE BUY ]                       | Price: $34,123.45                     |
+|                                     |                                       |
+| Live Log                            | Portfolio                             |
+| > UI: Sent command...               | Invested: $5,000  Value: $5,150       |
+| > Bot: Sell condition met...        | PnL: +$150.00                         |
+|                                     |                                       |
+|                                     | Open Positions                        |
+|                                     | ID   | Entry   | Qty    | Value      |
+|                                     |------|---------|--------|------------|
+|                                     | ab12 | 34000.0 | 0.01   | $341.23    |
+|                                     | cd34 | 33950.0 | 0.02   | $682.46    |
+|                                     |                                       |
+|                                     | [ Force Sell ] [ Mark as Treasury ]   |
++-----------------------------------------------------------------------------+
+```
 
 ### Step 5: Managing the Environment
 
