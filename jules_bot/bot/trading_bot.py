@@ -1,50 +1,44 @@
 import time
+import uuid
 from jules_bot.utils.logger import logger
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.core_logic.state_manager import StateManager
 from jules_bot.core_logic.trader import Trader
 from jules_bot.core_logic.strategy_rules import StrategyRules
 from jules_bot.core.market_data_provider import MarketDataProvider
+from jules_bot.database.data_manager import DataManager
+from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
 
 class TradingBot:
     """
-    The maestro that orquestrates all the components of the bot.
+    The maestro that orchestrates all the components of the bot.
     """
 
-    def __init__(self,
-                 mode: str,
-                 bot_id: str,
-                 market_data_provider: MarketDataProvider):
-
+    def __init__(self, mode: str, market_data_provider: MarketDataProvider):
         self.mode = mode
-        self.bot_id = bot_id
+        self.run_id = f"{self.mode}_{uuid.uuid4()}"
         self.is_running = True
         self.market_data_provider = market_data_provider
         self.symbol = config_manager.get('APP', 'symbol')
 
     def run(self):
         """
-        The main loop for TRADING and TEST.
+        The main loop for LIVE and PAPER TRADING.
         """
         if self.mode not in ['trade', 'test']:
-            logger.error(f"The 'run' method cannot be called in '{self.mode}' mode. Use 'run_backtest'.")
+            logger.error(f"The 'run' method cannot be called in '{self.mode}' mode.")
             return
 
         # Instantiate core components
+        db_config = config_manager.get_db_config()
         if self.mode == 'trade':
-            bucket_key = 'bucket_live'
-        elif self.mode == 'test':
-            bucket_key = 'bucket_testnet'
-        else:
-            logger.error(f"Invalid mode '{self.mode}' for determining bucket.")
-            return
+            db_config['bucket'] = config_manager.get('INFLUXDB', 'bucket_prices')
+        else: # test mode
+            db_config['bucket'] = config_manager.get('INFLUXDB', 'bucket_backtest')
 
-        bucket_name = config_manager.get('INFLUXDB', bucket_key)
-        if not bucket_name:
-            logger.error(f"Could not find bucket configuration for key '{bucket_key}' in config.ini")
-            return
-
-        state_manager = StateManager(bucket_name, self.bot_id)
+        data_manager = DataManager(db_manager=None, config=config_manager, logger=logger)
+        feature_calculator = LiveFeatureCalculator(data_manager, mode=self.mode)
+        state_manager = StateManager(db_config['bucket'], self.run_id)
         trader = Trader(mode=self.mode)
         strategy_rules = StrategyRules(config_manager)
 
@@ -53,69 +47,85 @@ class TradingBot:
             return
 
         self.is_running = True
-        logger.info(f"🚀 --- TRADING LOOP STARTED FOR SYMBOL {self.symbol} IN {self.mode.upper()} MODE --- 🚀")
+        logger.info(f"🚀 --- TRADING BOT STARTED --- RUN ID: {self.run_id} --- SYMBOL: {self.symbol} --- MODE: {self.mode.upper()} --- 🚀")
 
         while self.is_running:
             try:
-                current_price = trader.get_current_price(self.symbol)
-                if current_price is None:
-                    logger.warning("Could not retrieve current price. Skipping cycle.")
+                logger.info("--- Starting new trading cycle ---")
+
+                # 1. Get the latest market data with all features
+                final_candle = feature_calculator.get_current_candle_with_features()
+                if final_candle.empty:
+                    logger.warning("Could not generate final candle with features. Skipping cycle.")
                     time.sleep(10)
                     continue
 
-                # 1. Check for potential sales (Read -> Act -> Update State)
-                logger.debug("--- SELL CYCLE START ---")
-                logger.info("[Read] Fetching open positions.")
+                current_price = final_candle['close']
+                decision_context = final_candle.to_dict()
+
+                # 2. Check for potential sales
                 open_positions = state_manager.get_open_positions()
                 logger.info(f"Found {len(open_positions)} open position(s).")
 
                 for position in open_positions:
                     trade_id = position.get('trade_id')
                     target_price = position.get('sell_target_price', float('inf'))
-                    logger.debug(f"Checking position {trade_id}: current_price={current_price}, target_price={target_price}")
 
                     if current_price >= target_price:
-                        logger.info(f"[Act] Sell condition met for position {trade_id}. Executing sell.")
-                        sell_result = trader.execute_sell(position)
+                        logger.info(f"Sell condition met for position {trade_id}. Executing sell.")
 
-                        if sell_result:
-                            logger.info(f"[Update State] Sell successful for {trade_id}. Closing position in database.")
+                        # Add financial details to the position data for logging
+                        original_quantity = float(position.get('quantity', 0))
+                        sell_quantity = original_quantity * 0.9  # Sell 90%
+                        hodl_asset_amount = original_quantity * 0.1 # Keep 10%
+
+                        # Create a copy to avoid modifying the original dict from state_manager
+                        sell_position_data = position.copy()
+                        sell_position_data['quantity'] = sell_quantity
+
+                        success, sell_result = trader.execute_sell(sell_position_data, self.run_id, decision_context)
+
+                        if success:
+                            # Calculate PnL and other details after successful sell
+                            commission_usd = sell_result.get('commission', 0) # Assuming commission is in USDT
+                            realized_pnl_usd = (current_price - float(position.get('price', 0))) * sell_quantity - commission_usd
+                            hodl_asset_value_at_sell = hodl_asset_amount * current_price
+
+                            # Update sell_result with the calculated financial details for state update
+                            sell_result.update({
+                                "commission_usd": commission_usd,
+                                "realized_pnl_usd": realized_pnl_usd,
+                                "hodl_asset_amount": hodl_asset_amount,
+                                "hodl_asset_value_at_sell": hodl_asset_value_at_sell
+                            })
+
+                            logger.info(f"Sell successful for {trade_id}. Closing position.")
                             state_manager.close_position(trade_id, sell_result)
-                            logger.info(f"Position {trade_id} successfully closed.")
                         else:
-                            logger.error(f"Sell execution failed for position {trade_id}. State remains OPEN.")
-                logger.debug("--- SELL CYCLE END ---")
+                            logger.error(f"Sell execution failed for position {trade_id}.")
 
-                # 2. Check for a potential buy
-                logger.debug("--- BUY CYCLE START ---")
+                # 3. Check for a potential buy
                 last_buy_price = state_manager.get_last_purchase_price()
                 open_positions_count = state_manager.get_open_positions_count()
-
                 buy_trigger_percentage = strategy_rules.get_next_buy_trigger(open_positions_count)
 
                 if current_price <= last_buy_price * (1 - buy_trigger_percentage):
-                    logger.info("Buy condition met. Evaluating capital for new trade.")
+                    logger.info("Buy condition met. Evaluating capital.")
                     capital_allocated = state_manager.get_total_capital_allocated()
                     total_balance = trader.get_account_balance()
-
-                    # Avoid division by zero if total balance is 0
-                    if total_balance + capital_allocated == 0:
-                        capital_allocated_percent = 0
-                    else:
-                        capital_allocated_percent = (capital_allocated / (total_balance + capital_allocated)) * 100
+                    capital_allocated_percent = (capital_allocated / (total_balance + capital_allocated)) * 100 if (total_balance + capital_allocated) > 0 else 0
 
                     base_amount = float(config_manager.get('TRADING_STRATEGY', 'usd_per_trade'))
                     buy_amount_usdt = strategy_rules.get_next_buy_amount(capital_allocated_percent, base_amount)
 
                     logger.info(f"Executing buy for ${buy_amount_usdt} USD.")
-                    buy_result = trader.execute_buy(buy_amount_usdt)
-                    if buy_result:
-                        logger.info("Buy successful. Creating new position with calculated sell target.")
+                    success, buy_result = trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
+                    if success:
+                        logger.info("Buy successful. Creating new position.")
                         state_manager.create_new_position(buy_result)
-                logger.debug("--- BUY CYCLE END ---")
 
-                logger.info("--- Cycle complete. Waiting 10 seconds... ---")
-                time.sleep(10)
+                logger.info("--- Cycle complete. Waiting 60 seconds... ---")
+                time.sleep(60)
 
             except KeyboardInterrupt:
                 logger.info("\n[SHUTDOWN] Ctrl+C detected. Stopping main loop...")
@@ -126,6 +136,6 @@ class TradingBot:
 
     def shutdown(self):
         """Handles all cleanup operations to ensure a clean exit."""
-        print("\n[SHUTDOWN] Initiating graceful shutdown procedure...")
-        # In a real application, you would close connections here
-        print("[SHUTDOWN] Cleanup complete. Goodbye!")
+        logger.info("[SHUTDOWN] Initiating graceful shutdown procedure...")
+        # In a real application, you would close connections and other resources here
+        logger.info("[SHUTDOWN] Cleanup complete. Goodbye!")
