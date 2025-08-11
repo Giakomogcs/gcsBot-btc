@@ -43,39 +43,14 @@ class StateManager:
         last_position = sorted(open_positions, key=lambda p: p['time'], reverse=True)[0]
         return last_position.get('purchase_price', float('inf'))
 
-    def create_new_position(self, buy_result: dict):
+    def create_new_position(self, buy_result: dict, sell_target_price: float):
         """
-        Calculates the target sell price and records a new open position in the database.
+        Records a new open position in the database.
         """
-        logger.info(f"Attempting to create new position from buy result: {buy_result}")
-
-        commission_rate = float(config_manager.get('STRATEGY_RULES', 'commission_rate'))
-        sell_factor = float(config_manager.get('STRATEGY_RULES', 'sell_factor'))
-        target_profit = float(config_manager.get('STRATEGY_RULES', 'target_profit'))
-
-        purchase_price = buy_result['price']
-
-        # Corrected Formula Implementation
-        numerator = purchase_price * (1 + commission_rate)
-        denominator = (1 - commission_rate) # sell_factor should not be here
-
-        if denominator == 0:
-            logger.error("Denominator is zero in sell target price calculation. Aborting.")
-            return
-
-        break_even_price = numerator / denominator
-        sell_target_price = break_even_price * (1 + target_profit)
-
-        logger.info(f"Calculated sell_target_price: {sell_target_price} for purchase_price: {purchase_price}")
-
-        # This function is now a passthrough and should be refactored.
-        # For now, we adapt it to call the new log_trade function.
-        # The logic for calculating sell_target_price should be moved to the bot/strategy itself.
+        logger.info(f"Creating new position for trade_id: {buy_result.get('trade_id')} with target sell price: {sell_target_price}")
 
         from jules_bot.core.schemas import TradePoint
 
-        # The bot_id is not part of the TradePoint schema. It is used for status, not individual trades.
-        # We now create a TradePoint object to enforce the schema.
         try:
             trade_point = TradePoint(
                 run_id=self.bot_id,
@@ -90,7 +65,8 @@ class StateManager:
                 usd_value=buy_result['usd_value'],
                 commission=buy_result.get('commission', 0.0),
                 commission_asset=buy_result.get('commission_asset', 'USDT'),
-                exchange_order_id=buy_result.get('exchange_order_id')
+                exchange_order_id=buy_result.get('exchange_order_id'),
+                sell_target_price=sell_target_price  # Pass the pre-calculated target price
             )
             self.db_manager.log_trade(trade_point)
         except KeyError as e:

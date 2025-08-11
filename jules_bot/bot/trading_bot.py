@@ -86,14 +86,26 @@ class TradingBot:
                         success, sell_result = trader.execute_sell(sell_position_data, self.run_id, decision_context)
 
                         if success:
-                            # Calculate PnL and other details after successful sell
-                            commission_usd = sell_result.get('commission', 0) # Assuming commission is in USDT
-                            realized_pnl_usd = (current_price - float(position.get('price', 0))) * sell_quantity - commission_usd
+                            # --- CORRECTED PNL CALCULATION ---
+                            buy_price = float(position.get('price', 0))
+                            sell_price = float(sell_result.get('price'))
+
+                            commission_rate = float(strategy_rules.rules.get('commission_rate'))
+
+                            # This formula correctly accounts for commissions on both buy and sell side
+                            # for the portion of the asset that was sold.
+                            realized_pnl_usd = ((sell_price * (1 - commission_rate)) - (buy_price * (1 + commission_rate))) * sell_quantity
+
+                            # --- END CORRECTED PNL CALCULATION ---
+
                             hodl_asset_value_at_sell = hodl_asset_amount * current_price
+
+                            # The total commission for this sell transaction
+                            commission_usd = float(sell_result.get('commission', 0))
 
                             # Update sell_result with the calculated financial details for state update
                             sell_result.update({
-                                "commission_usd": commission_usd,
+                                "commission_usd": commission_usd, # Log the actual commission for the sell
                                 "realized_pnl_usd": realized_pnl_usd,
                                 "hodl_asset_amount": hodl_asset_amount,
                                 "hodl_asset_value_at_sell": hodl_asset_value_at_sell
@@ -150,8 +162,12 @@ class TradingBot:
                                     logger.info(f"Executing buy for ${buy_amount_usdt:.2f} USD.")
                                     success, buy_result = trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
                                     if success:
-                                        logger.info("Buy successful. Creating new position.")
-                                        state_manager.create_new_position(buy_result)
+                                        logger.info("Buy successful. Calculating sell target and creating new position.")
+
+                                        purchase_price = float(buy_result.get('price'))
+                                        sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
+
+                                        state_manager.create_new_position(buy_result, sell_target_price)
                                 else:
                                     logger.warning(f"Calculated buy amount (${buy_amount_usdt:.2f}) is below the minimum threshold of ${min_trade_size}. Skipping buy.")
 
