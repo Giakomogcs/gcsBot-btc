@@ -65,7 +65,7 @@ class Backtester:
                     logger.debug(f"Backtest: Sell condition met for {trade_id} at price {current_price}")
 
                     original_quantity = position['quantity']
-                    sell_quantity = original_quantity * strategy_rules.rules.getfloat('sell_factor', 0.9)
+                    sell_quantity = original_quantity * float(strategy_rules.rules.get('sell_factor', 0.9))
                     hodl_asset_amount = original_quantity - sell_quantity
 
                     success, sell_result = self.mock_trader.execute_sell({'quantity': sell_quantity})
@@ -109,9 +109,9 @@ class Backtester:
                     buy_price = buy_result['price']
 
                     # Calculate sell target price
-                    commission_rate = strategy_rules.rules.getfloat('commission_rate')
-                    sell_factor = strategy_rules.rules.getfloat('sell_factor')
-                    target_profit = strategy_rules.rules.getfloat('target_profit')
+                    commission_rate = float(strategy_rules.rules['commission_rate'])
+                    sell_factor = float(strategy_rules.rules['sell_factor'])
+                    target_profit = float(strategy_rules.rules['target_profit'])
                     numerator = buy_price * (1 + commission_rate)
                     denominator = sell_factor * (1 - commission_rate)
                     break_even_price = numerator / denominator if denominator != 0 else float('inf')
