@@ -79,6 +79,7 @@ class JulesBotApp(App):
         table = self.query_one(DataTable)
         table.add_columns("Trade ID", "Entry Price", "Quantity", "Status")
         self.update_timer = self.set_interval(1.0, self.update_dashboard, pause=False)
+        self.query_one("#manual_buy_input").focus()
 
     def update_dashboard(self) -> None:
         """Reads the state file and updates all UI widgets."""
