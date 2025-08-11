@@ -158,15 +158,21 @@ class Backtester:
 
         if all_trades_df.empty:
             logger.warning("No trades were executed in this backtest run.")
-            total_pnl = 0
-            num_trades = 0
+            num_buy_trades = 0
+            num_sell_trades = 0
+            total_realized_pnl = 0.0
+            total_fees_usd = 0.0
         else:
+            buy_trades = all_trades_df[all_trades_df['order_type'] == 'buy']
             sell_trades = all_trades_df[all_trades_df['order_type'] == 'sell']
-            total_pnl = sell_trades['realized_pnl_usd'].sum() if 'realized_pnl_usd' in sell_trades.columns else 0
-            num_trades = len(sell_trades)
+            num_buy_trades = len(buy_trades)
+            num_sell_trades = len(sell_trades)
+            total_realized_pnl = sell_trades['realized_pnl_usd'].sum() if 'realized_pnl_usd' in sell_trades.columns else 0.0
+            total_fees_usd = all_trades_df['commission_usd'].sum() if 'commission_usd' in all_trades_df.columns else 0.0
 
         initial_balance = self.mock_trader.initial_balance
         final_balance = self.mock_trader.get_account_balance()
+        final_btc_balance = self.mock_trader.btc_balance
         total_pnl_balance = final_balance - initial_balance
         total_pnl_percent = (total_pnl_balance / initial_balance) * 100 if initial_balance > 0 else 0
 
@@ -175,12 +181,14 @@ class Backtester:
         if not self.feature_data.empty:
             start_time = self.feature_data.index[0]
             end_time = self.feature_data.index[-1]
-            logger.info(f" Period: {start_time} to {end_time}")
+            logger.info(f" Period: {start_time.date()} to {end_time.date()}")
         logger.info(f" Initial Balance: ${initial_balance:,.2f}")
-        logger.info(f" Final Balance:   ${final_balance:,.2f}")
-        logger.info(f" Total P&L (Cash): ${total_pnl_balance:,.2f} ({total_pnl_percent:.2f}%)")
-        logger.info(f" Sum of Realized PnL (from trades): ${total_pnl:,.2f}")
-        logger.info(f" Total Closed Trades (Sells): {num_trades}")
+        logger.info(f" Final Balance:   ${final_balance:,.2f} (Final BTC: {final_btc_balance:.8f})")
+        logger.info(f" Net P&L:         ${total_pnl_balance:,.2f} ({total_pnl_percent:.2f}%)")
+        logger.info(f" Sum of Realized PnL (from sells): ${total_realized_pnl:,.2f}")
+        logger.info(f" Total Buy Trades:    {num_buy_trades}")
+        logger.info(f" Total Sell Trades:   {num_sell_trades}")
+        logger.info(f" Total Fees Paid: ${total_fees_usd:,.2f}")
         logger.info("========================================")
 
 # Add a to_dict method to TradePoint if it doesn't exist, for easy conversion
