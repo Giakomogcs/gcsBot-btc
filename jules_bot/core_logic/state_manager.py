@@ -22,6 +22,10 @@ class StateManager:
         """Queries the database and returns the number of currently open trades."""
         return len(self.get_open_positions())
 
+    def get_trade_history(self, mode: str) -> list[dict]:
+        """Fetches all trades (open and closed) from the database for the given mode."""
+        return self.db_manager.get_all_trades_by_mode(mode=mode)
+
     def get_last_purchase_price(self) -> float:
         """
         Retrieves the purchase price of the most recent 'buy' trade.

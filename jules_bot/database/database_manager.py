@@ -417,6 +417,24 @@ class DatabaseManager:
             logging.error(f"Error getting latest bot status: {e}")
             return None
 
+    def get_all_trades_by_mode(self, mode: str) -> list[dict]:
+        """Retrieves all trades for a given mode and returns them as a list of dicts."""
+        try:
+            flux_query = f'''
+            from(bucket: "{self.bucket}")
+              |> range(start: 0)
+              |> filter(fn: (r) => r._measurement == "trades" and r.environment == "{mode}")
+              |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+              |> sort(columns: ["_time"], desc: true)
+            '''
+            result = self.query_api.query(query=flux_query, org=self.org)
+            if not result:
+                return []
+            return [record.values for table in result for record in table.records]
+        except Exception as e:
+            logging.error(f"Error getting all trades by mode: {e}", exc_info=True)
+            return []
+
     def get_trade_history(self, bot_id: str) -> pd.DataFrame:
         """Retrieves all trades for a given bot and returns them as a DataFrame."""
         try:

@@ -76,6 +76,9 @@ class DisplayManager(App):
                 yield Static("Open Positions", classes="title")
                 yield DataTable(id="positions_table")
 
+                yield Static("Trade History", classes="title")
+                yield DataTable(id="history_table")
+
                 yield Static("Binance Wallet", classes="title")
                 yield DataTable(id="wallet_table")
 
@@ -89,6 +92,9 @@ class DisplayManager(App):
         positions_table = self.query_one("#positions_table", DataTable)
         positions_table.cursor_type = "row"
         positions_table.add_columns("ID", "Entry Price", "Quantity", "Value", "Status")
+
+        history_table = self.query_one("#history_table", DataTable)
+        history_table.add_columns("ID", "Status", "Entry Price", "Exit Price", "Quantity", "PnL")
 
         wallet_table = self.query_one("#wallet_table", DataTable)
         wallet_table.add_columns("Asset", "Free", "Locked", "USD Value")
@@ -119,7 +125,11 @@ class DisplayManager(App):
             validation_result = input_widget.validate(input_widget.value)
 
             if not validation_result.is_valid:
-                self.log_display.write(f"[bold red]UI ERROR: {validation_result.failure_description}[/]")
+                # Access the description from the first failure
+                if validation_result.failures:
+                    self.log_display.write(f"[bold red]UI ERROR: {validation_result.failures[0].description}[/]")
+                else:
+                    self.log_display.write(f"[bold red]UI ERROR: Validation failed with no description.[/]")
                 return
 
             try:
@@ -238,21 +248,98 @@ class DisplayManager(App):
             self.query_one("#action_bar").add_class("hidden")
 
         self.update_wallet_table(state.get("wallet_balances", []))
+        self.update_history_table(state.get("trade_history", []))
+
+    def update_history_table(self, history: list) -> None:
+        """Updates the history table with the latest trade history."""
+        history_table = self.query_one("#history_table", DataTable)
+        history_table.clear()
+        if not history:
+            history_table.add_row("No trade history.")
+            return
+
+        # The history can contain multiple entries for the same trade_id (buy and sell)
+        # We want to show one line per trade, so we need to process the data.
+        processed_trades = {}
+        # Sort history by time to process buys before sells
+        history.sort(key=lambda x: x.get('_time', ''), reverse=False)
+
+        for trade in history:
+            trade_id = trade.get('trade_id')
+            if not trade_id:
+                continue
+
+            if trade_id not in processed_trades:
+                processed_trades[trade_id] = {'trade_id': trade_id}
+
+            if trade.get('order_type') == 'buy':
+                processed_trades[trade_id]['entry_price'] = trade.get('price')
+                processed_trades[trade_id]['quantity'] = trade.get('quantity')
+                processed_trades[trade_id]['status'] = trade.get('status', 'OPEN')
+            elif trade.get('order_type') == 'sell':
+                processed_trades[trade_id]['exit_price'] = trade.get('price')
+                processed_trades[trade_id]['pnl'] = trade.get('realized_pnl_usd') # Correct field name
+                processed_trades[trade_id]['status'] = trade.get('status', 'CLOSED')
+
+        # Now add rows from the processed data
+        sorted_trades = sorted(processed_trades.values(), key=lambda x: x.get('entry_price', 0), reverse=True)
+
+        for data in sorted_trades:
+            short_id = data.get('trade_id', 'N/A').split('-')[0]
+            status = data.get('status', 'N/A')
+            entry_price = data.get('entry_price')
+            exit_price = data.get('exit_price')
+            quantity = data.get('quantity')
+            pnl = data.get('pnl')
+
+            # Formatting for display
+            entry_price_str = f"${Decimal(entry_price):,.2f}" if entry_price is not None else "N/A"
+            exit_price_str = f"${Decimal(exit_price):,.2f}" if exit_price is not None else "N/A"
+            quantity_str = f"{Decimal(quantity):.8f}" if quantity is not None else "N/A"
+            pnl_str = f"${Decimal(pnl):,.2f}" if pnl is not None else "N/A"
+
+            if pnl is not None:
+                pnl_color = "green" if Decimal(pnl) >= 0 else "red"
+                pnl_str = f"[{pnl_color}]{pnl_str}[/]"
+
+            history_table.add_row(
+                short_id,
+                status,
+                entry_price_str,
+                exit_price_str,
+                quantity_str,
+                pnl_str,
+                key=data.get('trade_id')
+            )
 
     def update_wallet_table(self, balances: list) -> None:
-        """Updates the wallet table with the latest balances."""
+        """Updates the wallet table with the latest balances, filtered for relevant assets."""
         wallet_table = self.query_one("#wallet_table", DataTable)
         wallet_table.clear()
+
         if not balances:
             wallet_table.add_row("No wallet data.")
+            return
+
+        # Assets to display, including common stablecoins
+        display_assets = ["BTC", "USDT", "USDC", "BUSD", "USD"]
+
+        filtered_balances = [
+            b for b in balances if b.get('asset') in display_assets
+        ]
+
+        if not filtered_balances:
+            wallet_table.add_row("No relevant assets (BTC, USD*) found.")
         else:
-            for balance in balances:
+            for balance in filtered_balances:
                 try:
                     asset = balance.get('asset')
                     free = Decimal(balance.get('free', '0'))
                     locked = Decimal(balance.get('locked', '0'))
                     usd_value = Decimal(balance.get('usd_value', '0'))
-                    wallet_table.add_row(asset, f"{free:.8f}", f"{locked:.8f}", f"${usd_value:,.2f}")
+                    # Only show value for assets that are not the quote currency itself
+                    value_str = f"${usd_value:,.2f}" if asset != 'USDT' else '' # Assuming USDT is the quote
+                    wallet_table.add_row(asset, f"{free:.8f}", f"{locked:.8f}", value_str)
                 except (InvalidOperation, TypeError):
                     wallet_table.add_row(balance.get('asset', 'ERR'), "Data Error", "", "")
 

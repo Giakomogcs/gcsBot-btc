@@ -26,7 +26,7 @@ class TradingBot:
         self.symbol = config_manager.get('APP', 'symbol')
         self.state_file_path = "/tmp/bot_state.json"
 
-    def _write_state_to_file(self, open_positions: list, current_price: float, wallet_balances: list):
+    def _write_state_to_file(self, open_positions: list, current_price: float, wallet_balances: list, trade_history: list):
         """Saves the current bot state to a JSON file for the UI to read."""
         state = {
             "mode": self.mode,
@@ -35,7 +35,8 @@ class TradingBot:
             "timestamp": time.time(),
             "current_price": str(current_price),
             "open_positions": open_positions,
-            "wallet_balances": wallet_balances
+            "wallet_balances": wallet_balances,
+            "trade_history": trade_history
         }
         try:
             # Use atomic write to prevent partial reads from the UI
@@ -144,9 +145,10 @@ class TradingBot:
                 # Fetch all wallet balances
                 all_prices = trader.get_all_prices()
                 wallet_balances = account_manager.get_all_account_balances(all_prices)
+                trade_history = state_manager.get_trade_history(mode=self.mode)
 
                 # Update UI state file
-                self._write_state_to_file(open_positions, float(current_price), wallet_balances)
+                self._write_state_to_file(open_positions, float(current_price), wallet_balances, trade_history)
 
                 for position in open_positions:
                     trade_id = position.get('trade_id')
