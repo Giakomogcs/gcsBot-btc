@@ -76,7 +76,14 @@ class TradingBot:
                     if cmd_type == "force_buy":
                         amount_usd = command.get("amount_usd")
                         if amount_usd:
-                            trader.execute_buy(amount_usd, self.run_id, {"reason": "manual_override"})
+                            success, buy_result = trader.execute_buy(amount_usd, self.run_id, {"reason": "manual_override"})
+                            if success:
+                                logger.info("Force buy successful. Calculating sell target and creating new position.")
+                                purchase_price = float(buy_result.get('price'))
+                                sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
+                                state_manager.create_new_position(buy_result, sell_target_price)
+                            else:
+                                logger.error(f"Force buy of {amount_usd} USD failed to execute.")
 
                     elif cmd_type == "force_sell":
                         trade_id = command.get("trade_id")
