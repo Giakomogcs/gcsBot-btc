@@ -28,6 +28,17 @@ class TradingBot:
 
     def _write_state_to_file(self, open_positions: list, current_price: float, wallet_balances: list, trade_history: list):
         """Saves the current bot state to a JSON file for the UI to read."""
+        # Convert datetime objects to ISO format strings for JSON serialization
+        for trade in trade_history:
+            for key, value in trade.items():
+                if hasattr(value, 'isoformat'):
+                    trade[key] = value.isoformat()
+
+        for position in open_positions:
+            for key, value in position.items():
+                if hasattr(value, 'isoformat'):
+                    position[key] = value.isoformat()
+
         state = {
             "mode": self.mode,
             "run_id": self.run_id,
