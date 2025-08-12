@@ -75,7 +75,7 @@ def test_close_position_logs_trade(state_manager, mock_db_manager):
         'usd_value': 110.0,
         'symbol': 'BTCUSDT',
         'order_type': 'sell',
-        'realized_pnl': 10.0
+        'realized_pnl_usd': 10.0
     }
 
     # Act
@@ -91,7 +91,7 @@ def test_close_position_logs_trade(state_manager, mock_db_manager):
     assert logged_point.trade_id == trade_id
     assert logged_point.price == 110.0
     assert logged_point.order_type == 'sell'
-    assert logged_point.realized_pnl == 10.0
+    assert logged_point.realized_pnl_usd == 10.0
 
 def test_get_last_purchase_price_with_open_positions(state_manager):
     """

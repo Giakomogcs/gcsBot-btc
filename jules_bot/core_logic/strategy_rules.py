@@ -3,8 +3,9 @@ from jules_bot.utils.config_manager import ConfigManager
 class StrategyRules:
     def __init__(self, config_manager: ConfigManager):
         self.rules = config_manager.get_section('STRATEGY_RULES')
+        self.trading_strategy_rules = config_manager.get_section('TRADING_STRATEGY')
         self.max_capital_per_trade_percent = float(self.rules.get('max_capital_per_trade_percent', 0.02))
-        self.base_usd_per_trade = float(self.rules.get('base_usd_per_trade', 20.0))
+        self.usd_per_trade = float(self.trading_strategy_rules.get('usd_per_trade', 20.0))
         self.sell_factor = float(self.rules.get('sell_factor', 0.9))
 
     def evaluate_buy_signal(self, market_data: dict, open_positions_count: int) -> tuple[bool, str, str]:
@@ -55,7 +56,7 @@ class StrategyRules:
         capital_based_size = available_balance * self.max_capital_per_trade_percent
 
         # The trade size is the smaller of the base amount or the capital-based amount
-        trade_size = min(self.base_usd_per_trade, capital_based_size)
+        trade_size = min(self.usd_per_trade, capital_based_size)
 
         return trade_size
 

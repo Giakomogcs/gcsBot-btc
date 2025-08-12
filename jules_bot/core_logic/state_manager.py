@@ -96,7 +96,11 @@ class StateManager:
                 commission=exit_data.get('commission', 0.0),
                 commission_asset=exit_data.get('commission_asset', 'USDT'),
                 exchange_order_id=exit_data.get('exchange_order_id'),
-                realized_pnl=exit_data.get('realized_pnl')
+                # --- Updated Fields ---
+                realized_pnl_usd=exit_data.get('realized_pnl_usd'),
+                commission_usd=exit_data.get('commission_usd'),
+                hodl_asset_amount=exit_data.get('hodl_asset_amount'),
+                hodl_asset_value_at_sell=exit_data.get('hodl_asset_value_at_sell')
             )
             self.db_manager.log_trade(trade_point)
         except KeyError as e:

@@ -57,7 +57,6 @@ class TradePoint:
 
     # --- Legacy Fields (to be deprecated) ---
     backtest_id: Optional[str] = None
-    realized_pnl: Optional[float] = None
     held_quantity: Optional[float] = None
 
     def to_influxdb_point(self):
@@ -106,8 +105,6 @@ class TradePoint:
         # --- Add Legacy Fields for Backwards Compatibility ---
         if self.backtest_id:
             p = p.tag("backtest_id", self.backtest_id)
-        if self.realized_pnl is not None:
-            p = p.field("realized_pnl", self.realized_pnl)
         if self.held_quantity is not None:
             p = p.field("held_quantity", self.held_quantity)
 
