@@ -18,6 +18,8 @@ if project_root not in sys.path:
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.utils.logger import logger
+from jules_bot.database.models import PriceHistory
+from sqlalchemy import desc
 
 class CorePriceCollector:
     def __init__(self, bucket_name: Optional[str] = None):

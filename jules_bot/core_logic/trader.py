@@ -5,7 +5,7 @@ from jules_bot.utils.config_manager import config_manager
 from jules_bot.utils.logger import logger
 from typing import Optional, Tuple, Dict, Any
 import time
-from jules_bot.database.database_manager import DatabaseManager
+from jules_bot.database.postgres_manager import PostgresManager
 
 class Trader:
     """
@@ -19,18 +19,8 @@ class Trader:
         self.symbol = config_manager.get('APP', 'symbol')
         self.strategy_name = config_manager.get('APP', 'strategy_name', fallback='default_strategy')
 
-        db_config = config_manager.get_db_config()
-
-        if self.mode == 'trade':
-            db_config['bucket'] = config_manager.get('INFLUXDB', 'bucket_live')
-        elif self.mode == 'test':
-            db_config['bucket'] = config_manager.get('INFLUXDB', 'bucket_testnet')
-        elif self.mode == 'backtest':
-            db_config['bucket'] = config_manager.get('INFLUXDB', 'bucket_backtest')
-        else:
-            db_config['bucket'] = config_manager.get('INFLUXDB', 'bucket_prices') # Fallback
-
-        self.db_manager = DatabaseManager(config=db_config)
+        db_config = config_manager.get_db_config('POSTGRES')
+        self.db_manager = PostgresManager(config=db_config)
 
     def _map_mode_to_environment(self, mode: str) -> str:
         """Maps the internal 'mode' to the user-facing 'environment' tag."""

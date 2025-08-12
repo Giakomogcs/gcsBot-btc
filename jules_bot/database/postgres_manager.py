@@ -3,7 +3,7 @@ import logging
 import uuid
 from typing import Optional
 import pandas as pd
-from sqlalchemy import create_engine, desc, and_
+from sqlalchemy import create_engine, desc, and_, text
 from sqlalchemy.orm import sessionmaker, Session
 from contextlib import contextmanager
 from jules_bot.core.schemas import TradePoint
