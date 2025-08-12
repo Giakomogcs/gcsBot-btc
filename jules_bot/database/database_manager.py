@@ -163,7 +163,7 @@ class DatabaseManager:
             flux_query = f'''
             from(bucket: "{self.bucket}")
                 |> range(start: 0)
-                |> filter(fn: (r) => r._measurement == "trades")
+                |> filter(fn: (r) => r._measurement == "trades" and r.run_id == "{bot_id}")
                 |> group(columns: ["trade_id"])
                 |> last(column: "_time")
                 |> group()
@@ -171,6 +171,8 @@ class DatabaseManager:
                 |> filter(fn: (r) => r.status == "OPEN")
             '''
             result = self.query_api.query(query=flux_query, org=self.org)
+            if not result:
+                return []
             return [record.values for table in result for record in table.records]
         except Exception as e:
             logging.error(f"Error getting open positions: {e}")
