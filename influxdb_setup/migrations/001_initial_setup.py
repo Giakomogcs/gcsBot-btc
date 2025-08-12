@@ -45,7 +45,7 @@ def main():
             sys.exit(1)
 
         print(f"Connecting to InfluxDB at {url}...")
-        client = InfluxDBClient(url=url, token=admin_token, org=org_name)
+        client = InfluxDBClient(url=url, token=admin_token)
         org_api = client.organizations_api()
         bucket_api = client.buckets_api()
         auth_api = client.authorizations_api()
@@ -92,7 +92,7 @@ def main():
                 continue
 
             try:
-                existing_bucket = bucket_api.find_bucket_by_name(bucket_name=bucket_name)
+                existing_bucket = bucket_api.find_bucket_by_name(bucket_name=bucket_name, org_id=org.id)
                 if existing_bucket:
                     print(f"✅ Bucket '{bucket_name}' already exists.")
                 else:
