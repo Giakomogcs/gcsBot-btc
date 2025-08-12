@@ -9,6 +9,7 @@ from jules_bot.core_logic.strategy_rules import StrategyRules
 from jules_bot.utils.logger import logger
 from jules_bot.core.schemas import TradePoint
 from jules_bot.research.feature_engineering import add_all_features
+from jules_bot.services.trade_logger import TradeLogger
 
 class Backtester:
     def __init__(self, days: int = None, start_date: str = None, end_date: str = None):
@@ -31,8 +32,9 @@ class Backtester:
 
         db_config = config_manager.get_db_config()
         db_config['bucket'] = config_manager.get('INFLUXDB', 'bucket_backtest')
-        self.db_manager = DatabaseManager(config=db_config)
+        self.db_manager = DatabaseManager(config=db_config) # For reading results
         self.data_manager = DataManager(self.db_manager, config_manager, logger)
+        self.trade_logger = TradeLogger(mode='backtest') # For writing trades
 
         symbol = config_manager.get('APP', 'symbol')
         interval = config_manager.get('DATA', 'interval', fallback='1m')
@@ -103,16 +105,27 @@ class Backtester:
                         decision_context = candle.to_dict()
                         decision_context.pop('symbol', None)
 
-                        trade_point = TradePoint(
-                            run_id=self.run_id, environment="backtest", strategy_name=strategy_name,
-                            symbol=symbol, trade_id=trade_id, exchange="backtest_engine",
-                            order_type="sell", status="CLOSED", price=sell_result['price'], quantity=sell_result['quantity'],
-                            usd_value=sell_result['usd_value'], commission=commission_usd, commission_asset="USDT",
-                            timestamp=current_time, decision_context=decision_context,
-                            commission_usd=commission_usd, realized_pnl_usd=realized_pnl_usd,
-                            hodl_asset_amount=hodl_asset_amount, hodl_asset_value_at_sell=hodl_asset_value_at_sell
-                        )
-                        self.db_manager.log_trade(trade_point)
+                        trade_data = {
+                            'run_id': self.run_id,
+                            'strategy_name': strategy_name,
+                            'symbol': symbol,
+                            'trade_id': trade_id,
+                            'exchange': "backtest_engine",
+                            'order_type': "sell",
+                            'status': "CLOSED",
+                            'price': sell_result['price'],
+                            'quantity': sell_result['quantity'],
+                            'usd_value': sell_result['usd_value'],
+                            'commission': commission_usd,
+                            'commission_asset': "USDT",
+                            'timestamp': current_time,
+                            'decision_context': decision_context,
+                            'commission_usd': commission_usd,
+                            'realized_pnl_usd': realized_pnl_usd,
+                            'hodl_asset_amount': hodl_asset_amount,
+                            'hodl_asset_value_at_sell': hodl_asset_value_at_sell
+                        }
+                        self.trade_logger.log_trade(trade_data)
 
                         logger.info(f"SELL EXECUTED: TradeID: {trade_id} | "
                                     f"Buy Price: ${position['price']:,.2f} | "
@@ -155,15 +168,24 @@ class Backtester:
                                 "regime_strength": None # Placeholder as per implementation
                             }
 
-                            trade_point = TradePoint(
-                                run_id=self.run_id, environment="backtest", strategy_name=strategy_name,
-                                symbol=symbol, trade_id=new_trade_id, exchange="backtest_engine",
-                                order_type="buy", status="OPEN", price=buy_price, quantity=buy_result['quantity'],
-                                usd_value=buy_result['usd_value'], commission=buy_result['commission'],
-                                commission_asset="USDT", timestamp=current_time, decision_context=decision_context,
-                                sell_target_price=sell_target_price
-                            )
-                            self.db_manager.log_trade(trade_point)
+                            trade_data = {
+                                'run_id': self.run_id,
+                                'strategy_name': strategy_name,
+                                'symbol': symbol,
+                                'trade_id': new_trade_id,
+                                'exchange': "backtest_engine",
+                                'order_type': "buy",
+                                'status': "OPEN",
+                                'price': buy_price,
+                                'quantity': buy_result['quantity'],
+                                'usd_value': buy_result['usd_value'],
+                                'commission': buy_result['commission'],
+                                'commission_asset': "USDT",
+                                'timestamp': current_time,
+                                'decision_context': decision_context,
+                                'sell_target_price': sell_target_price
+                            }
+                            self.trade_logger.log_trade(trade_data)
 
                             position_data = {
                                 'price': buy_price,

@@ -109,7 +109,7 @@ class TradingBot:
         db_manager = DatabaseManager(config=db_config)
         data_manager = DataManager(db_manager=db_manager, config=config_manager, logger=logger)
         feature_calculator = LiveFeatureCalculator(data_manager, mode=self.mode)
-        state_manager = StateManager(db_config['bucket'], self.run_id)
+        state_manager = StateManager(mode=self.mode, bot_id=self.run_id)
         trader = Trader(mode=self.mode)
         account_manager = AccountManager(trader.client)
         strategy_rules = StrategyRules(config_manager)
