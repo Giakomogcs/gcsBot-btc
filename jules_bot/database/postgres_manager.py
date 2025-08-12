@@ -113,16 +113,21 @@ class PostgresManager:
                 logger.error(f"Falha ao verificar se existem posições abertas: {e}", exc_info=True)
                 return False
 
-    def get_all_trades_in_range(self, start_date: str = "-90d", end_date: str = "now()"):
+    def get_all_trades_in_range(self, mode: Optional[str] = None, start_date: str = "-90d", end_date: str = "now()"):
         with self.get_db() as db:
             try:
                 # This is a simplified version. A more robust implementation would parse the date strings.
                 query = db.query(Trade).order_by(Trade.timestamp)
-                df = pd.read_sql(query.statement, self.engine)
-                return df
+                if mode:
+                    query = query.filter(Trade.environment == mode)
+
+                # The conversion to list of dicts is more consistent with other methods
+                trades = query.all()
+                return [trade.__dict__ for trade in trades]
+
             except Exception as e:
                 logger.error(f"Falha ao buscar todos os trades do DB: {e}", exc_info=True)
-                return pd.DataFrame()
+                return []
 
     def clear_all_tables(self):
         with self.get_db() as db:

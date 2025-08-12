@@ -28,7 +28,9 @@ class StateManager:
 
     def get_trade_history(self, mode: str) -> list[dict]:
         """Fetches all trades (open and closed) from the database for the given mode."""
-        return self.db_manager.get_all_trades_by_mode(mode=mode)
+        # Note: The date range parameters are omitted to use the default values,
+        # effectively fetching all trades for the given mode.
+        return self.db_manager.get_all_trades_in_range(mode=mode)
 
     def get_last_purchase_price(self) -> float:
         """
@@ -40,8 +42,8 @@ class StateManager:
             return float('inf')
 
         # Sort by time to find the most recent position.
-        # The field name for time in the dictionary from InfluxDB is '_time'.
-        latest_position = sorted(open_positions, key=lambda p: p['_time'], reverse=True)[0]
+        # The timestamp field from the SQLAlchemy model is 'timestamp'.
+        latest_position = sorted(open_positions, key=lambda p: p['timestamp'], reverse=True)[0]
         
         # The field for price is 'price'.
         return latest_position.get('price', float('inf'))
