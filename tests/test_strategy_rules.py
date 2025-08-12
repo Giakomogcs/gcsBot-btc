@@ -8,20 +8,16 @@ def mock_config_manager():
     """Provides a mock ConfigManager for testing."""
     mock = MagicMock(spec=ConfigManager)
 
-    # Mocking the get_section method to return different dictionaries
-    # based on the section name requested.
+    # Mocking the get_section method to return the expected dictionary.
     def get_section_side_effect(section_name):
         if section_name == 'STRATEGY_RULES':
             return {
                 'max_capital_per_trade_percent': '0.02', # 2%
+                'base_usd_per_trade': '100.0', # This was missing
                 'commission_rate': '0.001',
                 'sell_factor': '0.9',
                 'target_profit': '0.005',
                 'max_open_positions': '20'
-            }
-        if section_name == 'TRADING_STRATEGY':
-            return {
-                'usd_per_trade': '100.0'
             }
         return {}
 

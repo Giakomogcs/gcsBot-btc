@@ -36,10 +36,12 @@ def main(environment: str):
         start = "1970-01-01T00:00:00Z"
         stop = pd.Timestamp.now(tz='UTC').isoformat()
 
-        # PREDICADO DE EXCLUSÃO: Agora inclui o ambiente para segurança.
-        predicate = f'_measurement="trades" AND environment="{environment}"'
+        # PREDICADO DE EXCLUSÃO: Remove todos os pontos da medição 'trades' do bucket alvo.
+        # A segurança é garantida pela seleção do bucket com base no argumento --env.
+        # Isto corrige um bug onde dados antigos eram marcados com o ambiente errado.
+        predicate = f'_measurement="trades"'
 
-        logger.info(f"Excluindo dados com o predicado: '{predicate}' do bucket '{db_config['bucket']}'...")
+        logger.info(f"Limpando TODOS os dados da medição 'trades' do bucket '{db_config['bucket']}'...")
         db_manager._client.delete_api().delete(start, stop, predicate, bucket=db_config['bucket'], org=db_config['org'])
         logger.info(f"✅ Medição 'trades' do ambiente '{environment}' limpa com sucesso.")
 

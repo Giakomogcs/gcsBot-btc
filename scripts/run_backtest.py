@@ -10,37 +10,8 @@ if project_root not in sys.path:
 
 from jules_bot.backtesting.engine import Backtester
 from jules_bot.utils.config_manager import config_manager
-from jules_bot.database.database_manager import DatabaseManager
+from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.utils.logger import logger
-
-def clear_previous_backtest_trades():
-    """
-    Connects to the database and clears all records from the 'trades'
-    measurement in the backtest bucket to ensure a clean slate.
-    """
-    logger.info("--- Starting Backtest Environment Cleanup ---")
-    try:
-        # Get the base InfluxDB connection details from environment variables
-        db_connection_config = config_manager.get_db_config()
-
-        # Get the specific bucket for backtesting from the config file
-        db_connection_config['bucket'] = config_manager.get('INFLUXDB', 'bucket_backtest')
-
-        db_manager = DatabaseManager(config=db_connection_config)
-
-        # The 'trades' measurement is where trade data is stored.
-        # Clearing this ensures that reports are not contaminated by previous runs.
-        logger.info(f"Attempting to clear 'trades' measurement from bucket '{db_connection_config['bucket']}'...")
-        db_manager.clear_measurement("trades")
-
-        db_manager.close_client()
-        logger.info("--- Backtest Environment Cleanup Finished ---")
-
-    except Exception as e:
-        logger.error(f"An error occurred during backtest cleanup: {e}", exc_info=True)
-        # We should exit if we can't guarantee a clean state
-        sys.exit(1)
-
 
 def main():
     """
@@ -91,9 +62,6 @@ def main():
             sys.exit(1)
 
     try:
-        # CRITICAL: Ensure the environment is clean before running a new backtest
-        clear_previous_backtest_trades()
-
         logger.info("--- Starting New Backtest Simulation ---")
         
         backtester = None

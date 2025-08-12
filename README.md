@@ -19,10 +19,10 @@ The system is fully containerized using Docker, ensuring a consistent and reprod
   - Market sentiment (Fear & Greed Index)
   - Macroeconomic data (DXY, VIX, Gold, etc.)
 - **Automated Setup & Data Pipeline**:
-  - A one-time setup script (`influxdb_setup/run_migrations.py`) initializes the entire InfluxDB environment, creating the organization, buckets, and application token.
-  - A lean price collector (`collectors/core_price_collector.py`) automatically ingests and stores all required price data in an InfluxDB time-series database.
+  - A `postgres_setup/init.sql` script initializes the entire PostgreSQL environment, creating the necessary schemas and roles.
+  - A lean price collector (`collectors/core_price_collector.py`) automatically ingests and stores all required price data in a PostgreSQL time-series database.
 - **Situational Awareness Model**: Utilizes a K-Means clustering model to classify the market into one of several "regimes" (e.g., Bull Volatile, Bear Quiet), allowing the strategy to adapt to changing conditions. The code for this is in the `research` directory.
-- **Dockerized Environment**: The entire application stack, including the Python application and the InfluxDB database, is managed by Docker and Docker Compose for easy setup and deployment.
+- **Dockerized Environment**: The entire application stack, including the Python application and the PostgreSQL database, is managed by Docker and Docker Compose for easy setup and deployment.
 - **Command-Line Interface**: A central script `run.py` provides a simple interface for managing the entire lifecycle of the bot and its environment.
 - **Interactive Terminal UI (TUI)**: A sophisticated, real-time dashboard built with Textual that allows you to monitor bot status, view portfolio performance (including unrealized PnL), and intervene manually by forcing buys or sells.
 - **Resilient and Modular Architecture**: The code is organized into decoupled components (bot logic, database management, exchange connection), making it easier to maintain and extend.
@@ -48,7 +48,7 @@ The bot is designed with a modular architecture, separating concerns to improve 
       |                 |                  |
       V                 V                  V
 +----------------+ +---------------------+ +--------------------------+
-| PositionManager| |   AccountManager    | |     DatabaseManager      |
+| PositionManager| |   AccountManager    | |     PostgresManager      |
 | (Strategy)     | |     (Execution)     | |     (Persistence)        |
 +----------------+ +---------------------+ +--------------------------+
       |                 |                     |
@@ -62,7 +62,8 @@ The bot is designed with a modular architecture, separating concerns to improve 
 
 - **`run.py` (CLI)**: The main entry point for the user. It parses user commands and executes the appropriate `docker-compose` commands to build, start, stop, and interact with the application.
 - **`docker-compose.yml`**: Defines the services that make up the application:
-  - `db`: The InfluxDB container for data storage.
+  - `postgres`: The PostgreSQL container for data storage.
+  - `pgadmin`: A web-based administration tool for PostgreSQL.
   - `app`: The Python application container where the bot logic runs.
 - **`jules_bot/main.py`**: The main function inside the `app` container. It reads the `BOT_MODE` environment variable and instantiates the `TradingBot`.
 - **`TradingBot`**: The central orchestrator. It initializes all the necessary manager classes and runs the main trading loop (for live/test) or the backtesting process.
@@ -71,9 +72,7 @@ The bot is designed with a modular architecture, separating concerns to improve 
   - `AccountManager`: Interacts with the live or testnet exchange via the `ExchangeManager`. It validates and formats orders before placing them.
   - `SimulatedAccountManager`: Simulates an exchange account for backtesting, tracking balances locally without making real API calls.
 - **`ExchangeManager`**: A low-level wrapper around the `python-binance` client. It handles all direct communication with the Binance API (e.g., fetching prices, placing orders).
-- **`DatabaseManager` / `DataManager`**: Abstract the database.
-  - `DatabaseManager`: Provides generic methods to read and write to InfluxDB.
-  - `DataManager`: Provides a higher-level API to access specific, curated datasets like the `features_master_table`.
+- **`PostgresManager`**: Abstracts the database. It provides methods to read and write to PostgreSQL using SQLAlchemy.
 
 ## 4. Project Structure
 
@@ -83,11 +82,10 @@ The repository is organized into several key directories:
 gcsbot-btc/
 ├── .dvc/                   # Data Version Control (for large data files)
 ├── collectors/             # Scripts for collecting data
-├── config/                 # Configuration files for services (e.g., influxdb.conf)
+├── config/                 # Configuration files for services (e.g., postgres.conf)
 ├── data/                   # Local data storage (e.g., historical CSVs, models)
-├── influxdb_setup/         # Scripts for automated InfluxDB initialization
-│   ├── migrations/
-│   └── run_migrations.py
+├── postgres_setup/         # Scripts for automated PostgreSQL initialization
+│   └── init.sql
 ├── jules_bot/              # Main Python source code for the bot application
 │   ├── bot/                # Core trading logic and position management
 │   ├── core/               # Core components like schemas and connectors
@@ -124,11 +122,11 @@ cd gcsbot-btc
 cp .env.example .env
 ```
 
-Next, edit the `.env` file with your details. You will need to provide your Binance API keys and choose names for your InfluxDB organization and buckets.
+Next, edit the `.env` file with your details. You will need to provide your Binance API keys. The PostgreSQL credentials are set in `docker-compose.yml` and `config/postgres.conf`.
 
 ### Step 2: Start the Environment
 
-The `start` command builds the Docker images and launches the `app` and `db` services in the background. The `app` container will start in an idle state, waiting for your commands.
+The `start` command builds the Docker images and launches the `app`, `postgres`, and `pgadmin` services in the background. The `app` container will start in an idle state, waiting for your commands.
 
 ```bash
 python run.py start
@@ -142,13 +140,7 @@ python run.py status
 
 ### Step 3: Initial Database Setup
 
-The first time you run the bot, you need to set up the InfluxDB database. The following command runs a one-time migration script that creates the necessary buckets and tokens.
-
-```bash
-python influxdb_setup/run_migrations.py
-```
-
-This script will output a new `INFLUXDB_TOKEN`. **You must copy this token and paste it into your `.env` file.**
+The first time you run the bot, the PostgreSQL database will be automatically initialized using the `postgres_setup/init.sql` script when the container starts. You can connect to the database using a client like DBeaver or the provided pgAdmin service (available at `http://localhost:5050`).
 
 ### Step 4: Running the Bot
 

@@ -1,18 +1,22 @@
 import pandas as pd
 from jules_bot.utils.logger import logger
-from jules_bot.database.database_manager import DatabaseManager
+from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.utils.config_manager import config_manager
+from jules_bot.services.trade_logger import TradeLogger
 
 class StateManager:
-    def __init__(self, bucket_name: str, bot_id: str):
-        self.bucket_name = bucket_name
+    def __init__(self, mode: str, bot_id: str):
+        self.mode = mode
         self.bot_id = bot_id
-        # Get the base DB configuration from the environment
-        db_config = config_manager.get_db_config()
-        # Add the specific bucket for this instance
-        db_config['bucket'] = self.bucket_name
-        self.db_manager = DatabaseManager(config=db_config)
-        logger.info(f"StateManager initialized for bucket: {self.bucket_name}, bot_id: {self.bot_id}")
+
+        # This DB manager is for READING operations (get_open_positions, etc.)
+        db_config = config_manager.get_db_config('POSTGRES')
+        self.db_manager = PostgresManager(config=db_config)
+
+        # The TradeLogger is now responsible for ALL WRITE operations.
+        self.trade_logger = TradeLogger(mode=self.mode)
+
+        logger.info(f"StateManager initialized for mode: '{self.mode}', bot_id: '{self.bot_id}'")
 
     def get_open_positions(self) -> list[dict]:
         """Fetches all trades marked as 'OPEN' from the database for the current bot."""
@@ -44,62 +48,39 @@ class StateManager:
 
     def create_new_position(self, buy_result: dict, sell_target_price: float):
         """
-        Records a new open position in the database.
+        Records a new open position in the database via the TradeLogger service.
         """
         logger.info(f"Creating new position for trade_id: {buy_result.get('trade_id')} with target sell price: {sell_target_price}")
 
-        from jules_bot.core.schemas import TradePoint
+        # This dictionary flattens all the necessary data for the TradeLogger.
+        # The TradeLogger is responsible for creating the TradePoint and ensuring type safety.
+        trade_data = {
+            **buy_result,  # Unpack the raw buy result dictionary
+            'run_id': self.bot_id,
+            'status': 'OPEN',
+            'order_type': 'buy',
+            'sell_target_price': sell_target_price,
+            'strategy_name': buy_result.get('strategy_name', 'default'),
+            'exchange': buy_result.get('exchange', 'binance')
+        }
 
-        try:
-            trade_point = TradePoint(
-                run_id=self.bot_id,
-                environment=buy_result.get('environment', 'backtest'),
-                strategy_name=buy_result.get('strategy_name', 'default'),
-                symbol=buy_result['symbol'],
-                trade_id=buy_result['trade_id'],
-                exchange=buy_result.get('exchange', 'simulated'),
-                order_type='buy',
-                status='OPEN',
-                price=buy_result['price'],
-                quantity=buy_result['quantity'],
-                usd_value=buy_result['usd_value'],
-                commission=buy_result.get('commission', 0.0),
-                commission_asset=buy_result.get('commission_asset', 'USDT'),
-                exchange_order_id=buy_result.get('exchange_order_id'),
-                sell_target_price=sell_target_price  # Pass the pre-calculated target price
-            )
-            self.db_manager.log_trade(trade_point)
-        except KeyError as e:
-            logger.error(f"Missing essential key in buy_result to create TradePoint: {e}")
-        except Exception as e:
-            logger.error(f"Failed to create or log TradePoint: {e}")
+        self.trade_logger.log_trade(trade_data)
 
     def close_position(self, trade_id: str, exit_data: dict):
         """
-        Logs the closing part of a trade using the TradePoint schema.
+        Logs the closing of a trade via the TradeLogger service.
         """
-        from jules_bot.core.schemas import TradePoint
+        logger.info(f"Closing position for trade_id: {trade_id}")
 
-        try:
-            trade_point = TradePoint(
-                run_id=self.bot_id,
-                environment=exit_data.get('environment', 'backtest'),
-                strategy_name=exit_data.get('strategy_name', 'default'),
-                symbol=exit_data['symbol'],
-                trade_id=trade_id, # The ID of the trade being closed
-                exchange=exit_data.get('exchange', 'simulated'),
-                order_type='sell',
-                status='CLOSED',
-                price=exit_data['price'],
-                quantity=exit_data['quantity'],
-                usd_value=exit_data['usd_value'],
-                commission=exit_data.get('commission', 0.0),
-                commission_asset=exit_data.get('commission_asset', 'USDT'),
-                exchange_order_id=exit_data.get('exchange_order_id'),
-                realized_pnl=exit_data.get('realized_pnl')
-            )
-            self.db_manager.log_trade(trade_point)
-        except KeyError as e:
-            logger.error(f"Missing essential key in exit_data to create TradePoint: {e}")
-        except Exception as e:
-            logger.error(f"Failed to create or log closing TradePoint: {e}")
+        # This dictionary flattens all the necessary data for the TradeLogger.
+        trade_data = {
+            **exit_data, # Unpack the raw exit data dictionary
+            'run_id': self.bot_id,
+            'trade_id': trade_id, # Ensure the original trade_id is used
+            'status': 'CLOSED',
+            'order_type': 'sell',
+            'strategy_name': exit_data.get('strategy_name', 'default'),
+            'exchange': exit_data.get('exchange', 'binance')
+        }
+
+        self.trade_logger.log_trade(trade_data)

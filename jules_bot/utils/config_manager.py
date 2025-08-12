@@ -76,26 +76,31 @@ class ConfigManager:
         # Mimic configparser's error.
         raise ValueError(f'Not a boolean: {value}')
 
-    def get_db_config(self) -> Dict[str, str]:
+    def get_db_config(self, db_type: str) -> Dict[str, str]:
         """
         Constructs the database configuration from environment variables.
         This is the single source of truth for DB connection details.
         """
-        db_url = os.getenv("INFLUXDB_URL")
-        db_token = os.getenv("INFLUXDB_TOKEN")
-        db_org = os.getenv("INFLUXDB_ORG")
+        if db_type.upper() == 'INFLUXDB':
+            db_url = os.getenv("INFLUXDB_URL")
+            db_token = os.getenv("INFLUXDB_TOKEN")
+            db_org = os.getenv("INFLUXDB_ORG")
 
-        if not all([db_url, db_token, db_org]):
-            raise ValueError(
-                "One or more required InfluxDB environment variables are missing: "
-                "INFLUXDB_URL, INFLUXDB_TOKEN, INFLUXDB_ORG"
-            )
+            if not all([db_url, db_token, db_org]):
+                raise ValueError(
+                    "One or more required InfluxDB environment variables are missing: "
+                    "INFLUXDB_URL, INFLUXDB_TOKEN, INFLUXDB_ORG"
+                )
 
-        return {
-            "url": db_url,
-            "token": db_token,
-            "org": db_org
-        }
+            return {
+                "url": db_url,
+                "token": db_token,
+                "org": db_org
+            }
+        elif db_type.upper() == 'POSTGRES':
+            return self.get_section('POSTGRES')
+        else:
+            raise ValueError(f"Invalid database type: {db_type}")
 
 
 # Instantiate the config manager for global use

@@ -7,10 +7,9 @@ from aiohttp import web
 # Add project root to sys.path to allow imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from api.websocket_service import data_websocket_handler, query_influxdb
 from api.command_executor import run_command_in_container
 from jules_bot.utils.config_manager import ConfigManager
-from influxdb_client.client.influxdb_client_async import InfluxDBClientAsync
+from jules_bot.database.postgres_manager import PostgresManager
 
 async def trade_handler(request):
     print("Received HTTP request to start TRADE bot.")
@@ -94,28 +93,22 @@ async def command_websocket_handler(request):
     print("DEBUG: WebSocket connection for command logs closed.")
     return ws
 
-async def get_influxdb_data_handler(request):
+async def get_postgres_data_handler(request):
     config_manager = ConfigManager()
-    influx_config = config_manager.get_section('INFLUXDB')
-    api_config = config_manager.get_section('API')
+    db_config = config_manager.get_db_config('POSTGRES')
+    db_manager = PostgresManager(config=db_config)
 
-    host = os.getenv('INFLUXDB_HOST', 'localhost')
-    port = os.getenv('INFLUXDB_PORT', '8086')
-    token = os.getenv('INFLUXDB_TOKEN')
-    org = os.getenv('INFLUXDB_ORG')
-
-    measurement = request.match_info.get('measurement', api_config.get('measurement', 'price_data'))
-    bucket_name = request.match_info.get('bucket_name', influx_config.get('bucket_prices', 'prices')) # Default to prices bucket
+    table_name = request.match_info.get('table_name', 'price_history')
     time_range = request.query.get('time_range', '-1h')
 
-    url = f"http://{host}:{port}"
+    # This is a simplified example. A real implementation would need to parse the time_range
+    # and construct a proper SQL query.
+    data = db_manager.get_price_data(table_name, start_date=time_range)
 
-    async with InfluxDBClientAsync(url=url, token=token, org=org) as client:
-        data = await query_influxdb(client, bucket_name, measurement, time_range)
-        if data:
-            return web.json_response(data)
-        else:
-            return web.Response(text="No data found for measurement '" + measurement + "' in bucket '" + bucket_name + "' for time range '" + time_range + "'.", status=404)
+    if not data.empty:
+        return web.json_response(data.to_dict(orient='records'))
+    else:
+        return web.Response(text="No data found for table '" + table_name + "' for time range '" + time_range + "'.", status=404)
 
 async def main():
     """
@@ -126,7 +119,7 @@ async def main():
     app.router.add_post('/run/trade', trade_handler)
     app.router.add_post('/run/test', test_handler)
     app.router.add_post('/run/backtest', backtest_handler)
-    app.router.add_get('/data/{bucket_name}/{measurement}', get_influxdb_data_handler) # HTTP endpoint for InfluxDB data
+    app.router.add_get('/data/{table_name}', get_postgres_data_handler) # HTTP endpoint for PostgreSQL data
 
     config_manager = ConfigManager()
     api_config = config_manager.get_section('API')

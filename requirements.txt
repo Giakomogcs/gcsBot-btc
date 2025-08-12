@@ -3,6 +3,7 @@
 # --- Core Libraries ---
 numpy==1.26.4
 pandas
+setuptools
 
 # --- Machine Learning & AI ---
 scikit-learn
@@ -12,8 +13,10 @@ scikit-learn
 
 # --- Data & APIs ---
 python-binance
-influxdb-client
 requests # Essencial para o pipeline de sentimento
+sqlalchemy
+psycopg2-binary
+alembic
 
 # --- Technical Analysis ---
 # ta # Comentado - pandas-ta geralmente cobre tudo

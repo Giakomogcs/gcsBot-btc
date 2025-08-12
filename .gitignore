@@ -35,3 +35,23 @@ venv/
 # Command files
 # Ignore command files but keep the directory
 commands/*.json
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+pip-selfcheck.json
+*.egg-info/
+dist/
+build/
+
+# Postgres
+.pgpass
