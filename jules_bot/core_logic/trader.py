@@ -198,7 +198,7 @@ class Trader:
                 "usd_value": usd_value,
                 "commission": commission,
                 "commission_asset": commission_asset,
-                "exchange_order_id": order.get('orderId'),
+                "exchange_order_id": str(order.get('orderId')) if order.get('orderId') is not None else None,
                 "timestamp": order['transactTime']
             }
             return True, trade_result
@@ -270,7 +270,7 @@ class Trader:
                 "usd_value": usd_value,
                 "commission": commission,
                 "commission_asset": commission_asset,
-                "exchange_order_id": order.get('orderId'),
+                "exchange_order_id": str(order.get('orderId')) if order.get('orderId') is not None else None,
                 "timestamp": order['transactTime'],
                 **decision_context # Pass through any extra data like PnL
             }

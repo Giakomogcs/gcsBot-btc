@@ -195,6 +195,7 @@ python run.py ui
 ```
 
 This will launch the dashboard, which provides:
+
 - **Live Status & Portfolio**: Real-time updates on the bot's mode, the current asset price, total investment, current portfolio value, and unrealized Profit & Loss (PnL).
 - **Bot Control**: A panel to manually trigger a buy order for a specific USD amount.
 - **Live Log**: A stream of the latest log messages from the bot.
@@ -202,6 +203,7 @@ This will launch the dashboard, which provides:
 - **Manual Intervention**: Select a trade in the table to bring up options to **Force Sell** it or mark it as **Treasury** (a long-term hold).
 
 A preview of the TUI layout:
+
 ```
 +-----------------------------------------------------------------------------+
 | Jules Bot        Last Update: 2023-10-27 10:30:00                           |
@@ -217,10 +219,10 @@ A preview of the TUI layout:
 | > Bot: Sell condition met...        | PnL: +$150.00                         |
 |                                     |                                       |
 |                                     | Open Positions                        |
-|                                     | ID   | Entry   | Qty    | Value      |
-|                                     |------|---------|--------|------------|
-|                                     | ab12 | 34000.0 | 0.01   | $341.23    |
-|                                     | cd34 | 33950.0 | 0.02   | $682.46    |
+|                                     | ID   | Entry   | Qty    | Value       |
+|                                     |------|---------|--------|------------ |
+|                                     | ab12 | 34000.0 | 0.01   | $341.23     |
+|                                     | cd34 | 33950.0 | 0.02   | $682.46     |
 |                                     |                                       |
 |                                     | [ Force Sell ] [ Mark as Treasury ]   |
 +-----------------------------------------------------------------------------+

@@ -16,14 +16,20 @@ def main(environment: str):
     try:
         logger.info(f"--- LIMPANDO A MEDIÇÃO 'TRADES' DO AMBIENTE '{environment}' ---")
 
-        # A instanciação do DatabaseManager não é estritamente necessária aqui,
-        # pois usamos o _client diretamente, mas é bom para consistência.
-        # No futuro, o método de delete pode ser movido para dentro da classe.
-        db_config = config_manager.get_section('INFLUXDB')
-        if environment == 'test':
-            db_config['bucket'] = 'jules_bot_test_v1'
+        # Get the base DB config (URL, token, org)
+        db_config = config_manager.get_db_config()
+
+        # Determine the correct bucket name based on the environment and add it to the config
+        if environment == 'trade':
+            bucket_key = 'bucket_live'
+        elif environment == 'test':
+            bucket_key = 'bucket_testnet'
         elif environment == 'backtest':
-            db_config['bucket'] = 'jules_bot_backtest_v1'
+            bucket_key = 'bucket_backtest'
+        
+        bucket_name = config_manager.get('INFLUXDB', bucket_key)
+        db_config['bucket'] = bucket_name
+        
         db_manager = DatabaseManager(config=db_config)
 
 
