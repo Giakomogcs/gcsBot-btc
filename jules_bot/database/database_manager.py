@@ -162,11 +162,13 @@ class DatabaseManager:
             # This query gets the last known state for each trade_id and filters for OPEN ones.
             flux_query = f'''
             from(bucket: "{self.bucket}")
-              |> range(start: 0)
-              |> filter(fn: (r) => r._measurement == "trades" and r.bot_id == "{bot_id}")
-              |> last()
-              |> filter(fn: (r) => r._field == "status" and r._value == "OPEN")
-              |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+                |> range(start: 0)
+                |> filter(fn: (r) => r._measurement == "trades")
+                |> group(columns: ["trade_id"])
+                |> last(column: "_time")
+                |> group()
+                |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+                |> filter(fn: (r) => r.status == "OPEN")
             '''
             result = self.query_api.query(query=flux_query, org=self.org)
             return [record.values for table in result for record in table.records]
@@ -421,7 +423,7 @@ class DatabaseManager:
             flux_query = f'''
             from(bucket: "{self.bucket}")
               |> range(start: 0)
-              |> filter(fn: (r) => r._measurement == "trades" and r.bot_id == "{bot_id}")
+              |> filter(fn: (r) => r._measurement == "trades" and r.run_id == "{bot_id}")
               |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
               |> sort(columns: ["_time"], desc: true)
             '''

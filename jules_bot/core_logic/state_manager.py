@@ -85,6 +85,7 @@ class StateManager:
                 trade_id=trade_id, # The ID of the trade being closed
                 exchange=exit_data.get('exchange', 'simulated'),
                 order_type='sell',
+                status='CLOSED',
                 price=exit_data['price'],
                 quantity=exit_data['quantity'],
                 usd_value=exit_data['usd_value'],

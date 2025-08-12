@@ -115,4 +115,14 @@ def add_all_features(df: pd.DataFrame, live_mode: bool = False) -> pd.DataFrame:
             df_copy['target'] = df_copy['target'].astype(int)
 
     logger.debug("✅ Adição de features concluída.")
+
+    # --- GARANTIA FINAL DE TIPOS ---
+    # Garante que todas as colunas de feature sejam numéricas para evitar schema collision no InfluxDB
+    feature_cols = df_copy.columns.drop(ohlc_cols + ['target'] if 'target' in df_copy.columns else ohlc_cols)
+    for col in feature_cols:
+        df_copy[col] = pd.to_numeric(df_copy[col], errors='coerce')
+
+    # Preenche qualquer NaN que possa ter sido introduzido pela coerção
+    df_copy.fillna(0.0, inplace=True)
+    
     return df_copy

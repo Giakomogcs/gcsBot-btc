@@ -212,3 +212,41 @@ class AccountManager:
         except Exception as e:
             logger.error(f"Unexpected error fetching trade history: {e}", exc_info=True)
             return []
+
+    def get_all_account_balances(self, all_prices: dict) -> list:
+        """
+        Fetches all non-zero asset balances and calculates their USD value.
+        """
+        if not self.client:
+            logger.warning("Binance client not available (offline mode). Returning empty list.")
+            return []
+        try:
+            account_info = self.client.get_account()
+            non_zero_balances = []
+            for balance in account_info['balances']:
+                free_balance = float(balance['free'])
+                locked_balance = float(balance['locked'])
+                total_balance = free_balance + locked_balance
+
+                if total_balance > 0:
+                    asset = balance['asset']
+                    usd_value = 0.0
+
+                    # Calculate USD value
+                    if asset == 'USDT':
+                        usd_value = total_balance
+                    else:
+                        pair = f"{asset}USDT"
+                        if pair in all_prices:
+                            usd_value = total_balance * all_prices[pair]
+
+                    balance['usd_value'] = usd_value
+                    non_zero_balances.append(balance)
+
+            return non_zero_balances
+        except BinanceAPIException as e:
+            logger.error(f"Binance API error fetching all account balances: {e}", exc_info=True)
+            return []
+        except Exception as e:
+            logger.error(f"Unexpected error fetching all account balances: {e}", exc_info=True)
+            return []

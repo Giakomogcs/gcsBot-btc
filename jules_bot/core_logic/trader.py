@@ -15,16 +15,20 @@ class Trader:
     def __init__(self, mode: str = 'trade'):
         self.mode = mode
         self.environment = self._map_mode_to_environment(mode)
-        self._client = self._init_binance_client()
+        self.client = self._init_binance_client()
         self.symbol = config_manager.get('APP', 'symbol')
         self.strategy_name = config_manager.get('APP', 'strategy_name', fallback='default_strategy')
 
         db_config = config_manager.get_db_config()
 
-        if self.mode in ['test', 'backtest']:
+        if self.mode == 'trade':
+            db_config['bucket'] = config_manager.get('INFLUXDB', 'bucket_live')
+        elif self.mode == 'test':
+            db_config['bucket'] = config_manager.get('INFLUXDB', 'bucket_testnet')
+        elif self.mode == 'backtest':
             db_config['bucket'] = config_manager.get('INFLUXDB', 'bucket_backtest')
         else:
-            db_config['bucket'] = config_manager.get('INFLUXDB', 'bucket_prices')
+            db_config['bucket'] = config_manager.get('INFLUXDB', 'bucket_prices') # Fallback
 
         self.db_manager = DatabaseManager(config=db_config)
 
@@ -90,7 +94,7 @@ class Trader:
     @property
     def is_ready(self) -> bool:
         """Returns True if the Binance client is initialized and ready."""
-        return self._client is not None
+        return self.client is not None
 
     def get_current_price(self, symbol: str) -> Optional[float]:
         """Fetches the current price for a symbol from Binance."""
@@ -98,7 +102,7 @@ class Trader:
             logger.warning("Trader is not ready. Cannot fetch current price.")
             return None
         try:
-            ticker = self._client.get_symbol_ticker(symbol=symbol)
+            ticker = self.client.get_symbol_ticker(symbol=symbol)
             return float(ticker['price'])
         except (BinanceAPIException, BinanceRequestException) as e:
             logger.error(f"API error fetching current price for {symbol}: {e}")
@@ -107,13 +111,28 @@ class Trader:
             logger.error(f"Unexpected error fetching current price for {symbol}: {e}")
             return None
 
+    def get_all_prices(self) -> dict:
+        """Fetches the latest price for all symbols."""
+        if not self.is_ready:
+            logger.warning("Trader is not ready. Cannot fetch prices.")
+            return {}
+        try:
+            prices = self.client.get_all_tickers()
+            return {item['symbol']: float(item['price']) for item in prices}
+        except (BinanceAPIException, BinanceRequestException) as e:
+            logger.error(f"API error fetching all prices: {e}")
+            return {}
+        except Exception as e:
+            logger.error(f"Unexpected error fetching all prices: {e}")
+            return {}
+
     def get_account_balance(self, asset: str = 'USDT') -> float:
         """Fetches the free balance for a specific asset from the account."""
         if not self.is_ready:
             logger.warning("Trader is not ready. Cannot fetch account balance.")
             return 0.0
         try:
-            account_info = self._client.get_account()
+            account_info = self.client.get_account()
             for balance in account_info['balances']:
                 if balance['asset'] == asset:
                     return float(balance['free'])
@@ -130,14 +149,14 @@ class Trader:
         Submits a market buy order and records it in the database.
         Returns a tuple (success, order_data).
         """
-        if not self._client:
+        if not self.client:
             logger.error("Binance client not initialized. Buy order cannot be submitted.")
             return False, None
 
         trade_id = str(uuid.uuid4())
         try:
             logger.info(f"EXECUTING BUY: {amount_usdt} USDT of {self.symbol} | Trade ID: {trade_id}")
-            order = self._client.order_market_buy(symbol=self.symbol, quoteOrderQty=amount_usdt)
+            order = self.client.order_market_buy(symbol=self.symbol, quoteOrderQty=amount_usdt)
             logger.info(f"✅ BUY ORDER EXECUTED: {order}")
 
             price = float(order['fills'][0]['price'])
@@ -157,6 +176,7 @@ class Trader:
                 trade_id=trade_id,
                 exchange="binance_testnet" if self.mode == 'test' else "binance_live",
                 order_type="buy",
+                status="OPEN",
                 price=price,
                 quantity=quantity,
                 usd_value=usd_value,
@@ -224,6 +244,7 @@ class Trader:
                 trade_id=trade_id,
                 exchange="binance_testnet" if self.mode == 'test' else "binance_live",
                 order_type="sell",
+                status="CLOSED",
                 price=price,
                 quantity=quantity,
                 usd_value=usd_value,

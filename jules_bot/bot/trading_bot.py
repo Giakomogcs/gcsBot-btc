@@ -4,6 +4,7 @@ import json
 import os
 from jules_bot.utils.logger import logger
 from jules_bot.utils.config_manager import config_manager
+from jules_bot.bot.account_manager import AccountManager
 from jules_bot.core_logic.state_manager import StateManager
 from jules_bot.core_logic.trader import Trader
 from jules_bot.core_logic.strategy_rules import StrategyRules
@@ -25,7 +26,7 @@ class TradingBot:
         self.symbol = config_manager.get('APP', 'symbol')
         self.state_file_path = "/tmp/bot_state.json"
 
-    def _write_state_to_file(self, open_positions: list, current_price: float):
+    def _write_state_to_file(self, open_positions: list, current_price: float, wallet_balances: list):
         """Saves the current bot state to a JSON file for the UI to read."""
         state = {
             "mode": self.mode,
@@ -33,7 +34,8 @@ class TradingBot:
             "symbol": self.symbol,
             "timestamp": time.time(),
             "current_price": str(current_price),
-            "open_positions": open_positions
+            "open_positions": open_positions,
+            "wallet_balances": wallet_balances
         }
         try:
             # Use atomic write to prevent partial reads from the UI
@@ -97,8 +99,10 @@ class TradingBot:
         # Instantiate core components
         db_config = config_manager.get_db_config()
         if self.mode == 'trade':
-            db_config['bucket'] = config_manager.get('INFLUXDB', 'bucket_prices')
-        else: # test mode
+            db_config['bucket'] = config_manager.get('INFLUXDB', 'bucket_live')
+        elif self.mode == 'test':
+            db_config['bucket'] = config_manager.get('INFLUXDB', 'bucket_testnet')
+        else: # backtest mode
             db_config['bucket'] = config_manager.get('INFLUXDB', 'bucket_backtest')
 
         db_manager = DatabaseManager(config=db_config)
@@ -106,6 +110,7 @@ class TradingBot:
         feature_calculator = LiveFeatureCalculator(data_manager, mode=self.mode)
         state_manager = StateManager(db_config['bucket'], self.run_id)
         trader = Trader(mode=self.mode)
+        account_manager = AccountManager(trader.client)
         strategy_rules = StrategyRules(config_manager)
 
         if not trader.is_ready:
@@ -136,8 +141,12 @@ class TradingBot:
                 open_positions = state_manager.get_open_positions()
                 logger.info(f"Found {len(open_positions)} open position(s).")
 
+                # Fetch all wallet balances
+                all_prices = trader.get_all_prices()
+                wallet_balances = account_manager.get_all_account_balances(all_prices)
+
                 # Update UI state file
-                self._write_state_to_file(open_positions, float(current_price))
+                self._write_state_to_file(open_positions, float(current_price), wallet_balances)
 
                 for position in open_positions:
                     trade_id = position.get('trade_id')

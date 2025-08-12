@@ -76,6 +76,9 @@ class DisplayManager(App):
                 yield Static("Open Positions", classes="title")
                 yield DataTable(id="positions_table")
 
+                yield Static("Binance Wallet", classes="title")
+                yield DataTable(id="wallet_table")
+
                 with Horizontal(id="action_bar", classes="hidden"):
                     yield Button("Force Sell Selected", id="force_sell_button", variant="error")
                     yield Button("Mark as Treasury", id="to_treasury_button", variant="success")
@@ -83,9 +86,13 @@ class DisplayManager(App):
 
     def on_mount(self) -> None:
         """Called when the app is first mounted."""
-        table = self.query_one(DataTable)
-        table.cursor_type = "row"
-        table.add_columns("ID", "Entry Price", "Quantity", "Value", "Status")
+        positions_table = self.query_one("#positions_table", DataTable)
+        positions_table.cursor_type = "row"
+        positions_table.add_columns("ID", "Entry Price", "Quantity", "Value", "Status")
+
+        wallet_table = self.query_one("#wallet_table", DataTable)
+        wallet_table.add_columns("Asset", "Free", "Locked", "USD Value")
+
         self.update_timer = self.set_interval(1.0, self.update_dashboard)
         self.query_one("#manual_buy_input").focus()
         self.log_display = self.query_one(RichLog)
@@ -229,6 +236,25 @@ class DisplayManager(App):
         else:
             self.selected_trade_id = None
             self.query_one("#action_bar").add_class("hidden")
+
+        self.update_wallet_table(state.get("wallet_balances", []))
+
+    def update_wallet_table(self, balances: list) -> None:
+        """Updates the wallet table with the latest balances."""
+        wallet_table = self.query_one("#wallet_table", DataTable)
+        wallet_table.clear()
+        if not balances:
+            wallet_table.add_row("No wallet data.")
+        else:
+            for balance in balances:
+                try:
+                    asset = balance.get('asset')
+                    free = Decimal(balance.get('free', '0'))
+                    locked = Decimal(balance.get('locked', '0'))
+                    usd_value = Decimal(balance.get('usd_value', '0'))
+                    wallet_table.add_row(asset, f"{free:.8f}", f"{locked:.8f}", f"${usd_value:,.2f}")
+                except (InvalidOperation, TypeError):
+                    wallet_table.add_row(balance.get('asset', 'ERR'), "Data Error", "", "")
 
 
 if __name__ == '__main__':

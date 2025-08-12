@@ -106,7 +106,7 @@ class Backtester:
                         trade_point = TradePoint(
                             run_id=self.run_id, environment="backtest", strategy_name=strategy_name,
                             symbol=symbol, trade_id=trade_id, exchange="backtest_engine",
-                            order_type="sell", price=sell_result['price'], quantity=sell_result['quantity'],
+                            order_type="sell", status="CLOSED", price=sell_result['price'], quantity=sell_result['quantity'],
                             usd_value=sell_result['usd_value'], commission=commission_usd, commission_asset="USDT",
                             timestamp=current_time, decision_context=decision_context,
                             commission_usd=commission_usd, realized_pnl_usd=realized_pnl_usd,
@@ -158,7 +158,7 @@ class Backtester:
                             trade_point = TradePoint(
                                 run_id=self.run_id, environment="backtest", strategy_name=strategy_name,
                                 symbol=symbol, trade_id=new_trade_id, exchange="backtest_engine",
-                                order_type="buy", price=buy_price, quantity=buy_result['quantity'],
+                                order_type="buy", status="OPEN", price=buy_price, quantity=buy_result['quantity'],
                                 usd_value=buy_result['usd_value'], commission=buy_result['commission'],
                                 commission_asset="USDT", timestamp=current_time, decision_context=decision_context,
                                 sell_target_price=sell_target_price
