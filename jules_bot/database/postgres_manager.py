@@ -44,12 +44,31 @@ class PostgresManager:
                 logger.error(f"Failed to write bot status to PostgreSQL: {e}")
 
     def log_trade(self, trade_point: TradePoint):
+        """
+        Logs a trade to the database.
+        If the trade_id already exists, it updates the record.
+        Otherwise, it creates a new one.
+        """
         with self.get_db() as db:
             try:
-                trade = Trade(**trade_point.__dict__)
-                db.add(trade)
+                # Check if a trade with this ID already exists
+                existing_trade = db.query(Trade).filter(Trade.trade_id == trade_point.trade_id).first()
+
+                if existing_trade:
+                    # This is an update (e.g., a 'sell' closing a 'buy')
+                    logger.info(f"Updating existing trade {trade_point.trade_id} with status '{trade_point.status}'.")
+                    # Update all fields from the incoming trade_point
+                    for key, value in trade_point.__dict__.items():
+                        setattr(existing_trade, key, value)
+                else:
+                    # This is a new trade (e.g., a 'buy')
+                    logger.info(f"Creating new trade record for trade_id: {trade_point.trade_id}")
+                    new_trade = Trade(**trade_point.__dict__)
+                    db.add(new_trade)
+
                 db.commit()
-                logger.info(f"Successfully logged {trade.order_type} trade {trade.trade_id} to database.")
+                logger.info(f"Successfully logged '{trade_point.order_type}' for trade_id: {trade_point.trade_id}")
+
             except Exception as e:
                 db.rollback()
                 logger.error(f"Failed to log trade to PostgreSQL: {e}", exc_info=True)
