@@ -160,11 +160,21 @@ class DatabaseManager:
         """Fetches all trades for a bot_id that are currently in 'OPEN' status."""
         try:
             # This query gets the last known state for each trade_id and filters for OPEN ones.
+            # It includes an allow-list filter on essential fields to prevent schema collisions
+            # from noisy, non-essential data (e.g., from the decision_context).
             flux_query = f'''
             from(bucket: "{self.bucket}")
                 |> range(start: 0)
                 |> filter(fn: (r) => r._measurement == "trades")
-                |> filter(fn: (r) => r._field != "source")
+                |> filter(fn: (r) =>
+                    r._field == "order_type" or
+                    r._field == "price" or
+                    r._field == "quantity" or
+                    r._field == "usd_value" or
+                    r._field == "commission" or
+                    r._field == "commission_asset" or
+                    r._field == "sell_target_price"
+                )
                 |> group(columns: ["trade_id"])
                 |> last(column: "_time")
                 |> group()
