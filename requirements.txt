@@ -3,6 +3,7 @@
 # --- Core Libraries ---
 numpy==1.26.4
 pandas
+setuptools
 
 # --- Machine Learning & AI ---
 scikit-learn
