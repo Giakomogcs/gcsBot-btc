@@ -1,7 +1,7 @@
 import json
 import logging
 import uuid
-from typing import Optional
+from typing import Optional, Iterator
 import pandas as pd
 from sqlalchemy import create_engine, desc, and_, text
 from sqlalchemy.orm import sessionmaker, Session
@@ -21,7 +21,7 @@ class PostgresManager:
         Base.metadata.create_all(bind=self.engine)
 
     @contextmanager
-    def get_db(self) -> Session:
+    def get_db(self) -> Iterator[Session]:
         db = self.SessionLocal()
         try:
             yield db
@@ -128,7 +128,7 @@ class PostgresManager:
                 if not first_record:
                     logger.info(f"No data found in measurement '{measurement}'.")
                     return None
-                first_timestamp = pd.to_datetime(first_record.timestamp).tz_convert('UTC')
+                first_timestamp = pd.to_datetime(first_record.timestamp).tz_localize('UTC')
                 logger.info(f"First timestamp found in DB: {first_timestamp}")
                 return first_timestamp
             except Exception as e:

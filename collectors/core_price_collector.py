@@ -103,7 +103,7 @@ class CorePriceCollector:
                 if not last_record:
                     logger.info("No existing data found for this series in the table.")
                     return None
-                last_timestamp = pd.to_datetime(last_record.timestamp).tz_convert('UTC')
+                last_timestamp = pd.to_datetime(last_record.timestamp).tz_localize('UTC')
                 logger.info(f"Last timestamp found in DB: {last_timestamp}")
                 return last_timestamp
             except Exception as e:
