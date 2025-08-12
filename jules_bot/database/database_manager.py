@@ -164,6 +164,7 @@ class DatabaseManager:
             from(bucket: "{self.bucket}")
                 |> range(start: 0)
                 |> filter(fn: (r) => r._measurement == "trades")
+                |> filter(fn: (r) => r._field != "source")
                 |> group(columns: ["trade_id"])
                 |> last(column: "_time")
                 |> group()

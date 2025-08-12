@@ -26,16 +26,18 @@ def main():
 
         # Get host, port, and org from environment variables with sensible defaults
         # This makes the script runnable both locally and in a container
-        host = os.getenv('INFLUXDB_HOST', 'localhost')
-        port = os.getenv('INFLUXDB_PORT', '8086')
+        url = os.getenv('INFLUXDB_URL')
+        if not url:
+            host = os.getenv('INFLUXDB_HOST', 'localhost')
+            port = os.getenv('INFLUXDB_PORT', '8086')
+            url = f"http://{host}:{port}"
+
         org_name = os.getenv('INFLUXDB_ORG')
 
         if not org_name:
             print("❌ ERROR: INFLUXDB_ORG environment variable not set.")
             print("Please set this to your desired InfluxDB organization name.")
             sys.exit(1)
-
-        url = f"http://{host}:{port}"
 
         # Admin token must be provided via environment variable for initial setup
         admin_token = os.getenv("INFLUXDB_TOKEN")
@@ -109,57 +111,11 @@ def main():
                     # Continue to the next bucket instead of exiting
 
         # --- 4. Create Application Token ---
-        app_token_description = "JulesBot Application Token"
-        print(f"\nChecking for application token: '{app_token_description}'...")
-
-        permissions = [
-            {"action": "read", "resource": {"type": "buckets", "orgID": org.id}},
-            {"action": "write", "resource": {"type": "buckets", "orgID": org.id, "name": influx_config.get('bucket_live')}},
-            {"action": "write", "resource": {"type": "buckets", "orgID": org.id, "name": influx_config.get('bucket_testnet')}},
-            {"action": "write", "resource": {"type": "buckets", "orgID": org.id, "name": influx_config.get('bucket_backtest')}},
-            {"action": "write", "resource": {"type": "buckets", "orgID": org.id, "name": influx_config.get('bucket_prices')}},
-        ]
-        permissions = [p for p in permissions if p['resource'].get('name')]
-
-        # Check if a token with this description already exists
-        authorizations = auth_api.find_authorizations(org_id=org.id)
-        existing_token = None
-        if authorizations:
-            for auth in authorizations:
-                if auth.description == app_token_description:
-                    existing_token = auth
-                    break
-
-        app_token = None # Initialize app_token
-        if existing_token:
-            print(f"✅ Application token '{app_token_description}' already exists.")
-            print("   To regenerate the token, please delete it from the InfluxDB UI first.")
-            # The token value is not available when listing authorizations.
-            # We can't retrieve the old token here.
-            print("   WARNING: Existing token value cannot be retrieved. You may need to create a new one manually if the old one is lost.")
-        else:
-            print("Application token not found. Creating it...")
-            # --- FIX: Create the authorization request body ---
-            authorization_request = Authorization(org_id=org.id, permissions=permissions, description=app_token_description, status="active")
-            
-            # --- FIX: Call create_authorization with the request body ---
-            created_auth = auth_api.create_authorization(authorization=authorization_request)
-            
-            app_token = created_auth.token
-            print(f"✅ Application token created successfully.")
-
+        print("\nSkipping application token creation.")
         print("\n--- Initial Setup Complete ---")
         print(f"Organization: {org_name}")
-        valid_buckets = [b for b in buckets_to_create if b]
+        valid_buckets = [b for b in buckets_to__create if b]
         print(f"Buckets: {', '.join(valid_buckets)}")
-
-        if app_token:
-            print("\nIMPORTANT: Your application token and organization are printed below.")
-            print("You MUST add these values to your .env file for the application to work correctly.")
-            print("-" * 40)
-            print(f"INFLUXDB_TOKEN={app_token}")
-            print(f"INFLUXDB_ORG={org_name}")
-            print("-" * 40)
         
         print("\nSetup script finished.")
 
