@@ -155,6 +155,20 @@ def _run_in_container(command: list, env_vars: dict = {}, interactive: bool = Fa
         return False
 
 
+@app.command("db-setup")
+def db_setup():
+    """
+    Executa os scripts de migração do InfluxDB para criar a organização e os buckets.
+    Este comando deve ser executado apenas uma vez na configuração inicial.
+    """
+    print("⚙️  Executando configuração inicial do banco de dados InfluxDB...")
+    _run_in_container(
+        command=["influxdb_setup/run_migrations.py"]
+    )
+    print("✅ Configuração do banco de dados finalizada.")
+    print("   Verifique o output acima para obter o seu token de aplicação e adicione-o ao seu ficheiro .env")
+
+
 @app.command()
 def trade():
     """Inicia o bot em modo de negociação (live) dentro do container."""

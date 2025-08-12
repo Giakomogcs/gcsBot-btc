@@ -142,13 +142,22 @@ python run.py status
 
 ### Step 3: Initial Database Setup
 
-The first time you run the bot, you need to set up the InfluxDB database. The following command runs a one-time migration script that creates the necessary buckets and tokens.
+Before you start, you must define your initial InfluxDB admin token in your `.env` file. This is the token the database will be created with. Choose a secure, random string for this value:
 
-```bash
-python influxdb_setup/run_migrations.py
+```
+# In your .env file
+INFLUXDB_TOKEN=my-super-secret-admin-token
 ```
 
-This script will output a new `INFLUXDB_TOKEN`. **You must copy this token and paste it into your `.env` file.**
+Once you have set this token and started the services (`python run.py start`), you can set up the database. The following command runs the setup script securely inside the Docker container:
+
+```bash
+python run.py db-setup
+```
+
+This script will use your admin token to connect to the database and create the necessary organization and buckets. It will then output a **new application token**.
+
+**IMPORTANT**: You must copy this new **application token** and paste it back into your `.env` file, replacing your initial admin token. This new token has limited permissions and is more secure for the bot to use in its daily operations.
 
 ### Step 4: Running the Bot
 

@@ -26,7 +26,7 @@ def main():
 
         # Get host, port, and org from environment variables with sensible defaults
         # This makes the script runnable both locally and in a container
-        host = os.getenv('INFLUXDB_HOST', 'localhost')
+        host = os.getenv('INFLUXDB_HOST', 'db')
         port = os.getenv('INFLUXDB_PORT', '8086')
         org_name = os.getenv('INFLUXDB_ORG')
 
