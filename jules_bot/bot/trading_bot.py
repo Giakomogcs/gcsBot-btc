@@ -9,8 +9,7 @@ from jules_bot.core_logic.state_manager import StateManager
 from jules_bot.core_logic.trader import Trader
 from jules_bot.core_logic.strategy_rules import StrategyRules
 from jules_bot.core.market_data_provider import MarketDataProvider
-from jules_bot.database.data_manager import DataManager
-from jules_bot.database.database_manager import DatabaseManager
+from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
 
 class TradingBot:
@@ -109,17 +108,10 @@ class TradingBot:
             return
 
         # Instantiate core components
-        db_config = config_manager.get_db_config()
-        if self.mode == 'trade':
-            db_config['bucket'] = config_manager.get('INFLUXDB', 'bucket_live')
-        elif self.mode == 'test':
-            db_config['bucket'] = config_manager.get('INFLUXDB', 'bucket_testnet')
-        else: # backtest mode
-            db_config['bucket'] = config_manager.get('INFLUXDB', 'bucket_backtest')
+        db_config = config_manager.get_db_config('POSTGRES')
 
-        db_manager = DatabaseManager(config=db_config)
-        data_manager = DataManager(db_manager=db_manager, config=config_manager, logger=logger)
-        feature_calculator = LiveFeatureCalculator(data_manager, mode=self.mode)
+        db_manager = PostgresManager(config=db_config)
+        feature_calculator = LiveFeatureCalculator(db_manager, mode=self.mode)
         state_manager = StateManager(mode=self.mode, bot_id=self.run_id)
         trader = Trader(mode=self.mode)
         account_manager = AccountManager(trader.client)

@@ -1,6 +1,6 @@
 import pandas as pd
 from jules_bot.utils.logger import logger
-from jules_bot.database.database_manager import DatabaseManager
+from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.services.trade_logger import TradeLogger
 
@@ -8,30 +8,15 @@ class StateManager:
     def __init__(self, mode: str, bot_id: str):
         self.mode = mode
         self.bot_id = bot_id
-        self.bucket_name = self._get_bucket_for_mode(mode)
 
         # This DB manager is for READING operations (get_open_positions, etc.)
-        db_config = config_manager.get_db_config()
-        db_config['bucket'] = self.bucket_name
-        self.db_manager = DatabaseManager(config=db_config)
+        db_config = config_manager.get_db_config('POSTGRES')
+        self.db_manager = PostgresManager(config=db_config)
 
         # The TradeLogger is now responsible for ALL WRITE operations.
         self.trade_logger = TradeLogger(mode=self.mode)
 
-        logger.info(f"StateManager initialized for mode: '{self.mode}', bucket: '{self.bucket_name}', bot_id: '{self.bot_id}'")
-
-    def _get_bucket_for_mode(self, mode: str) -> str:
-        """Selects the correct InfluxDB bucket based on the operating mode."""
-        if mode == 'trade':
-            return config_manager.get('INFLUXDB', 'bucket_live')
-        elif mode == 'test':
-            return config_manager.get('INFLUXDB', 'bucket_testnet')
-        elif mode == 'backtest':
-            return config_manager.get('INFLUXDB', 'bucket_backtest')
-        else:
-            # Fallback or error
-            logger.error(f"Invalid mode '{mode}' provided to StateManager. Defaulting to test bucket.")
-            return config_manager.get('INFLUXDB', 'bucket_testnet')
+        logger.info(f"StateManager initialized for mode: '{self.mode}', bot_id: '{self.bot_id}'")
 
     def get_open_positions(self) -> list[dict]:
         """Fetches all trades marked as 'OPEN' from the database for the current bot."""

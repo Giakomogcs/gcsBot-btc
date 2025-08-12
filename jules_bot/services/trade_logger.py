@@ -2,7 +2,7 @@ import datetime
 from typing import Dict, Any
 
 from jules_bot.core.schemas import TradePoint
-from jules_bot.database.database_manager import DatabaseManager
+from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.utils.logger import logger
 
@@ -17,22 +17,11 @@ class TradeLogger:
         if mode not in ['trade', 'test', 'backtest']:
             raise ValueError(f"Invalid mode '{mode}' provided to TradeLogger.")
         self.mode = mode
-        self.bucket_name = self._get_bucket_for_mode(mode)
 
         # Instantiate DB manager here to be used by the log_trade method
-        db_config = config_manager.get_db_config()
-        db_config['bucket'] = self.bucket_name
-        self.db_manager = DatabaseManager(config=db_config)
-        logger.info(f"TradeLogger initialized for mode '{self.mode}' writing to bucket '{self.bucket_name}'.")
-
-    def _get_bucket_for_mode(self, mode: str) -> str:
-        """Selects the correct InfluxDB bucket based on the operating mode."""
-        if mode == 'trade':
-            return config_manager.get('INFLUXDB', 'bucket_live')
-        elif mode == 'test':
-            return config_manager.get('INFLUXDB', 'bucket_testnet')
-        elif mode == 'backtest':
-            return config_manager.get('INFLUXDB', 'bucket_backtest')
+        db_config = config_manager.get_db_config('POSTGRES')
+        self.db_manager = PostgresManager(config=db_config)
+        logger.info(f"TradeLogger initialized for mode '{self.mode}'.")
 
     def log_trade(self, trade_data: Dict[str, Any]):
         """

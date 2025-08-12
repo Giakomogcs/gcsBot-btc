@@ -1,44 +1,46 @@
-# docker-compose.yml (VERSÃO ALINHADA)
-
 services:
-  db:
-    image: influxdb:2.7
-    container_name: gcsbot-influxdb
+  postgres:
+    image: postgres:13
+    container_name: gcsbot-postgres
     environment:
-      - DOCKER_INFLUXDB_INIT_MODE=setup
-      - DOCKER_INFLUXDB_INIT_USERNAME=user
-      - DOCKER_INFLUXDB_INIT_PASSWORD=password
-      # Estas variáveis agora vêm diretamente do ficheiro .env
-      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG}
-      - DOCKER_INFLUXDB_INIT_BUCKET=${INFLUXDB_BUCKET}
-      - DOCKER_INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
+      POSTGRES_USER: gcs_user
+      POSTGRES_PASSWORD: gcs_password
+      POSTGRES_DB: gcs_db
     ports:
-      - "8086:8086"
+      - "5432:5432"
     volumes:
-      - influxdb_data:/var/lib/influxdb2
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres_setup/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD", "influx", "ping"]
+      test: ["CMD-SHELL", "pg_isready -U gcs_user -d gcs_db"]
       interval: 10s
       timeout: 5s
       retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: gcsbot-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
 
   app:
     build: .
     container_name: gcsbot-app
     depends_on:
-      db:
+      postgres:
         condition: service_healthy
-    # Passa o ficheiro .env inteiro para dentro do contentor
-    # A aplicação Python irá lê-lo diretamente
     env_file:
       - .env
     volumes:
       - .:/app
-    # Mantém o contentor a correr em segundo plano sem executar um comando por defeito
-    # Permite-nos usar 'docker-compose exec' para executar comandos específicos
     ports:
       - "8765:8765"
     command: tail -f /dev/null
 
 volumes:
-  influxdb_data:
+  postgres_data:

@@ -2,8 +2,7 @@ import logging
 import uuid
 import pandas as pd
 from jules_bot.core.mock_exchange import MockTrader
-from jules_bot.database.database_manager import DatabaseManager
-from jules_bot.database.data_manager import DataManager
+from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.core_logic.strategy_rules import StrategyRules
 from jules_bot.utils.logger import logger
@@ -30,18 +29,14 @@ class Backtester:
 
         logger.info(log_msg)
 
-        db_config = config_manager.get_db_config()
-        db_config['bucket'] = config_manager.get('INFLUXDB', 'bucket_backtest')
-        self.db_manager = DatabaseManager(config=db_config) # For reading results
-        self.data_manager = DataManager(self.db_manager, config_manager, logger)
+        db_config = config_manager.get_db_config('POSTGRES')
+        self.db_manager = PostgresManager(config=db_config) # For reading results
         self.trade_logger = TradeLogger(mode='backtest') # For writing trades
 
         symbol = config_manager.get('APP', 'symbol')
-        interval = config_manager.get('DATA', 'interval', fallback='1m')
         
-        price_data = self.data_manager.get_price_history(
-            symbol=symbol,
-            interval=interval,
+        price_data = self.db_manager.get_price_data(
+            measurement=symbol,
             start_date=self.start_date_str,
             end_date=self.end_date_str
         )
@@ -202,17 +197,8 @@ class Backtester:
     def _generate_and_save_summary(self):
         logger.info("--- Generating and saving backtest summary ---")
 
-        all_trades_query = f'''
-        from(bucket: "{self.db_manager.bucket}")
-          |> range(start: 0)
-          |> filter(fn: (r) => r._measurement == "trades")
-          |> filter(fn: (r) => r.run_id == "{self.run_id}")
-          |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
-        '''
-        all_trades_df = self.db_manager.query_api.query_data_frame(all_trades_query)
-
-        if isinstance(all_trades_df, list):
-            all_trades_df = pd.concat(all_trades_df, ignore_index=True) if all_trades_df else pd.DataFrame()
+        all_trades_df = self.db_manager.get_all_trades_in_range(start_date="0", end_date="now()")
+        all_trades_df = all_trades_df[all_trades_df['run_id'] == self.run_id]
 
         if all_trades_df.empty:
             logger.warning("No trades were executed in this backtest run.")

@@ -16,21 +16,15 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from jules_bot.utils.config_manager import config_manager
-from jules_bot.database.database_manager import DatabaseManager
+from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.utils.logger import logger
 
 class CorePriceCollector:
     def __init__(self, bucket_name: Optional[str] = None):
         logger.info("Initializing CorePriceCollector...")
-        db_config = config_manager.get_db_config()
-
-        if bucket_name:
-            bucket = bucket_name
-        else:
-            bucket = config_manager.get('INFLUXDB', 'bucket_prices')
+        db_config = config_manager.get_db_config('POSTGRES')
         
-        db_config['bucket'] = bucket
-        self.db_manager = DatabaseManager(config=db_config)
+        self.db_manager = PostgresManager(config=db_config)
         self.binance_client = None  # Initialize as None. Will be connected on demand.
         self.symbol = config_manager.get('APP', 'symbol')
         self.interval = config_manager.get('DATA', 'interval', fallback='1m')
@@ -73,61 +67,46 @@ class CorePriceCollector:
             logger.error(f"An unexpected error occurred during Binance client initialization: {e}", exc_info=True)
             return False
 
-    def _write_dataframe_to_influx(self, df: pd.DataFrame):
+    def _write_dataframe_to_postgres(self, df: pd.DataFrame):
         """
-        Writes a DataFrame to InfluxDB in chunks with a progress bar, adding required tags.
+        Writes a DataFrame to PostgreSQL in chunks with a progress bar.
         """
         if df.empty:
             logger.info("DataFrame is empty, nothing to write.")
             return
 
-        logger.info(f"Preparing to write {len(df)} rows to InfluxDB measurement '{self.measurement}'...")
+        logger.info(f"Preparing to write {len(df)} rows to PostgreSQL table '{self.measurement}'...")
         df['symbol'] = self.symbol
-        df['source'] = self.source
-        df['interval'] = self.interval
 
         chunk_size = 50_000
-        try:
-            with tqdm(total=len(df), desc="Writing data to InfluxDB", unit="rows") as pbar:
-                for i in range(0, len(df), chunk_size):
-                    chunk = df.iloc[i:i + chunk_size]
-                    self.db_manager.write_api.write(
-                        bucket=self.db_manager.bucket,
-                        record=chunk,
-                        data_frame_measurement_name=self.measurement,
-                        data_frame_tag_columns=['symbol', 'source', 'interval']
-                    )
-                    pbar.update(len(chunk))
-            logger.info(f"\nSuccessfully wrote {len(df)} new candles to '{self.db_manager.bucket}'.")
-        except Exception as e:
-            logger.error(f"\nError writing data to InfluxDB: {e}", exc_info=True)
+        with self.db_manager.get_db() as db:
+            try:
+                with tqdm(total=len(df), desc="Writing data to PostgreSQL", unit="rows") as pbar:
+                    for i in range(0, len(df), chunk_size):
+                        chunk = df.iloc[i:i + chunk_size]
+                        chunk.to_sql(self.measurement, self.db_manager.engine, if_exists='append', index=True, chunksize=1000)
+                        pbar.update(len(chunk))
+                logger.info(f"\nSuccessfully wrote {len(df)} new candles to '{self.measurement}'.")
+            except Exception as e:
+                logger.error(f"\nError writing data to PostgreSQL: {e}", exc_info=True)
 
     def _query_last_timestamp(self) -> Optional[pd.Timestamp]:
         """
-        Queries the last timestamp for the specific symbol, source, and interval.
+        Queries the last timestamp for the specific symbol.
         """
-        logger.info(f"Querying last timestamp for {self.symbol}/{self.source}/{self.interval} in bucket '{self.db_manager.bucket}'...")
-        query = f'''
-        from(bucket:"{self.db_manager.bucket}")
-            |> range(start: 0)
-            |> filter(fn: (r) => r._measurement == "{self.measurement}")
-            |> filter(fn: (r) => r.symbol == "{self.symbol}")
-            |> filter(fn: (r) => r.source == "{self.source}")
-            |> filter(fn: (r) => r.interval == "{self.interval}")
-            |> last()
-            |> keep(columns: ["_time"])
-        '''
-        try:
-            result = self.db_manager.query_api.query(query)
-            if not result or not result[0].records:
-                logger.info("No existing data found for this series in the measurement.")
+        logger.info(f"Querying last timestamp for {self.symbol} in table '{self.measurement}'...")
+        with self.db_manager.get_db() as db:
+            try:
+                last_record = db.query(PriceHistory).filter(PriceHistory.symbol == self.symbol).order_by(desc(PriceHistory.timestamp)).first()
+                if not last_record:
+                    logger.info("No existing data found for this series in the table.")
+                    return None
+                last_timestamp = pd.to_datetime(last_record.timestamp).tz_convert('UTC')
+                logger.info(f"Last timestamp found in DB: {last_timestamp}")
+                return last_timestamp
+            except Exception as e:
+                logger.error(f"Error querying last timestamp from PostgreSQL: {e}", exc_info=True)
                 return None
-            last_timestamp = pd.to_datetime(result[0].records[0].get_time()).tz_convert('UTC')
-            logger.info(f"Last timestamp found in DB: {last_timestamp}")
-            return last_timestamp
-        except Exception as e:
-            logger.error(f"Error querying last timestamp from InfluxDB: {e}", exc_info=True)
-            return None
 
     def _get_historical_klines(self, start_dt: datetime.datetime, end_dt: datetime.datetime) -> pd.DataFrame:
         """
@@ -179,7 +158,7 @@ class CorePriceCollector:
         """
         This method is for live data collection, continuously updating the database.
         """
-        logger.info(f"--- Starting live price collection for bucket '{self.db_manager.bucket}' ---")
+        logger.info(f"--- Starting live price collection for table '{self.measurement}' ---")
         if not self.connect_binance_client():
             logger.error("Could not connect to Binance. Live price collection cannot start.")
             return
@@ -200,7 +179,7 @@ class CorePriceCollector:
             else:
                 df_new_prices = self._get_historical_klines(start_date, end_date)
                 if not df_new_prices.empty:
-                    self._write_dataframe_to_influx(df_new_prices)
+                    self._write_dataframe_to_postgres(df_new_prices)
             
             time.sleep(60)
 
@@ -213,18 +192,18 @@ def prepare_backtest_data(days: int, force_reload: bool = False):
     """
     logger.info("--- Starting Intelligent Data Preparation ---")
     
-    collector = CorePriceCollector(bucket_name=config_manager.get('INFLUXDB', 'bucket_backtest'))
+    collector = CorePriceCollector()
     online_mode = collector.connect_binance_client()
 
     if force_reload:
         logger.warning("`--force-reload` flag detected. Deleting all existing price data for a full refresh.")
-        collector.db_manager.clear_measurement(collector.measurement)
+        collector.db_manager.clear_all_tables()
 
     # --- New Logic to ensure sufficient historical data ---
     end_date = datetime.datetime.now(datetime.timezone.utc)
     required_start_date = end_date - timedelta(days=days)
     
-    first_ts_in_db = collector.db_manager.query_first_timestamp(collector.measurement)
+    first_ts_in_db = collector._query_first_timestamp()
 
     # If DB is empty or its oldest record is newer than what we need, we must do a full historical download.
     if first_ts_in_db is None or first_ts_in_db > required_start_date:
@@ -234,11 +213,11 @@ def prepare_backtest_data(days: int, force_reload: bool = False):
             return
 
         logger.info(f"Clearing existing data (if any) and downloading full {days}-day history from {required_start_date} to {end_date}.")
-        collector.db_manager.clear_measurement(collector.measurement)
+        collector.db_manager.clear_all_tables()
         
         df_to_write = collector._get_historical_klines(required_start_date, end_date)
         if not df_to_write.empty:
-            collector._write_dataframe_to_influx(df_to_write)
+            collector._write_dataframe_to_postgres(df_to_write)
         else:
             logger.warning("Failed to download any historical data. The database will remain empty.")
             return # Stop if we couldn't get the base data
@@ -261,7 +240,7 @@ def prepare_backtest_data(days: int, force_reload: bool = False):
             logger.info(f"History is sufficient. Synchronizing new data from {incremental_start_date} to {end_date}.")
             df_to_write = collector._get_historical_klines(incremental_start_date, end_date)
             if not df_to_write.empty:
-                collector._write_dataframe_to_influx(df_to_write)
+                collector._write_dataframe_to_postgres(df_to_write)
     
     logger.info("--- Intelligent Data Preparation Finished ---")
 

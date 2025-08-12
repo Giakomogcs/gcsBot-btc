@@ -11,17 +11,17 @@ from jules_bot.utils.config_manager import config_manager
 
 @pytest.fixture
 def mock_db_manager():
-    """Provides a mock DatabaseManager instance."""
+    """Provides a mock PostgresManager instance."""
     return Mock()
 
 @pytest.fixture
 def state_manager(mock_db_manager):
     """
-    Provides a StateManager instance with a mocked DatabaseManager.
-    This fixture ensures that the real DatabaseManager is not used during tests.
+    Provides a StateManager instance with a mocked PostgresManager.
+    This fixture ensures that the real PostgresManager is not used during tests.
     """
-    # We use patch to temporarily replace the DatabaseManager class during instantiation
-    with patch('jules_bot.core_logic.state_manager.DatabaseManager', return_value=mock_db_manager), \
+    # We use patch to temporarily replace the PostgresManager class during instantiation
+    with patch('jules_bot.core_logic.state_manager.PostgresManager', return_value=mock_db_manager), \
          patch('jules_bot.core_logic.state_manager.TradeLogger') as MockTradeLogger:
         sm = StateManager(mode="test", bot_id="test_bot")
         # The old tests assumed log_trade was on db_manager. To avoid rewriting all tests,

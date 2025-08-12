@@ -8,7 +8,7 @@ from jules_bot.utils.logger import logger
 # --- IMPORTAÇÃO CORRIGIDA ---
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.core.exchange_connector import ExchangeManager
-from jules_bot.database.data_manager import DataManager
+from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.research.feature_engineering import add_all_features
 
 class LiveFeatureCalculator:
@@ -16,8 +16,8 @@ class LiveFeatureCalculator:
     Responsável por buscar todos os dados brutos necessários em tempo real,
     combiná-los e calcular o conjunto completo de features para a tomada de decisão.
     """
-    def __init__(self, data_manager: DataManager, mode: str = 'trade'):
-        self.data_manager = data_manager
+    def __init__(self, db_manager: PostgresManager, mode: str = 'trade'):
+        self.db_manager = db_manager
         self.mode = mode
         self.exchange_manager = ExchangeManager(mode=self.mode)
         self.symbol = config_manager.get('APP', 'symbol')
@@ -56,10 +56,10 @@ class LiveFeatureCalculator:
 
         # 2. Dados Macro e de Sentimento (Apenas para modo 'trade')
         if self.mode == 'trade':
-            df_macro = self.data_manager.read_data_from_influx("macro_data_1m", start_date="-3d")
+            df_macro = self.db_manager.get_price_data("macro_data_1m", start_date="-3d")
             
             df_sentiment_live = self._get_live_sentiment_data()
-            df_sentiment_db = self.data_manager.read_data_from_influx("sentiment_fear_and_greed", start_date="-3d")
+            df_sentiment_db = self.db_manager.get_price_data("sentiment_fear_and_greed", start_date="-3d")
             
             if df_sentiment_db.empty and df_sentiment_live.empty:
                 df_sentiment = pd.DataFrame()
