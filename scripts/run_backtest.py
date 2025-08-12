@@ -13,31 +13,6 @@ from jules_bot.utils.config_manager import config_manager
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.utils.logger import logger
 
-def clear_previous_backtest_trades():
-    """
-    Connects to the PostgreSQL database and clears all relevant tables
-    to ensure a clean state for the backtest.
-    """
-    logger.info("--- Starting Backtest Environment Cleanup ---")
-    try:
-        # Get PostgreSQL connection details from the config manager
-        db_connection_config = config_manager.get_db_config('POSTGRES')
-
-        # Instantiate the database manager for PostgreSQL
-        db_manager = PostgresManager(config=db_connection_config)
-
-        # Clearing all tables ensures that reports are not contaminated by previous runs.
-        logger.info("Attempting to clear all tables (trades, bot_status, price_history)...")
-        db_manager.clear_all_tables()
-
-        logger.info("--- Backtest Environment Cleanup Finished ---")
-
-    except Exception as e:
-        logger.error(f"An error occurred during backtest cleanup: {e}", exc_info=True)
-        # We should exit if we can't guarantee a clean state
-        sys.exit(1)
-
-
 def main():
     """
     Runs a full backtest using the provided historical data.
@@ -87,9 +62,6 @@ def main():
             sys.exit(1)
 
     try:
-        # CRITICAL: Ensure the environment is clean before running a new backtest
-        clear_previous_backtest_trades()
-
         logger.info("--- Starting New Backtest Simulation ---")
         
         backtester = None
