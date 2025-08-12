@@ -144,10 +144,51 @@ class Trader:
             logger.error(f"Unexpected error fetching account balance for {asset}: {e}")
             return 0.0
 
+    def _parse_order_response(self, order: Dict[str, Any], trade_id: str, decision_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """
+        Parses a Binance order response to extract accurate trade details.
+        Calculates the volume-weighted average price (VWAP) from the 'fills'.
+        """
+        if not order.get('fills'):
+            logger.warning(f"Order {order.get('orderId')} has no fills. Cannot parse trade details.")
+            # Return a structure with zeros to avoid downstream errors, but log a clear warning.
+            return {
+                "trade_id": trade_id, "symbol": self.symbol, "price": 0.0, "quantity": 0.0,
+                "usd_value": 0.0, "commission": 0.0, "commission_asset": "N/A",
+                "exchange_order_id": str(order.get('orderId')), "timestamp": order.get('transactTime'),
+                "decision_context": decision_context, "environment": self.environment
+            }
+
+        executed_qty = float(order['executedQty'])
+        cummulative_quote_qty = float(order['cummulativeQuoteQty'])
+
+        # Calculate Volume-Weighted Average Price (VWAP)
+        # This is the most accurate representation of the execution price.
+        price = cummulative_quote_qty / executed_qty if executed_qty > 0 else 0.0
+
+        # Sum commissions from all fills
+        commission = sum(float(f.get('commission', 0.0)) for f in order['fills'])
+        commission_asset = order['fills'][0].get('commissionAsset', 'N/A') if order['fills'] else 'N/A'
+
+        # Return a standardized dictionary
+        return {
+            "trade_id": trade_id,
+            "symbol": self.symbol,
+            "price": price,
+            "quantity": executed_qty,
+            "usd_value": cummulative_quote_qty,
+            "commission": commission,
+            "commission_asset": commission_asset,
+            "exchange_order_id": str(order.get('orderId')),
+            "timestamp": order.get('transactTime'),
+            "decision_context": decision_context,
+            "environment": self.environment
+        }
+
+
     def execute_buy(self, amount_usdt: float, run_id: str, decision_context: Optional[Dict[str, Any]]) -> Tuple[bool, Optional[dict]]:
         """
-        Submits a market buy order and records it in the database.
-        Returns a tuple (success, order_data).
+        Submits a market buy order and returns a standardized trade result dictionary.
         """
         if not self.client:
             logger.error("Binance client not initialized. Buy order cannot be submitted.")
@@ -159,48 +200,9 @@ class Trader:
             order = self.client.order_market_buy(symbol=self.symbol, quoteOrderQty=amount_usdt)
             logger.info(f"✅ BUY ORDER EXECUTED: {order}")
 
-            price = float(order['fills'][0]['price'])
-            quantity = float(order['executedQty'])
-            usd_value = float(order['cummulativeQuoteQty'])
-            commission = sum(float(f['commission']) for f in order['fills'])
-            commission_asset = order['fills'][0]['commissionAsset'] if order['fills'] else 'N/A'
+            # Parse the response to get accurate, standardized data
+            trade_result = self._parse_order_response(order, trade_id, decision_context)
 
-            from jules_bot.core.schemas import TradePoint
-            import pandas as pd
-
-            trade_point = TradePoint(
-                run_id=run_id,
-                environment=self.environment,
-                strategy_name=self.strategy_name,
-                symbol=self.symbol,
-                trade_id=trade_id,
-                exchange="binance_testnet" if self.mode == 'test' else "binance_live",
-                order_type="buy",
-                status="OPEN",
-                price=price,
-                quantity=quantity,
-                usd_value=usd_value,
-                commission=commission,
-                commission_asset=commission_asset,
-                exchange_order_id=order.get('orderId'),
-                timestamp=pd.to_datetime(order['transactTime'], unit='ms', utc=True).to_pydatetime(),
-                decision_context=decision_context
-            )
-            # self.db_manager.log_trade(trade_point) # This is now handled by the StateManager
-
-            # Standardize the output
-            trade_result = {
-                "trade_id": trade_id,
-                "environment": self.environment,
-                "symbol": self.symbol,
-                "price": price,
-                "quantity": quantity,
-                "usd_value": usd_value,
-                "commission": commission,
-                "commission_asset": commission_asset,
-                "exchange_order_id": str(order.get('orderId')) if order.get('orderId') is not None else None,
-                "timestamp": order['transactTime']
-            }
             return True, trade_result
 
         except Exception as e:
@@ -209,10 +211,9 @@ class Trader:
 
     def execute_sell(self, position_data: dict, run_id: str, decision_context: Optional[Dict[str, Any]]) -> Tuple[bool, Optional[dict]]:
         """
-        Submits a market sell order and records it in the database.
-        Returns a tuple (success, order_data).
+        Submits a market sell order and returns a standardized trade result dictionary.
         """
-        if not self._client:
+        if not self.client:
             logger.error("Binance client not initialized. Sell order cannot be submitted.")
             return False, None
 
@@ -223,57 +224,21 @@ class Trader:
 
         try:
             quantity_to_sell = position_data.get('quantity')
-            logger.info(f"EXECUTING SELL: {quantity_to_sell} of {self.symbol} | Trade ID: {trade_id}")
-            order = self._client.order_market_sell(symbol=self.symbol, quantity=quantity_to_sell)
+            logger.info(f"EXECUTING SELL: {quantity_to_sell:.8f} of {self.symbol} | Trade ID: {trade_id}")
+            order = self.client.order_market_sell(symbol=self.symbol, quantity=quantity_to_sell)
             logger.info(f"✅ SELL ORDER EXECUTED: {order}")
 
-            price = float(order['fills'][0]['price'])
-            quantity = float(order['executedQty'])
-            usd_value = float(order['cummulativeQuoteQty'])
-            commission = sum(float(f['commission']) for f in order['fills'])
-            commission_asset = order['fills'][0]['commissionAsset'] if order['fills'] else 'N/A'
+            # Parse the response to get accurate, standardized data
+            trade_result = self._parse_order_response(order, trade_id, decision_context)
 
-            from jules_bot.core.schemas import TradePoint
-            import pandas as pd
+            # Add PnL info from the input data, as the trader doesn't know this
+            trade_result.update({
+                "commission_usd": position_data.get("commission_usd"),
+                "realized_pnl_usd": position_data.get("realized_pnl_usd"),
+                "hodl_asset_amount": position_data.get("hodl_asset_amount"),
+                "hodl_asset_value_at_sell": position_data.get("hodl_asset_value_at_sell")
+            })
 
-            trade_point = TradePoint(
-                run_id=run_id,
-                environment=self.environment,
-                strategy_name=self.strategy_name,
-                symbol=self.symbol,
-                trade_id=trade_id,
-                exchange="binance_testnet" if self.mode == 'test' else "binance_live",
-                order_type="sell",
-                status="CLOSED",
-                price=price,
-                quantity=quantity,
-                usd_value=usd_value,
-                commission=commission,
-                commission_asset=commission_asset,
-                exchange_order_id=order.get('orderId'),
-                timestamp=pd.to_datetime(order['transactTime'], unit='ms', utc=True).to_pydatetime(),
-                decision_context=decision_context,
-                commission_usd=position_data.get("commission_usd"),
-                realized_pnl_usd=position_data.get("realized_pnl_usd"),
-                hodl_asset_amount=position_data.get("hodl_asset_amount"),
-                hodl_asset_value_at_sell=position_data.get("hodl_asset_value_at_sell")
-            )
-            # self.db_manager.log_trade(trade_point) # This is now handled by the StateManager
-
-            # Standardize the output
-            trade_result = {
-                "trade_id": trade_id,
-                "environment": self.environment,
-                "symbol": self.symbol,
-                "price": price,
-                "quantity": quantity,
-                "usd_value": usd_value,
-                "commission": commission,
-                "commission_asset": commission_asset,
-                "exchange_order_id": str(order.get('orderId')) if order.get('orderId') is not None else None,
-                "timestamp": order['transactTime'],
-                **decision_context # Pass through any extra data like PnL
-            }
             return True, trade_result
 
         except Exception as e:
