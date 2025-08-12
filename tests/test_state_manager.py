@@ -23,7 +23,7 @@ def state_manager(mock_db_manager):
     # Mock the environment variables required by ConfigManager
     mock_env = {
         "INFLUXDB_URL": "http://test.url",
-        "INFLUXDB_APP_TOKEN": "test_token",
+        "INFLUXDB_TOKEN": "test_token",
         "INFLUXDB_ORG": "test_org"
     }
     with patch.dict(os.environ, mock_env):
