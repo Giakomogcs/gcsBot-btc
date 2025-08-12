@@ -82,13 +82,13 @@ class ConfigManager:
         This is the single source of truth for DB connection details.
         """
         db_url = os.getenv("INFLUXDB_URL")
-        db_token = os.getenv("INFLUXDB_TOKEN")
+        db_token = os.getenv("INFLUXDB_APP_TOKEN")
         db_org = os.getenv("INFLUXDB_ORG")
 
         if not all([db_url, db_token, db_org]):
             raise ValueError(
                 "One or more required InfluxDB environment variables are missing: "
-                "INFLUXDB_URL, INFLUXDB_TOKEN, INFLUXDB_ORG"
+                "INFLUXDB_URL, INFLUXDB_APP_TOKEN, INFLUXDB_ORG"
             )
 
         return {

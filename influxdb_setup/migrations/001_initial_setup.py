@@ -38,9 +38,9 @@ def main():
         url = f"http://{host}:{port}"
 
         # Admin token must be provided via environment variable for initial setup
-        admin_token = os.getenv("INFLUXDB_TOKEN")
+        admin_token = os.getenv("INFLUXDB_ADMIN_TOKEN")
         if not admin_token:
-            print("❌ ERROR: INFLUXDB_TOKEN environment variable not set.")
+            print("❌ ERROR: INFLUXDB_ADMIN_TOKEN environment variable not set.")
             print("Please set this to your InfluxDB admin token to run the initial setup.")
             sys.exit(1)
 
@@ -157,7 +157,7 @@ def main():
             print("\nIMPORTANT: Your application token and organization are printed below.")
             print("You MUST add these values to your .env file for the application to work correctly.")
             print("-" * 40)
-            print(f"INFLUXDB_TOKEN={app_token}")
+            print(f"INFLUXDB_APP_TOKEN={app_token}")
             print(f"INFLUXDB_ORG={org_name}")
             print("-" * 40)
         

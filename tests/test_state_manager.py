@@ -20,11 +20,18 @@ def state_manager(mock_db_manager):
     Provides a StateManager instance with a mocked DatabaseManager.
     This fixture ensures that the real DatabaseManager is not used during tests.
     """
-    # We use patch to temporarily replace the DatabaseManager class during instantiation
-    with patch('jules_bot.core_logic.state_manager.DatabaseManager', return_value=mock_db_manager):
-        sm = StateManager(bucket_name="test_bucket", bot_id="test_bot")
-        sm.db_manager = mock_db_manager # Ensure the instance has the mock
-        return sm
+    # Mock the environment variables required by ConfigManager
+    mock_env = {
+        "INFLUXDB_URL": "http://test.url",
+        "INFLUXDB_APP_TOKEN": "test_token",
+        "INFLUXDB_ORG": "test_org"
+    }
+    with patch.dict(os.environ, mock_env):
+        # We use patch to temporarily replace the DatabaseManager class during instantiation
+        with patch('jules_bot.core_logic.state_manager.DatabaseManager', return_value=mock_db_manager):
+            sm = StateManager(bucket_name="test_bucket", bot_id="test_bot")
+            sm.db_manager = mock_db_manager # Ensure the instance has the mock
+            return sm
 
 from jules_bot.core.schemas import TradePoint
 

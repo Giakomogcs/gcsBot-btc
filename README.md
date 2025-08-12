@@ -142,22 +142,46 @@ python run.py status
 
 ### Step 3: Initial Database Setup
 
-Before you start, you must define your initial InfluxDB admin token in your `.env` file. This is the token the database will be created with. Choose a secure, random string for this value:
+The database setup is a crucial one-time process. It now uses two separate tokens for better security.
+
+**1. Set the Admin Token**
+
+First, you must define a powerful **admin token**. This token is used *only* to create and set up the database. In your `.env` file, add a secure, random string for `INFLUXDB_ADMIN_TOKEN`:
 
 ```
 # In your .env file
-INFLUXDB_TOKEN=my-super-secret-admin-token
+INFLUXDB_ADMIN_TOKEN=my-super-secret-and-very-random-admin-token-12345
+INFLUXDB_APP_TOKEN=
 ```
 
-Once you have set this token and started the services (`python run.py start`), you can set up the database. The following command runs the setup script securely inside the Docker container:
+**2. Run the Setup Command**
+
+Once you have set the admin token and started the services (`python run.py start`), run the following command to set up the database. This command runs the script securely inside the Docker container.
 
 ```bash
 python run.py db-setup
 ```
 
-This script will use your admin token to connect to the database and create the necessary organization and buckets. It will then output a **new application token**.
+**3. Set the Application Token**
 
-**IMPORTANT**: You must copy this new **application token** and paste it back into your `.env` file, replacing your initial admin token. This new token has limited permissions and is more secure for the bot to use in its daily operations.
+The setup script will use your `INFLUXDB_ADMIN_TOKEN` to connect and will then generate and print a new, less-powerful **application token**. The output will look like this:
+
+```
+IMPORTANT: Your application token and organization are printed below.
+You MUST add these values to your .env file for the application to work correctly.
+----------------------------------------
+INFLUXDB_APP_TOKEN=abcdefg-some-long-generated-token-xyz
+INFLUXDB_ORG=gcsbot_org
+----------------------------------------
+```
+
+Copy the generated `INFLUXDB_APP_TOKEN` value and paste it into your `.env` file. The bot will use this safer, less-privileged token for its daily operations. Your final `.env` file should look like this:
+
+```
+# In your .env file
+INFLUXDB_ADMIN_TOKEN=my-super-secret-and-very-random-admin-token-12345
+INFLUXDB_APP_TOKEN=abcdefg-some-long-generated-token-xyz
+```
 
 ### Step 4: Running the Bot
 
