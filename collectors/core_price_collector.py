@@ -203,7 +203,7 @@ def prepare_backtest_data(days: int, force_reload: bool = False):
     end_date = datetime.datetime.now(datetime.timezone.utc)
     required_start_date = end_date - timedelta(days=days)
     
-    first_ts_in_db = collector._query_first_timestamp()
+    first_ts_in_db = collector.db_manager.query_first_timestamp(collector.measurement)
 
     # If DB is empty or its oldest record is newer than what we need, we must do a full historical download.
     if first_ts_in_db is None or first_ts_in_db > required_start_date:

@@ -114,3 +114,23 @@ class PostgresManager:
             except Exception as e:
                 db.rollback()
                 logger.error(f"Failed to clear tables: {e}")
+
+    def query_first_timestamp(self, measurement: str) -> Optional[pd.Timestamp]:
+        """
+        Queries the very first timestamp for a specific measurement in the table.
+        """
+        logger.info(f"Querying first timestamp for measurement '{measurement}'...")
+        with self.get_db() as db:
+            try:
+                from jules_bot.database.models import PriceHistory
+                from sqlalchemy import asc
+                first_record = db.query(PriceHistory).filter(PriceHistory.symbol == measurement).order_by(asc(PriceHistory.timestamp)).first()
+                if not first_record:
+                    logger.info(f"No data found in measurement '{measurement}'.")
+                    return None
+                first_timestamp = pd.to_datetime(first_record.timestamp).tz_convert('UTC')
+                logger.info(f"First timestamp found in DB: {first_timestamp}")
+                return first_timestamp
+            except Exception as e:
+                logger.error(f"Error querying first timestamp from PostgreSQL for measurement '{measurement}': {e}", exc_info=True)
+                return None
