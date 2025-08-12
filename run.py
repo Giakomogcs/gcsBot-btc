@@ -62,7 +62,7 @@ def start():
 def stop():
     """Para e remove todos os serviços."""
     print("🔥 Parando serviços Docker...")
-    if run_docker_command(["down"], capture_output=True):
+    if run_docker_command(["down", "-v"], capture_output=True):
         print("✅ Serviços parados com sucesso.")
 
 @app.command("status")
@@ -77,7 +77,7 @@ def logs(service_name: Optional[str] = typer.Argument(None, help="Nome do servi�
     try:
         base_command = get_docker_compose_command()
         full_command = base_command + ["logs", "-f"]
-        
+
         if service_name:
             print(f"📄 Acompanhando logs do serviço '{service_name}'...")
             full_command.append(service_name)
@@ -86,7 +86,7 @@ def logs(service_name: Optional[str] = typer.Argument(None, help="Nome do servi�
 
         print(f"   (Pressione Ctrl+C para parar)")
         subprocess.run(full_command)
-        
+
     except KeyboardInterrupt:
         print("\n🛑 Acompanhamento de logs interrompido.")
     except Exception as e:
@@ -109,7 +109,7 @@ def _run_in_container(command: list, env_vars: dict = {}, interactive: bool = Fa
     """
     try:
         docker_cmd = get_docker_compose_command()
-        
+
         exec_cmd = docker_cmd + ["exec"]
         # O modo interativo do Docker requer -it para alocar um pseudo-TTY
         if interactive:
@@ -117,11 +117,11 @@ def _run_in_container(command: list, env_vars: dict = {}, interactive: bool = Fa
 
         for key, value in env_vars.items():
             exec_cmd.extend(["-e", f"{key}={value}"])
-        
+
         # Comando final a ser executado no container
         container_command = ["app", "python"] + command
         exec_cmd.extend(container_command)
-        
+
         print(f"   (executando: `{' '.join(exec_cmd)}`)")
 
         if interactive:
@@ -181,7 +181,7 @@ def backtest(
 ):
     """Prepara os dados e executa um backtest completo dentro do container."""
     print(f"🚀 Iniciando execução de backtest para {days} dias...")
-    
+
     print("\n--- Etapa 1 de 2: Preparando dados ---")
     if not _run_in_container(["scripts/prepare_backtest_data.py", str(days)]):
         print("❌ Falha na preparação dos dados. Abortando backtest.")
@@ -191,7 +191,7 @@ def backtest(
     if not _run_in_container(["scripts/run_backtest.py", str(days)]):
         print("❌ Falha na execução do backtest.")
         return
-        
+
     print("\n✅ Backtest finalizado com sucesso.")
 
 @app.command()
@@ -202,6 +202,15 @@ def ui():
     _run_in_container(
         command=["jules_bot/ui/app.py"],
         interactive=True
+    )
+
+@app.command()
+def api():
+    """Inicia o serviço da API com o WebSocket."""
+    print("🚀 Iniciando o serviço de API...")
+    _run_in_container(
+        command=["api/main.py"],
+        interactive=True # Change to True to use subprocess.run and -it
     )
 
 if __name__ == "__main__":

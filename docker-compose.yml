@@ -36,7 +36,9 @@ services:
       - .:/app
     # Mantém o contentor a correr em segundo plano sem executar um comando por defeito
     # Permite-nos usar 'docker-compose exec' para executar comandos específicos
-    command: ["tail", "-f", "/dev/null"]
+    ports:
+      - "8765:8765"
+    command: tail -f /dev/null
 
 volumes:
   influxdb_data:

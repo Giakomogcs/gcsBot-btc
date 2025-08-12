@@ -33,3 +33,4 @@ textual
 
 # --- Testing ---
 pytest
+aiocsv
