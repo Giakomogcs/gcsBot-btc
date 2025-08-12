@@ -192,6 +192,8 @@ class Trader:
             trade_result = {
                 "trade_id": trade_id,
                 "environment": self.environment,
+                "strategy_name": self.strategy_name,
+                "exchange": "binance_testnet" if self.mode == 'test' else "binance_live",
                 "symbol": self.symbol,
                 "price": price,
                 "quantity": quantity,
@@ -264,6 +266,8 @@ class Trader:
             trade_result = {
                 "trade_id": trade_id,
                 "environment": self.environment,
+                "strategy_name": self.strategy_name,
+                "exchange": "binance_testnet" if self.mode == 'test' else "binance_live",
                 "symbol": self.symbol,
                 "price": price,
                 "quantity": quantity,
