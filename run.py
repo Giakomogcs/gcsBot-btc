@@ -5,6 +5,9 @@ import typer
 import subprocess
 from typing import Optional
 
+from jules_bot.database.postgres_manager import PostgresManager
+from jules_bot.utils.config_manager import config_manager
+
 app = typer.Typer()
 
 # --- Lógica de Detecção do Docker Compose ---
@@ -61,7 +64,7 @@ def start():
 @app.command("stop")
 def stop():
     """Para e remove todos os serviços."""
-    print("🔥 Parando serviços Docker...")
+    print("🛑 Parando serviços Docker...")
     if run_docker_command(["down", "-v"], capture_output=True):
         print("✅ Serviços parados com sucesso.")
 
@@ -212,6 +215,19 @@ def api():
         command=["api/main.py"],
         interactive=True # Change to True to use subprocess.run and -it
     )
+
+@app.command("clear-backtest-trades")
+def clear_backtest_trades():
+    """Deletes all trades from the 'backtest' environment in the database."""
+    print("🗑️  Attempting to clear all backtest trades from the database...")
+    try:
+        db_config = config_manager.get_db_config('POSTGRES')
+        db_manager = PostgresManager(config=db_config)
+        db_manager.clear_backtest_trades()
+        print("✅ Backtest trades cleared successfully.")
+    except Exception as e:
+        print(f"❌ An error occurred while clearing backtest trades: {e}")
+
 
 if __name__ == "__main__":
     app()

@@ -197,8 +197,11 @@ class Backtester:
     def _generate_and_save_summary(self):
         logger.info("--- Generating and saving backtest summary ---")
 
-        all_trades_df = self.db_manager.get_all_trades_in_range(start_date="0", end_date="now()")
-        all_trades_df = all_trades_df[all_trades_df['run_id'] == self.run_id]
+        all_trades = self.db_manager.get_all_trades_in_range(start_date="0", end_date="now()")
+        all_trades_df = pd.DataFrame([t.to_dict() for t in all_trades])
+
+        if not all_trades_df.empty:
+            all_trades_df = all_trades_df[all_trades_df['run_id'] == self.run_id]
 
         if all_trades_df.empty:
             logger.warning("No trades were executed in this backtest run.")
@@ -207,9 +210,10 @@ class Backtester:
             total_realized_pnl = 0.0
             total_fees_usd = 0.0
         else:
-            buy_trades = all_trades_df[all_trades_df['order_type'] == 'buy']
-            sell_trades = all_trades_df[all_trades_df['order_type'] == 'sell']
-            num_buy_trades = len(buy_trades)
+            # After the fix in PostgresManager, all trades retain their original 'buy' order_type.
+            # A "sell" is now represented by a trade's status being 'CLOSED'.
+            num_buy_trades = len(all_trades_df)
+            sell_trades = all_trades_df[all_trades_df['status'] == 'CLOSED']
             num_sell_trades = len(sell_trades)
             total_realized_pnl = sell_trades['realized_pnl_usd'].sum() if 'realized_pnl_usd' in sell_trades.columns else 0.0
             total_fees_usd = all_trades_df['commission_usd'].sum() if 'commission_usd' in all_trades_df.columns else 0.0
