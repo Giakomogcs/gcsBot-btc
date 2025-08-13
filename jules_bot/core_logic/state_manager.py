@@ -6,6 +6,8 @@ from jules_bot.utils.config_manager import config_manager
 from jules_bot.services.trade_logger import TradeLogger
 from jules_bot.bot.account_manager import AccountManager
 from jules_bot.core_logic.strategy_rules import StrategyRules
+
+class StateManager:
     def __init__(self, mode: str, bot_id: str):
         self.mode = mode
         self.bot_id = bot_id
