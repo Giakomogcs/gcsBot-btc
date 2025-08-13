@@ -40,13 +40,14 @@ class StatusService:
 
             # 3. Reconcile open positions with the exchange
             live_open_orders = exchange_manager.get_open_orders(symbol)
-            live_open_order_ids = {order['clientOrderId'] for order in live_open_orders}
+            # Create a set of stringified order IDs for efficient lookup
+            live_open_order_ids = {str(order['orderId']) for order in live_open_orders}
 
             positions_status = []
             for trade in open_positions_db:
                 # If a trade marked as OPEN in our DB is not in the exchange's open orders, it was likely filled or cancelled.
-                # A more robust system would check the trade's fill status, but for now we'll just mark it as not open.
-                if trade.trade_id not in live_open_order_ids:
+                # We now correctly compare our stored exchange_order_id with the live order IDs from the exchange.
+                if str(trade.exchange_order_id) not in live_open_order_ids:
                     # This position is no longer open on the exchange. We can skip it for status display.
                     continue
 
