@@ -185,33 +185,37 @@ class Trader:
     def _format_quantity(self, quantity):
         """
         Formats the quantity to comply with the LOT_SIZE filter.
+        Returns a string to avoid scientific notation issues.
         """
         if self.step_size is None:
             logger.warning(f"step_size not available for symbol {self.symbol}. Quantity will not be formatted.")
-            return quantity
+            return str(quantity)
 
         try:
             step_size_float = float(self.step_size)
             # Use floor to comply with LOT_SIZE filter
-            # e.g. quantity=2.345, step=0.01 -> floor(234.5)*0.01 = 234*0.01 = 2.34
-            formatted_quantity = math.floor(quantity / step_size_float) * step_size_float
+            formatted_quantity_float = math.floor(quantity / step_size_float) * step_size_float
 
-            # Binance sometimes returns precision error for floating point numbers.
-            # Formatting to string with required precision can help.
-            precision = self.step_size.find('1') - 1
-            if precision < 0:
+            # Determine the number of decimal places from the step_size string
+            if 'e-' in self.step_size:
+                precision = int(self.step_size.split('e-')[-1])
+            elif '.' in self.step_size:
+                trimmed_step_size = self.step_size.rstrip('0')
+                precision = len(trimmed_step_size.split('.')[1]) if '.' in trimmed_step_size else 0
+            else:
                 precision = 0
 
-            final_quantity = "{:0.0{}f}".format(formatted_quantity, precision)
+            # Format the floored quantity to a string with the correct number of decimal places
+            final_quantity_str = f"{formatted_quantity_float:.{precision}f}"
 
-            if float(final_quantity) != quantity:
-                logger.info(f"Formatted quantity from {quantity} to {final_quantity} using stepSize {self.step_size}")
+            if float(final_quantity_str) != quantity:
+                logger.info(f"Formatted quantity from {quantity} to {final_quantity_str} using stepSize {self.step_size}")
 
-            return final_quantity
+            return final_quantity_str
 
         except (ValueError, TypeError) as e:
             logger.error(f"Error formatting quantity {quantity} with step_size {self.step_size}: {e}")
-            return quantity
+            return str(quantity)
 
     def _fetch_exchange_info(self):
         if not self.is_ready:
