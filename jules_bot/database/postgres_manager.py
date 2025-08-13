@@ -105,8 +105,8 @@ class PostgresManager:
                 trades = query.all()
                 return trades
             except Exception as e:
-                logger.error(f"Error getting open positions: {e}")
-                return []
+                logger.error(f"Failed to get open positions from DB: {e}")
+                raise
 
     def get_trade_by_id(self, trade_id: str) -> Optional[pd.Series]:
         with self.get_db() as db:
@@ -116,16 +116,16 @@ class PostgresManager:
                     return pd.Series(trade.__dict__)
                 return None
             except Exception as e:
-                logger.error(f"Falha ao buscar trade pelo ID '{trade_id}': {e}", exc_info=True)
-                return None
+                logger.error(f"Failed to get trade by ID '{trade_id}': {e}", exc_info=True)
+                raise
 
     def has_open_positions(self) -> bool:
         with self.get_db() as db:
             try:
                 return db.query(Trade).filter(Trade.status == "OPEN").first() is not None
             except Exception as e:
-                logger.error(f"Falha ao verificar se existem posições abertas: {e}", exc_info=True)
-                return False
+                logger.error(f"Failed to check for open positions: {e}", exc_info=True)
+                raise
 
     def get_all_trades_in_range(self, mode: Optional[str] = None, start_date: str = "-90d", end_date: str = "now()"):
         with self.get_db() as db:
@@ -139,8 +139,8 @@ class PostgresManager:
                 return trades
 
             except Exception as e:
-                logger.error(f"Falha ao buscar todos os trades do DB: {e}", exc_info=True)
-                return []
+                logger.error(f"Failed to get all trades from DB: {e}", exc_info=True)
+                raise
 
     def clear_all_tables(self):
         with self.get_db() as db:
