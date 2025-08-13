@@ -197,8 +197,11 @@ class Backtester:
     def _generate_and_save_summary(self):
         logger.info("--- Generating and saving backtest summary ---")
 
-        all_trades_df = self.db_manager.get_all_trades_in_range(start_date="0", end_date="now()")
-        all_trades_df = all_trades_df[all_trades_df['run_id'] == self.run_id]
+        all_trades = self.db_manager.get_all_trades_in_range(start_date="0", end_date="now()")
+        all_trades_df = pd.DataFrame([t.to_dict() for t in all_trades])
+
+        if not all_trades_df.empty:
+            all_trades_df = all_trades_df[all_trades_df['run_id'] == self.run_id]
 
         if all_trades_df.empty:
             logger.warning("No trades were executed in this backtest run.")
