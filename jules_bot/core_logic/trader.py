@@ -1,4 +1,5 @@
 import uuid
+import math
 from binance.client import Client
 from binance.exceptions import BinanceAPIException, BinanceRequestException
 from jules_bot.utils.config_manager import config_manager
@@ -18,6 +19,8 @@ class Trader:
         self.client = self._init_binance_client()
         self.symbol = config_manager.get('APP', 'symbol')
         self.strategy_name = config_manager.get('APP', 'strategy_name', fallback='default_strategy')
+        self.step_size = None
+        self._fetch_exchange_info()
 
         db_config = config_manager.get_db_config('POSTGRES')
         self.db_manager = PostgresManager(config=db_config)
@@ -179,6 +182,51 @@ class Trader:
         }
 
 
+    def _format_quantity(self, quantity):
+        """
+        Formats the quantity to comply with the LOT_SIZE filter.
+        """
+        if self.step_size is None:
+            logger.warning(f"step_size not available for symbol {self.symbol}. Quantity will not be formatted.")
+            return quantity
+
+        try:
+            step_size_float = float(self.step_size)
+            # Use floor to comply with LOT_SIZE filter
+            # e.g. quantity=2.345, step=0.01 -> floor(234.5)*0.01 = 234*0.01 = 2.34
+            formatted_quantity = math.floor(quantity / step_size_float) * step_size_float
+
+            # Binance sometimes returns precision error for floating point numbers.
+            # Formatting to string with required precision can help.
+            precision = self.step_size.find('1') - 1
+            if precision < 0:
+                precision = 0
+
+            final_quantity = "{:0.0{}f}".format(formatted_quantity, precision)
+
+            if float(final_quantity) != quantity:
+                logger.info(f"Formatted quantity from {quantity} to {final_quantity} using stepSize {self.step_size}")
+
+            return float(final_quantity)
+
+        except (ValueError, TypeError) as e:
+            logger.error(f"Error formatting quantity {quantity} with step_size {self.step_size}: {e}")
+            return quantity
+
+    def _fetch_exchange_info(self):
+        if not self.is_ready:
+            return
+        try:
+            logger.info(f"Fetching exchange info for {self.symbol}...")
+            info = self.client.get_symbol_info(self.symbol)
+            for f in info['filters']:
+                if f['filterType'] == 'LOT_SIZE':
+                    self.step_size = f['stepSize']
+                    logger.info(f"LOT_SIZE filter for {self.symbol}: stepSize is {self.step_size}")
+                    break
+        except Exception as e:
+            logger.error(f"Could not fetch exchange info for {self.symbol}: {e}")
+
     def execute_buy(self, amount_usdt: float, run_id: str, decision_context: Optional[Dict[str, Any]]) -> Tuple[bool, Optional[dict]]:
         """
         Submits a market buy order and returns a standardized trade result dictionary.
@@ -217,8 +265,12 @@ class Trader:
 
         try:
             quantity_to_sell = position_data.get('quantity')
-            logger.info(f"EXECUTING SELL: {quantity_to_sell:.8f} of {self.symbol} | Trade ID: {trade_id}")
-            order = self.client.order_market_sell(symbol=self.symbol, quantity=quantity_to_sell)
+
+            # Format the quantity to comply with exchange filters
+            formatted_quantity = self._format_quantity(quantity_to_sell)
+
+            logger.info(f"EXECUTING SELL: {formatted_quantity} of {self.symbol} | Trade ID: {trade_id}")
+            order = self.client.order_market_sell(symbol=self.symbol, quantity=formatted_quantity)
             logger.info(f"✅ SELL ORDER EXECUTED: {order}")
 
             # Parse the response to get accurate, standardized data

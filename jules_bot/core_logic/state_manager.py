@@ -52,11 +52,11 @@ class StateManager:
             return float('inf')
 
         # Sort by time to find the most recent position.
-        # The timestamp field from the SQLAlchemy model is 'timestamp'.
-        latest_position = sorted(open_positions, key=lambda p: p['timestamp'], reverse=True)[0]
+        # The returned objects are SQLAlchemy models, so we use attribute access.
+        latest_position = sorted(open_positions, key=lambda p: p.timestamp, reverse=True)[0]
         
         # The field for price is 'price'.
-        return latest_position.get('price', float('inf'))
+        return latest_position.price
 
     def create_new_position(self, buy_result: dict, sell_target_price: float):
         """

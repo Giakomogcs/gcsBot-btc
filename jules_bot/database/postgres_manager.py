@@ -3,7 +3,7 @@ import logging
 import uuid
 from typing import Optional, Iterator
 import pandas as pd
-from sqlalchemy import create_engine, desc, and_, text
+from sqlalchemy import create_engine, desc, and_, text, inspect
 from sqlalchemy.orm import sessionmaker, Session
 from contextlib import contextmanager
 from jules_bot.core.schemas import TradePoint
@@ -16,6 +16,21 @@ class PostgresManager:
         self.engine = create_engine(self.db_url)
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
         self.create_tables()
+        self._run_migrations()
+
+    def _run_migrations(self):
+        inspector = inspect(self.engine)
+        with self.engine.connect() as connection:
+            try:
+                if not inspector.has_table("trades"):
+                    return
+                columns = [c['name'] for c in inspector.get_columns('trades')]
+                if 'binance_trade_id' not in columns:
+                    logger.info("Adding missing column 'binance_trade_id' to table 'trades'")
+                    with connection.begin():
+                        connection.execute(text('ALTER TABLE trades ADD COLUMN binance_trade_id INTEGER'))
+            except Exception as e:
+                logger.error(f"Failed to run migration: {e}")
 
     def create_tables(self):
         Base.metadata.create_all(bind=self.engine)
