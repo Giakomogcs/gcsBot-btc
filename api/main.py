@@ -3,6 +3,7 @@ import os
 import sys
 import json
 from aiohttp import web
+from jules_bot.utils.logger import logger
 
 # Add project root to sys.path to allow imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -14,22 +15,28 @@ from jules_bot.services.status_service import StatusService
 from jules_bot.core.market_data_provider import MarketDataProvider
 
 async def get_extended_status_handler(request):
-    config_manager = ConfigManager()
-    db_config = config_manager.get_db_config('POSTGRES')
-    db_manager = PostgresManager(config=db_config)
-    market_data_provider = MarketDataProvider(db_manager)
-    status_service = StatusService(db_manager, config_manager, market_data_provider)
+    try:
+        config_manager = ConfigManager()
+        db_config = config_manager.get_db_config('POSTGRES')
+        db_manager = PostgresManager(config=db_config)
+        market_data_provider = MarketDataProvider(db_manager)
+        status_service = StatusService(db_manager, config_manager, market_data_provider)
 
-    # Determine environment and bot_id dynamically from environment variables
-    environment = os.getenv('BOT_MODE', 'live').lower()
-    bot_id = f"jules_{environment}_bot"
+        # Determine environment and bot_id dynamically from environment variables
+        environment = os.getenv('BOT_MODE', 'live').lower()
+        bot_id = f"jules_{environment}_bot"
 
-    status_data = status_service.get_extended_status(environment, bot_id)
+        status_data = status_service.get_extended_status(environment, bot_id)
 
-    if "error" in status_data:
-        return web.Response(text=status_data["error"], status=500)
+        if "error" in status_data:
+            return web.Response(text=status_data["error"], status=500)
 
-    return web.json_response(status_data)
+        return web.json_response(status_data)
+    except Exception as e:
+        # Log the full traceback to the server console
+        logger.error(f"Unhandled exception in get_extended_status_handler: {e}", exc_info=True)
+        # Return a generic 500 error response
+        return web.Response(text="Internal Server Error", status=500)
 
 async def trade_handler(request):
     print("Received HTTP request to start TRADE bot.")
