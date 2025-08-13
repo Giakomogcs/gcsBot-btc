@@ -8,7 +8,10 @@ from textual.containers import VerticalScroll, Horizontal
 from textual.widgets import (Header, Footer, DataTable, Input, Button, Label, Static, RichLog)
 from textual.validation import Validator, ValidationResult
 
+import asyncio
 from jules_bot.bot.command_manager import CommandManager
+from jules_bot.services.status_service import StatusService
+from jules_bot.core.market_data_provider import MarketDataProvider
 
 if __name__ == "__main__":
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -26,12 +29,24 @@ class DisplayManager(App):
     BINDINGS = [("d", "toggle_dark", "Toggle dark mode")]
     CSS_PATH = "jules_bot.css"
 
-    def __init__(self, mode: str, command_manager: CommandManager, *args, **kwargs):
+    def __init__(
+        self,
+        mode: str,
+        command_manager: CommandManager,
+        status_service: StatusService,
+        *args,
+        **kwargs
+    ):
         super().__init__(*args, **kwargs)
         self.mode = mode
         self.command_manager = command_manager
+        self.status_service = status_service
+
         self.selected_trade_id: str | None = None
         self.log_display = None
+        self.symbol = "BTC/USDT"
+        self.bot_id = f"jules_{self.mode}_bot"
+        self.update_interval_sec = 5
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -77,6 +92,54 @@ class DisplayManager(App):
             table.add_columns(*columns)
 
         self.query_one("#positions_table", DataTable).cursor_type = "row"
+
+        # Start the background worker to update the UI periodically
+        self.run_worker(self.periodic_update_task, name="status_updater", group="updaters")
+
+    def get_status_payload(self) -> dict:
+        """
+        Fetches all status information from the StatusService.
+        """
+        try:
+            # The original implementation of get_latest_data seems to be missing.
+            # We'll get the last few minutes of data and use the latest record.
+            df = self.status_service.market_data_provider.get_historical_data(self.symbol, start="-5m")
+
+            if df is not None and not df.empty:
+                latest_market_data = df.iloc[-1].to_dict()
+                current_price = latest_market_data.get('close', '0')
+            else:
+                latest_market_data = {}
+                current_price = '0'
+
+            open_positions = self.status_service.get_reconciled_open_positions(
+                self.command_manager.exchange_manager, self.mode, self.bot_id, Decimal(current_price)
+            )
+            buy_signal_status = self.status_service.get_buy_signal_status(
+                latest_market_data, len(open_positions)
+            )
+            trade_history = self.status_service.get_trade_history(self.mode)
+            wallet_balances = self.status_service.get_wallet_balances(self.command_manager.exchange_manager)
+
+            return {
+                "mode": self.mode,
+                "symbol": self.symbol.replace('/', ''),
+                "current_btc_price": current_price,
+                "open_positions_status": open_positions,
+                "buy_signal_status": buy_signal_status,
+                "trade_history": trade_history,
+                "wallet_balances": wallet_balances,
+            }
+        except Exception as e:
+            self.log_display.write(f"[bold red]Error getting status: {e}[/]")
+            return {"error": str(e)}
+
+    async def periodic_update_task(self) -> None:
+        """The main background loop for periodically updating the UI."""
+        while self.is_running:
+            payload = self.get_status_payload()
+            self.update_data(payload)
+            await asyncio.sleep(self.update_interval_sec)
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button press events."""
