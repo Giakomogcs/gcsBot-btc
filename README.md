@@ -3,7 +3,6 @@
 A sophisticated, data-driven automated trading bot for the BTC/USDT market.
 
 ## Table of Contents
-
 - [Overview](#1-overview)
 - [Features](#2-features)
 - [Architecture](#3-architecture)
@@ -154,7 +153,6 @@ All interaction with the bot and its environment is handled through `run.py`.
 
 These commands control the Docker environment.
 
-
 | Command | Description |
 |---|---|
 | `start` | Builds and starts all services (`app`, `postgres`, `pgadmin`) in detached mode. |
@@ -162,13 +160,6 @@ These commands control the Docker environment.
 | `status` | Shows the current status of all running services. |
 | `build` | Forces a rebuild of the Docker images without starting them. Useful after changing the `Dockerfile`. |
 | `logs [service]` | Tails the logs of a specific service (e.g., `app`, `db`) or all services if none is specified. |
-| Command          | Description                                                                                          |
-| ---------------- | ---------------------------------------------------------------------------------------------------- |
-| `start`          | Builds and starts all services (`app`, `postgres`, `pgadmin`) in detached mode.                      |
-| `stop`           | Stops and removes all services and associated volumes.                                               |
-| `status`         | Shows the current status of all running services.                                                    |
-| `build`          | Forces a rebuild of the Docker images without starting them. Useful after changing the `Dockerfile`. |
-| `logs [service]` | Tails the logs of a specific service (e.g., `app`, `db`) or all services if none is specified.       |
 
 ### Application Control
 
@@ -282,96 +273,10 @@ The realized PnL for a trade is calculated when a position is sold. The formula,
 realized_pnl_usd = ((sell_price * (1 - commission_rate)) - (buy_price * (1 + commission_rate))) * quantity_sold
 ```
 
-| Command                 | Description                                                                                                                                             |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `trade`                 | Starts the bot in **live trading mode** using your main Binance account.                                                                                |
-| `test`                  | Starts the bot in **paper trading mode** using your Binance testnet account.                                                                            |
-| `backtest`              | Prepares historical data and runs a full backtest. Use the `--days` option (e.g., `--days 30`) to specify the period.                                   |
-| `ui`                    | Starts the interactive Terminal User Interface (TUI) for monitoring and control. The bot must be running in `trade` or `test` mode in another terminal. |
-| `api`                   | Starts the WebSocket API service for the bot.                                                                                                           |
-| `clear-backtest-trades` | **Deletes all trades** from the `backtest` environment in the database. Useful for starting a fresh backtest analysis.                                  |
-
-## 7. Database Schema
-
-The application uses a PostgreSQL database to store all persistent data. The schema is defined in `jules_bot/database/models.py` and consists of three main tables.
-
-### `price_history`
-
-Stores historical OHLCV (Open, High, Low, Close, Volume) price data for assets.
-
-| Column      | Type     | Description                                               |
-| ----------- | -------- | --------------------------------------------------------- |
-| `id`        | Integer  | Primary key.                                              |
-| `timestamp` | DateTime | The timestamp for the start of the candle (e.g., minute). |
-| `open`      | Float    | The opening price for the period.                         |
-| `high`      | Float    | The highest price for the period.                         |
-| `low`       | Float    | The lowest price for the period.                          |
-| `close`     | Float    | The closing price for the period.                         |
-| `volume`    | Float    | The trading volume for the period.                        |
-| `symbol`    | String   | The trading symbol (e.g., 'BTCUSDT').                     |
-
-### `trades`
-
-The central table for recording all trading activity. A single row represents the entire lifecycle of a trade, from buy to sell.
-
-| Column                     | Type     | Description                                                                                                         |
-| -------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------- |
-| `id`                       | Integer  | Primary key.                                                                                                        |
-| `run_id`                   | String   | The unique ID for the bot session that initiated the trade.                                                         |
-| `environment`              | String   | The environment the trade was made in ('trade', 'test', or 'backtest').                                             |
-| `strategy_name`            | String   | The name of the strategy that triggered the trade.                                                                  |
-| `symbol`                   | String   | The trading symbol (e.g., 'BTCUSDT').                                                                               |
-| `trade_id`                 | String   | A unique identifier for the trade lifecycle.                                                                        |
-| `exchange`                 | String   | The exchange where the trade occurred (e.g., 'binance').                                                            |
-| `status`                   | String   | The current status of the trade: 'OPEN' or 'CLOSED'.                                                                |
-| `order_type`               | String   | The type of order that opened the position. Always 'buy'.                                                           |
-| `price`                    | Float    | The price of the transaction. For an open trade, this is the buy price. For a closed trade, this is the sell price. |
-| `quantity`                 | Float    | The amount of the asset traded.                                                                                     |
-| `usd_value`                | Float    | The total value of the transaction in USD.                                                                          |
-| `commission`               | Float    | The commission paid for the transaction.                                                                            |
-| `commission_asset`         | String   | The asset the commission was paid in (e.g., 'USDT').                                                                |
-| `timestamp`                | DateTime | The timestamp of the transaction. Updated to the sell time when a trade is closed.                                  |
-| `exchange_order_id`        | String   | The order ID provided by the exchange.                                                                              |
-| `decision_context`         | JSON     | A JSON object containing the market data and indicators at the time the decision was made.                          |
-| `sell_target_price`        | Float    | The target price at which to sell, calculated at buy time.                                                          |
-| `commission_usd`           | Float    | The total commission for the sell part of the trade, in USD.                                                        |
-| `realized_pnl_usd`         | Float    | The realized profit or loss from the trade in USD, calculated upon selling.                                         |
-| `hodl_asset_amount`        | Float    | The amount of the asset held back from the sell (if not selling 100%).                                              |
-| `hodl_asset_value_at_sell` | Float    | The USD value of the `hodl_asset_amount` at the time of the sell.                                                   |
-
-### `bot_status`
-
-A simple table for storing the last known state of a running bot instance, used primarily by the UI.
-
-| Column                | Type     | Description                                                  |
-| --------------------- | -------- | ------------------------------------------------------------ |
-| `id`                  | Integer  | Primary key.                                                 |
-| `bot_id`              | String   | The unique ID of the bot session.                            |
-| `mode`                | String   | The mode the bot is running in ('trade' or 'test').          |
-| `is_running`          | Boolean  | Whether the bot is currently running.                        |
-| `session_pnl_usd`     | Float    | The profit or loss for the current session.                  |
-| `session_pnl_percent` | Float    | The profit or loss for the current session, as a percentage. |
-| `open_positions`      | Integer  | The number of currently open positions.                      |
-| `portfolio_value_usd` | Float    | The total current value of the portfolio.                    |
-| `timestamp`           | DateTime | The last time the status was updated.                        |
-
-## 8. Key Calculations
-
-### Realized Profit & Loss (PnL)
-
-The realized PnL for a trade is calculated when a position is sold. The formula, found in `jules_bot/backtesting/engine.py`, accounts for commission fees on both the buy and sell transactions to provide an accurate reflection of the net profit.
-
-**Formula:**
-
-```
-realized_pnl_usd = ((sell_price * (1 - commission_rate)) - (buy_price * (1 + commission_rate))) * quantity_sold
-```
-
 - `sell_price`: The price at which the asset was sold.
 - `buy_price`: The price at which the asset was originally purchased.
 - `commission_rate`: The percentage fee charged by the exchange (e.g., 0.001 for 0.1%).
 - `quantity_sold`: The amount of the asset that was sold.
-
 
 This formula ensures that the profit is only calculated on the capital that was returned after fees were deducted on both ends of the trade lifecycle.
 
@@ -413,5 +318,3 @@ The bot includes a powerful, real-time Terminal User Interface (TUI) for monitor
   - **Unrealized PnL**: The current profit or loss for each position.
   - **Sell Target & Progress**: The target price for selling and how close the current price is to reaching it.
 - **Manual Intervention**: Select a trade in the table to bring up options to **Force Sell** it or mark it as **Treasury** (a long-term hold).
-
-This formula ensures that the profit is only calculated on the capital that was returned after fees were deducted on both ends of the trade lifecycle.

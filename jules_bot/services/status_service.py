@@ -10,6 +10,8 @@ logger = logging.getLogger(__name__)
 def _calculate_progress_pct(current_price, start_price, target_price):
     if target_price == start_price:
         return 100.0 if current_price >= target_price else 0.0
+    if target_price is None or start_price is None or current_price is None:
+        return 0.0
 
     progress = (current_price - start_price) / (target_price - start_price) * 100
     return max(0, min(progress, 100))
@@ -19,88 +21,73 @@ class StatusService:
         self.db_manager = db_manager
         self.strategy = StrategyRules(config_manager)
         self.market_data_provider = market_data_provider
-        # Note: ExchangeManager is instantiated per-request in get_extended_status
-        # to ensure it's created with the correct mode (live/test).
 
-    def get_extended_status(self, environment: str, bot_id: str):
+    def get_reconciled_open_positions(self, exchange_manager: ExchangeManager, environment: str, bot_id: str, current_price: float):
         """
-        Gathers and calculates extended status information, including
-        open positions' PnL, progress towards sell targets, and buy signal readiness.
+        Fetches open positions from the DB, reconciles them with the exchange,
+        and calculates PnL and progress.
+        """
+        symbol = "BTCUSDT"
+        open_positions_db = self.db_manager.get_open_positions(environment, bot_id)
+
+        try:
+            live_open_orders = exchange_manager.get_open_orders(symbol)
+            live_open_order_ids = {str(order['orderId']) for order in live_open_orders}
+        except Exception as e:
+            logger.error(f"Could not fetch open orders from exchange: {e}")
+            # If exchange fails, we can't reconcile. Return an empty list or handle as appropriate.
+            return []
+
+        positions_status = []
+        for trade in open_positions_db:
+            if str(trade.exchange_order_id) not in live_open_order_ids:
+                continue
+
+            unrealized_pnl = (current_price - trade.price) * trade.quantity if current_price else 0
+            progress_to_sell_target_pct = _calculate_progress_pct(
+                current_price, trade.price, trade.sell_target_price
+            )
+            positions_status.append({
+                "trade_id": trade.trade_id,
+                "entry_price": trade.price,
+                "current_price": current_price,
+                "quantity": trade.quantity,
+                "unrealized_pnl": unrealized_pnl,
+                "sell_target_price": trade.sell_target_price,
+                "progress_to_sell_target_pct": progress_to_sell_target_pct,
+            })
+        return positions_status
+
+    def get_buy_signal_status(self, market_data: dict, open_positions_count: int):
+        """
+        Determines the buy signal status based on market data and open positions.
+        """
+        should_buy, _, reason = self.strategy.evaluate_buy_signal(market_data, open_positions_count)
+        btc_purchase_target, btc_purchase_progress_pct = self._calculate_buy_progress(market_data, open_positions_count)
+
+        return {
+            "should_buy": should_buy,
+            "reason": reason,
+            "btc_purchase_target": btc_purchase_target,
+            "btc_purchase_progress_pct": btc_purchase_progress_pct
+        }
+
+    def get_trade_history(self, environment: str):
+        """
+        Fetches trade history from the database.
+        """
+        trade_history = self.db_manager.get_all_trades_in_range(environment)
+        return [trade.to_dict() for trade in trade_history]
+
+    def get_wallet_balances(self, exchange_manager: ExchangeManager):
+        """
+        Fetches wallet balances from the exchange.
         """
         try:
-            exchange_manager = ExchangeManager(mode=environment)
-            symbol = "BTCUSDT" # Assuming BTCUSDT for now
-
-            # 1. Fetch current market data
-            market_data = self.market_data_provider.get_latest_data("BTC/USDT")
-            current_price = market_data.get('close', 0)
-
-            # 2. Fetch open positions from local DB
-            open_positions_db = self.db_manager.get_open_positions(environment, bot_id)
-
-            # 3. Reconcile open positions with the exchange
-            live_open_orders = exchange_manager.get_open_orders(symbol)
-            # Create a set of stringified order IDs for efficient lookup
-            live_open_order_ids = {str(order['orderId']) for order in live_open_orders}
-
-            positions_status = []
-            for trade in open_positions_db:
-                # If a trade marked as OPEN in our DB is not in the exchange's open orders, it was likely filled or cancelled.
-                # We now correctly compare our stored exchange_order_id with the live order IDs from the exchange.
-                if str(trade.exchange_order_id) not in live_open_order_ids:
-                    # This position is no longer open on the exchange. We can skip it for status display.
-                    continue
-
-                unrealized_pnl = (current_price - trade.price) * trade.quantity
-                progress_to_sell_target_pct = _calculate_progress_pct(
-                    current_price, trade.price, trade.sell_target_price
-                )
-                positions_status.append({
-                    "trade_id": trade.trade_id,
-                    "entry_price": trade.price,
-                    "current_price": current_price,
-                    "quantity": trade.quantity,
-                    "unrealized_pnl": unrealized_pnl,
-                    "sell_target_price": trade.sell_target_price,
-                    "progress_to_sell_target_pct": progress_to_sell_target_pct,
-                })
-
-            # 4. Determine buy signal status
-            should_buy, _, reason = self.strategy.evaluate_buy_signal(
-                market_data, len(positions_status) # Use the count of reconciled open positions
-            )
-            btc_purchase_target, btc_purchase_progress_pct = self._calculate_buy_progress(
-                market_data, len(positions_status)
-            )
-
-            # 5. Fetch trade history from DB
-            trade_history = self.db_manager.get_all_trades_in_range(environment)
-            trade_history_dicts = [trade.to_dict() for trade in trade_history]
-
-            # 6. Fetch live wallet data
-            wallet_balances = exchange_manager.get_account_balance()
-
-            # 7. Assemble the final status object
-            extended_status = {
-                "mode": environment,
-                "symbol": "BTC/USDT",
-                "current_btc_price": current_price,
-                "open_positions_status": positions_status,
-                "buy_signal_status": {
-                    "should_buy": should_buy,
-                    "reason": reason,
-                    "btc_purchase_target": btc_purchase_target,
-                    "btc_purchase_progress_pct": btc_purchase_progress_pct
-                },
-                "trade_history": trade_history_dicts,
-                "wallet_balances": wallet_balances
-            }
-
-            return extended_status
-
+            return exchange_manager.get_account_balance()
         except Exception as e:
-            logger.error(f"Error getting extended status: {e}", exc_info=True)
-            return {"error": str(e)}
+            logger.error(f"Could not fetch wallet balances from exchange: {e}")
+            return {} # Return empty dict on error
 
     def _calculate_buy_progress(self, market_data: dict, open_positions_count: int) -> tuple[float, float]:
         """
