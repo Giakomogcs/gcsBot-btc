@@ -93,22 +93,42 @@ async def command_websocket_handler(request):
     print("DEBUG: WebSocket connection for command logs closed.")
     return ws
 
-async def get_postgres_data_handler(request):
+async def get_trades_handler(request):
     config_manager = ConfigManager()
     db_config = config_manager.get_db_config('POSTGRES')
     db_manager = PostgresManager(config=db_config)
 
-    table_name = request.match_info.get('table_name', 'price_history')
-    time_range = request.query.get('time_range', '-1h')
+    environment = request.query.get('environment')
+    start_date = request.query.get('start_date')
+    end_date = request.query.get('end_date')
 
-    # This is a simplified example. A real implementation would need to parse the time_range
-    # and construct a proper SQL query.
-    data = db_manager.get_price_data(table_name, start_date=time_range)
+    if not all([environment, start_date, end_date]):
+        return web.Response(text="'environment', 'start_date', and 'end_date' are required query parameters.", status=400)
+
+    data = db_manager.get_trades(environment, start_date, end_date)
 
     if not data.empty:
-        return web.json_response(data.to_dict(orient='records'))
+        return web.json_response(json.loads(data.to_json(orient='records', date_format='iso')))
     else:
-        return web.Response(text="No data found for table '" + table_name + "' for time range '" + time_range + "'.", status=404)
+        return web.Response(text=f"No trades found for environment '{environment}' in the given time range.", status=404)
+
+async def get_price_history_handler(request):
+    config_manager = ConfigManager()
+    db_config = config_manager.get_db_config('POSTGRES')
+    db_manager = PostgresManager(config=db_config)
+
+    start_date = request.query.get('start_date')
+    end_date = request.query.get('end_date')
+
+    if not all([start_date, end_date]):
+        return web.Response(text="'start_date' and 'end_date' are required query parameters.", status=400)
+
+    data = db_manager.get_price_history(start_date, end_date)
+
+    if not data.empty:
+        return web.json_response(json.loads(data.to_json(orient='records', date_format='iso')))
+    else:
+        return web.Response(text="No price history found for the given time range.", status=404)
 
 async def main():
     """
@@ -119,7 +139,8 @@ async def main():
     app.router.add_post('/run/trade', trade_handler)
     app.router.add_post('/run/test', test_handler)
     app.router.add_post('/run/backtest', backtest_handler)
-    app.router.add_get('/data/{table_name}', get_postgres_data_handler) # HTTP endpoint for PostgreSQL data
+    app.router.add_get('/data/trades', get_trades_handler)
+    app.router.add_get('/data/price_history', get_price_history_handler)
 
     config_manager = ConfigManager()
     api_config = config_manager.get_section('API')

@@ -113,6 +113,33 @@ class PostgresManager:
                 logger.error(f"Falha ao verificar se existem posições abertas: {e}", exc_info=True)
                 return False
 
+    def get_trades(self, environment: str, start_date: str, end_date: str) -> pd.DataFrame:
+        with self.get_db() as db:
+            try:
+                query = db.query(Trade).filter(
+                    Trade.environment == environment,
+                    Trade.timestamp >= start_date,
+                    Trade.timestamp <= end_date
+                ).order_by(Trade.timestamp)
+                df = pd.read_sql(query.statement, self.engine)
+                return df
+            except Exception as e:
+                logger.error(f"Failed to get trades: {e}", exc_info=True)
+                return pd.DataFrame()
+
+    def get_price_history(self, start_date: str, end_date: str) -> pd.DataFrame:
+        with self.get_db() as db:
+            try:
+                query = db.query(PriceHistory).filter(
+                    PriceHistory.timestamp >= start_date,
+                    PriceHistory.timestamp <= end_date
+                ).order_by(PriceHistory.timestamp)
+                df = pd.read_sql(query.statement, self.engine)
+                return df
+            except Exception as e:
+                logger.error(f"Failed to get price history: {e}", exc_info=True)
+                return pd.DataFrame()
+
     def get_all_trades_in_range(self, start_date: str = "-90d", end_date: str = "now()"):
         with self.get_db() as db:
             try:
