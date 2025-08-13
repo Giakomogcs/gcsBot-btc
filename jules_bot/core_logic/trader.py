@@ -207,7 +207,7 @@ class Trader:
             if float(final_quantity) != quantity:
                 logger.info(f"Formatted quantity from {quantity} to {final_quantity} using stepSize {self.step_size}")
 
-            return float(final_quantity)
+            return final_quantity
 
         except (ValueError, TypeError) as e:
             logger.error(f"Error formatting quantity {quantity} with step_size {self.step_size}: {e}")
