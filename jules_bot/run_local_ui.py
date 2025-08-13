@@ -14,11 +14,7 @@ from jules_bot.core.exchange_connector import ExchangeManager
 from jules_bot.services.status_service import StatusService
 from jules_bot.bot.command_manager import CommandManager
 from jules_bot.ui.display_manager import DisplayManager
-from jules_bot.utils.logger import setup_logging
-
-# Setup logging
-setup_logging()
-logger = logging.getLogger(__name__)
+from jules_bot.utils.logger import logger
 
 # --- Main Application Runner ---
 
