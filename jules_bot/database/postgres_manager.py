@@ -3,7 +3,7 @@ import logging
 import uuid
 from typing import Optional, Iterator
 import pandas as pd
-from sqlalchemy import create_engine, desc, and_, text
+from sqlalchemy import create_engine, desc, and_, text, inspect
 from sqlalchemy.orm import sessionmaker, Session
 from contextlib import contextmanager
 from jules_bot.core.schemas import TradePoint
@@ -16,6 +16,21 @@ class PostgresManager:
         self.engine = create_engine(self.db_url)
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
         self.create_tables()
+        self._run_migrations()
+
+    def _run_migrations(self):
+        inspector = inspect(self.engine)
+        with self.engine.connect() as connection:
+            try:
+                if not inspector.has_table("trades"):
+                    return
+                columns = [c['name'] for c in inspector.get_columns('trades')]
+                if 'binance_trade_id' not in columns:
+                    logger.info("Adding missing column 'binance_trade_id' to table 'trades'")
+                    with connection.begin():
+                        connection.execute(text('ALTER TABLE trades ADD COLUMN binance_trade_id INTEGER'))
+            except Exception as e:
+                logger.error(f"Failed to run migration: {e}")
 
     def create_tables(self):
         Base.metadata.create_all(bind=self.engine)
@@ -137,6 +152,15 @@ class PostgresManager:
                 logger.error(f"Failed to get trade by ID '{trade_id}': {e}", exc_info=True)
                 raise
 
+    def get_trade_by_binance_trade_id(self, binance_trade_id: int) -> Optional[Trade]:
+        with self.get_db() as db:
+            try:
+                trade = db.query(Trade).filter(Trade.binance_trade_id == binance_trade_id).first()
+                return trade
+            except Exception as e:
+                logger.error(f"Failed to get trade by binance_trade_id '{binance_trade_id}': {e}")
+                return None
+
     def has_open_positions(self) -> bool:
         with self.get_db() as db:
             try:
@@ -159,6 +183,20 @@ class PostgresManager:
             except Exception as e:
                 logger.error(f"Failed to get all trades from DB: {e}", exc_info=True)
                 raise
+
+    def get_last_trade_id(self, environment: str) -> int:
+        """
+        Fetches the ID of the last trade for a given environment from the database.
+        """
+        with self.get_db() as db:
+            try:
+                last_trade = db.query(Trade).filter(Trade.environment == environment).order_by(desc(Trade.binance_trade_id)).first()
+                if last_trade and last_trade.binance_trade_id is not None:
+                    return last_trade.binance_trade_id
+                return 0
+            except Exception as e:
+                logger.error(f"Failed to get last trade ID from DB: {e}", exc_info=True)
+                return 0
 
     def clear_all_tables(self):
         with self.get_db() as db:

@@ -213,6 +213,42 @@ class AccountManager:
             logger.error(f"Unexpected error fetching trade history: {e}", exc_info=True)
             return []
 
+    def get_all_my_trades(self, symbol: str, from_id: int = 0) -> list:
+        """
+        Fetches all historical trades for a symbol, starting from a specific trade ID.
+        """
+        if not self.client or config_manager.getboolean('APP', 'force_offline_mode'):
+            logger.warning("OFFLINE MODE: Cannot fetch all trades.")
+            return []
+
+        try:
+            all_trades = []
+            limit = 1000  # Max limit per request
+            last_id = from_id
+
+            while True:
+                logger.info(f"Fetching trades for {symbol} starting from id {last_id}...")
+                trades = self.client.get_my_trades(symbol=symbol, fromId=last_id, limit=limit)
+
+                if not trades:
+                    break
+
+                all_trades.extend(trades)
+                last_id = trades[-1]['id'] + 1
+
+                # If the number of trades fetched is less than the limit, we've reached the end
+                if len(trades) < limit:
+                    break
+
+            logger.info(f"Fetched a total of {len(all_trades)} new trades for {symbol}.")
+            return all_trades
+        except BinanceAPIException as e:
+            logger.error(f"Binance API Error fetching all trades for {symbol}: {e}", exc_info=True)
+            return []
+        except Exception as e:
+            logger.error(f"Unexpected error fetching all trades for {symbol}: {e}", exc_info=True)
+            return []
+
     def get_all_account_balances(self, all_prices: dict) -> list:
         """
         Fetches all non-zero asset balances and calculates their USD value.

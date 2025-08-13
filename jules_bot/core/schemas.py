@@ -44,6 +44,7 @@ class TradePoint:
     # --- Optional & Contextual Fields ---
     timestamp: datetime.datetime = field(default_factory=lambda: datetime.datetime.now(datetime.timezone.utc))
     exchange_order_id: Optional[str] = None
+    binance_trade_id: Optional[int] = None
     decision_context: Optional[Dict[str, Any]] = None  # Stores RSI, MACD, etc.
 
     # --- Fields for BUY trades ---

@@ -15,16 +15,34 @@ app = typer.Typer()
 def get_docker_compose_command():
     """
     Verifica se 'docker-compose' (V1) ou 'docker compose' (V2) está disponível.
+    Adiciona 'sudo' se o usuário não for root para evitar problemas de permissão.
     """
+    # Lista de comandos base. Adiciona 'sudo' se não formos o usuário root.
+    base_cmd = []
+    try:
+        # os.geteuid() não existe no Windows, então tratamos o erro.
+        # No Windows, o gerenciamento de permissões do Docker é diferente e geralmente não requer sudo.
+        if os.geteuid() != 0:
+            base_cmd = ["sudo"]
+    except AttributeError:
+        # Se geteuid não existe, estamos provavelmente no Windows. Não fazemos nada.
+        pass
+
+    # Tenta encontrar um comando docker-compose válido
     if shutil.which("docker-compose"):
-        return ["docker-compose"]
+        return base_cmd + ["docker-compose"]
     elif shutil.which("docker"):
         try:
-            result = subprocess.run(["docker", "compose", "--version"], capture_output=True, text=True, check=True)
+            # Constrói o comando de teste completo (ex: ['sudo', 'docker', 'compose', '--version'])
+            test_command = base_cmd + ["docker", "compose", "--version"]
+            result = subprocess.run(test_command, capture_output=True, text=True, check=True)
             if "Docker Compose version" in result.stdout:
-                return ["docker", "compose"]
+                return base_cmd + ["docker", "compose"]
         except (subprocess.CalledProcessError, FileNotFoundError):
+            # Se o teste falhar, continuamos para o erro final
             pass
+    
+    # Se nenhuma versão do comando foi encontrada
     raise FileNotFoundError("Could not find a valid 'docker-compose' or 'docker compose' command. Please ensure Docker is installed and in your PATH.")
 
 def run_docker_command(command_args: list, **kwargs):
@@ -104,18 +122,20 @@ def build():
 
 # --- Comandos da Aplicação ---
 
-def _run_in_container(command: list, env_vars: dict = {}, interactive: bool = False):
+def _run_in_container(command: list, env_vars: dict = {}, interactive: bool = False, detached: bool = False):
     """
     Executa um comando Python dentro do container 'app'.
-    - Modo Padrão (interactive=False): Captura e exibe o output em tempo real, ideal para logs.
-    - Modo Interativo (interactive=True): Anexa o terminal ao processo, necessário para TUIs.
+    - Modo Padrão (interactive=False): Captura e exibe o output em tempo real.
+    - Modo Interativo (interactive=True): Anexa o terminal ao processo (para TUIs).
+    - Modo Detached (detached=True): Executa o comando em segundo plano.
     """
     try:
         docker_cmd = get_docker_compose_command()
 
         exec_cmd = docker_cmd + ["exec"]
-        # O modo interativo do Docker requer -it para alocar um pseudo-TTY
-        if interactive:
+        if detached:
+            exec_cmd.append("-d")
+        elif interactive:
             exec_cmd.append("-it")
 
         for key, value in env_vars.items():
@@ -158,23 +178,6 @@ def _run_in_container(command: list, env_vars: dict = {}, interactive: bool = Fa
         return False
 
 
-@app.command()
-def trade():
-    """Inicia o bot em modo de negociação (live) dentro do container."""
-    print("🚀 Iniciando o bot em modo 'TRADE'...")
-    _run_in_container(
-        command=["jules_bot/main.py"],
-        env_vars={"BOT_MODE": "trade"}
-    )
-
-@app.command()
-def test():
-    """Inicia o bot em modo de teste (testnet) dentro do container."""
-    print("🚀 Iniciando o bot em modo 'TEST'...")
-    _run_in_container(
-        command=["jules_bot/main.py"],
-        env_vars={"BOT_MODE": "test"}
-    )
 
 @app.command()
 def backtest(
@@ -198,23 +201,27 @@ def backtest(
     print("\n✅ Backtest finalizado com sucesso.")
 
 @app.command()
-def ui():
-    """Inicia a interface de usuário (TUI) para monitorar e controlar o bot."""
-    print("🖥️  Iniciando a Interface de Usuário (TUI)...")
-    print("   Lembre-se que o bot (usando 'trade' ou 'test') deve estar rodando em outro terminal.")
+def trade():
+    """Inicia o bot e a TUI local em modo de negociação (live)."""
+    mode = "trade"
+    print(f"🚀 Iniciando o Bot com a Interface de Usuário em modo '{mode.upper()}'...")
     _run_in_container(
-        command=["jules_bot/ui/app.py"],
+        command=["jules_bot/run_local_ui.py", mode],
         interactive=True
     )
 
 @app.command()
-def api():
-    """Inicia o serviço da API com o WebSocket."""
-    print("🚀 Iniciando o serviço de API...")
+def test():
+    """Inicia o bot e a TUI local em modo de teste (testnet)."""
+    mode = "test"
+    print(f"🚀 Iniciando o Bot com a Interface de Usuário em modo '{mode.upper()}'...")
     _run_in_container(
-        command=["api/main.py"],
-        interactive=True # Change to True to use subprocess.run and -it
+        command=["jules_bot/run_local_ui.py", mode],
+        interactive=True
     )
+
+import time
+
 
 @app.command("clear-backtest-trades")
 def clear_backtest_trades():

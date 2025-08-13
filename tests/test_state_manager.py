@@ -106,12 +106,21 @@ def test_get_last_purchase_price_with_open_positions(state_manager):
     Test that `get_last_purchase_price` returns the price of the most recent trade
     when there are open positions.
     """
-    # Arrange: Mock the return value of get_open_positions
-    state_manager.get_open_positions = Mock(return_value=[
-        {'_time': '2023-01-01T12:00:00Z', 'price': 100.0},
-        {'_time': '2023-01-01T13:00:00Z', 'price': 105.0}, # Most recent
-        {'_time': '2023-01-01T11:00:00Z', 'price': 99.0}
-    ])
+    # Arrange: Mock the return value of get_open_positions to return mock objects
+    # with attributes, to simulate SQLAlchemy model objects.
+    trade1 = Mock()
+    trade1.timestamp = '2023-01-01T12:00:00Z'
+    trade1.price = 100.0
+
+    trade2 = Mock()
+    trade2.timestamp = '2023-01-01T13:00:00Z'
+    trade2.price = 105.0
+
+    trade3 = Mock()
+    trade3.timestamp = '2023-01-01T11:00:00Z'
+    trade3.price = 99.0
+
+    state_manager.get_open_positions = Mock(return_value=[trade1, trade2, trade3])
 
     # Act
     last_price = state_manager.get_last_purchase_price()

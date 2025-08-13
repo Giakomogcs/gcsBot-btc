@@ -45,6 +45,7 @@ class Trade(Base):
     commission_asset = Column(String)
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
     exchange_order_id = Column(String)
+    binance_trade_id = Column(Integer)
     decision_context = Column(JSON)
     sell_target_price = Column(Float)
     commission_usd = Column(Float)

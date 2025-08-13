@@ -17,6 +17,7 @@ requests # Essencial para o pipeline de sentimento
 sqlalchemy
 psycopg2-binary
 alembic
+httpx
 
 # --- Technical Analysis ---
 # ta # Comentado - pandas-ta geralmente cobre tudo
