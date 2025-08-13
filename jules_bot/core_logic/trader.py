@@ -161,6 +161,8 @@ class Trader:
         commission_asset = order['fills'][0].get('commissionAsset', 'N/A') if order['fills'] else 'N/A'
 
         # Return a standardized dictionary
+        binance_trade_id = order['fills'][0]['tradeId'] if order.get('fills') else None
+
         return {
             "trade_id": trade_id,
             "symbol": self.symbol,
@@ -170,6 +172,7 @@ class Trader:
             "commission": commission,
             "commission_asset": commission_asset,
             "exchange_order_id": str(order.get('orderId')),
+            "binance_trade_id": binance_trade_id,
             "timestamp": order.get('transactTime'),
             "decision_context": decision_context,
             "environment": self.environment

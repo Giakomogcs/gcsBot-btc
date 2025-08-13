@@ -60,6 +60,7 @@ class TradeLogger:
                 # --- Optional & Contextual Fields ---
                 timestamp=self._convert_timestamp(trade_data.get('timestamp')),
                 exchange_order_id=str(trade_data.get('exchange_order_id')) if trade_data.get('exchange_order_id') else None,
+                binance_trade_id=int(trade_data.get('binance_trade_id')) if trade_data.get('binance_trade_id') is not None else None,
                 decision_context=trade_data.get('decision_context'),
 
                 # --- Fields for BUY trades ---

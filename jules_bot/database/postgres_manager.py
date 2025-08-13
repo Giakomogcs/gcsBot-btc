@@ -160,6 +160,20 @@ class PostgresManager:
                 logger.error(f"Failed to get all trades from DB: {e}", exc_info=True)
                 raise
 
+    def get_last_trade_id(self, environment: str) -> int:
+        """
+        Fetches the ID of the last trade for a given environment from the database.
+        """
+        with self.get_db() as db:
+            try:
+                last_trade = db.query(Trade).filter(Trade.environment == environment).order_by(desc(Trade.binance_trade_id)).first()
+                if last_trade and last_trade.binance_trade_id is not None:
+                    return last_trade.binance_trade_id
+                return 0
+            except Exception as e:
+                logger.error(f"Failed to get last trade ID from DB: {e}", exc_info=True)
+                return 0
+
     def clear_all_tables(self):
         with self.get_db() as db:
             try:

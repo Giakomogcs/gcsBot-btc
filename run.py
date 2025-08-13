@@ -180,20 +180,50 @@ def _run_in_container(command: list, env_vars: dict = {}, interactive: bool = Fa
 
 @app.command()
 def trade():
-    """Inicia o bot em modo de negociação (live) dentro do container."""
-    print("🚀 Iniciando o bot em modo 'TRADE'...")
+    """Inicia a API em background e o bot em modo de negociação (live)."""
+    mode = "trade"
+    print(f"🚀 Iniciando o bot em modo '{mode.upper()}' com API...")
+
+    print("\n--- Etapa 1 de 2: Iniciando a API em segundo plano ---")
+    if not _run_in_container(
+        command=["api/main.py"],
+        env_vars={"BOT_MODE": mode},
+        detached=True
+    ):
+        print("❌ Falha ao iniciar a API. Abortando.")
+        return
+
+    print("   Aguardando 3 segundos para a API inicializar...")
+    time.sleep(3)
+
+    print(f"\n--- Etapa 2 de 2: Iniciando o bot em modo '{mode.upper()}' ---")
     _run_in_container(
         command=["jules_bot/main.py"],
-        env_vars={"BOT_MODE": "trade"}
+        env_vars={"BOT_MODE": mode}
     )
 
 @app.command()
 def test():
-    """Inicia o bot em modo de teste (testnet) dentro do container."""
-    print("🚀 Iniciando o bot em modo 'TEST'...")
+    """Inicia a API em background e o bot em modo de teste (testnet)."""
+    mode = "test"
+    print(f"🚀 Iniciando o bot em modo '{mode.upper()}' com API...")
+
+    print("\n--- Etapa 1 de 2: Iniciando a API em segundo plano ---")
+    if not _run_in_container(
+        command=["api/main.py"],
+        env_vars={"BOT_MODE": mode},
+        detached=True
+    ):
+        print("❌ Falha ao iniciar a API. Abortando.")
+        return
+
+    print("   Aguardando 3 segundos para a API inicializar...")
+    time.sleep(3)
+
+    print(f"\n--- Etapa 2 de 2: Iniciando o bot em modo '{mode.upper()}' ---")
     _run_in_container(
         command=["jules_bot/main.py"],
-        env_vars={"BOT_MODE": "test"}
+        env_vars={"BOT_MODE": mode}
     )
 
 @app.command()

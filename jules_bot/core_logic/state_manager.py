@@ -1,10 +1,11 @@
 import pandas as pd
 from jules_bot.utils.logger import logger
 from jules_bot.database.postgres_manager import PostgresManager
+import uuid
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.services.trade_logger import TradeLogger
-
-class StateManager:
+from jules_bot.bot.account_manager import AccountManager
+from jules_bot.core_logic.strategy_rules import StrategyRules
     def __init__(self, mode: str, bot_id: str):
         self.mode = mode
         self.bot_id = bot_id
@@ -74,6 +75,85 @@ class StateManager:
         }
 
         self.trade_logger.log_trade(trade_data)
+
+    def sync_trades_with_binance(self, account_manager: AccountManager, strategy_rules: StrategyRules):
+        """
+        Syncs historical trades from Binance with the local database and handles open positions.
+        """
+        logger.info("--- Starting trade synchronization with Binance ---")
+        symbol = config_manager.get('APP', 'symbol')
+        last_trade_id = self.db_manager.get_last_trade_id(self.mode)
+
+        new_trades = account_manager.get_all_my_trades(symbol, from_id=last_trade_id + 1)
+
+        if not new_trades:
+            logger.info("No new trades to sync.")
+            return
+
+        logger.info(f"Found {len(new_trades)} new trades to sync.")
+
+        # Group trades by orderId to identify open positions
+        orders = {}
+        for trade in new_trades:
+            order_id = trade['orderId']
+            if order_id not in orders:
+                orders[order_id] = []
+            orders[order_id].append(trade)
+
+        for order_id, trades_in_order in orders.items():
+            is_buy_order = all(t['isBuyer'] for t in trades_in_order)
+
+            # This is a simplified assumption. A robust implementation would check if the total quantity bought
+            # has been sold in other orders. For now, we assume one order per position.
+            if is_buy_order:
+                # This is an open position
+                # We'll use the first trade in the order to represent the position
+                buy_trade = trades_in_order[0]
+                purchase_price = float(buy_trade['price'])
+                sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
+
+                trade_data = {
+                    'run_id': self.bot_id,
+                    'symbol': buy_trade['symbol'],
+                    'trade_id': str(uuid.uuid4()),
+                    'exchange': 'binance',
+                    'status': 'OPEN',
+                    'order_type': 'buy',
+                    'price': purchase_price,
+                    'quantity': sum(float(t['qty']) for t in trades_in_order),
+                    'usd_value': sum(float(t['price']) * float(t['qty']) for t in trades_in_order),
+                    'commission': sum(float(t.get('commission', 0.0)) for t in trades_in_order),
+                    'commission_asset': trades_in_order[0].get('commissionAsset'),
+                    'timestamp': trades_in_order[0]['time'],
+                    'exchange_order_id': str(order_id),
+                    'binance_trade_id': trades_in_order[0]['id'],
+                    'sell_target_price': sell_target_price,
+                    'decision_context': {'source': 'sync', 'reason': 'open_position'}
+                }
+                self.trade_logger.log_trade(trade_data)
+            else:
+                # This is a sell order or a mixed order, log all trades as closed
+                for trade in trades_in_order:
+                    trade_data = {
+                        'run_id': self.bot_id,
+                        'symbol': trade['symbol'],
+                        'trade_id': str(uuid.uuid4()),
+                        'exchange': 'binance',
+                        'status': 'CLOSED',
+                        'order_type': 'buy' if trade['isBuyer'] else 'sell',
+                        'price': float(trade['price']),
+                        'quantity': float(trade['qty']),
+                        'usd_value': float(trade['price']) * float(trade['qty']),
+                        'commission': float(trade.get('commission', 0.0)),
+                        'commission_asset': trade.get('commissionAsset'),
+                        'timestamp': trade['time'],
+                        'exchange_order_id': str(trade['orderId']),
+                        'binance_trade_id': trade['id'],
+                        'decision_context': {'source': 'sync'}
+                    }
+                    self.trade_logger.log_trade(trade_data)
+
+        logger.info("--- Trade synchronization finished ---")
 
     def close_position(self, trade_id: str, exit_data: dict):
         """
