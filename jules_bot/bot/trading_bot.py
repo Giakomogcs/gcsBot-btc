@@ -209,8 +209,12 @@ class TradingBot:
                                 "hodl_asset_value_at_sell": hodl_asset_value_at_sell
                             })
 
-                            logger.info(f"Sell successful for {trade_id}. Closing position.")
-                            state_manager.close_position(trade_id, sell_result)
+                            logger.info(f"Sell successful for {trade_id}. Recording partial sell and updating position.")
+                            state_manager.record_partial_sell(
+                                original_trade_id=trade_id,
+                                remaining_quantity=hodl_asset_amount,
+                                sell_data=sell_result
+                            )
                         else:
                             logger.error(f"Sell execution failed for position {trade_id}.")
 

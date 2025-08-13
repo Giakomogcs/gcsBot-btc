@@ -169,17 +169,63 @@ class StateManager:
 
         logger.info("--- Trade synchronization finished ---")
 
-    def close_position(self, trade_id: str, exit_data: dict):
+    def record_partial_sell(self, original_trade_id: str, remaining_quantity: float, sell_data: dict):
         """
-        Logs the closing of a trade via the TradeLogger service.
+        Records a partial sell. This involves two steps:
+        1. Logging the sell transaction as a new, separate, 'CLOSED' trade record.
+        2. Updating the original 'OPEN' buy position to reflect the new, reduced quantity.
+        """
+        # Step 1: Log the sell transaction as a new record.
+        # To ensure it's a new record, we generate a new UUID for this sell transaction.
+        sell_trade_id = str(uuid.uuid4())
+        logger.info(f"Logging partial sell transaction with new trade_id: {sell_trade_id} for original trade: {original_trade_id}")
+
+        sell_trade_data = {
+            **sell_data,
+            'run_id': self.bot_id,
+            'trade_id': sell_trade_id,  # Use the new UUID
+            'status': 'CLOSED',         # A sell transaction is a self-contained, closed event
+            'order_type': 'sell',
+            # Link back to the original trade for better traceability (optional, but good practice)
+            'decision_context': {
+                **sell_data.get('decision_context', {}),
+                'closing_partial_trade_id': original_trade_id
+            }
+        }
+        self.trade_logger.log_trade(sell_trade_data)
+
+        # Step 2: Update the original buy position with the reduced quantity.
+        logger.info(f"Updating original position {original_trade_id} with remaining quantity: {remaining_quantity}")
+        if remaining_quantity > 0:
+            self.db_manager.update_trade_quantity(original_trade_id, remaining_quantity)
+        else:
+            # If remaining quantity is zero, we should close the original position.
+            logger.info(f"Remaining quantity is zero. Closing original position {original_trade_id}.")
+            self.close_position(original_trade_id, sell_data, is_partial_close=False)
+
+
+    def close_position(self, trade_id: str, exit_data: dict, is_partial_close: bool = True):
+        """
+        Logs the closing of a trade.
+        If this is the final closing of a position (not a partial sell), it updates the original record.
+        If it's a partial sell, this function is now a legacy path and the new record_partial_sell should be used.
         """
         logger.info(f"Closing position for trade_id: {trade_id}")
 
-        # This dictionary flattens all the necessary data for the TradeLogger.
+        # The original implementation of this function was flawed because it overwrote the buy record
+        # with sell information. The new `record_partial_sell` is the correct path for partial sells.
+        # This function will now only handle the final closing of a position.
+
+        if is_partial_close:
+             # This indicates a logic error - close_position should not be called for partials anymore.
+             logger.warning("close_position was called for a partial sell. This is a deprecated path. Please use record_partial_sell.")
+             # Fallback to old logic to avoid crashing, but this is not ideal.
+             pass
+
         trade_data = {
-            **exit_data, # Unpack the raw exit data dictionary
+            **exit_data,
             'run_id': self.bot_id,
-            'trade_id': trade_id, # Ensure the original trade_id is used
+            'trade_id': trade_id,
             'status': 'CLOSED',
             'order_type': 'sell',
             'strategy_name': exit_data.get('strategy_name', 'default'),

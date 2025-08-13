@@ -198,6 +198,30 @@ class PostgresManager:
                 logger.error(f"Failed to get last trade ID from DB: {e}", exc_info=True)
                 return 0
 
+    def update_trade_quantity(self, trade_id: str, new_quantity: float):
+        """
+        Updates the quantity of a specific trade in the database.
+        This is used for partial sell logic, where the original buy position's
+        quantity is reduced.
+        """
+        with self.get_db() as db:
+            try:
+                trade_to_update = db.query(Trade).filter(Trade.trade_id == trade_id).first()
+
+                if not trade_to_update:
+                    logger.error(f"Could not find trade with trade_id '{trade_id}' to update quantity.")
+                    return
+
+                logger.info(f"Updating quantity for trade {trade_id} from {trade_to_update.quantity} to {new_quantity}.")
+                trade_to_update.quantity = new_quantity
+                db.commit()
+                logger.info(f"Successfully updated quantity for trade {trade_id}.")
+
+            except Exception as e:
+                db.rollback()
+                logger.error(f"Failed to update trade quantity for trade_id '{trade_id}': {e}", exc_info=True)
+                raise
+
     def clear_all_tables(self):
         with self.get_db() as db:
             try:

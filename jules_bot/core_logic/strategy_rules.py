@@ -5,7 +5,7 @@ class StrategyRules:
         self.rules = config_manager.get_section('STRATEGY_RULES')
         self.max_capital_per_trade_percent = float(self.rules.get('max_capital_per_trade_percent', 0.02))
         self.base_usd_per_trade = float(self.rules.get('base_usd_per_trade', 20.0))
-        self.sell_factor = float(self.rules.get('sell_factor', 1.0))
+        self.sell_factor = float(self.rules.get('sell_factor', 0.9))
 
     def evaluate_buy_signal(self, market_data: dict, open_positions_count: int) -> tuple[bool, str, str]:
         """
