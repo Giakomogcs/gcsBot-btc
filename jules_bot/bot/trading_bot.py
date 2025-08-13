@@ -163,60 +163,73 @@ class TradingBot:
                 # Update UI state file
                 self._write_state_to_file(open_positions, float(current_price), wallet_balances, trade_history)
 
-                for position in open_positions:
-                    trade_id = position.trade_id
-                    target_price = position.sell_target_price or float('inf')
+                # --- Refactored Sell Logic ---
 
-                    if current_price >= target_price:
-                        logger.info(f"Sell condition met for position {trade_id}. Verifying balance before selling.")
+                # 1. Identify all positions that meet the sell criteria
+                positions_to_sell = [
+                    p for p in open_positions
+                    if float(current_price) >= (p.sell_target_price or float('inf'))
+                ]
 
-                        original_quantity = float(position.quantity or 0)
-                        sell_quantity = original_quantity * strategy_rules.sell_factor
+                if positions_to_sell:
+                    logger.info(f"Found {len(positions_to_sell)} positions meeting sell criteria.")
 
-                        # --- PRE-SELL BALANCE CHECK ---
-                        # Get the real-time available balance of the base asset.
-                        available_balance = trader.get_account_balance(asset=base_asset)
-                        if sell_quantity > available_balance:
-                            logger.warning(
-                                f"INSUFFICIENT BALANCE: Attempted to sell {sell_quantity} {base_asset} for trade {trade_id}, "
-                                f"but only {available_balance} is available. This may be due to other open sell orders or "
-                                f"a manual trade. Skipping this sell attempt."
-                            )
-                            # This also implicitly handles the case where sell_quantity is 0, as available_balance should be >= 0.
-                            continue
-                        # --- END PRE-SELL BALANCE CHECK ---
+                    # 2. Calculate the total quantity required for all sales
+                    total_sell_quantity = sum(
+                        float(p.quantity or 0) * strategy_rules.sell_factor for p in positions_to_sell
+                    )
 
-                        hodl_asset_amount = original_quantity - sell_quantity
+                    # 3. Fetch available balance ONCE
+                    available_balance = trader.get_account_balance(asset=base_asset)
 
-                        sell_position_data = position.to_dict()
-                        sell_position_data['quantity'] = sell_quantity
+                    # 4. Perform a single, consolidated balance check
+                    if total_sell_quantity > available_balance:
+                        logger.warning(
+                            f"INSUFFICIENT BALANCE: Attempting to sell a total of {total_sell_quantity:.8f} {base_asset}, "
+                            f"but only {available_balance:.8f} is available. "
+                            f"Skipping all sales for this cycle."
+                        )
+                    else:
+                        logger.info(
+                            f"Balance check passed. Available: {available_balance:.8f} {base_asset}, "
+                            f"Required: {total_sell_quantity:.8f} {base_asset}. Proceeding with sales."
+                        )
+                        # 5. Execute sales if balance is sufficient
+                        for position in positions_to_sell:
+                            trade_id = position.trade_id
+                            original_quantity = float(position.quantity or 0)
+                            sell_quantity = original_quantity * strategy_rules.sell_factor
+                            hodl_asset_amount = original_quantity - sell_quantity
 
-                        success, sell_result = trader.execute_sell(sell_position_data, self.run_id, decision_context)
+                            sell_position_data = position.to_dict()
+                            sell_position_data['quantity'] = sell_quantity
 
-                        if success:
-                            buy_price = float(position.price or 0)
-                            sell_price = float(sell_result.get('price'))
-                            commission_rate = float(strategy_rules.rules.get('commission_rate'))
+                            success, sell_result = trader.execute_sell(sell_position_data, self.run_id, decision_context)
 
-                            realized_pnl_usd = ((sell_price * (1 - commission_rate)) - (buy_price * (1 + commission_rate))) * sell_quantity
-                            hodl_asset_value_at_sell = hodl_asset_amount * current_price
-                            commission_usd = float(sell_result.get('commission', 0))
+                            if success:
+                                buy_price = float(position.price or 0)
+                                sell_price = float(sell_result.get('price'))
+                                commission_rate = float(strategy_rules.rules.get('commission_rate'))
 
-                            sell_result.update({
-                                "commission_usd": commission_usd,
-                                "realized_pnl_usd": realized_pnl_usd,
-                                "hodl_asset_amount": hodl_asset_amount,
-                                "hodl_asset_value_at_sell": hodl_asset_value_at_sell
-                            })
+                                realized_pnl_usd = ((sell_price * (1 - commission_rate)) - (buy_price * (1 + commission_rate))) * sell_quantity
+                                hodl_asset_value_at_sell = hodl_asset_amount * current_price
+                                commission_usd = float(sell_result.get('commission', 0))
 
-                            logger.info(f"Sell successful for {trade_id}. Recording partial sell and updating position.")
-                            state_manager.record_partial_sell(
-                                original_trade_id=trade_id,
-                                remaining_quantity=hodl_asset_amount,
-                                sell_data=sell_result
-                            )
-                        else:
-                            logger.error(f"Sell execution failed for position {trade_id}.")
+                                sell_result.update({
+                                    "commission_usd": commission_usd,
+                                    "realized_pnl_usd": realized_pnl_usd,
+                                    "hodl_asset_amount": hodl_asset_amount,
+                                    "hodl_asset_value_at_sell": hodl_asset_value_at_sell
+                                })
+
+                                logger.info(f"Sell successful for {trade_id}. Recording partial sell and updating position.")
+                                state_manager.record_partial_sell(
+                                    original_trade_id=trade_id,
+                                    remaining_quantity=hodl_asset_amount,
+                                    sell_data=sell_result
+                                )
+                            else:
+                                logger.error(f"Sell execution failed for position {trade_id}.")
 
                 # 3. Check for a potential buy (New "Adaptive Momentum Grid" Strategy)
                 open_positions_count = state_manager.get_open_positions_count()

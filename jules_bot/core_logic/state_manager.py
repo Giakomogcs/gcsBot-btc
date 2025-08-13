@@ -171,22 +171,20 @@ class StateManager:
 
     def record_partial_sell(self, original_trade_id: str, remaining_quantity: float, sell_data: dict):
         """
-        Records a partial sell. This involves two steps:
-        1. Logging the sell transaction as a new, separate, 'CLOSED' trade record.
-        2. Updating the original 'OPEN' buy position to reflect the new, reduced quantity.
+        Records a partial sell and moves the remaining assets to a treasury.
+        1. Logs the sell transaction as a new 'CLOSED' trade.
+        2. Creates a new 'TREASURY' trade for the remaining assets.
+        3. Closes the original 'OPEN' trade.
         """
         # Step 1: Log the sell transaction as a new record.
-        # To ensure it's a new record, we generate a new UUID for this sell transaction.
         sell_trade_id = str(uuid.uuid4())
         logger.info(f"Logging partial sell transaction with new trade_id: {sell_trade_id} for original trade: {original_trade_id}")
-
         sell_trade_data = {
             **sell_data,
             'run_id': self.bot_id,
-            'trade_id': sell_trade_id,  # Use the new UUID
-            'status': 'CLOSED',         # A sell transaction is a self-contained, closed event
+            'trade_id': sell_trade_id,
+            'status': 'CLOSED',
             'order_type': 'sell',
-            # Link back to the original trade for better traceability (optional, but good practice)
             'decision_context': {
                 **sell_data.get('decision_context', {}),
                 'closing_partial_trade_id': original_trade_id
@@ -194,14 +192,41 @@ class StateManager:
         }
         self.trade_logger.log_trade(sell_trade_data)
 
-        # Step 2: Update the original buy position with the reduced quantity.
-        logger.info(f"Updating original position {original_trade_id} with remaining quantity: {remaining_quantity}")
+        # Step 2: If there's a remainder, create a new 'TREASURY' position for it.
         if remaining_quantity > 0:
-            self.db_manager.update_trade_quantity(original_trade_id, remaining_quantity)
-        else:
-            # If remaining quantity is zero, we should close the original position.
-            logger.info(f"Remaining quantity is zero. Closing original position {original_trade_id}.")
-            self.close_position(original_trade_id, sell_data, is_partial_close=False)
+            original_trade = self.db_manager.get_trade_by_trade_id(original_trade_id)
+            if not original_trade:
+                logger.error(f"Could not find original trade {original_trade_id} to create treasury position. Aborting treasury creation.")
+                # We should still close the original position to avoid inconsistent state
+                self.db_manager.update_trade_status(original_trade_id, 'CLOSED')
+                return
+
+            treasury_trade_id = str(uuid.uuid4())
+            logger.info(f"Creating new TREASURY position {treasury_trade_id} with remaining quantity: {remaining_quantity}")
+
+            buy_price = original_trade.price
+            treasury_usd_value = remaining_quantity * buy_price
+
+            treasury_data = {
+                'run_id': self.bot_id,
+                'environment': self.mode,
+                'strategy_name': original_trade.strategy_name,
+                'symbol': original_trade.symbol,
+                'trade_id': treasury_trade_id,
+                'exchange': original_trade.exchange,
+                'status': 'TREASURY',
+                'order_type': 'buy',
+                'price': buy_price,
+                'quantity': remaining_quantity,
+                'usd_value': treasury_usd_value,
+                'timestamp': original_trade.timestamp,
+                'decision_context': {'source': 'treasury', 'original_trade_id': original_trade_id}
+            }
+            self.trade_logger.log_trade(treasury_data)
+
+        # Step 3: Close the original position, as it's now fully accounted for.
+        logger.info(f"Closing original position {original_trade_id} after partial sell and treasury creation.")
+        self.db_manager.update_trade_status(original_trade_id, 'CLOSED')
 
 
     def close_position(self, trade_id: str, exit_data: dict, is_partial_close: bool = True):
