@@ -10,6 +10,26 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from api.command_executor import run_command_in_container
 from jules_bot.utils.config_manager import ConfigManager
 from jules_bot.database.postgres_manager import PostgresManager
+from jules_bot.services.status_service import StatusService
+from jules_bot.core.market_data_provider import MarketDataProvider
+
+async def get_extended_status_handler(request):
+    config_manager = ConfigManager()
+    db_config = config_manager.get_db_config('POSTGRES')
+    db_manager = PostgresManager(config=db_config)
+    market_data_provider = MarketDataProvider(db_manager)
+    status_service = StatusService(db_manager, config_manager, market_data_provider)
+
+    # Determine environment and bot_id dynamically from environment variables
+    environment = os.getenv('BOT_MODE', 'live').lower()
+    bot_id = f"jules_{environment}_bot"
+
+    status_data = status_service.get_extended_status(environment, bot_id)
+
+    if "error" in status_data:
+        return web.Response(text=status_data["error"], status=500)
+
+    return web.json_response(status_data)
 
 async def trade_handler(request):
     print("Received HTTP request to start TRADE bot.")
@@ -120,6 +140,7 @@ async def main():
     app.router.add_post('/run/test', test_handler)
     app.router.add_post('/run/backtest', backtest_handler)
     app.router.add_get('/data/{table_name}', get_postgres_data_handler) # HTTP endpoint for PostgreSQL data
+    app.router.add_get('/status/extended', get_extended_status_handler)
 
     config_manager = ConfigManager()
     api_config = config_manager.get_section('API')

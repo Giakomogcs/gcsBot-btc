@@ -4,6 +4,7 @@ import sys
 import os
 import time
 from decimal import Decimal, InvalidOperation
+import httpx
 
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll, Horizontal
@@ -30,15 +31,15 @@ class DisplayManager(App):
     """A Textual app to display and control the trading bot's status."""
 
     BINDINGS = [("d", "toggle_dark", "Toggle dark mode")]
-    CSS_PATH = "jules_bot.css" # Assumes CSS is in the same directory
-    STATE_FILE = "/tmp/bot_state.json"
+    CSS_PATH = "jules_bot.css"
     COMMAND_DIR = "commands"
+    API_URL = "http://localhost:8765/status/extended"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.update_timer: Timer | None = None
         self.selected_trade_id: str | None = None
-        self.current_btc_price: Decimal = Decimal(0)
+        self.client = httpx.AsyncClient()
         os.makedirs(self.COMMAND_DIR, exist_ok=True)
 
     def compose(self) -> ComposeResult:
@@ -68,10 +69,9 @@ class DisplayManager(App):
 
                 yield Static("Strategy", classes="title")
                 with VerticalScroll(id="strategy_bar"):
-                    yield Static("Total Realized Profit: $0.00", id="total_realized_pnl")
-                    yield Static("BTC Saved (HODL): 0.00000000", id="total_btc_saved")
-                    yield Static("Next Buy Target: N/A", id="price_to_buy")
-                    yield Static("Next Sell Target: N/A", id="price_to_sell")
+                    yield Static("Buy Signal: N/A", id="buy_signal_status")
+                    yield Static("Buy Target: N/A", id="buy_target_price")
+                    yield Static("Buy Progress: N/A", id="buy_target_progress")
 
                 yield Static("Open Positions", classes="title")
                 yield DataTable(id="positions_table")
@@ -91,7 +91,7 @@ class DisplayManager(App):
         """Called when the app is first mounted."""
         positions_table = self.query_one("#positions_table", DataTable)
         positions_table.cursor_type = "row"
-        positions_table.add_columns("ID", "Entry Price", "Quantity", "Value", "Status")
+        positions_table.add_columns("ID", "Entry Price", "Qty", "Value", "Unrealized PnL", "Sell Target", "Sell Progress")
 
         history_table = self.query_one("#history_table", DataTable)
         history_table.add_columns("ID", "Status", "Entry Price", "Exit Price", "Quantity", "PnL")
@@ -99,12 +99,12 @@ class DisplayManager(App):
         wallet_table = self.query_one("#wallet_table", DataTable)
         wallet_table.add_columns("Asset", "Free", "Locked", "USD Value")
 
-        self.update_timer = self.set_interval(1.0, self.update_dashboard)
+        self.update_timer = self.set_interval(2.0, self.update_dashboard) # Slower update for API calls
         self.query_one("#manual_buy_input").focus()
         self.log_display = self.query_one(RichLog)
-        self.log_display.write("[bold green]UI mounted. Waiting for bot state...[/]")
+        self.log_display.write("[bold green]UI mounted. Fetching data from API...[/]")
 
-    def on_data_table_row_selected(self, event: DataTable.RowSelected):
+    async def on_data_table_row_selected(self, event: DataTable.RowSelected):
         self.selected_trade_id = event.row_key.value
         self.query_one("#action_bar").remove_class("hidden")
 
@@ -125,7 +125,6 @@ class DisplayManager(App):
             validation_result = input_widget.validate(input_widget.value)
 
             if not validation_result.is_valid:
-                # Access the description from the first failure
                 if validation_result.failures:
                     self.log_display.write(f"[bold red]UI ERROR: {validation_result.failures[0].description}[/]")
                 else:
@@ -152,46 +151,45 @@ class DisplayManager(App):
             self.query_one(DataTable).cursor_row = -1
             self.selected_trade_id = None
 
-    def update_dashboard(self) -> None:
-        """Reads the state file and updates all UI widgets."""
+    async def update_dashboard(self) -> None:
+        """Fetches data from the API and updates all UI widgets."""
         try:
-            with open(self.STATE_FILE, "r") as f:
-                state = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
+            response = await self.client.get(self.API_URL, timeout=5.0)
+            response.raise_for_status()
+            state = response.json()
+        except httpx.RequestError as e:
+            self.log_display.write(f"[bold red]API Error: Could not connect to {self.API_URL}. Is the API running?[/]")
+            return
+        except Exception as e:
+            self.log_display.write(f"[bold red]An unexpected error occurred: {e}[/]")
             return
 
         header = self.query_one(Header)
-        header.sub_title = f"Last Update: {datetime.fromtimestamp(state.get('timestamp', 0)).strftime('%Y-%m-%d %H:%M:%S')}"
+        header.sub_title = f"Last Update: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         
+        # Update status bar
+        current_price = Decimal(state.get('current_btc_price', '0'))
+        self.query_one("#status_price").update(f"Price: ${current_price:,.2f}")
         self.query_one("#status_mode").update(f"Mode: {state.get('mode', 'N/A').upper()}")
         self.query_one("#status_symbol").update(f"Symbol: {state.get('symbol', 'N/A')}")
 
-        try:
-            self.current_btc_price = Decimal(state.get('current_price', '0'))
-            self.query_one("#status_price").update(f"Price: ${self.current_btc_price:,.2f}")
-        except (InvalidOperation, TypeError):
-            self.current_btc_price = Decimal(0)
-
-        table = self.query_one(DataTable)
-        current_selection = self.selected_trade_id
+        # Update open positions table
+        table = self.query_one("#positions_table", DataTable)
         table.clear()
 
-        total_investment = Decimal(0)
-        current_value = Decimal(0)
-
-        positions = state.get("open_positions", [])
+        positions = state.get("open_positions_status", [])
         if not positions:
             table.add_row("No open positions.")
         else:
             for pos in positions:
                 try:
-                    entry_price = Decimal(pos.get('price', '0'))
+                    entry_price = Decimal(pos.get('entry_price', '0'))
                     quantity = Decimal(pos.get('quantity', '0'))
-                    pos_value = quantity * self.current_btc_price
-
-                    total_investment += Decimal(pos.get('usd_value', '0'))
-                    current_value += pos_value
-
+                    pos_value = quantity * current_price
+                    unrealized_pnl = Decimal(pos.get('unrealized_pnl', '0'))
+                    pnl_color = "green" if unrealized_pnl >= 0 else "red"
+                    sell_target = Decimal(pos.get('sell_target_price', '0'))
+                    sell_progress = Decimal(pos.get('progress_to_sell_target_pct', '0'))
                     short_id = pos.get('trade_id', 'N/A').split('-')[0]
 
                     table.add_row(
@@ -199,56 +197,36 @@ class DisplayManager(App):
                         f"${entry_price:,.2f}",
                         f"{quantity:.8f}",
                         f"${pos_value:,.2f}",
-                        pos.get('status', 'OPEN'),
+                        f"[{pnl_color}]${unrealized_pnl:,.2f}[/]",
+                        f"${sell_target:,.2f}",
+                        f"{sell_progress:.1f}%",
                         key=pos.get('trade_id')
                     )
-                except (InvalidOperation, TypeError):
-                    table.add_row(pos.get('trade_id', 'ERR'), "Data Error", "", "", "", key=pos.get('trade_id'))
+                except (InvalidOperation, TypeError) as e:
+                    self.log_display.write(f"[bold red]Data Error parsing position: {pos}. Error: {e}[/]")
+                    table.add_row(pos.get('trade_id', 'ERR'), "Data Error", "", "", "", "", "", key=pos.get('trade_id'))
 
-        unrealized_pnl = current_value - total_investment
-        pnl_color = "green" if unrealized_pnl >= 0 else "red"
+        # Update buy signal status
+        buy_status = state.get("buy_signal_status", {})
+        should_buy = buy_status.get('should_buy', False)
+        reason = buy_status.get('reason', 'N/A')
+        buy_target = Decimal(buy_status.get('btc_purchase_target', '0'))
+        buy_progress = Decimal(buy_status.get('btc_purchase_progress_pct', '0'))
 
-        self.query_one("#total_investment").update(f"Total Investment: ${total_investment:,.2f}")
-        self.query_one("#current_value").update(f"Current Value: ${current_value:,.2f}")
-        self.query_one("#unrealized_pnl").update(f"Unrealized PnL: [bold {pnl_color}]${unrealized_pnl:,.2f}[/]")
+        signal_color = "green" if should_buy else "yellow"
+        self.query_one("#buy_signal_status").update(f"Buy Signal: [{signal_color}]{reason}[/]")
 
-        # Update Strategy section
-        total_pnl = Decimal(state.get("total_realized_pnl", 0))
-        pnl_color = "green" if total_pnl >= 0 else "red"
-        self.query_one("#total_realized_pnl").update(f"Total Realized Profit: [bold {pnl_color}]${total_pnl:,.2f}[/]")
-
-        total_btc_saved = Decimal(state.get("total_btc_saved", 0))
-        self.query_one("#total_btc_saved").update(f"BTC Saved (HODL): {total_btc_saved:.8f}")
-
-        next_buy_price = Decimal(state.get("next_buy_price", 0))
-        if next_buy_price > 0 and self.current_btc_price > 0:
-            diff = self.current_btc_price - next_buy_price
-            diff_percent = (diff / self.current_btc_price) * 100
-            color = "red" if diff > 0 else "green"
-            self.query_one("#price_to_buy").update(f"Next Buy Target: ${next_buy_price:,.2f} ([{color}]{diff:,.2f} / {diff_percent:,.2f}%[/])")
+        if buy_target > 0:
+            self.query_one("#buy_target_price").update(f"Buy Target: ${buy_target:,.2f}")
+            self.query_one("#buy_target_progress").update(f"Buy Progress: {buy_progress:.1f}%")
         else:
-            self.query_one("#price_to_buy").update("Next Buy Target: N/A")
+            self.query_one("#buy_target_price").update("Buy Target: N/A")
+            self.query_one("#buy_target_progress").update("Buy Progress: N/A")
 
-        next_sell_price = Decimal(state.get("next_sell_price", 0))
-        if next_sell_price > 0 and self.current_btc_price > 0:
-            diff = next_sell_price - self.current_btc_price
-            diff_percent = (diff / self.current_btc_price) * 100
-            color = "green" if diff > 0 else "red"
-            self.query_one("#price_to_sell").update(f"Next Sell Target: ${next_sell_price:,.2f} ([{color}]{diff:,.2f} / {diff_percent:,.2f}%[/])")
-        else:
-            self.query_one("#price_to_sell").update("Next Sell Target: N/A")
-
-        # Restore selection if it still exists
-        if current_selection in table.rows:
-            self.selected_trade_id = current_selection
-            table.cursor_row = table.get_row_index(current_selection)
-            self.query_one("#action_bar").remove_class("hidden")
-        else:
-            self.selected_trade_id = None
-            self.query_one("#action_bar").add_class("hidden")
-
-        self.update_wallet_table(state.get("wallet_balances", []))
+        # Update history and wallet tables with data from API
         self.update_history_table(state.get("trade_history", []))
+        self.update_wallet_table(state.get("wallet_balances", []))
+
 
     def update_history_table(self, history: list) -> None:
         """Updates the history table with the latest trade history."""
@@ -258,11 +236,8 @@ class DisplayManager(App):
             history_table.add_row("No trade history.")
             return
 
-        # The history can contain multiple entries for the same trade_id (buy and sell)
-        # We want to show one line per trade, so we need to process the data.
         processed_trades = {}
-        # Sort history by time to process buys before sells
-        history.sort(key=lambda x: x.get('_time', ''), reverse=False)
+        history.sort(key=lambda x: x.get('timestamp', ''), reverse=False)
 
         for trade in history:
             trade_id = trade.get('trade_id')
@@ -278,10 +253,9 @@ class DisplayManager(App):
                 processed_trades[trade_id]['status'] = trade.get('status', 'OPEN')
             elif trade.get('order_type') == 'sell':
                 processed_trades[trade_id]['exit_price'] = trade.get('price')
-                processed_trades[trade_id]['pnl'] = trade.get('realized_pnl_usd') # Correct field name
+                processed_trades[trade_id]['pnl'] = trade.get('realized_pnl_usd')
                 processed_trades[trade_id]['status'] = trade.get('status', 'CLOSED')
 
-        # Now add rows from the processed data
         sorted_trades = sorted(processed_trades.values(), key=lambda x: x.get('entry_price', 0), reverse=True)
 
         for data in sorted_trades:
@@ -292,7 +266,6 @@ class DisplayManager(App):
             quantity = data.get('quantity')
             pnl = data.get('pnl')
 
-            # Formatting for display
             entry_price_str = f"${Decimal(entry_price):,.2f}" if entry_price is not None else "N/A"
             exit_price_str = f"${Decimal(exit_price):,.2f}" if exit_price is not None else "N/A"
             quantity_str = f"{Decimal(quantity):.8f}" if quantity is not None else "N/A"
@@ -303,17 +276,11 @@ class DisplayManager(App):
                 pnl_str = f"[{pnl_color}]{pnl_str}[/]"
 
             history_table.add_row(
-                short_id,
-                status,
-                entry_price_str,
-                exit_price_str,
-                quantity_str,
-                pnl_str,
-                key=data.get('trade_id')
+                short_id, status, entry_price_str, exit_price_str, quantity_str, pnl_str, key=data.get('trade_id')
             )
 
     def update_wallet_table(self, balances: list) -> None:
-        """Updates the wallet table with the latest balances, filtered for relevant assets."""
+        """Updates the wallet table with the latest balances."""
         wallet_table = self.query_one("#wallet_table", DataTable)
         wallet_table.clear()
 
@@ -321,27 +288,16 @@ class DisplayManager(App):
             wallet_table.add_row("No wallet data.")
             return
 
-        # Assets to display, including common stablecoins
-        display_assets = ["BTC", "USDT", "USDC", "BUSD", "USD"]
-
-        filtered_balances = [
-            b for b in balances if b.get('asset') in display_assets
-        ]
-
-        if not filtered_balances:
-            wallet_table.add_row("No relevant assets (BTC, USD*) found.")
-        else:
-            for balance in filtered_balances:
-                try:
-                    asset = balance.get('asset')
-                    free = Decimal(balance.get('free', '0'))
-                    locked = Decimal(balance.get('locked', '0'))
-                    usd_value = Decimal(balance.get('usd_value', '0'))
-                    # Only show value for assets that are not the quote currency itself
-                    value_str = f"${usd_value:,.2f}" if asset != 'USDT' else '' # Assuming USDT is the quote
-                    wallet_table.add_row(asset, f"{free:.8f}", f"{locked:.8f}", value_str)
-                except (InvalidOperation, TypeError):
-                    wallet_table.add_row(balance.get('asset', 'ERR'), "Data Error", "", "")
+        for balance in balances:
+            try:
+                asset = balance.get('asset')
+                free = Decimal(balance.get('free', '0'))
+                locked = Decimal(balance.get('locked', '0'))
+                usd_value = Decimal(balance.get('usd_value', '0'))
+                value_str = f"${usd_value:,.2f}" if asset != 'USDT' else ''
+                wallet_table.add_row(asset, f"{free:.8f}", f"{locked:.8f}", value_str)
+            except (InvalidOperation, TypeError):
+                wallet_table.add_row(balance.get('asset', 'ERR'), "Data Error", "", "")
 
 
 if __name__ == '__main__':

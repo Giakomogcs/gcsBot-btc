@@ -104,18 +104,20 @@ def build():
 
 # --- Comandos da Aplicação ---
 
-def _run_in_container(command: list, env_vars: dict = {}, interactive: bool = False):
+def _run_in_container(command: list, env_vars: dict = {}, interactive: bool = False, detached: bool = False):
     """
     Executa um comando Python dentro do container 'app'.
-    - Modo Padrão (interactive=False): Captura e exibe o output em tempo real, ideal para logs.
-    - Modo Interativo (interactive=True): Anexa o terminal ao processo, necessário para TUIs.
+    - Modo Padrão (interactive=False): Captura e exibe o output em tempo real.
+    - Modo Interativo (interactive=True): Anexa o terminal ao processo (para TUIs).
+    - Modo Detached (detached=True): Executa o comando em segundo plano.
     """
     try:
         docker_cmd = get_docker_compose_command()
 
         exec_cmd = docker_cmd + ["exec"]
-        # O modo interativo do Docker requer -it para alocar um pseudo-TTY
-        if interactive:
+        if detached:
+            exec_cmd.append("-d")
+        elif interactive:
             exec_cmd.append("-it")
 
         for key, value in env_vars.items():
@@ -208,13 +210,51 @@ def ui():
     )
 
 @app.command()
-def api():
-    """Inicia o serviço da API com o WebSocket."""
-    print("🚀 Iniciando o serviço de API...")
+def api(
+    mode: str = typer.Option(
+        "live", "--mode", "-m", help="O modo de operação para a API (ex: 'live', 'test')."
+    )
+):
+    """Inicia o serviço da API, configurando o BOT_MODE."""
+    print(f"🚀 Iniciando o serviço de API em modo '{mode.upper()}'...")
     _run_in_container(
         command=["api/main.py"],
-        interactive=True # Change to True to use subprocess.run and -it
+        env_vars={"BOT_MODE": mode},
+        interactive=True
     )
+
+import time
+
+@app.command()
+def dashboard(
+    mode: str = typer.Argument(..., help="O modo de operação a ser monitorado (ex: 'trade', 'test').")
+):
+    """Inicia a API em segundo plano e a TUI em primeiro plano para monitoramento."""
+    print(f"🚀 Iniciando o dashboard para o modo '{mode.upper()}'...")
+
+    print("\n--- Etapa 1 de 2: Iniciando a API em segundo plano ---")
+    if not _run_in_container(
+        command=["api/main.py"],
+        env_vars={"BOT_MODE": mode},
+        detached=True
+    ):
+        print("❌ Falha ao iniciar a API. Abortando.")
+        return
+
+    print("   Aguardando 3 segundos para a API inicializar...")
+    time.sleep(3)
+
+    print("\n--- Etapa 2 de 2: Iniciando a Interface de Usuário (TUI) ---")
+    if not _run_in_container(
+        command=["jules_bot/ui/app.py"],
+        interactive=True
+    ):
+        print("❌ A TUI foi encerrada ou falhou ao iniciar.")
+
+    print("\n✅ Dashboard encerrado.")
+    print("   Lembre-se que o serviço da API ainda pode estar rodando em segundo plano.")
+    print("   Use `docker ps` para verificar e `docker kill <container_id>` se necessário.")
+
 
 @app.command("clear-backtest-trades")
 def clear_backtest_trades():
