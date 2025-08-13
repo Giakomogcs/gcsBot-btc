@@ -18,9 +18,16 @@ class StateManager:
 
         logger.info(f"StateManager initialized for mode: '{self.mode}', bot_id: '{self.bot_id}'")
 
-    def get_open_positions(self) -> list[dict]:
-        """Fetches all trades marked as 'OPEN' from the database for the current bot."""
-        return self.db_manager.get_open_positions(bot_id=self.bot_id)
+    def get_open_positions(self) -> list:
+        """
+        Fetches all trades marked as 'OPEN' for the current environment.
+        For backtesting, it also filters by bot_id.
+        """
+        bot_id_to_filter = None
+        if self.mode == 'backtest':
+            bot_id_to_filter = self.bot_id
+        
+        return self.db_manager.get_open_positions(environment=self.mode, bot_id=bot_id_to_filter)
 
     def get_open_positions_count(self) -> int:
         """Queries the database and returns the number of currently open trades."""

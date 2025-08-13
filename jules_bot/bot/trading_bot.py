@@ -27,16 +27,9 @@ class TradingBot:
 
     def _write_state_to_file(self, open_positions: list, current_price: float, wallet_balances: list, trade_history: list):
         """Saves the current bot state to a JSON file for the UI to read."""
-        # Convert datetime objects to ISO format strings for JSON serialization
-        for trade in trade_history:
-            for key, value in trade.items():
-                if hasattr(value, 'isoformat'):
-                    trade[key] = value.isoformat()
-
-        for position in open_positions:
-            for key, value in position.items():
-                if hasattr(value, 'isoformat'):
-                    position[key] = value.isoformat()
+        # Convert SQLAlchemy objects to dictionaries for JSON serialization
+        serializable_trade_history = [t.to_dict() for t in trade_history]
+        serializable_open_positions = [p.to_dict() for p in open_positions]
 
         state = {
             "mode": self.mode,
@@ -44,9 +37,9 @@ class TradingBot:
             "symbol": self.symbol,
             "timestamp": time.time(),
             "current_price": str(current_price),
-            "open_positions": open_positions,
+            "open_positions": serializable_open_positions,
             "wallet_balances": wallet_balances,
-            "trade_history": trade_history
+            "trade_history": serializable_trade_history
         }
         try:
             # Use atomic write to prevent partial reads from the UI
@@ -89,11 +82,11 @@ class TradingBot:
                         trade_id = command.get("trade_id")
                         if trade_id:
                             open_positions = state_manager.get_open_positions()
-                            position_to_sell = next((p for p in open_positions if p.get('trade_id') == trade_id), None)
+                            position_to_sell = next((p for p in open_positions if p.trade_id == trade_id), None)
                             if position_to_sell:
-                                # Mimic the data structure needed for trader.execute_sell
-                                sell_position_data = position_to_sell.copy()
-                                sell_position_data['quantity'] = float(position_to_sell.get('quantity', 0))
+                                # Convert the Trade object to a dict for selling
+                                sell_position_data = position_to_sell.to_dict()
+                                sell_position_data['quantity'] = float(position_to_sell.quantity or 0)
                                 trader.execute_sell(sell_position_data, self.run_id, {"reason": "manual_override"})
                             else:
                                 logger.warning(f"Could not find open position with trade_id: {trade_id} for force_sell.")
@@ -161,26 +154,27 @@ class TradingBot:
                 self._write_state_to_file(open_positions, float(current_price), wallet_balances, trade_history)
 
                 for position in open_positions:
-                    trade_id = position.get('trade_id')
-                    target_price = position.get('sell_target_price', float('inf'))
+                    trade_id = position.trade_id
+                    # Use direct attribute access; handle potential None value for sell_target_price
+                    target_price = position.sell_target_price or float('inf')
 
                     if current_price >= target_price:
                         logger.info(f"Sell condition met for position {trade_id}. Executing sell.")
 
-                        # Add financial details to the position data for logging
-                        original_quantity = float(position.get('quantity', 0))
+                        # Use direct attribute access
+                        original_quantity = float(position.quantity or 0)
                         sell_quantity = original_quantity * strategy_rules.sell_factor
                         hodl_asset_amount = original_quantity - sell_quantity
 
-                        # Create a copy to avoid modifying the original dict from state_manager
-                        sell_position_data = position.copy()
+                        # Convert the Trade object to a dict for modification and selling
+                        sell_position_data = position.to_dict()
                         sell_position_data['quantity'] = sell_quantity
 
                         success, sell_result = trader.execute_sell(sell_position_data, self.run_id, decision_context)
 
                         if success:
                             # --- CORRECTED PNL CALCULATION ---
-                            buy_price = float(position.get('price', 0))
+                            buy_price = float(position.price or 0)
                             sell_price = float(sell_result.get('price'))
 
                             commission_rate = float(strategy_rules.rules.get('commission_rate'))

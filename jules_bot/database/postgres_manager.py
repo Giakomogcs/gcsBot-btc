@@ -85,11 +85,25 @@ class PostgresManager:
                 logger.error(f"Failed to get price data: {e}", exc_info=True)
                 return pd.DataFrame()
 
-    def get_open_positions(self, bot_id: str) -> list[dict]:
+    def get_open_positions(self, environment: str, bot_id: Optional[str] = None) -> list:
+        """
+        Fetches open positions for a given environment.
+        If bot_id is provided, it also filters by bot_id (for backtesting).
+        Returns a list of Trade model instances.
+        """
         with self.get_db() as db:
             try:
-                trades = db.query(Trade).filter(and_(Trade.run_id == bot_id, Trade.status == "OPEN")).all()
-                return [trade.__dict__ for trade in trades]
+                query = db.query(Trade).filter(
+                    and_(
+                        Trade.status == "OPEN",
+                        Trade.environment == environment
+                    )
+                )
+                if bot_id:
+                    query = query.filter(Trade.run_id == bot_id)
+                
+                trades = query.all()
+                return trades
             except Exception as e:
                 logger.error(f"Error getting open positions: {e}")
                 return []
@@ -121,9 +135,8 @@ class PostgresManager:
                 if mode:
                     query = query.filter(Trade.environment == mode)
 
-                # The conversion to list of dicts is more consistent with other methods
                 trades = query.all()
-                return [trade.__dict__ for trade in trades]
+                return trades
 
             except Exception as e:
                 logger.error(f"Falha ao buscar todos os trades do DB: {e}", exc_info=True)
