@@ -165,46 +165,26 @@ These commands control the Docker environment.
 
 These commands execute tasks inside the `app` container.
 
-#### Running the Bot
+#### Running the Bot with the UI
 
-The bot can be run in `live` or `test` mode. These commands will start the trading logic, and you can follow the bot's activity through its logs.
+The primary way to run the bot is with the integrated Terminal User Interface (TUI). The `trade` and `test` commands will launch the bot and the UI together in a single process.
 
-- **Live Trading**: `python run.py trade`
-- **Paper Trading (Testnet)**: `python run.py test`
-
-While the bot is running, you can use the `dashboard` command in a separate terminal to monitor it.
-
-#### Monitoring with the Dashboard
-
-The primary way to monitor the bot is through the interactive TUI. The `dashboard` command is the easiest way to get started, as it launches both the necessary API service and the UI.
-
-- **To monitor the Testnet bot:**
+- **Live Trading with UI**:
   ```bash
-  python run.py dashboard --mode test
+  python run.py trade
   ```
 
-- **To monitor the Live bot:**
+- **Paper Trading (Testnet) with UI**:
   ```bash
-  python run.py dashboard --mode trade
-  ```
-
-Alternatively, you can use the new **local TUI**, which runs the bot and the UI in the same process, eliminating the need for a separate API service. This is the recommended approach for most users.
-
-- **To run the local TUI for the Testnet bot:**
-  ```bash
-  python run.py ui-local --mode test
+  python run.py test
   ```
 
 | Command | Description |
 |---|---|
-| `trade` | Starts the bot in **live trading mode** using your main Binance account. |
-| `test` | Starts the bot in **paper trading mode** using your Binance testnet account. |
-| `ui-local` | Starts the new **local TUI** which runs the bot and UI in a single process. Recommended for monitoring. |
-| `dashboard` | (Legacy) Starts the API and the interactive TUI for live monitoring. Use `--mode` to specify `trade` or `test`. |
-| `backtest` | Prepares historical data and runs a full backtest. Use the `--days` option (e.g., `--days 30`) to specify the period. |
-| `api` | (Legacy) Starts the API service independently. Use `--mode` to specify `trade` or `test`. |
-| `ui` | (Legacy) Starts the WebSocket-based TUI. Requires the API to be running separately. |
-| `clear-backtest-trades` | **Deletes all trades** from the `backtest` environment in the database. Useful for starting a fresh backtest analysis. |
+| `trade` | Starts the bot and the interactive TUI in **live trading mode**. |
+| `test` | Starts the bot and the interactive TUI in **paper trading mode** (testnet). |
+| `backtest` | Prepares historical data and runs a full backtest. Use the `--days` option (e.g., `--days 30`). |
+| `clear-backtest-trades` | **Deletes all trades** from the `backtest` environment in the database. |
 
 
 ## 7. Database Schema

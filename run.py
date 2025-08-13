@@ -178,53 +178,6 @@ def _run_in_container(command: list, env_vars: dict = {}, interactive: bool = Fa
         return False
 
 
-@app.command()
-def trade():
-    """Inicia a API em background e o bot em modo de negociação (live)."""
-    mode = "trade"
-    print(f"🚀 Iniciando o bot em modo '{mode.upper()}' com API...")
-
-    print("\n--- Etapa 1 de 2: Iniciando a API em segundo plano ---")
-    if not _run_in_container(
-        command=["api/main.py"],
-        env_vars={"BOT_MODE": mode},
-        detached=True
-    ):
-        print("❌ Falha ao iniciar a API. Abortando.")
-        return
-
-    print("   Aguardando 3 segundos para a API inicializar...")
-    time.sleep(3)
-
-    print(f"\n--- Etapa 2 de 2: Iniciando o bot em modo '{mode.upper()}' ---")
-    _run_in_container(
-        command=["jules_bot/main.py"],
-        env_vars={"BOT_MODE": mode}
-    )
-
-@app.command()
-def test():
-    """Inicia a API em background e o bot em modo de teste (testnet)."""
-    mode = "test"
-    print(f"🚀 Iniciando o bot em modo '{mode.upper()}' com API...")
-
-    print("\n--- Etapa 1 de 2: Iniciando a API em segundo plano ---")
-    if not _run_in_container(
-        command=["api/main.py"],
-        env_vars={"BOT_MODE": mode},
-        detached=True
-    ):
-        print("❌ Falha ao iniciar a API. Abortando.")
-        return
-
-    print("   Aguardando 3 segundos para a API inicializar...")
-    time.sleep(3)
-
-    print(f"\n--- Etapa 2 de 2: Iniciando o bot em modo '{mode.upper()}' ---")
-    _run_in_container(
-        command=["jules_bot/main.py"],
-        env_vars={"BOT_MODE": mode}
-    )
 
 @app.command()
 def backtest(
@@ -247,74 +200,27 @@ def backtest(
 
     print("\n✅ Backtest finalizado com sucesso.")
 
-@app.command("ui-local")
-def ui_local(
-    mode: str = typer.Argument("test", help="O modo de operação a ser executado (ex: 'trade', 'test').")
-):
-    """Inicia a nova TUI local que roda em um único processo com os serviços do bot."""
-    print(f"🚀 Iniciando a Interface de Usuário Local em modo '{mode.upper()}'...")
-    print("   Este comando executa a UI e os serviços do bot em um único processo.")
-    print("   Não há necessidade de iniciar a API ou o bot separadamente.")
+@app.command()
+def trade():
+    """Inicia o bot e a TUI local em modo de negociação (live)."""
+    mode = "trade"
+    print(f"🚀 Iniciando o Bot com a Interface de Usuário em modo '{mode.upper()}'...")
     _run_in_container(
         command=["jules_bot/run_local_ui.py", mode],
         interactive=True
     )
 
 @app.command()
-def ui():
-    """(LEGACY) Inicia a interface de usuário (TUI) baseada em WebSocket."""
-    print("🖥️  Iniciando a Interface de Usuário (TUI) legada...")
-    print("   Lembre-se que o serviço da API (usando 'run.py api') deve estar rodando em outro terminal.")
+def test():
+    """Inicia o bot e a TUI local em modo de teste (testnet)."""
+    mode = "test"
+    print(f"🚀 Iniciando o Bot com a Interface de Usuário em modo '{mode.upper()}'...")
     _run_in_container(
-        command=["jules_bot/ui/app.py"],
-        interactive=True
-    )
-
-@app.command()
-def api(
-    mode: str = typer.Option(
-        "live", "--mode", "-m", help="O modo de operação para a API (ex: 'live', 'test')."
-    )
-):
-    """Inicia o serviço da API, configurando o BOT_MODE."""
-    print(f"🚀 Iniciando o serviço de API em modo '{mode.upper()}'...")
-    _run_in_container(
-        command=["api/main.py"],
-        env_vars={"BOT_MODE": mode},
+        command=["jules_bot/run_local_ui.py", mode],
         interactive=True
     )
 
 import time
-
-@app.command()
-def dashboard(
-    mode: str = typer.Argument(..., help="O modo de operação a ser monitorado (ex: 'trade', 'test').")
-):
-    """Inicia a API em segundo plano e a TUI em primeiro plano para monitoramento."""
-    print(f"🚀 Iniciando o dashboard para o modo '{mode.upper()}'...")
-
-    print("\n--- Etapa 1 de 2: Iniciando a API em segundo plano ---")
-    if not _run_in_container(
-        command=["api/main.py"],
-        env_vars={"BOT_MODE": mode},
-        detached=True
-    ):
-        print("❌ Falha ao iniciar a API. Abortando.")
-        return
-
-    print("   Aguardando 3 segundos para a API inicializar...")
-    time.sleep(3)
-
-    print("\n--- Etapa 2 de 2: Iniciando a Interface de Usuário (TUI) ---")
-    if not _run_in_container(
-        command=["jules_bot/ui/app.py"],
-        interactive=True
-    ):
-        print("❌ A TUI foi encerrada ou falhou ao iniciar.")
-
-    print("\n✅ Dashboard encerrado.")
-    print("   Lembre-se que o serviço da API ainda pode estar rodando em segundo plano.")
-    print("   Use `docker ps` para verificar e `docker kill <container_id>` se necessário.")
 
 
 @app.command("clear-backtest-trades")
