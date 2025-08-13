@@ -132,7 +132,13 @@ class StateManager:
                     'sell_target_price': sell_target_price,
                     'decision_context': {'source': 'sync', 'reason': 'open_position'}
                 }
-                self.trade_logger.log_trade(trade_data)
+
+                # Check for duplicates before logging
+                existing_trade = self.db_manager.get_trade_by_binance_trade_id(trade_data['binance_trade_id'])
+                if existing_trade:
+                    logger.info(f"Skipping duplicate trade with binance_trade_id {trade_data['binance_trade_id']}")
+                else:
+                    self.trade_logger.log_trade(trade_data)
             else:
                 # This is a sell order or a mixed order, log all trades as closed
                 for trade in trades_in_order:
@@ -153,7 +159,13 @@ class StateManager:
                         'binance_trade_id': trade['id'],
                         'decision_context': {'source': 'sync'}
                     }
-                    self.trade_logger.log_trade(trade_data)
+
+                    # Check for duplicates before logging
+                    existing_trade = self.db_manager.get_trade_by_binance_trade_id(trade_data['binance_trade_id'])
+                    if existing_trade:
+                        logger.info(f"Skipping duplicate trade with binance_trade_id {trade_data['binance_trade_id']}")
+                    else:
+                        self.trade_logger.log_trade(trade_data)
 
         logger.info("--- Trade synchronization finished ---")
 

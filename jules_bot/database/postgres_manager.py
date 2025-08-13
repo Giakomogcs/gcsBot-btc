@@ -152,6 +152,15 @@ class PostgresManager:
                 logger.error(f"Failed to get trade by ID '{trade_id}': {e}", exc_info=True)
                 raise
 
+    def get_trade_by_binance_trade_id(self, binance_trade_id: int) -> Optional[Trade]:
+        with self.get_db() as db:
+            try:
+                trade = db.query(Trade).filter(Trade.binance_trade_id == binance_trade_id).first()
+                return trade
+            except Exception as e:
+                logger.error(f"Failed to get trade by binance_trade_id '{binance_trade_id}': {e}")
+                return None
+
     def has_open_positions(self) -> bool:
         with self.get_db() as db:
             try:
