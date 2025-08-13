@@ -17,6 +17,17 @@ class PriceHistory(Base):
     symbol = Column(String)
 
 class Trade(Base):
+    def to_dict(self):
+        """Converts the object to a dictionary."""
+        # A more robust way to convert SQLAlchemy model to dict
+        result = {}
+        for key in self.__mapper__.c.keys():
+            value = getattr(self, key)
+            if isinstance(value, datetime.datetime):
+                result[key] = value.isoformat()
+            else:
+                result[key] = value
+        return result
     __tablename__ = 'trades'
     id = Column(Integer, primary_key=True)
     run_id = Column(String, nullable=False)

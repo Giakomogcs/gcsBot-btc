@@ -1,26 +1,24 @@
-# File: gcs_bot/core/market_data_provider.py
 import logging
 import pandas as pd
-from jules_bot.database.database_manager import DatabaseManager
+from jules_bot.database.postgres_manager import PostgresManager
 
 class MarketDataProvider:
     """
-    Responsible for fetching historical market data from a dedicated InfluxDB bucket.
+    Responsible for fetching historical market data from the PostgreSQL database.
     """
-    def __init__(self, db_manager: DatabaseManager):
+    def __init__(self, db_manager: PostgresManager):
         """
-        Initializes the provider with a DatabaseManager instance that is already
-        configured to point to the historical data bucket.
+        Initializes the provider with a PostgresManager instance.
         """
         self.db_manager = db_manager
-        logging.info(f"MarketDataProvider initialized for bucket: '{self.db_manager.bucket}'")
+        logging.info("MarketDataProvider initialized with PostgresManager.")
 
     def get_historical_data(self, symbol: str, start: str, end: str = "now()") -> pd.DataFrame | None:
         """
-        Queries the InfluxDB bucket for OHLCV data for a given symbol and time range.
+        Queries the PostgreSQL database for OHLCV data for a given symbol and time range.
 
         Args:
-            symbol (str): The trading symbol to fetch (e.g., 'BTC/USD').
+            symbol (str): The trading symbol to fetch (e.g., 'BTCUSDT').
             start (str): The start of the time range (e.g., '-7d', '2023-01-01T00:00:00Z').
             end (str): The end of the time range, defaults to now.
 
@@ -29,37 +27,16 @@ class MarketDataProvider:
             or None if an error occurs or no data is found.
         """
         try:
-            # This query assumes your historical data has the measurement "crypto_prices"
-            # and fields named 'open', 'high', 'low', 'close', 'volume'.
-            # Adjust if your schema is different.
-            flux_query = f'''
-            from(bucket: "{self.db_manager.bucket}")
-              |> range(start: {start}, stop: {end})
-              |> filter(fn: (r) => r._measurement == "crypto_prices" and r.symbol == "{symbol}")
-              |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
-              |> keep(columns: ["_time", "open", "high", "low", "close", "volume"])
-              |> sort(columns: ["_time"], desc: false)
-            '''
-
             logging.debug(f"Querying market data for {symbol} from {start} to {end}")
-            df = self.db_manager.query_api.query_data_frame(query=flux_query, org=self.db_manager.org)
+            # The 'measurement' in the old system is now the 'symbol' in the new system
+            df = self.db_manager.get_price_data(measurement=symbol, start_date=start, end_date=end)
 
             if df.empty:
                 logging.warning(f"No market data found for {symbol} in the specified range.")
                 return None
 
-            # Clean up the DataFrame
-            df = df.rename(columns={'_time': 'timestamp'})
-            df = df.set_index('timestamp')
-            df = df.drop(columns=['result', 'table'], errors='ignore')
-
-            # Ensure correct data types
-            for col in ['open', 'high', 'low', 'close', 'volume']:
-                if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
-
             return df
 
         except Exception as e:
-            logging.error(f"Failed to fetch or process market data from InfluxDB: {e}")
+            logging.error(f"Failed to fetch or process market data from PostgreSQL: {e}", exc_info=True)
             return None

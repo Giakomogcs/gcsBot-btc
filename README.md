@@ -1,5 +1,18 @@
 # GCS Trading Bot
 
+A sophisticated, data-driven automated trading bot for the BTC/USDT market.
+
+## Table of Contents
+
+- [Overview](#1-overview)
+- [Features](#2-features)
+- [Architecture](#3-architecture)
+- [Project Structure](#4-project-structure)
+- [Setup and Installation](#5-setup-and-installation)
+- [CLI Commands](#6-cli-commands)
+- [Database Schema](#7-database-schema)
+- [Key Calculations](#8-key-calculations)
+
 ## 1. Overview
 
 GCS Trading Bot is a sophisticated, data-driven automated trading bot designed for the BTC/USDT market on the Binance exchange. It leverages a robust data pipeline, machine learning for market regime detection, and a flexible architecture to support live trading, paper trading (testnet), and comprehensive backtesting.
@@ -102,13 +115,13 @@ gcsbot-btc/
 └── run.py                  # Main command-line interface for controlling the bot
 ```
 
-## 5. Usage Guide
+## 5. Setup and Installation
 
 This guide provides the step-by-step instructions to set up the environment and run the bot.
 
 ### Prerequisites
 
-- **Docker and Docker Compose**: Ensure Docker is installed and running. The script will automatically use `sudo` if required.
+- **Docker and Docker Compose**: Ensure Docker is installed and running.
 - **Python 3.10+**: Required for running the control script `run.py`.
 - **Git**: For cloning the repository.
 
@@ -132,107 +145,114 @@ The `start` command builds the Docker images and launches the `app`, `postgres`,
 python run.py start
 ```
 
-You can check the status of the services at any time:
+## 6. CLI Commands
 
-```bash
-python run.py status
+All interaction with the bot and its environment is handled through `run.py`.
+
+### Environment Management
+
+These commands control the Docker environment.
+
+| Command          | Description                                                                                          |
+| ---------------- | ---------------------------------------------------------------------------------------------------- |
+| `start`          | Builds and starts all services (`app`, `postgres`, `pgadmin`) in detached mode.                      |
+| `stop`           | Stops and removes all services and associated volumes.                                               |
+| `status`         | Shows the current status of all running services.                                                    |
+| `build`          | Forces a rebuild of the Docker images without starting them. Useful after changing the `Dockerfile`. |
+| `logs [service]` | Tails the logs of a specific service (e.g., `app`, `db`) or all services if none is specified.       |
+
+### Application Control
+
+These commands execute tasks inside the `app` container.
+
+| Command                 | Description                                                                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `trade`                 | Starts the bot in **live trading mode** using your main Binance account.                                                                                |
+| `test`                  | Starts the bot in **paper trading mode** using your Binance testnet account.                                                                            |
+| `backtest`              | Prepares historical data and runs a full backtest. Use the `--days` option (e.g., `--days 30`) to specify the period.                                   |
+| `ui`                    | Starts the interactive Terminal User Interface (TUI) for monitoring and control. The bot must be running in `trade` or `test` mode in another terminal. |
+| `api`                   | Starts the WebSocket API service for the bot.                                                                                                           |
+| `clear-backtest-trades` | **Deletes all trades** from the `backtest` environment in the database. Useful for starting a fresh backtest analysis.                                  |
+
+## 7. Database Schema
+
+The application uses a PostgreSQL database to store all persistent data. The schema is defined in `jules_bot/database/models.py` and consists of three main tables.
+
+### `price_history`
+
+Stores historical OHLCV (Open, High, Low, Close, Volume) price data for assets.
+
+| Column      | Type     | Description                                               |
+| ----------- | -------- | --------------------------------------------------------- |
+| `id`        | Integer  | Primary key.                                              |
+| `timestamp` | DateTime | The timestamp for the start of the candle (e.g., minute). |
+| `open`      | Float    | The opening price for the period.                         |
+| `high`      | Float    | The highest price for the period.                         |
+| `low`       | Float    | The lowest price for the period.                          |
+| `close`     | Float    | The closing price for the period.                         |
+| `volume`    | Float    | The trading volume for the period.                        |
+| `symbol`    | String   | The trading symbol (e.g., 'BTCUSDT').                     |
+
+### `trades`
+
+The central table for recording all trading activity. A single row represents the entire lifecycle of a trade, from buy to sell.
+
+| Column                     | Type     | Description                                                                                                         |
+| -------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------- |
+| `id`                       | Integer  | Primary key.                                                                                                        |
+| `run_id`                   | String   | The unique ID for the bot session that initiated the trade.                                                         |
+| `environment`              | String   | The environment the trade was made in ('trade', 'test', or 'backtest').                                             |
+| `strategy_name`            | String   | The name of the strategy that triggered the trade.                                                                  |
+| `symbol`                   | String   | The trading symbol (e.g., 'BTCUSDT').                                                                               |
+| `trade_id`                 | String   | A unique identifier for the trade lifecycle.                                                                        |
+| `exchange`                 | String   | The exchange where the trade occurred (e.g., 'binance').                                                            |
+| `status`                   | String   | The current status of the trade: 'OPEN' or 'CLOSED'.                                                                |
+| `order_type`               | String   | The type of order that opened the position. Always 'buy'.                                                           |
+| `price`                    | Float    | The price of the transaction. For an open trade, this is the buy price. For a closed trade, this is the sell price. |
+| `quantity`                 | Float    | The amount of the asset traded.                                                                                     |
+| `usd_value`                | Float    | The total value of the transaction in USD.                                                                          |
+| `commission`               | Float    | The commission paid for the transaction.                                                                            |
+| `commission_asset`         | String   | The asset the commission was paid in (e.g., 'USDT').                                                                |
+| `timestamp`                | DateTime | The timestamp of the transaction. Updated to the sell time when a trade is closed.                                  |
+| `exchange_order_id`        | String   | The order ID provided by the exchange.                                                                              |
+| `decision_context`         | JSON     | A JSON object containing the market data and indicators at the time the decision was made.                          |
+| `sell_target_price`        | Float    | The target price at which to sell, calculated at buy time.                                                          |
+| `commission_usd`           | Float    | The total commission for the sell part of the trade, in USD.                                                        |
+| `realized_pnl_usd`         | Float    | The realized profit or loss from the trade in USD, calculated upon selling.                                         |
+| `hodl_asset_amount`        | Float    | The amount of the asset held back from the sell (if not selling 100%).                                              |
+| `hodl_asset_value_at_sell` | Float    | The USD value of the `hodl_asset_amount` at the time of the sell.                                                   |
+
+### `bot_status`
+
+A simple table for storing the last known state of a running bot instance, used primarily by the UI.
+
+| Column                | Type     | Description                                                  |
+| --------------------- | -------- | ------------------------------------------------------------ |
+| `id`                  | Integer  | Primary key.                                                 |
+| `bot_id`              | String   | The unique ID of the bot session.                            |
+| `mode`                | String   | The mode the bot is running in ('trade' or 'test').          |
+| `is_running`          | Boolean  | Whether the bot is currently running.                        |
+| `session_pnl_usd`     | Float    | The profit or loss for the current session.                  |
+| `session_pnl_percent` | Float    | The profit or loss for the current session, as a percentage. |
+| `open_positions`      | Integer  | The number of currently open positions.                      |
+| `portfolio_value_usd` | Float    | The total current value of the portfolio.                    |
+| `timestamp`           | DateTime | The last time the status was updated.                        |
+
+## 8. Key Calculations
+
+### Realized Profit & Loss (PnL)
+
+The realized PnL for a trade is calculated when a position is sold. The formula, found in `jules_bot/backtesting/engine.py`, accounts for commission fees on both the buy and sell transactions to provide an accurate reflection of the net profit.
+
+**Formula:**
+
+```
+realized_pnl_usd = ((sell_price * (1 - commission_rate)) - (buy_price * (1 + commission_rate))) * quantity_sold
 ```
 
-### Step 3: Initial Database Setup
+- `sell_price`: The price at which the asset was sold.
+- `buy_price`: The price at which the asset was originally purchased.
+- `commission_rate`: The percentage fee charged by the exchange (e.g., 0.001 for 0.1%).
+- `quantity_sold`: The amount of the asset that was sold.
 
-The first time you run the bot, the PostgreSQL database will be automatically initialized using the `postgres_setup/init.sql` script when the container starts. You can connect to the database using a client like DBeaver or the provided pgAdmin service (available at `http://localhost:5050`).
-
-### Step 4: Running the Bot
-
-With the environment running and the database configured, you can now execute commands inside the application container.
-
-**A. Run a Backtest**
-To run a backtest, you first need to collect some historical data. The `backtest` command handles this for you.
-
-```bash
-# Prepare data for the last 30 days and run a backtest
-python run.py backtest --days 30
-```
-
-This command will:
-
-1.  Execute a script inside the container to fetch the last 30 days of price data.
-2.  Execute the backtesting engine using that data.
-
-**B. Run in Test Mode (Testnet)**
-To run the bot using your Binance testnet account:
-
-```bash
-python run.py test
-```
-
-The bot will start, and you will see its log output directly in your terminal. Press `Ctrl+C` to stop the bot.
-
-**C. Run in Live Trading Mode**
-To run the bot with real funds on your main Binance account:
-
-```bash
-python run.py trade
-```
-
-The bot will start, and its logs will be streamed to your terminal. Press `Ctrl+C` to stop it.
-
-**D. Using the Interactive Terminal UI (TUI)**
-The bot includes a powerful, real-time Terminal User Interface (TUI) for monitoring and manual control.
-
-To use the TUI, you must have the bot running in either `test` or `trade` mode in one terminal. Then, in a **second terminal**, run:
-
-```bash
-python run.py ui
-```
-
-This will launch the dashboard, which provides:
-
-- **Live Status & Portfolio**: Real-time updates on the bot's mode, the current asset price, total investment, current portfolio value, and unrealized Profit & Loss (PnL).
-- **Bot Control**: A panel to manually trigger a buy order for a specific USD amount.
-- **Live Log**: A stream of the latest log messages from the bot.
-- **Open Positions Table**: A detailed list of all open trades, including entry price, quantity, and current value.
-- **Manual Intervention**: Select a trade in the table to bring up options to **Force Sell** it or mark it as **Treasury** (a long-term hold).
-
-A preview of the TUI layout:
-
-```
-+-----------------------------------------------------------------------------+
-| Jules Bot        Last Update: 2023-10-27 10:30:00                           |
-+-----------------------------------------------------------------------------+
-| Left Pane (Bot Control & Logs)      | Right Pane (Status & Positions)       |
-|                                     |                                       |
-| Bot Control                         | Bot Status                            |
-| Manual Buy (USD): [ 100.00 ]        | Mode: TEST   Symbol: BTCUSDT          |
-| [ FORCE BUY ]                       | Price: $34,123.45                     |
-|                                     |                                       |
-| Live Log                            | Portfolio                             |
-| > UI: Sent command...               | Invested: $5,000  Value: $5,150       |
-| > Bot: Sell condition met...        | PnL: +$150.00                         |
-|                                     |                                       |
-|                                     | Open Positions                        |
-|                                     | ID   | Entry   | Qty    | Value       |
-|                                     |------|---------|--------|------------ |
-|                                     | ab12 | 34000.0 | 0.01   | $341.23     |
-|                                     | cd34 | 33950.0 | 0.02   | $682.46     |
-|                                     |                                       |
-|                                     | [ Force Sell ] [ Mark as Treasury ]   |
-+-----------------------------------------------------------------------------+
-```
-
-### Step 5: Managing the Environment
-
-- **View Logs**: To see the real-time logs from any service (e.g., `app` or `db`):
-  ```bash
-  python run.py logs <service_name>
-  # Example:
-  python run.py logs app
-  ```
-- **Stop Services**: To stop all services and remove the containers:
-  ```bash
-  python run.py stop
-  ```
-- **Rebuild Images**: If you make changes to the `Dockerfile`, you can force a rebuild:
-  ```bash
-  python run.py build
-  ```
+This formula ensures that the profit is only calculated on the capital that was returned after fees were deducted on both ends of the trade lifecycle.

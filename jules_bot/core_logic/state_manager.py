@@ -18,9 +18,16 @@ class StateManager:
 
         logger.info(f"StateManager initialized for mode: '{self.mode}', bot_id: '{self.bot_id}'")
 
-    def get_open_positions(self) -> list[dict]:
-        """Fetches all trades marked as 'OPEN' from the database for the current bot."""
-        return self.db_manager.get_open_positions(bot_id=self.bot_id)
+    def get_open_positions(self) -> list:
+        """
+        Fetches all trades marked as 'OPEN' for the current environment.
+        For backtesting, it also filters by bot_id.
+        """
+        bot_id_to_filter = None
+        if self.mode == 'backtest':
+            bot_id_to_filter = self.bot_id
+        
+        return self.db_manager.get_open_positions(environment=self.mode, bot_id=bot_id_to_filter)
 
     def get_open_positions_count(self) -> int:
         """Queries the database and returns the number of currently open trades."""
@@ -28,7 +35,9 @@ class StateManager:
 
     def get_trade_history(self, mode: str) -> list[dict]:
         """Fetches all trades (open and closed) from the database for the given mode."""
-        return self.db_manager.get_all_trades_by_mode(mode=mode)
+        # Note: The date range parameters are omitted to use the default values,
+        # effectively fetching all trades for the given mode.
+        return self.db_manager.get_all_trades_in_range(mode=mode)
 
     def get_last_purchase_price(self) -> float:
         """
@@ -40,8 +49,8 @@ class StateManager:
             return float('inf')
 
         # Sort by time to find the most recent position.
-        # The field name for time in the dictionary from InfluxDB is '_time'.
-        latest_position = sorted(open_positions, key=lambda p: p['_time'], reverse=True)[0]
+        # The timestamp field from the SQLAlchemy model is 'timestamp'.
+        latest_position = sorted(open_positions, key=lambda p: p['timestamp'], reverse=True)[0]
         
         # The field for price is 'price'.
         return latest_position.get('price', float('inf'))

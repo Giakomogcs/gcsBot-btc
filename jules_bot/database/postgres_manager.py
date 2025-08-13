@@ -46,28 +46,46 @@ class PostgresManager:
     def log_trade(self, trade_point: TradePoint):
         """
         Logs a trade to the database.
-        If the trade_id already exists, it updates the record.
-        Otherwise, it creates a new one.
+        If the trade_id already exists, it updates the record with sell information.
+        Otherwise, it creates a new record for a new buy trade.
         """
         with self.get_db() as db:
             try:
-                # Check if a trade with this ID already exists
                 existing_trade = db.query(Trade).filter(Trade.trade_id == trade_point.trade_id).first()
 
                 if existing_trade:
-                    # This is an update (e.g., a 'sell' closing a 'buy')
+                    # This is an update for a sell, closing a buy.
+                    # We selectively update fields. Crucially, order_type is NOT changed.
                     logger.info(f"Updating existing trade {trade_point.trade_id} with status '{trade_point.status}'.")
-                    # Update all fields from the incoming trade_point
-                    for key, value in trade_point.__dict__.items():
-                        setattr(existing_trade, key, value)
+
+                    existing_trade.status = trade_point.status
+                    existing_trade.timestamp = trade_point.timestamp # Update to sell time
+
+                    # Update fields to reflect the sell transaction details
+                    existing_trade.price = trade_point.price
+                    existing_trade.quantity = trade_point.quantity
+                    existing_trade.usd_value = trade_point.usd_value
+                    existing_trade.commission = trade_point.commission
+
+                    # Add sell-specific financial details
+                    existing_trade.realized_pnl_usd = trade_point.realized_pnl_usd
+                    existing_trade.commission_usd = trade_point.commission_usd
+                    existing_trade.hodl_asset_amount = trade_point.hodl_asset_amount
+                    existing_trade.hodl_asset_value_at_sell = trade_point.hodl_asset_value_at_sell
+
+                    # Update context to reflect the sell decision
+                    existing_trade.decision_context = trade_point.decision_context
+
                 else:
-                    # This is a new trade (e.g., a 'buy')
+                    # This is a new trade (a buy)
                     logger.info(f"Creating new trade record for trade_id: {trade_point.trade_id}")
                     new_trade = Trade(**trade_point.__dict__)
                     db.add(new_trade)
 
                 db.commit()
-                logger.info(f"Successfully logged '{trade_point.order_type}' for trade_id: {trade_point.trade_id}")
+                # Clarify log message
+                action_type = "buy" if not existing_trade else "sell (update)"
+                logger.info(f"Successfully logged '{action_type}' for trade_id: {trade_point.trade_id}")
 
             except Exception as e:
                 db.rollback()
@@ -85,14 +103,28 @@ class PostgresManager:
                 logger.error(f"Failed to get price data: {e}", exc_info=True)
                 return pd.DataFrame()
 
-    def get_open_positions(self, bot_id: str) -> list[dict]:
+    def get_open_positions(self, environment: str, bot_id: Optional[str] = None) -> list:
+        """
+        Fetches open positions for a given environment.
+        If bot_id is provided, it also filters by bot_id (for backtesting).
+        Returns a list of Trade model instances.
+        """
         with self.get_db() as db:
             try:
-                trades = db.query(Trade).filter(and_(Trade.run_id == bot_id, Trade.status == "OPEN")).all()
-                return [trade.__dict__ for trade in trades]
+                query = db.query(Trade).filter(
+                    and_(
+                        Trade.status == "OPEN",
+                        Trade.environment == environment
+                    )
+                )
+                if bot_id:
+                    query = query.filter(Trade.run_id == bot_id)
+
+                trades = query.all()
+                return trades
             except Exception as e:
-                logger.error(f"Error getting open positions: {e}")
-                return []
+                logger.error(f"Failed to get open positions from DB: {e}")
+                raise
 
     def get_trade_by_id(self, trade_id: str) -> Optional[pd.Series]:
         with self.get_db() as db:
@@ -102,16 +134,16 @@ class PostgresManager:
                     return pd.Series(trade.__dict__)
                 return None
             except Exception as e:
-                logger.error(f"Falha ao buscar trade pelo ID '{trade_id}': {e}", exc_info=True)
-                return None
+                logger.error(f"Failed to get trade by ID '{trade_id}': {e}", exc_info=True)
+                raise
 
     def has_open_positions(self) -> bool:
         with self.get_db() as db:
             try:
                 return db.query(Trade).filter(Trade.status == "OPEN").first() is not None
             except Exception as e:
-                logger.error(f"Falha ao verificar se existem posições abertas: {e}", exc_info=True)
-                return False
+                logger.error(f"Failed to check for open positions: {e}", exc_info=True)
+                raise
 
     def get_trades(self, environment: str, start_date: str, end_date: str) -> pd.DataFrame:
         with self.get_db() as db:
@@ -140,16 +172,19 @@ class PostgresManager:
                 logger.error(f"Failed to get price history: {e}", exc_info=True)
                 return pd.DataFrame()
 
-    def get_all_trades_in_range(self, start_date: str = "-90d", end_date: str = "now()"):
         with self.get_db() as db:
             try:
                 # This is a simplified version. A more robust implementation would parse the date strings.
                 query = db.query(Trade).order_by(Trade.timestamp)
-                df = pd.read_sql(query.statement, self.engine)
-                return df
+                if mode:
+                    query = query.filter(Trade.environment == mode)
+
+                trades = query.all()
+                return trades
+
             except Exception as e:
-                logger.error(f"Falha ao buscar todos os trades do DB: {e}", exc_info=True)
-                return pd.DataFrame()
+                logger.error(f"Failed to get all trades from DB: {e}", exc_info=True)
+                raise
 
     def clear_all_tables(self):
         with self.get_db() as db:
@@ -180,3 +215,17 @@ class PostgresManager:
             except Exception as e:
                 logger.error(f"Error querying first timestamp from PostgreSQL for measurement '{measurement}': {e}", exc_info=True)
                 return None
+
+    def clear_backtest_trades(self):
+        """Deletes all trades from the 'trades' table where the environment is 'backtest'."""
+        with self.get_db() as db:
+            try:
+                # Using text for a simple delete statement for clarity
+                statement = text("DELETE FROM trades WHERE environment = :env")
+                result = db.execute(statement, {"env": "backtest"})
+                db.commit()
+                logger.info(f"Successfully cleared {result.rowcount} backtest trades from the database.")
+            except Exception as e:
+                db.rollback()
+                logger.error(f"Failed to clear backtest trades: {e}", exc_info=True)
+                raise

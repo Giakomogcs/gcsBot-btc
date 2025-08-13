@@ -1,5 +1,0 @@
-🚀 Iniciando o bot em modo 'TEST'...
-   (executando: `docker compose exec app python jules_bot/main.py`)
-permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock: Get "http://%2Fvar%2Frun%2Fdocker.sock/v1.51/containers/json?filters=%7B%22label%22%3A%7B%22com.docker.compose.config-hash%22%3Atrue%2C%22com.docker.compose.project%3Dapp%22%3Atrue%2C%22com.docker.compose.service%3Dapp%22%3Atrue%7D%7D": dial unix /var/run/docker.sock: connect: permission denied
-
-❌ Comando falhou com código de saída: 1

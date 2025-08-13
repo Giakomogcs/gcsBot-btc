@@ -58,7 +58,7 @@ class TradeLogger:
                 commission_asset=str(trade_data.get('commission_asset', 'USDT')),
 
                 # --- Optional & Contextual Fields ---
-                timestamp=trade_data.get('timestamp', datetime.datetime.now(datetime.timezone.utc)),
+                timestamp=self._convert_timestamp(trade_data.get('timestamp')),
                 exchange_order_id=str(trade_data.get('exchange_order_id')) if trade_data.get('exchange_order_id') else None,
                 decision_context=trade_data.get('decision_context'),
 
@@ -85,3 +85,20 @@ class TradeLogger:
         except Exception as e:
             logger.error(f"TradeLogger: An unexpected error occurred while logging trade: {e}", exc_info=True)
             return False
+
+    def _convert_timestamp(self, ts: Any) -> datetime.datetime:
+        """
+        Safely converts a timestamp from various formats (ms int, datetime) to a
+        timezone-aware datetime object. Defaults to now() if input is None.
+        """
+        if ts is None:
+            return datetime.datetime.now(datetime.timezone.utc)
+        if isinstance(ts, int):
+            # Assume it's a Unix timestamp in MILLISECONDS and convert to datetime
+            return datetime.datetime.fromtimestamp(ts / 1000, tz=datetime.timezone.utc)
+        if isinstance(ts, datetime.datetime):
+            # If it's already a datetime object, ensure it's timezone-aware
+            return ts.astimezone(datetime.timezone.utc) if ts.tzinfo else ts.replace(tzinfo=datetime.timezone.utc)
+
+        logger.warning(f"Unexpected timestamp type '{type(ts)}'. Using current time.")
+        return datetime.datetime.now(datetime.timezone.utc)
