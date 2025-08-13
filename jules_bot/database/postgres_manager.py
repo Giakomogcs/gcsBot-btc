@@ -85,11 +85,25 @@ class PostgresManager:
                 logger.error(f"Failed to get price data: {e}", exc_info=True)
                 return pd.DataFrame()
 
-    def get_open_positions(self, bot_id: str) -> list[dict]:
+    def get_open_positions(self, environment: str, bot_id: Optional[str] = None) -> list:
+        """
+        Fetches open positions for a given environment.
+        If bot_id is provided, it also filters by bot_id (for backtesting).
+        Returns a list of Trade model instances.
+        """
         with self.get_db() as db:
             try:
-                trades = db.query(Trade).filter(and_(Trade.run_id == bot_id, Trade.status == "OPEN")).all()
-                return [trade.__dict__ for trade in trades]
+                query = db.query(Trade).filter(
+                    and_(
+                        Trade.status == "OPEN",
+                        Trade.environment == environment
+                    )
+                )
+                if bot_id:
+                    query = query.filter(Trade.run_id == bot_id)
+                
+                trades = query.all()
+                return trades
             except Exception as e:
                 logger.error(f"Error getting open positions: {e}")
                 return []
@@ -113,16 +127,20 @@ class PostgresManager:
                 logger.error(f"Falha ao verificar se existem posições abertas: {e}", exc_info=True)
                 return False
 
-    def get_all_trades_in_range(self, start_date: str = "-90d", end_date: str = "now()"):
+    def get_all_trades_in_range(self, mode: Optional[str] = None, start_date: str = "-90d", end_date: str = "now()"):
         with self.get_db() as db:
             try:
                 # This is a simplified version. A more robust implementation would parse the date strings.
                 query = db.query(Trade).order_by(Trade.timestamp)
-                df = pd.read_sql(query.statement, self.engine)
-                return df
+                if mode:
+                    query = query.filter(Trade.environment == mode)
+
+                trades = query.all()
+                return trades
+
             except Exception as e:
                 logger.error(f"Falha ao buscar todos os trades do DB: {e}", exc_info=True)
-                return pd.DataFrame()
+                return []
 
     def clear_all_tables(self):
         with self.get_db() as db:

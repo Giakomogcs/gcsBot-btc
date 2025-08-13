@@ -3,7 +3,7 @@ import sys
 import uuid
 from jules_bot.bot.trading_bot import TradingBot
 from jules_bot.utils.logger import logger
-from jules_bot.database.database_manager import DatabaseManager
+from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.core.market_data_provider import MarketDataProvider
 from jules_bot.utils.config_manager import config_manager
 
@@ -29,24 +29,20 @@ def main():
 
     bot = None
     try:
-        # --- Configuração do Banco de Dados ---
-        # A configuração base (URL, Token, Org) vem diretamente do ambiente
-        db_connection_config = config_manager.get_db_config()
-
-        # O provedor de dados de mercado lê do bucket de preços históricos
-        prices_bucket_name = config_manager.get('INFLUXDB', 'bucket_prices')
-        prices_db_config = db_connection_config.copy()
-        prices_db_config['bucket'] = prices_bucket_name
+        # --- Configuração do Banco de Dados Unificado (PostgreSQL) ---
+        db_config = config_manager.get_db_config('POSTGRES')
+        db_manager = PostgresManager(config=db_config)
         
-        prices_db_manager = DatabaseManager(config=prices_db_config)
-        market_data_provider = MarketDataProvider(db_manager=prices_db_manager)
+        # O MarketDataProvider agora usa o mesmo PostgresManager
+        market_data_provider = MarketDataProvider(db_manager=db_manager)
 
         # --- Instanciação do Bot ---
         bot_id = str(uuid.uuid4())
         logger.info(f"Gerado ID único para a sessão do bot: {bot_id}")
 
-        # O TradingBot é responsável por criar seu próprio StateManager,
-        # que por sua vez obtém o bucket de negociação correto.
+        # O TradingBot recebe o MarketDataProvider.
+        # Internamente, o TradingBot e seus componentes (como StateManager)
+        # criarão suas próprias instâncias do PostgresManager conforme necessário.
         bot = TradingBot(
             mode=bot_mode,
             bot_id=bot_id,
