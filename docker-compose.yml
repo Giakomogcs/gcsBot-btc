@@ -36,6 +36,8 @@ services:
         condition: service_healthy
     env_file:
       - .env
+    environment:
+      POSTGRES_HOST: gcsbot-postgres
     volumes:
       - .:/app
     ports:

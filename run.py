@@ -15,16 +15,34 @@ app = typer.Typer()
 def get_docker_compose_command():
     """
     Verifica se 'docker-compose' (V1) ou 'docker compose' (V2) está disponível.
+    Adiciona 'sudo' se o usuário não for root para evitar problemas de permissão.
     """
+    # Lista de comandos base. Adiciona 'sudo' se não formos o usuário root.
+    base_cmd = []
+    try:
+        # os.geteuid() não existe no Windows, então tratamos o erro.
+        # No Windows, o gerenciamento de permissões do Docker é diferente e geralmente não requer sudo.
+        if os.geteuid() != 0:
+            base_cmd = ["sudo"]
+    except AttributeError:
+        # Se geteuid não existe, estamos provavelmente no Windows. Não fazemos nada.
+        pass
+
+    # Tenta encontrar um comando docker-compose válido
     if shutil.which("docker-compose"):
-        return ["docker-compose"]
+        return base_cmd + ["docker-compose"]
     elif shutil.which("docker"):
         try:
-            result = subprocess.run(["docker", "compose", "--version"], capture_output=True, text=True, check=True)
+            # Constrói o comando de teste completo (ex: ['sudo', 'docker', 'compose', '--version'])
+            test_command = base_cmd + ["docker", "compose", "--version"]
+            result = subprocess.run(test_command, capture_output=True, text=True, check=True)
             if "Docker Compose version" in result.stdout:
-                return ["docker", "compose"]
+                return base_cmd + ["docker", "compose"]
         except (subprocess.CalledProcessError, FileNotFoundError):
+            # Se o teste falhar, continuamos para o erro final
             pass
+    
+    # Se nenhuma versão do comando foi encontrada
     raise FileNotFoundError("Could not find a valid 'docker-compose' or 'docker compose' command. Please ensure Docker is installed and in your PATH.")
 
 def run_docker_command(command_args: list, **kwargs):
