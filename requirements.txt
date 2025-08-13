@@ -29,6 +29,7 @@ python-dotenv
 tqdm
 joblib
 tabulate
+psycopg2-binary
 
 # --- Plotting ---
 matplotlib

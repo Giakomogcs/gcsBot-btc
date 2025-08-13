@@ -317,5 +317,20 @@ def clear_backtest_trades():
         print(f"❌ An error occurred while clearing backtest trades: {e}")
 
 
+@app.command("wipe-db")
+def wipe_db():
+    """
+    Shows a confirmation prompt and then wipes all data from the main tables.
+    This is a destructive operation.
+    """
+    print("🗑️  Attempting to wipe the database...")
+    print("   This will run the script inside the container.")
+
+    _run_in_container(
+        command=["scripts/wipe_database.py"],
+        interactive=True
+    )
+
+
 if __name__ == "__main__":
     app()
