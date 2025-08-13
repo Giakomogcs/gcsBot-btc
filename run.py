@@ -247,11 +247,24 @@ def backtest(
 
     print("\n✅ Backtest finalizado com sucesso.")
 
+@app.command("ui-local")
+def ui_local(
+    mode: str = typer.Argument("test", help="O modo de operação a ser executado (ex: 'trade', 'test').")
+):
+    """Inicia a nova TUI local que roda em um único processo com os serviços do bot."""
+    print(f"🚀 Iniciando a Interface de Usuário Local em modo '{mode.upper()}'...")
+    print("   Este comando executa a UI e os serviços do bot em um único processo.")
+    print("   Não há necessidade de iniciar a API ou o bot separadamente.")
+    _run_in_container(
+        command=["jules_bot/run_local_ui.py", mode],
+        interactive=True
+    )
+
 @app.command()
 def ui():
-    """Inicia a interface de usuário (TUI) para monitorar e controlar o bot."""
-    print("🖥️  Iniciando a Interface de Usuário (TUI)...")
-    print("   Lembre-se que o bot (usando 'trade' ou 'test') deve estar rodando em outro terminal.")
+    """(LEGACY) Inicia a interface de usuário (TUI) baseada em WebSocket."""
+    print("🖥️  Iniciando a Interface de Usuário (TUI) legada...")
+    print("   Lembre-se que o serviço da API (usando 'run.py api') deve estar rodando em outro terminal.")
     _run_in_container(
         command=["jules_bot/ui/app.py"],
         interactive=True

@@ -188,13 +188,22 @@ The primary way to monitor the bot is through the interactive TUI. The `dashboar
   python run.py dashboard --mode trade
   ```
 
+Alternatively, you can use the new **local TUI**, which runs the bot and the UI in the same process, eliminating the need for a separate API service. This is the recommended approach for most users.
+
+- **To run the local TUI for the Testnet bot:**
+  ```bash
+  python run.py ui-local --mode test
+  ```
+
 | Command | Description |
 |---|---|
 | `trade` | Starts the bot in **live trading mode** using your main Binance account. |
 | `test` | Starts the bot in **paper trading mode** using your Binance testnet account. |
-| `dashboard` | Starts the API and the interactive TUI for live monitoring. Use `--mode` to specify `trade` or `test`. |
+| `ui-local` | Starts the new **local TUI** which runs the bot and UI in a single process. Recommended for monitoring. |
+| `dashboard` | (Legacy) Starts the API and the interactive TUI for live monitoring. Use `--mode` to specify `trade` or `test`. |
 | `backtest` | Prepares historical data and runs a full backtest. Use the `--days` option (e.g., `--days 30`) to specify the period. |
-| `api` | Starts the API service independently. Use `--mode` to specify `trade` or `test`. |
+| `api` | (Legacy) Starts the API service independently. Use `--mode` to specify `trade` or `test`. |
+| `ui` | (Legacy) Starts the WebSocket-based TUI. Requires the API to be running separately. |
 | `clear-backtest-trades` | **Deletes all trades** from the `backtest` environment in the database. Useful for starting a fresh backtest analysis. |
 
 

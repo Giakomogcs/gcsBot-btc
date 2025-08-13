@@ -1,15 +1,14 @@
-import asyncio
-import json
 import os
 import sys
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
-import aiohttp
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll, Horizontal
 from textual.widgets import (Header, Footer, DataTable, Input, Button, Label, Static, RichLog)
 from textual.validation import Validator, ValidationResult
+
+from jules_bot.bot.command_manager import CommandManager
 
 if __name__ == "__main__":
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -26,13 +25,12 @@ class NumberValidator(Validator):
 class DisplayManager(App):
     BINDINGS = [("d", "toggle_dark", "Toggle dark mode")]
     CSS_PATH = "jules_bot.css"
-    API_HOST = "localhost:8765"
 
-    def __init__(self, mode="test", *args, **kwargs):
+    def __init__(self, mode: str, command_manager: CommandManager, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.mode = mode
+        self.command_manager = command_manager
         self.selected_trade_id: str | None = None
-        self._websocket_task = None
         self.log_display = None
 
     def compose(self) -> ComposeResult:
@@ -68,7 +66,7 @@ class DisplayManager(App):
 
     def on_mount(self) -> None:
         self.log_display = self.query_one(RichLog)
-        self.log_display.write("[bold green]UI mounted. Attempting to connect to WebSocket...[/]")
+        self.log_display.write("[bold green]UI mounted.[/bold green] Waiting for first data update...")
 
         for table_id, columns in [
             ("#positions_table", ["ID", "Entry", "Qty", "Value", "PnL", "Sell Target", "Progress"]),
@@ -79,44 +77,63 @@ class DisplayManager(App):
             table.add_columns(*columns)
 
         self.query_one("#positions_table", DataTable).cursor_type = "row"
-        self._websocket_task = asyncio.create_task(self.connect_to_websocket())
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
-        # This functionality is pending implementation of command handling via API
-        self.log_display.write(f"[bold yellow]Command '{event.button.id}' not implemented yet.[/]")
+        """Handle button press events."""
+        log_display = self.query_one(RichLog)
 
-    async def on_data_table_row_selected(self, event: DataTable.RowSelected):
-        self.selected_trade_id = event.row_key.value
-        self.query_one("#action_bar").remove_class("hidden")
+        if event.button.id == "force_buy_button":
+            input_widget = self.query_one("#manual_buy_input", Input)
+            amount_str = input_widget.value
+            if not amount_str:
+                log_display.write("[bold red]Please enter a USD amount to buy.[/bold red]")
+                return
 
-    async def connect_to_websocket(self):
-        """Connects to the status WebSocket and processes incoming data."""
-        ws_url = f"ws://{self.API_HOST}/ws/status"
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.ws_connect(ws_url) as ws:
-                    self.log_display.write(f"[bold green]Successfully connected to {ws_url}[/]")
-                    # Inform the server of the desired mode
-                    await ws.send_str(self.mode)
+            try:
+                amount_usd = Decimal(amount_str)
+                if amount_usd <= 0:
+                    raise ValueError("Amount must be positive.")
 
-                    async for msg in ws:
-                        if msg.type == aiohttp.WSMsgType.TEXT:
-                            self.process_status_update(json.loads(msg.data))
-                        elif msg.type in (aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
-                            break
-        except aiohttp.ClientConnectorError:
-            self.log_display.write(f"[bold red]Connection error: Unable to connect to {ws_url}. Is the API server running?[/]")
-        except Exception as e:
-            self.log_display.write(f"[bold red]WebSocket Error: {e}[/]")
-        finally:
-            self.log_display.write("[bold yellow]WebSocket disconnected. Attempting to reconnect in 5 seconds...[/]")
-            await asyncio.sleep(5)
-            self._websocket_task = asyncio.create_task(self.connect_to_websocket())
+                log_display.write(f"[yellow]Executing force buy for ${amount_usd}...[/yellow]")
+                # This is now a synchronous call to the command manager
+                success, message = self.command_manager.force_buy(amount_usd)
+                if success:
+                    log_display.write(f"[bold green]{message}[/bold green]")
+                    input_widget.value = "" # Clear input on success
+                else:
+                    log_display.write(f"[bold red]{message}[/bold red]")
 
-    def process_status_update(self, state: dict):
+            except (ValueError, InvalidOperation):
+                log_display.write(f"[bold red]Invalid amount: '{amount_str}'. Please enter a valid number.[/bold red]")
+
+        elif event.button.id == "force_sell_button":
+            if self.selected_trade_id:
+                log_display.write(f"[yellow]Executing force sell for trade {self.selected_trade_id[:8]}...[/yellow]")
+                success, message = self.command_manager.force_sell(self.selected_trade_id)
+                if success:
+                    log_display.write(f"[bold green]{message}[/bold green]")
+                    self.query_one("#action_bar").add_class("hidden")
+                    self.selected_trade_id = None
+                else:
+                    log_display.write(f"[bold red]{message}[/bold red]")
+            else:
+                log_display.write("[bold red]No trade selected to sell.[/bold red]")
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected):
+        """Handle row selection in the positions table."""
+        # A None value for row_key means the table was cleared or lost focus
+        if event.row_key.value is None:
+            self.selected_trade_id = None
+            self.query_one("#action_bar").add_class("hidden")
+        else:
+            self.selected_trade_id = event.row_key.value
+            self.query_one("#action_bar").remove_class("hidden")
+            self.query_one(RichLog).write(f"Selected trade: {self.selected_trade_id[:8]}")
+
+    def update_data(self, state: dict):
         """Processes a state dictionary and updates all UI widgets."""
         if "error" in state:
-            self.log_display.write(f"[bold red]Received error from server: {state['error']}[/]")
+            self.log_display.write(f"[bold red]Received error from bot: {state['error']}[/]")
             return
 
         header = self.query_one(Header)
@@ -193,11 +210,3 @@ class DisplayManager(App):
                 f"${usd_val:,.2f}" if usd_val > 0 else ""
             )
 
-if __name__ == '__main__':
-    # This allows running the UI standalone, e.g., `python -m jules_bot.ui.display_manager`
-    # You can pass the mode as an argument, e.g., `python -m jules_bot.ui.display_manager trade`
-    mode = "test"
-    if len(sys.argv) > 1 and sys.argv[1] in ["live", "trade"]:
-        mode = "trade"
-    app = DisplayManager(mode=mode)
-    app.run()
