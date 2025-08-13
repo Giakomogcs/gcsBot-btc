@@ -151,7 +151,7 @@ class PostgresManager:
             except Exception as e:
                 logger.error(f"Failed to get trade by ID '{trade_id}': {e}", exc_info=True)
                 raise
-
+    
     def get_trade_by_binance_trade_id(self, binance_trade_id: int) -> Optional[Trade]:
         with self.get_db() as db:
             try:

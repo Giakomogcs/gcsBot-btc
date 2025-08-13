@@ -190,12 +190,12 @@ class Trader:
         if self.step_size is None:
             logger.warning(f"step_size not available for symbol {self.symbol}. Quantity will not be formatted.")
             return str(quantity)
-
+        
         try:
             step_size_float = float(self.step_size)
             # Use floor to comply with LOT_SIZE filter
             formatted_quantity_float = math.floor(quantity / step_size_float) * step_size_float
-
+            
             # Determine the number of decimal places from the step_size string
             if 'e-' in self.step_size:
                 precision = int(self.step_size.split('e-')[-1])
@@ -204,13 +204,13 @@ class Trader:
                 precision = len(trimmed_step_size.split('.')[1]) if '.' in trimmed_step_size else 0
             else:
                 precision = 0
-
+            
             # Format the floored quantity to a string with the correct number of decimal places
             final_quantity_str = f"{formatted_quantity_float:.{precision}f}"
 
             if float(final_quantity_str) != quantity:
                 logger.info(f"Formatted quantity from {quantity} to {final_quantity_str} using stepSize {self.step_size}")
-
+            
             return final_quantity_str
 
         except (ValueError, TypeError) as e:
@@ -269,10 +269,10 @@ class Trader:
 
         try:
             quantity_to_sell = position_data.get('quantity')
-
+            
             # Format the quantity to comply with exchange filters
             formatted_quantity = self._format_quantity(quantity_to_sell)
-
+            
             logger.info(f"EXECUTING SELL: {formatted_quantity} of {self.symbol} | Trade ID: {trade_id}")
             order = self.client.order_market_sell(symbol=self.symbol, quantity=formatted_quantity)
             logger.info(f"✅ SELL ORDER EXECUTED: {order}")

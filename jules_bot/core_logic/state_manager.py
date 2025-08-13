@@ -132,7 +132,7 @@ class StateManager:
                     'sell_target_price': sell_target_price,
                     'decision_context': {'source': 'sync', 'reason': 'open_position'}
                 }
-
+                
                 # Check for duplicates before logging
                 existing_trade = self.db_manager.get_trade_by_binance_trade_id(trade_data['binance_trade_id'])
                 if existing_trade:
@@ -159,7 +159,7 @@ class StateManager:
                         'binance_trade_id': trade['id'],
                         'decision_context': {'source': 'sync'}
                     }
-
+                    
                     # Check for duplicates before logging
                     existing_trade = self.db_manager.get_trade_by_binance_trade_id(trade_data['binance_trade_id'])
                     if existing_trade:
