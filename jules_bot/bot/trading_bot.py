@@ -129,6 +129,11 @@ class TradingBot:
         self.is_running = True
         logger.info(f"🚀 --- TRADING BOT STARTED --- RUN ID: {self.run_id} --- SYMBOL: {self.symbol} --- MODE: {self.mode.upper()} --- 🚀")
 
+        # Determine the base asset once (e.g., BTC from BTCUSDT)
+        quote_asset = "USDT"
+        base_asset = self.symbol.replace(quote_asset, "") if self.symbol.endswith(quote_asset) else self.symbol[:3]
+
+
         while self.is_running:
             try:
                 logger.info("--- Starting new trading cycle ---")
@@ -160,44 +165,45 @@ class TradingBot:
 
                 for position in open_positions:
                     trade_id = position.trade_id
-                    # Use direct attribute access; handle potential None value for sell_target_price
                     target_price = position.sell_target_price or float('inf')
 
                     if current_price >= target_price:
-                        logger.info(f"Sell condition met for position {trade_id}. Executing sell.")
+                        logger.info(f"Sell condition met for position {trade_id}. Verifying balance before selling.")
 
-                        # Use direct attribute access
                         original_quantity = float(position.quantity or 0)
                         sell_quantity = original_quantity * strategy_rules.sell_factor
+
+                        # --- PRE-SELL BALANCE CHECK ---
+                        # Get the real-time available balance of the base asset.
+                        available_balance = trader.get_account_balance(asset=base_asset)
+                        if sell_quantity > available_balance:
+                            logger.warning(
+                                f"INSUFFICIENT BALANCE: Attempted to sell {sell_quantity} {base_asset} for trade {trade_id}, "
+                                f"but only {available_balance} is available. This may be due to other open sell orders or "
+                                f"a manual trade. Skipping this sell attempt."
+                            )
+                            # This also implicitly handles the case where sell_quantity is 0, as available_balance should be >= 0.
+                            continue
+                        # --- END PRE-SELL BALANCE CHECK ---
+
                         hodl_asset_amount = original_quantity - sell_quantity
 
-                        # Convert the Trade object to a dict for modification and selling
                         sell_position_data = position.to_dict()
                         sell_position_data['quantity'] = sell_quantity
 
                         success, sell_result = trader.execute_sell(sell_position_data, self.run_id, decision_context)
 
                         if success:
-                            # --- CORRECTED PNL CALCULATION ---
                             buy_price = float(position.price or 0)
                             sell_price = float(sell_result.get('price'))
-
                             commission_rate = float(strategy_rules.rules.get('commission_rate'))
 
-                            # This formula correctly accounts for commissions on both buy and sell side
-                            # for the portion of the asset that was sold.
                             realized_pnl_usd = ((sell_price * (1 - commission_rate)) - (buy_price * (1 + commission_rate))) * sell_quantity
-
-                            # --- END CORRECTED PNL CALCULATION ---
-
                             hodl_asset_value_at_sell = hodl_asset_amount * current_price
-
-                            # The total commission for this sell transaction
                             commission_usd = float(sell_result.get('commission', 0))
 
-                            # Update sell_result with the calculated financial details for state update
                             sell_result.update({
-                                "commission_usd": commission_usd, # Log the actual commission for the sell
+                                "commission_usd": commission_usd,
                                 "realized_pnl_usd": realized_pnl_usd,
                                 "hodl_asset_amount": hodl_asset_amount,
                                 "hodl_asset_value_at_sell": hodl_asset_value_at_sell
