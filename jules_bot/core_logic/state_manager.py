@@ -129,31 +129,28 @@ class StateManager:
                     )
                     self.db_manager.update_trade_status(pos.trade_id, 'RECONCILED')
 
-            # 4. Reconcile Part 2: Create new positions for untracked assets found on the exchange
-            for asset, balance in holdings_map.items():
-                if asset == quote_asset:
-                    continue
+            # 4. Reconcile Part 2: Create a position for the primary asset if untracked
+            config_symbol = config_manager.get('APP', 'symbol')
+            base_asset = config_symbol.replace(quote_asset, '')
 
-                if asset not in db_positions_map:
-                    symbol = f"{asset}{quote_asset}"
-                    current_price = all_prices.get(symbol)
+            if base_asset in holdings_map and base_asset not in db_positions_map:
+                balance = holdings_map[base_asset]
+                current_price = all_prices.get(config_symbol)
 
-                    if current_price is None:
-                        logger.warning(f"Could not find price for symbol {symbol}. Cannot create synced position.")
-                        continue
-
+                if current_price is None:
+                    logger.error(f"Could not find price for primary symbol {config_symbol}. Cannot create synced position.")
+                else:
                     logger.info(
-                        f"Found untracked asset {asset} on exchange with balance {balance}. "
+                        f"Found untracked primary asset {base_asset} on exchange with balance {balance}. "
                         f"Creating a new 'OPEN' position in the database."
                     )
 
                     usd_value = balance * current_price
                     new_trade_id = str(uuid.uuid4())
 
-                    # Create a placeholder buy_result dictionary
                     buy_result = {
                         'trade_id': new_trade_id,
-                        'symbol': symbol,
+                        'symbol': config_symbol,
                         'price': current_price,
                         'quantity': balance,
                         'usd_value': usd_value,
@@ -166,10 +163,7 @@ class StateManager:
                         'exchange': 'binance'
                     }
 
-                    # Calculate a sell target based on the current price
                     sell_target_price = strategy_rules.calculate_sell_target_price(current_price)
-
-                    # Use the existing method to create the new position
                     self.create_new_position(buy_result, sell_target_price)
 
             logger.info("--- Holdings synchronization finished ---")
