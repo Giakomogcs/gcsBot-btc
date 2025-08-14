@@ -78,96 +78,68 @@ class StateManager:
 
         self.trade_logger.log_trade(trade_data)
 
-    def sync_trades_with_binance(self, account_manager: AccountManager, strategy_rules: StrategyRules):
+    def sync_holdings_with_binance(self, account_manager: AccountManager, strategy_rules: StrategyRules):
         """
-        Syncs historical trades from Binance with the local database and handles open positions.
+        Synchronizes the database with current Binance holdings by checking for discrepancies.
+        It closes local 'OPEN' positions that no longer exist on the exchange.
+        It also logs warnings for assets held on the exchange but not tracked in the database.
         """
-        logger.info("--- Starting trade synchronization with Binance ---")
-        symbol = config_manager.get('APP', 'symbol')
-        last_trade_id = self.db_manager.get_last_trade_id(self.mode)
+        logger.info("--- Starting holdings synchronization with Binance ---")
 
-        new_trades = account_manager.get_all_my_trades(symbol, from_id=last_trade_id + 1)
+        try:
+            # 1. Get current holdings from the exchange
+            # We pass an empty dict for prices because, for this logic, we only need asset names and amounts.
+            current_holdings = account_manager.get_all_account_balances({})
 
-        if not new_trades:
-            logger.info("No new trades to sync.")
-            return
+            # Create a map of holdings for easy lookup, ignoring dust amounts.
+            holdings_map = {
+                h['asset']: float(h['free']) + float(h['locked'])
+                for h in current_holdings if (float(h['free']) + float(h['locked'])) > 0.00001
+            }
+            logger.info(f"Found {len(holdings_map)} non-dust assets on Binance: {list(holdings_map.keys())}")
 
-        logger.info(f"Found {len(new_trades)} new trades to sync.")
+            # 2. Get all 'OPEN' and 'TREASURY' positions from our database
+            open_positions = self.get_open_positions()
+            treasury_positions = self.db_manager.get_treasury_positions(environment=self.mode)
 
-        # Group trades by orderId to identify open positions
-        orders = {}
-        for trade in new_trades:
-            order_id = trade['orderId']
-            if order_id not in orders:
-                orders[order_id] = []
-            orders[order_id].append(trade)
+            db_positions_map = {}
+            for pos in open_positions + treasury_positions:
+                # Assuming all symbols are against USDT, which is a simplification.
+                asset = pos.symbol.replace('USDT', '')
+                if asset not in db_positions_map:
+                    db_positions_map[asset] = []
+                db_positions_map[asset].append(pos)
 
-        for order_id, trades_in_order in orders.items():
-            is_buy_order = all(t['isBuyer'] for t in trades_in_order)
+            if db_positions_map:
+                logger.info(f"Found {len(db_positions_map)} assets with OPEN/TREASURY status in DB: {list(db_positions_map.keys())}")
 
-            # This is a simplified assumption. A robust implementation would check if the total quantity bought
-            # has been sold in other orders. For now, we assume one order per position.
-            if is_buy_order:
-                # This is an open position
-                # We'll use the first trade in the order to represent the position
-                buy_trade = trades_in_order[0]
-                purchase_price = float(buy_trade['price'])
-                sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
+            # 3. Reconcile: Close local positions that are no longer on the exchange
+            for pos in open_positions:
+                asset = pos.symbol.replace('USDT', '')
+                if asset not in holdings_map:
+                    logger.warning(
+                        f"Position {pos.trade_id} for asset {asset} is 'OPEN' in the database, "
+                        f"but the asset is no longer held on the exchange. Closing it as 'RECONCILED'."
+                    )
+                    self.db_manager.update_trade_status(pos.trade_id, 'RECONCILED')
 
-                trade_data = {
-                    'run_id': self.bot_id,
-                    'symbol': buy_trade['symbol'],
-                    'trade_id': str(uuid.uuid4()),
-                    'exchange': 'binance',
-                    'status': 'OPEN',
-                    'order_type': 'buy',
-                    'price': purchase_price,
-                    'quantity': sum(float(t['qty']) for t in trades_in_order),
-                    'usd_value': sum(float(t['price']) * float(t['qty']) for t in trades_in_order),
-                    'commission': sum(float(t.get('commission', 0.0)) for t in trades_in_order),
-                    'commission_asset': trades_in_order[0].get('commissionAsset'),
-                    'timestamp': trades_in_order[0]['time'],
-                    'exchange_order_id': str(order_id),
-                    'binance_trade_id': trades_in_order[0]['id'],
-                    'sell_target_price': sell_target_price,
-                    'decision_context': {'source': 'sync', 'reason': 'open_position'}
-                }
-                
-                # Check for duplicates before logging
-                existing_trade = self.db_manager.get_trade_by_binance_trade_id(trade_data['binance_trade_id'])
-                if existing_trade:
-                    logger.info(f"Skipping duplicate trade with binance_trade_id {trade_data['binance_trade_id']}")
-                else:
-                    self.trade_logger.log_trade(trade_data)
-            else:
-                # This is a sell order or a mixed order, log all trades as closed
-                for trade in trades_in_order:
-                    trade_data = {
-                        'run_id': self.bot_id,
-                        'symbol': trade['symbol'],
-                        'trade_id': str(uuid.uuid4()),
-                        'exchange': 'binance',
-                        'status': 'CLOSED',
-                        'order_type': 'buy' if trade['isBuyer'] else 'sell',
-                        'price': float(trade['price']),
-                        'quantity': float(trade['qty']),
-                        'usd_value': float(trade['price']) * float(trade['qty']),
-                        'commission': float(trade.get('commission', 0.0)),
-                        'commission_asset': trade.get('commissionAsset'),
-                        'timestamp': trade['time'],
-                        'exchange_order_id': str(trade['orderId']),
-                        'binance_trade_id': trade['id'],
-                        'decision_context': {'source': 'sync'}
-                    }
-                    
-                    # Check for duplicates before logging
-                    existing_trade = self.db_manager.get_trade_by_binance_trade_id(trade_data['binance_trade_id'])
-                    if existing_trade:
-                        logger.info(f"Skipping duplicate trade with binance_trade_id {trade_data['binance_trade_id']}")
-                    else:
-                        self.trade_logger.log_trade(trade_data)
+            # 4. Reconcile: Log warnings for untracked assets on the exchange
+            quote_asset = config_manager.get('APP', 'quote_asset', fallback='USDT')
+            for asset, balance in holdings_map.items():
+                if asset == quote_asset: # Ignore the quote asset (e.g., USDT)
+                    continue
+                if asset not in db_positions_map:
+                    logger.warning(
+                        f"Found untracked asset {asset} on the exchange with balance {balance}. "
+                        "This holding is not associated with any 'OPEN' or 'TREASURY' position in the database. "
+                        "Manual review may be needed."
+                    )
 
-        logger.info("--- Trade synchronization finished ---")
+            logger.info("--- Holdings synchronization finished ---")
+
+        except Exception as e:
+            logger.error(f"An error occurred during holdings synchronization: {e}", exc_info=True)
+
 
     def record_partial_sell(self, original_trade_id: str, remaining_quantity: float, sell_data: dict):
         """

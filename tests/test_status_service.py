@@ -30,12 +30,12 @@ class TestStatusService(unittest.TestCase):
             {'asset': 'BTC', 'free': '1.0', 'locked': '0.5'}
         ]
         mock_exchange_instance.get_open_orders.return_value = [
-            {'clientOrderId': 'trade-still-open'}
+            {'orderId': 'trade-still-open'}
         ]
 
         # Arrange: Mock DB results
-        trade1 = Trade(trade_id="trade-still-open", price=50000, quantity=0.1, sell_target_price=55000)
-        trade2 = Trade(trade_id="trade-closed-on-exchange", price=48000, quantity=0.2, sell_target_price=50000)
+        trade1 = Trade(trade_id="trade-still-open", price=50000, quantity=0.1, sell_target_price=55000, exchange_order_id="trade-still-open")
+        trade2 = Trade(trade_id="trade-closed-on-exchange", price=48000, quantity=0.2, sell_target_price=50000, exchange_order_id="trade-closed-on-exchange")
         self.db_manager.get_open_positions.return_value = [trade1, trade2]
         self.db_manager.get_all_trades_in_range.return_value = [trade1, trade2]
 

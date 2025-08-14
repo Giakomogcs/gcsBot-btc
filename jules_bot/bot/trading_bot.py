@@ -119,8 +119,8 @@ class TradingBot:
 
         # --- SYNC TRADES ON STARTUP ---
         if trader.is_ready:
-            logger.info("Performing initial trade synchronization...")
-            state_manager.sync_trades_with_binance(account_manager, strategy_rules)
+            logger.info("Performing initial holdings synchronization...")
+            state_manager.sync_holdings_with_binance(account_manager, strategy_rules)
 
         if not trader.is_ready:
             logger.critical("Trader could not be initialized. Shutting down bot.")

@@ -141,6 +141,27 @@ class PostgresManager:
                 logger.error(f"Failed to get open positions from DB: {e}")
                 raise
 
+    def get_treasury_positions(self, environment: str, bot_id: Optional[str] = None) -> list:
+        """
+        Fetches all trades marked as 'TREASURY' for the current environment.
+        """
+        with self.get_db() as db:
+            try:
+                query = db.query(Trade).filter(
+                    and_(
+                        Trade.status == "TREASURY",
+                        Trade.environment == environment
+                    )
+                )
+                if bot_id:
+                    query = query.filter(Trade.run_id == bot_id)
+
+                trades = query.all()
+                return trades
+            except Exception as e:
+                logger.error(f"Failed to get treasury positions from DB: {e}", exc_info=True)
+                return []
+
     def get_trade_by_trade_id(self, trade_id: str) -> Optional[Trade]:
         """Fetches a trade by its unique trade_id and returns the SQLAlchemy model instance."""
         with self.get_db() as db:
