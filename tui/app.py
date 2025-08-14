@@ -2,17 +2,16 @@ import json
 import subprocess
 import sys
 import os
-from decimal import Decimal, InvalidOperation
-from datetime import datetime
+from decimal import Decimal
 import time
 
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll, Horizontal
 from textual.widgets import Header, Footer, DataTable, Input, Button, Label, Static, RichLog, ProgressBar
-from textual.timer import Timer
 from textual.validation import Validator, ValidationResult
-from textual.worker import Worker
+from textual.worker import Worker, get_current_worker
 from textual import work
+from textual.message import Message # NOVO
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -26,6 +25,21 @@ class NumberValidator(Validator):
                 return self.failure("Must be a positive number.")
         except ValueError:
             return self.failure("Invalid number format.")
+
+# NOVO: Mensagens personalizadas para comunicação entre workers e a UI
+class DashboardData(Message):
+    """Uma mensagem para transportar dados do dashboard."""
+    def __init__(self, data: dict | str, success: bool) -> None:
+        self.data = data
+        self.success = success
+        super().__init__()
+
+class CommandOutput(Message):
+    """Uma mensagem para transportar a saída de um comando."""
+    def __init__(self, output: str, success: bool) -> None:
+        self.output = output
+        self.success = success
+        super().__init__()
 
 class TUIApp(App):
     """A Textual app to display and control the trading bot's status via command-line scripts."""
@@ -122,10 +136,11 @@ class TUIApp(App):
         wallet_table = self.query_one("#wallet_table", DataTable)
         wallet_table.add_columns("Asset", "Free", "Locked", "USD Value")
 
-        self.set_interval(5.0, self.update_dashboard)
+        # MODIFICADO: Chama o update_dashboard uma vez e depois define o intervalo de 30s
+        self.update_dashboard()
+        self.set_interval(30.0, self.update_dashboard) # Atualiza a cada 30 segundos
         self.query_one("#manual_buy_input").focus()
 
-        # Start tailing the log file in the background
         self.tail_log_file()
 
     def on_unmount(self) -> None:
@@ -140,17 +155,18 @@ class TUIApp(App):
                 self.log_display.write(f"[dim]Log file not found. Creating...[/dim]")
                 os.makedirs(os.path.dirname(self.log_file_path), exist_ok=True)
                 with open(self.log_file_path, 'w') as f:
-                    pass # create empty file
+                    pass
 
             self.log_file_handle = open(self.log_file_path, 'r')
-            self.log_file_handle.seek(0, 2) # Go to the end of the file
+            self.log_file_handle.seek(0, 2)
 
-            while self.is_running:
+            # MODIFICADO: Usa um método para checar se o worker deve parar
+            worker = get_current_worker()
+            while not worker.is_cancelled:
                 line = self.log_file_handle.readline()
                 if not line:
                     time.sleep(0.5)
                     continue
-
                 self.call_from_thread(self.process_log_line, line)
 
         except Exception as e:
@@ -168,7 +184,6 @@ class TUIApp(App):
                 elif level == "WARNING": color = "yellow"
                 elif level == "ERROR": color = "red"
                 elif level == "CRITICAL": color = "bold red"
-
                 self.log_display.write(f"[[{color}]{level}[/{color}]] {message}")
         except json.JSONDecodeError:
             if self.log_filter == "":
@@ -179,33 +194,44 @@ class TUIApp(App):
             self.log_filter = event.value
             self.log_display.clear()
             self.log_display.write("[bold green]Log filter applied. Tailing new logs...[/bold green]")
-            # A more advanced implementation could re-read and filter the file.
 
-    def run_script(self, command: list[str]) -> tuple[bool, str | dict]:
+    # NOVO: Worker para executar scripts e enviar o resultado via mensagem
+    @work(thread=True)
+    def run_script_worker(self, command: list[str], message_type: type[Message]) -> None:
+        """Executa um script em um worker e posta o resultado como uma mensagem."""
         self.log_display.write(f"Executing: [yellow]{' '.join(command)}[/]")
         try:
-            process = subprocess.run(command, capture_output=True, text=True)
+            process = subprocess.run(command, capture_output=True, text=True, check=False)
             if process.returncode != 0:
-                self.log_display.write(f"[bold red]Script Error:[/bold red] {process.stderr.strip()}")
-                return False, process.stderr.strip()
-
-            output = process.stdout.strip()
+                output = process.stderr.strip()
+                success = False
+                self.call_from_thread(self.log_display.write, f"[bold red]Script Error:[/bold red] {output}")
+            else:
+                output = process.stdout.strip()
+                success = True
+            
+            # Tenta decodificar o JSON, se falhar, envia como texto
             try:
-                return True, json.loads(output)
+                data = json.loads(output)
+                self.post_message(message_type(data, success))
             except json.JSONDecodeError:
-                return True, output
-        except FileNotFoundError:
-            self.log_display.write(f"[bold red]Error: Script not found.[/bold red]")
-            return False, "Script not found"
+                self.post_message(message_type(output, success))
 
-    async def on_button_pressed(self, event: Button.Pressed) -> None:
+        except FileNotFoundError:
+            self.post_message(message_type("Script not found", False))
+            self.call_from_thread(self.log_display.write, f"[bold red]Error: Script not found.[/bold red]")
+
+    # MODIFICADO: on_button_pressed agora chama um worker em vez de executar o script diretamente
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        """Lida com cliques de botão de forma não-bloqueante."""
         if event.button.id == "force_buy_button":
             input_widget = self.query_one("#manual_buy_input", Input)
             if not input_widget.is_valid:
                 self.log_display.write("[bold red]Invalid buy amount.[/bold red]")
                 return
             amount = input_widget.value
-            self.run_script(["python", "scripts/force_buy.py", amount])
+            command = ["python", "scripts/force_buy.py", amount]
+            self.run_script_worker(command, CommandOutput) # Executa em segundo plano
             input_widget.value = ""
 
         elif event.button.id in ["force_sell_100_button", "force_sell_90_button"]:
@@ -214,22 +240,33 @@ class TUIApp(App):
                 return
 
             percentage = "100" if event.button.id == "force_sell_100_button" else "90"
-            self.run_script(["python", "scripts/force_sell.py", self.selected_trade_id, percentage])
+            command = ["python", "scripts/force_sell.py", self.selected_trade_id, percentage]
+            self.run_script_worker(command, CommandOutput) # Executa em segundo plano
 
             self.query_one("#action_bar").add_class("hidden")
             self.query_one("#positions_table").move_cursor(row=-1)
             self.selected_trade_id = None
 
-    async def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         if event.control.id == "positions_table":
             self.selected_trade_id = event.row_key.value
             self.query_one("#action_bar").remove_class("hidden")
+    
+    # MODIFICADO: update_dashboard agora chama um worker
+    def update_dashboard(self) -> None:
+        """Inicia a atualização do dashboard em um worker."""
+        command = ["python", "scripts/get_bot_data.py", self.mode]
+        self.run_script_worker(command, DashboardData)
 
-    async def update_dashboard(self) -> None:
-        success, data = self.run_script(["python", "scripts/get_bot_data.py", self.mode])
-        if not success:
+    # NOVO: Handler para a mensagem DashboardData, que atualiza a UI
+    def on_dashboard_data(self, message: DashboardData) -> None:
+        """Atualiza a UI com os dados recebidos do worker."""
+        if not message.success or not isinstance(message.data, dict):
+            self.log_display.write(f"[bold red]Failed to get dashboard data: {message.data}[/]")
             return
-
+        
+        data = message.data
+        
         # Update status bar
         price = Decimal(data.get("current_btc_price", 0))
         self.query_one("#status_symbol").update(f"Symbol: {data.get('symbol', 'N/A')}")
@@ -248,7 +285,7 @@ class TUIApp(App):
                 sell_target = Decimal(pos.get("sell_target_price", 0))
                 progress = float(pos.get("progress_to_sell_target_pct", 0))
                 pnl_color = "green" if pnl >= 0 else "red"
-
+                
                 progress_bar = ProgressBar(total=100, show_eta=False, show_percentage=True)
                 progress_bar.progress = progress
 
@@ -271,7 +308,7 @@ class TUIApp(App):
         if balances:
             for bal in balances:
                 asset = bal.get("asset")
-                if asset in ["USDT", "BTC"]: # Only show relevant assets
+                if asset in ["USDT", "BTC"]:
                     free = Decimal(bal.get("free", 0))
                     locked = Decimal(bal.get("locked", 0))
                     usd_val = Decimal(bal.get("usd_value", 0))
@@ -279,17 +316,26 @@ class TUIApp(App):
         else:
             wallet_table.add_row("No wallet data.")
 
+    # NOVO: Handler para a mensagem CommandOutput (opcional, mas bom para feedback)
+    def on_command_output(self, message: CommandOutput) -> None:
+        """Exibe o resultado de um comando no log."""
+        if message.success:
+            self.log_display.write(f"[green]Command success:[/green] {message.output}")
+        else:
+            self.log_display.write(f"[bold red]Command failed:[/bold red] {message.output}")
+        # Aciona uma atualização do dashboard para vermos o resultado da ação
+        self.update_dashboard()
 
 def run_tui():
-    """CLI entry point for the TUI."""
+    """Ponto de entrada da linha de comando para a TUI."""
     import argparse
-    parser = argparse.ArgumentParser(description="Run the Jules Bot TUI.")
+    parser = argparse.ArgumentParser(description="Executa o dashboard do Jules Bot.")
     parser.add_argument(
         "--mode",
         type=str,
         choices=["trade", "test"],
         default="test",
-        help="The trading mode to monitor ('trade' or 'test')."
+        help="O modo de negociação a ser monitorado ('trade' ou 'test')."
     )
     args = parser.parse_args()
 
