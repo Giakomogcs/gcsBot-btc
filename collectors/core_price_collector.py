@@ -4,6 +4,7 @@ import datetime
 from datetime import timedelta
 import pandas as pd
 import time
+import yfinance as yf
 from binance.client import Client
 from binance.exceptions import BinanceAPIException, BinanceRequestException
 from typing import Optional
@@ -37,6 +38,10 @@ class CorePriceCollector:
         """
         Initializes the Binance client. Returns True on success, False on failure.
         """
+        if self.source != 'binance':
+            logger.info(f"Data source is '{self.source}', not 'binance'. Skipping Binance client connection.")
+            return False
+
         if self.binance_client:
             logger.info("Binance client is already connected.")
             return True
@@ -112,9 +117,21 @@ class CorePriceCollector:
 
     def _get_historical_klines(self, start_dt: datetime.datetime, end_dt: datetime.datetime) -> pd.DataFrame:
         """
+        Dispatcher for fetching historical OHLCV data from the configured source.
+        """
+        logger.info(f"Fetching OHLCV data for {self.symbol} from {self.source} between {start_dt} and {end_dt}...")
+        if self.source == 'binance':
+            return self._get_historical_klines_binance(start_dt, end_dt)
+        elif self.source == 'yahoo':
+            return self._get_historical_klines_yahoo(start_dt, end_dt)
+        else:
+            logger.error(f"Unsupported data source: {self.source}")
+            return pd.DataFrame()
+
+    def _get_historical_klines_binance(self, start_dt: datetime.datetime, end_dt: datetime.datetime) -> pd.DataFrame:
+        """
         Fetches historical OHLCV data from Binance, handling pagination and API errors with retries.
         """
-        logger.info(f"Fetching OHLCV data for {self.symbol} from {start_dt} to {end_dt}...")
         if not self.binance_client:
             logger.warning("Binance client not initialized. Cannot fetch historical klines.")
             return pd.DataFrame()
@@ -137,12 +154,10 @@ class CorePriceCollector:
                         )
                         
                         if not klines:
-                            # This can happen on testnet if there's a gap in trading.
-                            # Instead of stopping, we log it and advance our start time to skip the gap.
                             logger.warning(f"No klines returned from Binance for start time {current_start_dt}. Advancing to next chunk.")
-                            current_start_dt += pd.Timedelta(minutes=1000) # Advance by the API limit
+                            current_start_dt += pd.Timedelta(minutes=1000)
                             klines_fetched_in_batch = True
-                            break # Exit retry loop and continue pagination
+                            break
 
                         all_klines.extend(klines)
                         pbar.update(len(klines))
@@ -151,8 +166,8 @@ class CorePriceCollector:
                         current_start_dt = pd.to_datetime(last_kline_ts_ms, unit='ms', utc=True) + pd.Timedelta(minutes=1)
                         
                         klines_fetched_in_batch = True
-                        time.sleep(0.1) # Be respectful to the API
-                        break # Success, exit retry loop
+                        time.sleep(0.1)
+                        break
 
                     except (BinanceAPIException, BinanceRequestException) as e:
                         if i < retries - 1:
@@ -161,20 +176,17 @@ class CorePriceCollector:
                             time.sleep(sleep_time)
                         else:
                             logger.error(f"API Error after {retries} retries for start time {current_start_dt}. Skipping this chunk.")
-                            # Advance the start time to skip the problematic chunk and continue downloading
                             current_start_dt += pd.Timedelta(minutes=1000)
-                            klines_fetched_in_batch = True # Mark as 'handled' to continue the main loop
-                            break # Exit retry loop
+                            klines_fetched_in_batch = True
+                            break
                 
                 if not klines_fetched_in_batch:
-                    # This should now be unreachable, but as a safeguard:
                     logger.error("A downloader logic error occurred. Aborting.")
                     break
 
         if not all_klines:
             return pd.DataFrame()
 
-        # Format the dataframe
         df = pd.DataFrame(all_klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'qav', 'nt', 'tbbav', 'tbqav', 'ignore'])
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms', utc=True)
         df.set_index('timestamp', inplace=True)
@@ -185,22 +197,95 @@ class CorePriceCollector:
             df = df[~df.index.duplicated(keep='first')]
 
         df = df[['open', 'high', 'low', 'close', 'volume']].astype(float)
-        df = df.sort_index() # Ensure data is sorted before slicing
+        df = df.sort_index()
         df = df.loc[start_dt:end_dt]
         
         unique_candles = len(df)
         logger.info(f"\nFetched a total of {unique_candles} unique candles from Binance.")
         return df
 
+    def _get_historical_klines_yahoo(self, start_dt: datetime.datetime, end_dt: datetime.datetime) -> pd.DataFrame:
+        """
+        Fetches historical OHLCV data from Yahoo Finance.
+        Yahoo Finance has limitations on the amount of 1-minute data it can provide (last 30 days).
+        """
+        logger.info(f"Fetching OHLCV data from Yahoo Finance for {self.symbol}...")
+        
+        # Yahoo Finance expects a ticker format like 'BTC-USD'
+        yahoo_ticker = f"{self.symbol.replace('USDT', '')}-USD"
+        
+        # yfinance can be unreliable for very long periods of 1m data.
+        # It's best to fetch it in chunks, e.g., 7 days at a time.
+        all_data = []
+        current_start = start_dt
+        
+        with tqdm(total=(end_dt - start_dt).total_seconds() / 60, desc="Downloading from Yahoo", unit=" candles") as pbar:
+            while current_start < end_dt:
+                # yfinance 'download' end is exclusive, so we don't need to subtract a minute
+                current_end = current_start + timedelta(days=7)
+                if current_end > end_dt:
+                    current_end = end_dt
+                
+                try:
+                    data = yf.download(
+                        tickers=yahoo_ticker,
+                        start=current_start,
+                        end=current_end,
+                        interval="1m",
+                        progress=False,
+                        auto_adjust=True
+                    )
+                    
+                    if not data.empty:
+                        all_data.append(data)
+                        pbar.update(len(data))
+
+                except Exception as e:
+                    logger.error(f"Could not download data for {yahoo_ticker} from {current_start} to {current_end}: {e}")
+                
+                current_start = current_end
+                time.sleep(1) # Be respectful to the API
+
+        if not all_data:
+            logger.warning(f"No data returned from Yahoo Finance for {yahoo_ticker}.")
+            return pd.DataFrame()
+
+        df = pd.concat(all_data)
+        
+        # Ensure the index is a UTC-localized datetime
+        if df.index.tz is None:
+            df = df.tz_localize('UTC')
+        else:
+            df = df.tz_convert('UTC')
+
+        df.rename(columns={'Open': 'open', 'High': 'high', 'Low': 'low', 'Close': 'close', 'Volume': 'volume'}, inplace=True)
+        
+        if df.index.has_duplicates:
+            num_duplicates = df.index.duplicated().sum()
+            logger.warning(f"Found {num_duplicates} duplicate timestamps from Yahoo Finance. Removing them.")
+            df = df[~df.index.duplicated(keep='first')]
+        
+        df = df[['open', 'high', 'low', 'close', 'volume']].astype(float)
+        df = df.sort_index()
+        df = df.loc[start_dt:end_dt]
+
+        logger.info(f"\nFetched a total of {len(df)} unique candles from Yahoo Finance.")
+        return df
+
     def run(self):
         """
         This method is for live data collection, continuously updating the database.
         """
-        logger.info(f"--- Starting live price collection for table '{self.measurement}' ---")
-        if not self.connect_binance_client():
-            logger.error("Could not connect to Binance. Live price collection cannot start.")
-            return
+        logger.info(f"--- Starting live price collection for table '{self.measurement}' using {self.source} ---")
         
+        is_connected = True
+        if self.source == 'binance':
+            is_connected = self.connect_binance_client()
+        
+        if not is_connected and self.source == 'binance':
+             logger.error("Could not connect to Binance. Live price collection cannot start.")
+             return
+
         while True:
             last_timestamp = self._query_last_timestamp()
             if last_timestamp:

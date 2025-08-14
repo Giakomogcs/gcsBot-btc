@@ -54,6 +54,7 @@ class Trade(Base):
     hodl_asset_value_at_sell = Column(Float)
     realized_pnl = Column(Float)
     held_quantity = Column(Float)
+    backtest_id = Column(String, nullable=True)
 
 class BotStatus(Base):
     __tablename__ = 'bot_status'

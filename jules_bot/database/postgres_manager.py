@@ -23,14 +23,27 @@ class PostgresManager:
         with self.engine.connect() as connection:
             try:
                 if not inspector.has_table("trades"):
-                    return
+                    return # A tabela será criada pelo create_all mais tarde
+                
                 columns = [c['name'] for c in inspector.get_columns('trades')]
-                if 'binance_trade_id' not in columns:
-                    logger.info("Adding missing column 'binance_trade_id' to table 'trades'")
-                    with connection.begin():
-                        connection.execute(text('ALTER TABLE trades ADD COLUMN binance_trade_id INTEGER'))
+                
+                # Dicionário de colunas a verificar e o tipo SQL para adicioná-las
+                # Adicione novas colunas aqui no futuro
+                columns_to_add = {
+                    'binance_trade_id': 'INTEGER',
+                    'realized_pnl': 'FLOAT',
+                    'held_quantity': 'FLOAT',
+                    'backtest_id': 'VARCHAR'
+                }
+
+                for col_name, col_type in columns_to_add.items():
+                    if col_name not in columns:
+                        logger.info(f"Adding missing column '{col_name}' to table 'trades'")
+                        with connection.begin():
+                            connection.execute(text(f'ALTER TABLE trades ADD COLUMN {col_name} {col_type}'))
+
             except Exception as e:
-                logger.error(f"Failed to run migration: {e}")
+                logger.error(f"Failed to run migration: {e}", exc_info=True)
 
     def create_tables(self):
         Base.metadata.create_all(bind=self.engine)
