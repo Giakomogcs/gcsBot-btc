@@ -137,6 +137,8 @@ cp .env.example .env
 
 Next, edit the `.env` file with your details. You will need to provide your Binance API keys. The PostgreSQL credentials are set in `docker-compose.yml` and `config/postgres.conf`.
 
+> **Important**: If you change the `.env` file after the application has been started, you must restart the Docker services for the changes to take effect. You can do this by running `python run.py stop` followed by `python run.py start`.
+
 ### Step 2: Start the Environment
 
 The `start` command builds the Docker images and launches the `app`, `postgres`, and `pgadmin` services in the background. The `app` container will start in an idle state, waiting for your commands.
@@ -196,6 +198,7 @@ The primary way to monitor the bot is through the interactive TUI. The `dashboar
 | `backtest` | Prepares historical data and runs a full backtest. Use the `--days` option (e.g., `--days 30`) to specify the period. |
 | `api` | Starts the API service independently. Use `--mode` to specify `trade` or `test`. |
 | `clear-backtest-trades` | **Deletes all trades** from the `backtest` environment in the database. Useful for starting a fresh backtest analysis. |
+| `clear-testnet-trades` | **Deletes all trades** from the `test` environment in the database. Useful for resetting your testnet account. |
 
 
 ## 7. Database Schema

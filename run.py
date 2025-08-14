@@ -308,13 +308,19 @@ def dashboard(
 def clear_backtest_trades():
     """Deletes all trades from the 'backtest' environment in the database."""
     print("🗑️  Attempting to clear all backtest trades from the database...")
-    try:
-        db_config = config_manager.get_db_config('POSTGRES')
-        db_manager = PostgresManager(config=db_config)
-        db_manager.clear_backtest_trades()
-        print("✅ Backtest trades cleared successfully.")
-    except Exception as e:
-        print(f"❌ An error occurred while clearing backtest trades: {e}")
+    _run_in_container(
+        command=["scripts/clear_trades_measurement.py", "backtest"],
+        interactive=True
+    )
+
+@app.command("clear-testnet-trades")
+def clear_testnet_trades():
+    """Deletes all trades from the 'test' environment in the database."""
+    print("🗑️  Attempting to clear all testnet trades from the database...")
+    _run_in_container(
+        command=["scripts/clear_testnet_trades.py"],
+        interactive=True
+    )
 
 
 @app.command("wipe-db")

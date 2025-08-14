@@ -284,3 +284,16 @@ class PostgresManager:
                 db.rollback()
                 logger.error(f"Failed to clear backtest trades: {e}", exc_info=True)
                 raise
+
+    def clear_testnet_trades(self):
+        """Deletes all trades from the 'trades' table where the environment is 'test'."""
+        with self.get_db() as db:
+            try:
+                statement = text("DELETE FROM trades WHERE environment = :env")
+                result = db.execute(statement, {"env": "test"})
+                db.commit()
+                logger.info(f"Successfully cleared {result.rowcount} testnet trades from the database.")
+            except Exception as e:
+                db.rollback()
+                logger.error(f"Failed to clear testnet trades: {e}", exc_info=True)
+                raise
