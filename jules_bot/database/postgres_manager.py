@@ -78,7 +78,12 @@ class PostgresManager:
     def get_price_data(self, measurement: str, start_date: str = "-30d", end_date: str = "now()") -> pd.DataFrame:
         with self.get_db() as db:
             try:
-                start_date_parsed = pd.to_datetime(start_date)
+                if start_date.startswith('-') and start_date.endswith('d'):
+                    days_to_subtract = int(start_date[1:-1])
+                    start_date_parsed = datetime.utcnow() - timedelta(days=days_to_subtract)
+                else:
+                    start_date_parsed = pd.to_datetime(start_date)
+
                 end_date_parsed = pd.to_datetime(end_date) if end_date != "now()" else datetime.utcnow()
 
                 query = db.query(PriceHistory).filter(
