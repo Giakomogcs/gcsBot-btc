@@ -45,23 +45,20 @@ class StatusService:
             # 2. Fetch open positions from local DB
             open_positions_db = self.db_manager.get_open_positions(environment, bot_id)
 
-            # 3. Reconcile open positions with the exchange
-            live_open_orders = exchange_manager.get_open_orders(symbol)
-            # Create a set of stringified order IDs for efficient lookup
-            live_open_order_ids = {str(order['orderId']) for order in live_open_orders}
-
+            # 3. Process open positions from the local database
+            # The previous reconciliation logic was flawed. For status, we trust our DB.
+            # The main bot loop handles more robust synchronization.
             positions_status = []
             for trade in open_positions_db:
-                # If a trade marked as OPEN in our DB is not in the exchange's open orders, it was likely filled or cancelled.
-                # We now correctly compare our stored exchange_order_id with the live order IDs from the exchange.
-                if str(trade.exchange_order_id) not in live_open_order_ids:
-                    # This position is no longer open on the exchange. We can skip it for status display.
-                    continue
-
-                unrealized_pnl = (current_price - trade.price) * trade.quantity
+                unrealized_pnl = (current_price - trade.price) * trade.quantity if trade.price else 0
                 progress_to_sell_target_pct = _calculate_progress_pct(
                     current_price, trade.price, trade.sell_target_price
                 )
+
+                # Add the new requested data fields
+                price_to_target = (trade.sell_target_price - current_price) if trade.sell_target_price and current_price else 0
+                usd_to_target = price_to_target * trade.quantity if trade.quantity else 0
+
                 positions_status.append({
                     "trade_id": trade.trade_id,
                     "entry_price": trade.price,
@@ -70,6 +67,8 @@ class StatusService:
                     "unrealized_pnl": unrealized_pnl,
                     "sell_target_price": trade.sell_target_price,
                     "progress_to_sell_target_pct": progress_to_sell_target_pct,
+                    "price_to_target": price_to_target,
+                    "usd_to_target": usd_to_target,
                 })
 
             # 4. Determine buy signal status
