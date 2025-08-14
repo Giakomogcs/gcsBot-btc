@@ -74,16 +74,67 @@ class PostgresManager:
                 db.rollback()
                 logger.error(f"Failed to log trade to PostgreSQL: {e}", exc_info=True)
 
-    def get_price_data(self, measurement: str, start_date: str = "-30d", end_date: str = "now()") -> pd.DataFrame:
+    def update_trade_on_sell(self, trade_id: str, sell_data: dict):
+        """
+        Updates an existing trade record with sell-side information, marking it as 'CLOSED'.
+        """
         with self.get_db() as db:
             try:
-                # This is a simplified version. A more robust implementation would parse the date strings.
-                query = db.query(PriceHistory).filter(PriceHistory.symbol == measurement).order_by(PriceHistory.timestamp)
-                df = pd.read_sql(query.statement, self.engine)
-                df = df.rename(columns={"timestamp": "timestamp"}).set_index('timestamp')
+                trade_to_update = db.query(Trade).filter(Trade.trade_id == trade_id).first()
+
+                if not trade_to_update:
+                    logger.error(f"DB: Could not find trade with trade_id '{trade_id}' to update with sell data.")
+                    return
+
+                logger.info(f"DB: Updating and closing trade {trade_id} with sell information.")
+
+                trade_to_update.status = 'CLOSED'
+                trade_to_update.order_type = 'sell' # Reflects the last action on the trade
+                
+                # Update all relevant fields from the sell_data dictionary
+                trade_to_update.price = sell_data.get('price', trade_to_update.price)
+                trade_to_update.quantity = sell_data.get('quantity', trade_to_update.quantity)
+                trade_to_update.usd_value = sell_data.get('usd_value', trade_to_update.usd_value)
+                trade_to_update.commission = sell_data.get('commission', trade_to_update.commission)
+                trade_to_update.timestamp = sell_data.get('timestamp', trade_to_update.timestamp)
+                trade_to_update.decision_context = sell_data.get('decision_context', trade_to_update.decision_context)
+                trade_to_update.commission_usd = sell_data.get('commission_usd')
+                trade_to_update.realized_pnl_usd = sell_data.get('realized_pnl_usd')
+                trade_to_update.hodl_asset_amount = sell_data.get('hodl_asset_amount')
+                trade_to_update.hodl_asset_value_at_sell = sell_data.get('hodl_asset_value_at_sell')
+
+                db.commit()
+                logger.info(f"DB: Successfully updated and closed trade {trade_id}.")
+
+            except Exception as e:
+                db.rollback()
+                logger.error(f"DB: Failed to update trade on sell for trade_id '{trade_id}': {e}", exc_info=True)
+                raise
+
+    def get_price_data(self, measurement: str, start_date: str = "-30d", end_date: str = "now()") -> pd.DataFrame:
+        """
+        Fetches price data from the database for a specific measurement within a given date range.
+        `start_date` and `end_date` should be in a format that PostgreSQL can understand,
+        e.g., 'YYYY-MM-DD HH:MI:SS' or relative like '-30d'.
+        """
+        logger.info(f"DB: Fetching price data for {measurement} from {start_date} to {end_date}")
+        with self.get_db() as db:
+            try:
+                # The query now correctly uses the date range to filter data at the database level.
+                query = db.query(PriceHistory).filter(
+                    PriceHistory.symbol == measurement,
+                    PriceHistory.timestamp >= text(f"now() - interval '{start_date.replace('-', '')}'") if '-' in start_date else text(f"'{start_date}'"),
+                    PriceHistory.timestamp <= text("now()") if end_date == "now()" else text(f"'{end_date}'")
+                ).order_by(PriceHistory.timestamp)
+
+                df = pd.read_sql(query.statement, self.engine, index_col='timestamp')
+
+                if df.empty:
+                    logger.warning(f"DB: No price data found for {measurement} in the specified range.")
+                
                 return df
             except Exception as e:
-                logger.error(f"Failed to get price data: {e}", exc_info=True)
+                logger.error(f"DB: Failed to get price data: {e}", exc_info=True)
                 return pd.DataFrame()
 
     def get_open_positions(self, environment: str, bot_id: Optional[str] = None, symbol: Optional[str] = None) -> list:
@@ -194,6 +245,17 @@ class PostgresManager:
 
             except Exception as e:
                 logger.error(f"Failed to get all trades from DB: {e}", exc_info=True)
+                raise
+
+    def get_trades_by_run_id(self, run_id: str) -> list:
+        """Fetches all trades associated with a specific run_id."""
+        with self.get_db() as db:
+            try:
+                query = db.query(Trade).filter(Trade.run_id == run_id).order_by(Trade.timestamp)
+                trades = query.all()
+                return trades
+            except Exception as e:
+                logger.error(f"Failed to get trades by run_id '{run_id}': {e}", exc_info=True)
                 raise
 
     def get_last_trade_id(self, environment: str) -> int:

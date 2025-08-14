@@ -125,7 +125,8 @@ class Backtester:
                             'hodl_asset_amount': hodl_asset_amount,
                             'hodl_asset_value_at_sell': hodl_asset_value_at_sell
                         }
-                        self.trade_logger.log_trade(trade_data)
+                        # Use the new update_trade method for sells
+                        self.trade_logger.update_trade(trade_data)
 
                         logger.info(f"SELL EXECUTED: TradeID: {trade_id} | "
                                     f"Buy Price: ${position['price']:,.2f} | "
@@ -234,11 +235,9 @@ class Backtester:
     def _generate_and_save_summary(self, open_positions: dict, portfolio_history: list):
         logger.info("--- Generating and saving backtest summary ---")
 
-        all_trades = self.db_manager.get_all_trades_in_range(start_date="0", end_date="now()")
-        all_trades_df = pd.DataFrame([t.to_dict() for t in all_trades])
-
-        if not all_trades_df.empty:
-            all_trades_df = all_trades_df[all_trades_df['run_id'] == self.run_id]
+        # Fetch trades specifically for this backtest run
+        all_trades_for_run = self.db_manager.get_trades_by_run_id(self.run_id)
+        all_trades_df = pd.DataFrame([t.to_dict() for t in all_trades_for_run])
 
         if all_trades_df.empty:
             logger.warning("No trades were executed in this backtest run.")
