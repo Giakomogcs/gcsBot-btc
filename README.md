@@ -1,234 +1,323 @@
-# gcsBot - A Quantitative Trading Framework
+# GCS Trading Bot
 
-[![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue?logo=docker)](https://www.docker.com/products/docker-desktop/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
-
-**gcsBot** is a state-of-the-art framework for algorithmic trading on the BTC/USDT pair. This project provides a complete Machine Learning pipeline, from strategy optimization with historical data to autonomous and adaptive operation on Binance.
+A sophisticated, data-driven automated trading bot for the BTC/USDT market.
 
 ## Table of Contents
+- [Overview](#1-overview)
+- [Features](#2-features)
+- [Architecture](#3-architecture)
+- [Project Structure](#4-project-structure)
+- [Setup and Installation](#5-setup-and-installation)
+- [CLI Commands](#6-cli-commands)
+- [Database Schema](#7-database-schema)
+- [Key Calculations](#8-key-calculations)
 
-- [About the Project](#about-the-project)
-- [Key Features](#key-features)
-- [The Bot's Philosophy](#the-bots-philosophy)
-- [The Bot's Ecosystem](#the-bots-ecosystem)
-- [Quick Start Guide](#quick-start-guide)
-- [Environment Configuration](#environment-configuration)
-- [The Professional Workflow](#the-professional-workflow)
-- [Project Structure](#project-structure)
-- [License](#license)
+## 1. Overview
 
-## About the Project
+GCS Trading Bot is a sophisticated, data-driven automated trading bot designed for the BTC/USDT market on the Binance exchange. It leverages a robust data pipeline, machine learning for market regime detection, and a flexible architecture to support live trading, paper trading (testnet), and comprehensive backtesting.
 
-This repository contains a complete algorithmic trading system, designed to be robust, intelligent, and methodologically sound. Unlike bots based on fixed rules, gcsBot uses a **Machine Learning (LightGBM)** model to find predictive patterns and a sophisticated architecture to adapt to market dynamics.
+The system is fully containerized using Docker, ensuring a consistent and reproducible environment for both development and production. It is controlled via a simple yet powerful command-line interface (`run.py`) that manages everything from starting services to running data pipelines and executing trades.
 
-The core of the project is a **Walk-Forward Optimization (WFO)** process that ensures that the strategy is constantly re-evaluated and optimized on new data, avoiding overfitting and stagnation. The result is an autonomous agent that not only operates, but also learns and adjusts.
+## 2. Features
 
-## Key Features
+- **Multiple Execution Modes**:
+  - **Live Trading**: Execute trades with real capital on the Binance spot market.
+  - **Paper Trading**: Trade on the Binance testnet without risking real funds.
+  - **Backtesting**: Simulate trading strategies on historical data to evaluate performance.
+- **Data-Driven Strategy**: Decisions are not based on simple rules but on a rich dataset including:
+  - OHLCV price data
+  - Technical indicators (RSI, MACD, Bollinger Bands, etc.)
+  - Order flow data (Taker Buy/Sell Volume)
+  - Market sentiment (Fear & Greed Index)
+  - Macroeconomic data (DXY, VIX, Gold, etc.)
+- **Automated Setup & Data Pipeline**:
+  - A `postgres_setup/init.sql` script initializes the entire PostgreSQL environment, creating the necessary schemas and roles.
+  - A lean price collector (`collectors/core_price_collector.py`) automatically ingests and stores all required price data in a PostgreSQL time-series database.
+- **Situational Awareness Model**: Utilizes a K-Means clustering model to classify the market into one of several "regimes" (e.g., Bull Volatile, Bear Quiet), allowing the strategy to adapt to changing conditions. The code for this is in the `research` directory.
+- **Dockerized Environment**: The entire application stack, including the Python application and the PostgreSQL database, is managed by Docker and Docker Compose for easy setup and deployment.
+- **Command-Line Interface**: A central script `run.py` provides a simple interface for managing the entire lifecycle of the bot and its environment.
+- **Interactive Terminal UI (TUI)**: A sophisticated, real-time dashboard built with Textual that connects to a dedicated API service. It provides live updates on per-position unrealized PnL, progress towards buy/sell targets, and live wallet balances.
+- **Live Data Synchronization**: The bot's status service actively reconciles its internal database state with live open orders from the Binance exchange, ensuring the UI always displays an accurate view of your real positions.
+- **Resilient and Modular Architecture**: The code is organized into decoupled components (bot logic, database management, exchange connection), making it easier to maintain and extend.
 
-- **Multi-Layered Intelligence:**
-  - **Active Position Management:** Once in a trade, the bot actively manages risk with **Breakeven Stop, Partial Profit Taking, and Trailing Stop** techniques.
-  - **Dual Objective Strategy:** The bot not only seeks profit in USDT, but also uses it to **accumulate a "BTC Treasury"** in the long term, allocating a percentage of the profits for this purpose.
-  - **Dynamic Confidence:** The bot adjusts its own "courage" based on the performance of a **window of recent trades**, becoming bolder in winning streaks and more cautious after losses.
-  - **Dynamic Risk (Bet Sizing):** The size of each operation is proportional to the model's conviction and the current market regime, risking intelligently.
+## 3. Architecture
 
-- **Professional-Level Methodology:**
-  - **Robust Optimization (Calmar Ratio):** The system uses `Optuna` to optimize the strategy by seeking the best **Calmar Ratio** (Annualized Return / Maximum Drawdown), prioritizing capital security.
-  - **Market Regime Filter:** The bot first identifies the state of the market (e.g., `BULL_FORTE`, `BEAR`, `LATERAL`) and adjusts its risk behavior or even blocks operations.
-  - **Robust Validation (Train/Validate/Test):** The optimization process uses a rigorous methodology that prevents data leakage from the future (_look-ahead bias_).
+The bot is designed with a modular architecture, separating concerns to improve maintainability and testability.
 
-- **Cutting-Edge Engineering:**
-  - **Realistic Backtest:** All simulations include operational costs (fees and slippage) for a performance evaluation that is faithful to reality.
-  - **Automatic Data Update:** Automatically collects and updates not only crypto data from Binance, but also **macroeconomic data** (DXY, Gold, VIX, TNX) via `yfinance`.
-  - **Deployment with Docker:** 100% containerized environment for consistent and dependency-free execution.
-  - **Advanced Logs and Visualization:** Uses `tqdm` and `tabulate` to provide progress bars and clear, easy-to-read reports.
+```
++-------------------+      +----------------------+      +--------------------+
+|     run.py        |----->| docker-compose.yml   |----->|   jules_bot/main.py  |
+| (User Interface)  |      | (Service Definition) |      | (App Entry Point)  |
++-------------------+      +----------------------+      +--------------------+
+                                                            |
+                                                            V
++---------------------------------------------------------------------------------+
+|                                  TradingBot (`trading_bot.py`)                  |
+|                                     (Orchestrator)                              |
+|---------------------------------------------------------------------------------|
+| - Initializes all managers based on BOT_MODE (trade, test, backtest)            |
+| - Runs the main trading loop or the backtest process.                           |
++---------------------------------------------------------------------------------+
+      |                 |                  |
+      V                 V                  V
++----------------+ +---------------------+ +--------------------------+
+| PositionManager| |   AccountManager    | |     PostgresManager      |
+| (Strategy)     | |     (Execution)     | |     (Persistence)        |
++----------------+ +---------------------+ +--------------------------+
+      |                 |                     |
+      |                 V                     |
+      |       +-------------------+           |
+      +------>| ExchangeManager   |<----------+
+              | (API Connector)   |
+              +-------------------+
 
-## The Bot's Philosophy
+```
 
-The decision-making of gcsBot follows a **3-layer intelligence hierarchy**, mimicking a military command structure to ensure robust and well-founded decisions:
+- **`run.py` (CLI)**: The main entry point for the user. It parses user commands and executes the appropriate `docker-compose` commands to build, start, stop, and interact with the application.
+- **`docker-compose.yml`**: Defines the services that make up the application:
+  - `postgres`: The PostgreSQL container for data storage.
+  - `pgadmin`: A web-based administration tool for PostgreSQL.
+  - `app`: The Python application container where the bot logic runs.
+- **`jules_bot/main.py`**: The main function inside the `app` container. It reads the `BOT_MODE` environment variable and instantiates the `TradingBot`.
+- **`TradingBot`**: The central orchestrator. It initializes all the necessary manager classes and runs the main trading loop (for live/test) or the backtesting process.
+- **`PositionManager`**: Contains the core trading strategy logic. It decides when to buy or sell based on the data from the database.
+- **`AccountManager` / `SimulatedAccountManager`**: Handles the execution of trades.
+  - `AccountManager`: Interacts with the live or testnet exchange via the `ExchangeManager`. It validates and formats orders before placing them.
+  - `SimulatedAccountManager`: Simulates an exchange account for backtesting, tracking balances locally without making real API calls.
+- **`ExchangeManager`**: A low-level wrapper around the `python-binance` client. It handles all direct communication with the Binance API (e.g., fetching prices, placing orders).
+- **`PostgresManager`**: Abstracts the database. It provides methods to read and write to PostgreSQL using SQLAlchemy.
 
-### Layer 1: The General (Strategy)
+## 4. Project Structure
 
-- **Question:** "Is the battlefield favorable? Should we fight today?"
-- **Action:** Analyzes the long-term **market regime** (`BULL_FORTE`, `BEAR`, etc.) using daily moving averages. Based on this scenario, it defines the general risk policy: whether trades are allowed and what the level of aggressiveness is. In a `BEAR` regime, the General may order a total withdrawal, preserving capital.
+The repository is organized into several key directories:
 
-### Layer 2: The Captain (Tactic)
+```
+gcsbot-btc/
+├── .dvc/                   # Data Version Control (for large data files)
+├── collectors/             # Scripts for collecting data
+├── config/                 # Configuration files for services (e.g., postgres.conf)
+├── data/                   # Local data storage (e.g., historical CSVs, models)
+├── postgres_setup/         # Scripts for automated PostgreSQL initialization
+│   └── init.sql
+├── jules_bot/              # Main Python source code for the bot application
+│   ├── bot/                # Core trading logic and position management
+│   ├── core/               # Core components like schemas and connectors
+│   ├── database/           # Database interaction and data management
+│   └── utils/              # Utility modules like logging and configuration
+├── logs/                   # Log files and trading status JSONs
+├── research/               # Scripts for research and feature engineering
+├── scripts/                # Standalone Python scripts for automation and analysis
+├── tests/                  # Automated tests for the application
+├── .env.example            # Example environment variables file
+├── config.ini              # Main application configuration file
+├── docker-compose.yml      # Docker service definitions
+├── Dockerfile              # Docker image definition for the application
+└── run.py                  # Main command-line interface for controlling the bot
+```
 
-- **Question:** "Given that the General has given the green light, is this the exact moment to attack?"
-- **Action:** The **Machine Learning model**, trained with recent data and aware of the market regime, looks for short-term patterns that indicate a high-probability buying opportunity. It generates a "buy confidence" signal.
+## 5. Setup and Installation
 
-### Layer 3: The Soldier (Execution and Management)
-
-- **Question:** "Attack initiated. How do we manage this position to maximize gains and minimize losses?"
-- **Action:** Once the purchase is executed, this module takes control with precise rules:
-  1.  **Protection:** Moves the stop to _breakeven_ as soon as the trade reaches a small profit, eliminating the risk on the main capital.
-  2.  **Realization:** Secures part of the profit by selling a fraction of the position when the profit target is reached.
-  3.  **Maximization:** Lets the rest of the position "run" with a _trailing stop_ to capture larger trends.
-  4.  **Treasury:** Allocates a portion of the realized profit to the "BTC Treasury", fulfilling the long-term accumulation objective.
-
-This process transforms the bot from a simple signal executor into a strategic agent that thinks in multiple layers.
-
-## The Bot's Ecosystem
-
-- **`optimizer.py`**: The research brain. Manages the WFO, calls the `model_trainer` and `backtest`, and uses `Optuna` to find the best parameters for the complete strategy, optimizing for the Calmar Ratio.
-- **`model_trainer.py`**: The "data scientist". Prepares all the features (technical, macro, and regime) and trains the LightGBM model so that it understands the market context.
-- **`confidence_manager.py`**: The bot's "psychologist". Implements the logic to adjust confidence based on recent performance, making it more stable.
-- **`backtest.py`**: The combat simulator. Executes the complete Multi-Layer strategy in a realistic way to provide the performance metrics (Drawdown, Return) for the optimizer.
-- **`quick_tester.py`**: The "auditor". Allows validating an already trained model in a future time period, generating a complete report with the new performance metrics.
-- **`trading_bot.py`**: The "elite pilot". Module that operates in the real market, implementing the same Multi-Layer strategy validated in the optimization.
-
-## Quick Start Guide
-
-Follow these steps to get the bot up and running.
+This guide provides the step-by-step instructions to set up the environment and run the bot.
 
 ### Prerequisites
 
-- [Python 3.11+](https://www.python.org/downloads/)
-- [Git](https://git-scm.com/downloads)
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (running)
+- **Docker and Docker Compose**: Ensure Docker is installed and running.
+- **Python 3.10+**: Required for running the control script `run.py`.
+- **Git**: For cloning the repository.
 
-### Installation
+### Step 1: Clone and Configure
 
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/YOUR_USERNAME/gcsbot-btc.git
-    cd gcsbot-btc
-    ```
-2.  **Run the Automatic Setup:**
-    This command will check the environment, install the dependencies, and create your `.env` configuration file.
-
-    ```bash
-    python run.py setup
-    ```
-
-    > ⚠️ **Attention:** After the setup, open the newly created `.env` file and fill in **all** the variables, especially your API keys.
-
-3.  **Build the Docker Image:**
-    ```bash
-    docker-compose build
-    ```
-
-## Environment Configuration
-
-The `.env` file is the main control panel of the bot.
-
-- **`MODE`**: Operating mode: `optimize`, `backtest`, `test`, or `trade`.
-- **`FORCE_OFFLINE_MODE`**: `True` or `False`. Prevents the bot from accessing the internet (useful for optimizations).
-
-#### API Keys
-
-- `BINANCE_API_KEY` & `BINANCE_API_SECRET`: **Real** account keys.
-- `BINANCE_TESTNET_API_KEY` & `BINANCE_TESTNET_API_SECRET`: **Testnet** account keys.
-
-#### Portfolio Management (For `test` and `trade` modes)
-
-- `MAX_USDT_ALLOCATION`: The **MAXIMUM** USDT capital that the bot is allowed to manage in its trading part.
-
-## The Professional Workflow
-
-The interaction with the bot is done through the `run.py` orchestrator. Follow these phases in the correct order.
-
-### Phase Zero: Environment Cleanup (VERY IMPORTANT)
-
-Before starting a **new** optimization for a reformulated strategy, it is essential to delete the old artifacts to ensure that the system starts from scratch, without any information from the previous strategy.
-
-**Delete the following files from your `/data` directory:**
-
-- `model.joblib`
-- `scaler.joblib`
-- `strategy_params.json`
-- `wfo_optimization_state.json`
-- `combined_data_cache.csv`
-
-### Phase 1: Research and Optimization (`optimize`)
-
-The most important step. The bot will study the entire history to find the best strategy and create the model files.
+First, clone the repository and create your `.env` file from the example.
 
 ```bash
-python run.py optimize
+git clone <YOUR_REPOSITORY_URL>
+cd gcsbot-btc
+cp .env.example .env
 ```
 
-This process is long and can take hours or days. At the end, the `trading_model.pkl`, `scaler.pkl`, and `strategy_params.json` files will be saved in the `/data` folder.
+Next, edit the `.env` file with your details. You will need to provide your Binance API keys. The PostgreSQL credentials are set in `docker-compose.yml` and `config/postgres.conf`.
 
----
+> **Important**: If you change the `.env` file after the application has been started, you must restart the Docker services for the changes to take effect. You can do this by running `python run.py stop` followed by `python run.py start`.
 
-### Phase 2: Quick Backtest
+### Step 2: Start the Environment
 
-After optimization, validate the new strategy in a period that the model has never seen during training.
+The `start` command builds the Docker images and launches the `app`, `postgres`, and `pgadmin` services in the background. The `app` container will start in an idle state, waiting for your commands.
 
 ```bash
-python run.py backtest --start "2024-01-01" --end "2025-01-01"
+python run.py start
 ```
 
-The bot will run the simulation and print a complete performance report, including the Calmar Ratio and the accumulated BTC Treasury.
+## 6. CLI Commands
 
----
+All interaction with the bot and its environment is handled through `run.py`.
 
-### Phase 3: Testnet Validation
+### Environment Management
 
-If the validation is positive, test the strategy in the live market with test money.
+These commands control the Docker environment.
 
-```bash
-python run.py test
+| Command | Description |
+|---|---|
+| `start` | Builds and starts all services (`app`, `postgres`, `pgadmin`) in detached mode. |
+| `stop` | Stops and removes all services and associated volumes. |
+| `status` | Shows the current status of all running services. |
+| `build` | Forces a rebuild of the Docker images without starting them. Useful after changing the `Dockerfile`. |
+| `logs [service]` | Tails the logs of a specific service (e.g., `app`, `db`) or all services if none is specified. |
+
+### Application Control
+
+These commands execute tasks inside the `app` container.
+
+#### Running the Bot
+
+The bot can be run in `live` or `test` mode. These commands will start the trading logic, and you can follow the bot's activity through its logs.
+
+- **Live Trading**: `python run.py trade`
+- **Paper Trading (Testnet)**: `python run.py test`
+
+While the bot is running, you can use the `dashboard` command in a separate terminal to monitor it.
+
+#### Monitoring with the Dashboard
+
+The primary way to monitor the bot is through the interactive TUI. The `dashboard` command is the easiest way to get started, as it launches both the necessary API service and the UI.
+
+- **To monitor the Testnet bot:**
+  ```bash
+  python run.py dashboard --mode test
+  ```
+
+- **To monitor the Live bot:**
+  ```bash
+  python run.py dashboard --mode trade
+  ```
+
+| Command | Description |
+|---|---|
+| `trade` | Starts the bot in **live trading mode** using your main Binance account. |
+| `test` | Starts the bot in **paper trading mode** using your Binance testnet account. |
+| `dashboard` | Starts the API and the interactive TUI for live monitoring. Use `--mode` to specify `trade` or `test`. |
+| `backtest` | Prepares historical data and runs a full backtest. Use the `--days` option (e.g., `--days 30`) to specify the period. |
+| `api` | Starts the API service independently. Use `--mode` to specify `trade` or `test`. |
+| `clear-backtest-trades` | **Deletes all trades** from the `backtest` environment in the database. Useful for starting a fresh backtest analysis. |
+| `clear-testnet-trades` | **Deletes all trades** from the `test` environment in the database. Useful for resetting your testnet account. |
+
+
+## 7. Database Schema
+
+The application uses a PostgreSQL database to store all persistent data. The schema is defined in `jules_bot/database/models.py` and consists of three main tables.
+
+### `price_history`
+
+Stores historical OHLCV (Open, High, Low, Close, Volume) price data for assets.
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | Integer | Primary key. |
+| `timestamp` | DateTime | The timestamp for the start of the candle (e.g., minute). |
+| `open` | Float | The opening price for the period. |
+| `high` | Float | The highest price for the period. |
+| `low` | Float | The lowest price for the period. |
+| `close` | Float | The closing price for the period. |
+| `volume` | Float | The trading volume for the period. |
+| `symbol` | String | The trading symbol (e.g., 'BTCUSDT'). |
+
+### `trades`
+
+The central table for recording all trading activity. A single row represents the entire lifecycle of a trade, from buy to sell.
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | Integer | Primary key. |
+| `run_id` | String | The unique ID for the bot session that initiated the trade. |
+| `environment` | String | The environment the trade was made in ('trade', 'test', or 'backtest'). |
+| `strategy_name`| String | The name of the strategy that triggered the trade. |
+| `symbol` | String | The trading symbol (e.g., 'BTCUSDT'). |
+| `trade_id` | String | A unique identifier for the trade lifecycle. |
+| `exchange` | String | The exchange where the trade occurred (e.g., 'binance'). |
+| `status` | String | The current status of the trade: 'OPEN' or 'CLOSED'. |
+| `order_type` | String | The type of order that opened the position. Always 'buy'. |
+| `price` | Float | The price of the transaction. For an open trade, this is the buy price. For a closed trade, this is the sell price. |
+| `quantity` | Float | The amount of the asset traded. |
+| `usd_value` | Float | The total value of the transaction in USD. |
+| `commission` | Float | The commission paid for the transaction. |
+| `commission_asset` | String | The asset the commission was paid in (e.g., 'USDT'). |
+| `timestamp` | DateTime | The timestamp of the transaction. Updated to the sell time when a trade is closed. |
+| `exchange_order_id`| String | The order ID provided by the exchange. |
+| `decision_context`| JSON | A JSON object containing the market data and indicators at the time the decision was made. |
+| `sell_target_price`| Float | The target price at which to sell, calculated at buy time. |
+| `commission_usd` | Float | The total commission for the sell part of the trade, in USD. |
+| `realized_pnl_usd`| Float | The realized profit or loss from the trade in USD, calculated upon selling. |
+| `hodl_asset_amount`| Float | The amount of the asset held back from the sell (if not selling 100%). |
+| `hodl_asset_value_at_sell`| Float | The USD value of the `hodl_asset_amount` at the time of the sell. |
+
+### `bot_status`
+
+A simple table for storing the last known state of a running bot instance, used primarily by the UI.
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | Integer | Primary key. |
+| `bot_id` | String | The unique ID of the bot session. |
+| `mode` | String | The mode the bot is running in ('trade' or 'test'). |
+| `is_running` | Boolean | Whether the bot is currently running. |
+| `session_pnl_usd`| Float | The profit or loss for the current session. |
+| `session_pnl_percent`| Float | The profit or loss for the current session, as a percentage. |
+| `open_positions` | Integer | The number of currently open positions. |
+| `portfolio_value_usd`| Float | The total current value of the portfolio. |
+| `timestamp` | DateTime | The last time the status was updated. |
+
+## 8. Key Calculations
+
+### Realized Profit & Loss (PnL)
+
+The realized PnL for a trade is calculated when a position is sold. The formula, found in `jules_bot/backtesting/engine.py`, accounts for commission fees on both the buy and sell transactions to provide an accurate reflection of the net profit.
+
+**Formula:**
+```
+realized_pnl_usd = ((sell_price * (1 - commission_rate)) - (buy_price * (1 + commission_rate))) * quantity_sold
 ```
 
-It will use the model and parameters created in Phase 1. Let it run for at least 1-2 weeks to observe the behavior in real time.
+- `sell_price`: The price at which the asset was sold.
+- `buy_price`: The price at which the asset was originally purchased.
+- `commission_rate`: The percentage fee charged by the exchange (e.g., 0.001 for 0.1%).
+- `quantity_sold`: The amount of the asset that was sold.
 
----
+This formula ensures that the profit is only calculated on the capital that was returned after fees were deducted on both ends of the trade lifecycle.
 
-### Phase 4: Real Trading
+## 9. Terminal User Interface (TUI)
 
-The final step. The bot will operate in the same way as in test mode, but using your real Binance account and your defined capital allocation.
+The bot includes a powerful, real-time Terminal User Interface (TUI) for monitoring and manual control, launched with the `run.py dashboard` command.
 
-```bash
-python run.py trade
+### TUI Preview
+
+```
++------------------------------------------------------------------------------------------------+
+| Jules Bot        Last Update: 2023-10-27 10:30:00                                              |
++------------------------------------------------------------------------------------------------+
+| Left Pane (Bot Control & Logs)      | Right Pane (Status & Positions)                          |
+|                                     |                                                          |
+| Bot Control                         | Bot Status                                               |
+| Manual Buy (USD): [ 100.00 ]        | Mode: TEST   Symbol: BTC/USDT   Price: $34,123.45         |
+| [ FORCE BUY ]                       |                                                          |
+|                                     | Strategy                                                 |
+| Live Log                            | Buy Signal: Uptrend pullback                             |
+| > UI: Sent command...               | Buy Target: $34,050.00   Progress: 75.5%                 |
+| > Bot: Sell condition met...        |                                                          |
+|                                     | Open Positions                                           |
+|                                     | ID   | Entry   | Qty    | Value   | PnL     | Sell Target | Progress |
+|                                     |------|---------|--------|---------|---------|-------------|----------|
+|                                     | ab12 | 34000.0 | 0.01   | $341.23 | +$1.23  | $34500.00   | 24.6%    |
+|                                     | cd34 | 33950.0 | 0.02   | $682.46 | +$3.46  | $34400.00   | 38.8%    |
+|                                     |                                                          |
+|                                     | [ Force Sell ] [ Mark as Treasury ]                      |
++------------------------------------------------------------------------------------------------+
 ```
 
----
+### Key UI Features
 
-## Additional Commands
-
-- View Logs in Real Time:
-
-```bash
-python run.py logs
-```
-
-- Stop the Bot (`test` or `trade` mode):
-
-```bash
-python run.py stop
-```
-
----
-
-## Project Structure
-
-```bash
-gcsbot-btc/
-├── data/                  # Generated data (CSVs, models, states) - Ignored by Git
-├── logs/                  # Daily log files - Ignored by Git
-├── src/                   # Project source code
-│   ├── __init__.py
-│   ├── backtest.py        # Realistic simulation engine (used by optimization)
-│   ├── config.py          # Configuration manager for .env
-│   ├── confidence_manager.py # Adaptive confidence brain
-│   ├── data_manager.py    # Data collection and caching manager
-│   ├── logger.py          # Log system configuration
-│   ├── model_trainer.py   # Prepares features and trains the ML model
-│   ├── optimizer.py       # Walk-Forward Optimization (WFO) orchestrator
-│   ├── quick_tester.py    # Logic for the quick backtest mode (validation)
-│   └── trading_bot.py     # Real operation and portfolio management logic
-├── .dockerignore          # Files to be ignored by Docker
-├── .env.example           # Example of the configuration file
-├── .gitignore             # Files to be ignored by Git
-├── Dockerfile             # Defines the Docker environment for the bot
-├── main.py                # Main entry point (used by Docker)
-├── README.md              # This documentation
-├── requirements.txt       # Python dependencies
-└── run.py                 # Main orchestrator and user entry point
-```
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+- **Live Status**: Real-time updates on the bot's mode, the current asset price, and buy signal status.
+- **Bot Control**: A panel to manually trigger a buy order for a specific USD amount.
+- **Live Log**: A stream of the latest log messages from the bot.
+- **Open Positions Table**: A detailed list of all open trades, including:
+  - **Unrealized PnL**: The current profit or loss for each position.
+  - **Sell Target & Progress**: The target price for selling and how close the current price is to reaching it.
+- **Manual Intervention**: Select a trade in the table to bring up options to **Force Sell** it or mark it as **Treasury** (a long-term hold).

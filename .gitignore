@@ -7,7 +7,7 @@
 /data/
 
 # Ignora a pasta de logs e TUDO dentro dela.
-#/logs/
+/logs/
 
 
 # ===================================================
@@ -31,3 +31,27 @@ venv/
 # Ignora o arquivo de segredos
 .secrets.toml
 /data
+
+# Command files
+# Ignore command files but keep the directory
+commands/*.json
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+pip-selfcheck.json
+*.egg-info/
+dist/
+build/
+
+# Postgres
+.pgpass

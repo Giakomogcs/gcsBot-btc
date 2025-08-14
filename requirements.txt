@@ -1,24 +1,41 @@
-# requirements.txt
-python-dotenv
+# Ficheiro: requirements.txt (VERSÃO DEFINITIVA E ALINHADA)
+
+# --- Core Libraries ---
+numpy==1.26.4
 pandas
+setuptools
+
+# --- Machine Learning & AI ---
 scikit-learn
-numpy
-joblib
+# optuna-integration # Comentado - Descomente apenas se o seu código o usar explicitamente
+# stable-baselines3 # Comentado - Para uso futuro em Reinforcement Learning
+# gymnasium # Comentado - Para uso futuro em Reinforcement Learning
+
+# --- Data & APIs ---
 python-binance
-ccxt
-optuna
-ta
-numba
-yfinance
-lightgbm
-tabulate
-yfinance
-python-dateutil
-filelock
-rich
-pytest
+requests # Essencial para o pipeline de sentimento
+sqlalchemy
 psycopg2-binary
-SQLAlchemy
-dynaconf
-vaderSentiment
-optuna-integration[lightgbm]
+alembic
+httpx
+
+# --- Technical Analysis ---
+# ta # Comentado - pandas-ta geralmente cobre tudo
+pandas_ta # Sem versão para instalar a mais recente e compatível
+
+# --- Config & Utilities ---
+typer
+python-dotenv
+tqdm
+joblib
+tabulate
+psycopg2-binary
+
+# --- Plotting ---
+matplotlib
+seaborn
+textual
+
+# --- Testing ---
+pytest
+aiocsv

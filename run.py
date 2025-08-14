@@ -1,160 +1,342 @@
-# run.py (VERSÃO 3.2 - Usando Docker Compose V2)
-
-import subprocess
 import os
 import sys
 import shutil
-import json
-import time
-from dotenv import load_dotenv
-from datetime import datetime, timezone
-from dateutil.parser import isoparse
+import typer
+import subprocess
+from typing import Optional
 
-# --- Configuração do Projeto ---
-DOCKER_IMAGE_NAME = "gcsbot"
-KAGGLE_DATA_FILE = os.path.join("data", "kaggle_btc_1m_bootstrap.csv")
-ENV_FILE = ".env"
-ENV_EXAMPLE_FILE = ".env.example"
-MODEL_METADATA_FILE = os.path.join("data", "model_metadata.json")
-OPTIMIZER_STATUS_FILE = os.path.join("logs", "optimizer_status.json")
-# -----------------------------
+from jules_bot.database.postgres_manager import PostgresManager
+from jules_bot.utils.config_manager import config_manager
 
-def print_color(text, color="green"):
-    """Imprime texto colorido no terminal."""
-    colors = {"green": "\033[92m", "yellow": "\033[93m", "red": "\033[91m", "blue": "\033[94m", "end": "\033[0m"}
-    print(f"{colors.get(color, colors['green'])}{text}{colors['end']}")
+app = typer.Typer()
 
-def run_command(command, shell=True, capture_output=False, check=False):
-    """Executa um comando no shell."""
-    print_color(f"\n> Executando: {command}", "blue")
+# --- Lógica de Detecção do Docker Compose ---
+
+def get_docker_compose_command():
+    """
+    Verifica se 'docker-compose' (V1) ou 'docker compose' (V2) está disponível.
+    Adiciona 'sudo' se o usuário não for root para evitar problemas de permissão.
+    """
+    # Lista de comandos base. Adiciona 'sudo' se não formos o usuário root.
+    base_cmd = []
     try:
-        if not capture_output:
-            process = subprocess.Popen(command, shell=shell, text=True, stdout=sys.stdout, stderr=sys.stderr)
-            process.wait()
-            if check and process.returncode != 0:
-                raise subprocess.CalledProcessError(process.returncode, command)
-            return process
+        # os.geteuid() não existe no Windows, então tratamos o erro.
+        # No Windows, o gerenciamento de permissões do Docker é diferente e geralmente não requer sudo.
+        if os.geteuid() != 0:
+            base_cmd = ["sudo"]
+    except AttributeError:
+        # Se geteuid não existe, estamos provavelmente no Windows. Não fazemos nada.
+        pass
+
+    # Tenta encontrar um comando docker-compose válido
+    if shutil.which("docker-compose"):
+        return base_cmd + ["docker-compose"]
+    elif shutil.which("docker"):
+        try:
+            # Constrói o comando de teste completo (ex: ['sudo', 'docker', 'compose', '--version'])
+            test_command = base_cmd + ["docker", "compose", "--version"]
+            result = subprocess.run(test_command, capture_output=True, text=True, check=True)
+            if "Docker Compose version" in result.stdout:
+                return base_cmd + ["docker", "compose"]
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            # Se o teste falhar, continuamos para o erro final
+            pass
+    
+    # Se nenhuma versão do comando foi encontrada
+    raise FileNotFoundError("Could not find a valid 'docker-compose' or 'docker compose' command. Please ensure Docker is installed and in your PATH.")
+
+def run_docker_command(command_args: list, **kwargs):
+    """Helper para executar comandos docker e lidar com erros."""
+    try:
+        base_command = get_docker_compose_command()
+        full_command = base_command + command_args
+        print(f"   (usando comando: `{' '.join(full_command)}`)")
+        # Para comandos de ambiente, não precisamos de output em tempo real, então 'run' é ok.
+        subprocess.run(full_command, check=True, **kwargs)
+        return True
+    except FileNotFoundError as e:
+        print(f"❌ Erro: {e}")
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Erro ao executar comando. Código de saída: {e.returncode}")
+        if e.stderr:
+            # Em alguns casos, o stderr é usado para output normal, então decodificamos se possível
+            print(f"   Stderr:\n{e.stderr.decode('utf-8', 'ignore')}")
+        if e.stdout:
+            print(f"   Stdout:\n{e.stdout.decode('utf-8', 'ignore')}")
+    except Exception as e:
+        print(f"❌ Ocorreu um erro inesperado: {e}")
+    return False
+
+
+# --- Comandos do Ambiente Docker ---
+
+@app.command("start")
+def start():
+    """Constrói e inicia todos os serviços em modo detached."""
+    print("🚀 Iniciando serviços Docker...")
+    if run_docker_command(["up", "-d"], capture_output=True):
+        print("✅ Serviços iniciados com sucesso.")
+        print("   O container 'app' está rodando em modo idle.")
+        print("   Use `python run.py trade`, `test`, ou `backtest` para executar tarefas.")
+
+@app.command("stop")
+def stop():
+    """Para e remove todos os serviços."""
+    print("🛑 Parando serviços Docker...")
+    if run_docker_command(["down", "-v"], capture_output=True):
+        print("✅ Serviços parados com sucesso.")
+
+@app.command("status")
+def status():
+    """Mostra o status de todos os serviços."""
+    print("📊 Verificando status dos serviços Docker...")
+    run_docker_command(["ps"])
+
+@app.command("logs")
+def logs(service_name: Optional[str] = typer.Argument(None, help="Nome do serviço para ver os logs (ex: 'app', 'db').")):
+    """Acompanha os logs de um serviço específico ou de todos."""
+    try:
+        base_command = get_docker_compose_command()
+        full_command = base_command + ["logs", "-f"]
+
+        if service_name:
+            print(f"📄 Acompanhando logs do serviço '{service_name}'...")
+            full_command.append(service_name)
         else:
-            result = subprocess.run(command, shell=shell, capture_output=True, text=True, encoding='utf-8', check=check)
-            return result
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        print_color(f"ERRO ao executar o comando: {command}\n{e}", "red")
-        sys.exit(1)
+            print("📄 Acompanhando logs de todos os serviços...")
 
-def check_docker_running():
-    print_color("Verificando se o Docker está em execução...", "yellow")
-    try:
-        subprocess.run("docker info", shell=True, check=True, capture_output=True)
-        print_color("Docker está ativo e pronto.", "green")
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        print_color("ERRO: Docker Desktop não parece estar em execução.", "red"); sys.exit(1)
+        print(f"   (Pressione Ctrl+C para parar)")
+        subprocess.run(full_command)
 
-def check_env_file():
-    print_color("Verificando arquivo de configuração .env...", "yellow")
-    if not os.path.exists(ENV_FILE):
-        print_color(f"Arquivo .env não encontrado. Copiando de {ENV_EXAMPLE_FILE}...", "yellow")
-        if not os.path.exists(ENV_EXAMPLE_FILE):
-             print_color(f"ERRO: {ENV_EXAMPLE_FILE} também não encontrado.", "red"); sys.exit(1)
-        shutil.copy(ENV_EXAMPLE_FILE, ENV_FILE)
-        print_color("IMPORTANTE: Abra o arquivo .env e preencha suas chaves de API.", "red"); sys.exit(1)
-    print_color("Arquivo .env encontrado.", "green")
-
-def initial_setup():
-    print_color("--- Iniciando Setup e Verificação do Ambiente ---", "blue")
-    check_env_file()
-    os.makedirs("data", exist_ok=True)
-    os.makedirs("logs", exist_ok=True)
-    run_command(f"\"{sys.executable}\" -m pip install -r requirements.txt", check=True)
-    print_color("--- Setup Concluído com Sucesso ---", "green")
-
-def start_optimizer():
-    """Inicia o processo de otimização em um container Docker em modo background."""
-    check_docker_running()
-    print_color("--- Iniciando Otimização (Modo Background) ---", "blue")
-    # <<< CORRIGIDO AQUI
-    run_command("docker compose up -d --build app", check=True)
-    print_color("Otimização iniciada em segundo plano com sucesso!", "green")
-    print_color("Para acompanhar o progresso, use o comando:", "yellow")
-    print_color("python3 run.py display", "blue")
-    print_color("Para ver os logs completos, use o comando:", "yellow")
-    print_color("python3 run.py logs", "blue")
-
-def start_bot(mode):
-    check_docker_running()
-    print_color(f"--- Iniciando Bot em Modo '{mode.upper()}' ---", "blue")
-    # <<< CORRIGIDO AQUI
-    run_command(f"MODE={mode} docker compose up -d --build app", check=True)
-
-    if mode in ['test', 'trade']:
-        print_color(f"Bot no modo '{mode}' iniciado em segundo plano.", "green")
-        print_color("Para ver os logs, use: python3 run.py logs", "yellow")
-
-def stop_all():
-    check_docker_running()
-    print_color("--- Parando e Removendo TODOS os Containers do Bot ---", "yellow")
-    # <<< CORRIGIDO AQUI
-    run_command("docker compose down", check=True)
-    print_color("Containers parados e removidos com sucesso.", "green")
-
-def show_logs():
-    check_docker_running()
-    print_color("Anexando aos logs do container 'app'. Pressione CTRL+C para sair.", "green")
-    try:
-        # <<< CORRIGIDO AQUI
-        subprocess.run("docker compose logs -f app", shell=True)
-    except KeyboardInterrupt: print_color("\n\nDesanexado dos logs.", "yellow")
-
-def show_display():
-    """Mostra o painel de otimização lendo o arquivo de status."""
-    from src.core.display_manager import display_optimization_dashboard
-    
-    # <<< CORRIGIDO AQUI
-    result = run_command("docker compose ps -q app", capture_output=True)
-    if not result.stdout.strip():
-        print_color("O container de otimização 'app' não está em execução.", "red")
-        print_color("Inicie-o com: python3 run.py optimize", "yellow")
-        return
-
-    print_color("Mostrando painel de otimização. Pressione CTRL+C para sair.", "green")
-    try:
-        while True:
-            if os.path.exists(OPTIMIZER_STATUS_FILE):
-                try:
-                    with open(OPTIMIZER_STATUS_FILE, 'r') as f:
-                        status_data = json.load(f)
-                    display_optimization_dashboard(status_data)
-                except (json.JSONDecodeError, KeyError) as e:
-                    print(f"Aguardando arquivo de status válido... Erro: {e}")
-            else:
-                print("Aguardando o otimizador iniciar e criar o arquivo de status...")
-            
-            time.sleep(2)
     except KeyboardInterrupt:
-        print_color("\nPainel finalizado.", "yellow")
+        print("\n🛑 Acompanhamento de logs interrompido.")
+    except Exception as e:
+        print(f"❌ Erro ao obter logs: {e}")
 
-def main():
-    if len(sys.argv) < 2:
-        print_color("Uso: python3 run.py [comando]", "blue")
-        print("Comandos disponíveis:")
-        print("  setup        - Instala dependências e prepara o ambiente.")
-        print("  optimize     - Roda a otimização em SEGUNDO PLANO.")
-        print("  display      - Mostra o PAINEL da otimização em execução.")
-        print("  backtest     - Roda um backtest rápido com o modelo atual.")
-        print("  test / trade - Roda o bot (em segundo plano).")
-        print("  stop         - Para e remove TODOS os containers do bot.")
-        print("  logs         - Mostra os logs brutos de um container em execução.")
+@app.command("build")
+def build():
+    """Força a reconstrução das imagens Docker sem iniciá-las."""
+    print("🛠️ Forçando reconstrução das imagens Docker...")
+    if run_docker_command(["build", "--no-cache"]):
+        print("✅ Imagens reconstruídas com sucesso.")
+
+# --- Comandos da Aplicação ---
+
+def _run_in_container(command: list, env_vars: dict = {}, interactive: bool = False, detached: bool = False):
+    """
+    Executa um comando Python dentro do container 'app'.
+    - Modo Padrão (interactive=False): Captura e exibe o output em tempo real.
+    - Modo Interativo (interactive=True): Anexa o terminal ao processo (para TUIs).
+    - Modo Detached (detached=True): Executa o comando em segundo plano.
+    """
+    try:
+        docker_cmd = get_docker_compose_command()
+
+        exec_cmd = docker_cmd + ["exec"]
+        if detached:
+            exec_cmd.append("-d")
+        elif interactive:
+            exec_cmd.append("-it")
+
+        for key, value in env_vars.items():
+            exec_cmd.extend(["-e", f"{key}={value}"])
+
+        # Comando final a ser executado no container
+        container_command = ["app", "python"] + command
+        exec_cmd.extend(container_command)
+
+        print(f"   (executando: `{' '.join(exec_cmd)}`)")
+
+        if interactive:
+            # Para TUIs, precisamos que o processo anexe ao terminal do host.
+            # `subprocess.run` sem capturar output e com `check=False` é ideal.
+            # Deixamos o processo filho controlar o terminal.
+            result = subprocess.run(exec_cmd, check=False)
+            if result.returncode != 0:
+                print(f"\n❌ Comando interativo finalizado com código de saída: {result.returncode}")
+            return result.returncode == 0
+        else:
+            # Para logs, usamos Popen para streaming de output em tempo real
+            process = subprocess.Popen(exec_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, encoding='utf-8', errors='replace')
+
+            # Lê e imprime cada linha de output assim que ela aparece
+            for line in iter(process.stdout.readline, ''):
+                print(line, end='')
+
+            process.wait()
+            process.stdout.close()
+
+            if process.returncode != 0:
+                print(f"\n❌ Comando falhou com código de saída: {process.returncode}")
+                return False
+            return True
+
+    except Exception as e:
+        print(f"❌ Ocorreu um erro ao executar o comando no container: {e}")
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+@app.command()
+def trade():
+    """Inicia a API em background e o bot em modo de negociação (live)."""
+    mode = "trade"
+    print(f"🚀 Iniciando o bot em modo '{mode.upper()}' com API...")
+
+    print("\n--- Etapa 1 de 2: Iniciando a API em segundo plano ---")
+    if not _run_in_container(
+        command=["api/main.py"],
+        env_vars={"BOT_MODE": mode},
+        detached=True
+    ):
+        print("❌ Falha ao iniciar a API. Abortando.")
         return
 
-    command = sys.argv[1].lower()
-    
-    if command == "setup": initial_setup()
-    elif command == "optimize": start_optimizer()
-    elif command == "display": show_display()
-    elif command in ["test", "trade"]: start_bot(command)
-    elif command == "backtest": start_bot(command)
-    elif command == "stop": stop_all()
-    elif command == "logs": show_logs()
-    else: print_color(f"Comando '{command}' não reconhecido.", "red")
+    print("   Aguardando 3 segundos para a API inicializar...")
+    time.sleep(3)
+
+    print(f"\n--- Etapa 2 de 2: Iniciando o bot em modo '{mode.upper()}' ---")
+    _run_in_container(
+        command=["jules_bot/main.py"],
+        env_vars={"BOT_MODE": mode}
+    )
+
+@app.command()
+def test():
+    """Inicia a API em background e o bot em modo de teste (testnet)."""
+    mode = "test"
+    print(f"🚀 Iniciando o bot em modo '{mode.upper()}' com API...")
+
+    print("\n--- Etapa 1 de 2: Iniciando a API em segundo plano ---")
+    if not _run_in_container(
+        command=["api/main.py"],
+        env_vars={"BOT_MODE": mode},
+        detached=True
+    ):
+        print("❌ Falha ao iniciar a API. Abortando.")
+        return
+
+    print("   Aguardando 3 segundos para a API inicializar...")
+    time.sleep(3)
+
+    print(f"\n--- Etapa 2 de 2: Iniciando o bot em modo '{mode.upper()}' ---")
+    _run_in_container(
+        command=["jules_bot/main.py"],
+        env_vars={"BOT_MODE": mode}
+    )
+
+@app.command()
+def backtest(
+    days: int = typer.Option(
+        30, "--days", "-d", help="Número de dias de dados recentes para o backtest."
+    )
+):
+    """Prepara os dados e executa um backtest completo dentro do container."""
+    print(f"🚀 Iniciando execução de backtest para {days} dias...")
+
+    print("\n--- Etapa 1 de 2: Preparando dados ---")
+    if not _run_in_container(["scripts/prepare_backtest_data.py", str(days)]):
+        print("❌ Falha na preparação dos dados. Abortando backtest.")
+        return
+
+    print("\n--- Etapa 2 de 2: Rodando o backtest ---")
+    if not _run_in_container(["scripts/run_backtest.py", str(days)]):
+        print("❌ Falha na execução do backtest.")
+        return
+
+    print("\n✅ Backtest finalizado com sucesso.")
+
+@app.command()
+def ui():
+    """Inicia a interface de usuário (TUI) para monitorar e controlar o bot."""
+    print("🖥️  Iniciando a Interface de Usuário (TUI)...")
+    print("   Lembre-se que o bot (usando 'trade' ou 'test') deve estar rodando em outro terminal.")
+    _run_in_container(
+        command=["jules_bot/ui/app.py"],
+        interactive=True
+    )
+
+@app.command()
+def api(
+    mode: str = typer.Option(
+        "live", "--mode", "-m", help="O modo de operação para a API (ex: 'live', 'test')."
+    )
+):
+    """Inicia o serviço da API, configurando o BOT_MODE."""
+    print(f"🚀 Iniciando o serviço de API em modo '{mode.upper()}'...")
+    _run_in_container(
+        command=["api/main.py"],
+        env_vars={"BOT_MODE": mode},
+        interactive=True
+    )
+
+import time
+
+@app.command()
+def dashboard(
+    mode: str = typer.Argument(..., help="O modo de operação a ser monitorado (ex: 'trade', 'test').")
+):
+    """Inicia a API em segundo plano e a TUI em primeiro plano para monitoramento."""
+    print(f"🚀 Iniciando o dashboard para o modo '{mode.upper()}'...")
+
+    print("\n--- Etapa 1 de 2: Iniciando a API em segundo plano ---")
+    if not _run_in_container(
+        command=["api/main.py"],
+        env_vars={"BOT_MODE": mode},
+        detached=True
+    ):
+        print("❌ Falha ao iniciar a API. Abortando.")
+        return
+
+    print("   Aguardando 3 segundos para a API inicializar...")
+    time.sleep(3)
+
+    print("\n--- Etapa 2 de 2: Iniciando a Interface de Usuário (TUI) ---")
+    if not _run_in_container(
+        command=["jules_bot/ui/app.py"],
+        interactive=True
+    ):
+        print("❌ A TUI foi encerrada ou falhou ao iniciar.")
+
+    print("\n✅ Dashboard encerrado.")
+    print("   Lembre-se que o serviço da API ainda pode estar rodando em segundo plano.")
+    print("   Use `docker ps` para verificar e `docker kill <container_id>` se necessário.")
+
+
+@app.command("clear-backtest-trades")
+def clear_backtest_trades():
+    """Deletes all trades from the 'backtest' environment in the database."""
+    print("🗑️  Attempting to clear all backtest trades from the database...")
+    _run_in_container(
+        command=["scripts/clear_trades_measurement.py", "backtest"],
+        interactive=True
+    )
+
+@app.command("clear-testnet-trades")
+def clear_testnet_trades():
+    """Deletes all trades from the 'test' environment in the database."""
+    print("🗑️  Attempting to clear all testnet trades from the database...")
+    _run_in_container(
+        command=["scripts/clear_testnet_trades.py"],
+        interactive=True
+    )
+
+
+@app.command("wipe-db")
+def wipe_db():
+    """
+    Shows a confirmation prompt and then wipes all data from the main tables.
+    This is a destructive operation.
+    """
+    print("🗑️  Attempting to wipe the database...")
+    print("   This will run the script inside the container.")
+
+    _run_in_container(
+        command=["scripts/wipe_database.py"],
+        interactive=True
+    )
+
 
 if __name__ == "__main__":
-    main()
+    app()
