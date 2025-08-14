@@ -11,7 +11,7 @@ from textual.containers import VerticalScroll, Horizontal
 from textual.widgets import Header, Footer, DataTable, Input, Button, Label, Static, RichLog, ProgressBar
 from textual.timer import Timer
 from textual.validation import Validator, ValidationResult
-from textual.worker import worker
+from textual.worker import Worker
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -131,7 +131,7 @@ class TUIApp(App):
         if self.log_file_handle:
             self.log_file_handle.close()
 
-    @worker(group="log_tailer", exclusive=True)
+    @Worker(group="log_tailer", exclusive=True)
     def tail_log_file(self) -> None:
         self.log_display.write(f"Tailing log file: [yellow]{self.log_file_path}[/]")
         try:
