@@ -43,21 +43,22 @@ class StatusService:
             current_price = market_data.get('close', 0)
 
             # 2. Fetch open positions from local DB
-            open_positions_db = self.db_manager.get_open_positions(environment, bot_id)
+            # CORRECTED LOGIC: Only filter by bot_id in 'backtest' mode.
+            # For 'trade' and 'test' modes, we want to see all open positions for the environment.
+            bot_id_to_filter = bot_id if environment == 'backtest' else None
+            open_positions_db = self.db_manager.get_open_positions(environment, bot_id_to_filter)
 
-            # 3. Process open positions from the local database
-            # The previous reconciliation logic was flawed. For status, we trust our DB.
-            # The main bot loop handles more robust synchronization.
+            # 3. Process open positions
             positions_status = []
             for trade in open_positions_db:
-                unrealized_pnl = (current_price - trade.price) * trade.quantity if trade.price else 0
+                unrealized_pnl = (current_price - trade.price) * trade.quantity if trade.price and trade.quantity else 0
                 progress_to_sell_target_pct = _calculate_progress_pct(
                     current_price, trade.price, trade.sell_target_price
                 )
 
                 # Add the new requested data fields
                 price_to_target = (trade.sell_target_price - current_price) if trade.sell_target_price and current_price else 0
-                usd_to_target = price_to_target * trade.quantity if trade.quantity else 0
+                usd_to_target = price_to_target * trade.quantity if trade.quantity and price_to_target else 0
 
                 positions_status.append({
                     "trade_id": trade.trade_id,

@@ -131,7 +131,7 @@ class TUIApp(App):
         if self.log_file_handle:
             self.log_file_handle.close()
 
-    @Worker(group="log_tailer", exclusive=True)
+    @Worker(group="log_tailer")
     def tail_log_file(self) -> None:
         self.log_display.write(f"Tailing log file: [yellow]{self.log_file_path}[/]")
         try:
