@@ -133,6 +133,38 @@ class Backtester:
                                     f"Realized PnL: ${realized_pnl_usd:,.2f} | "
                                     f"HODL Amount: {hodl_asset_amount:.8f} BTC")
 
+                        # --- START TREASURY LOGIC ---
+                        # Mirror the live environment's logic by creating a new 'TREASURY' record
+                        # for the amount that was held back from the sale.
+                        if hodl_asset_amount > 1e-8: # Use a small tolerance for floating point
+                            treasury_trade_id = str(uuid.uuid4())
+                            buy_price = position['price']
+                            treasury_usd_value = hodl_asset_amount * buy_price
+
+                            treasury_data = {
+                                'run_id': self.run_id,
+                                'environment': 'backtest',
+                                'strategy_name': strategy_name,
+                                'symbol': symbol,
+                                'trade_id': treasury_trade_id,
+                                'exchange': "backtest_engine",
+                                'status': 'TREASURY',
+                                'order_type': 'buy', # Represents an asset we are holding
+                                'price': buy_price,
+                                'quantity': hodl_asset_amount,
+                                'usd_value': treasury_usd_value,
+                                'timestamp': current_time,
+                                'decision_context': {
+                                    'source': 'treasury',
+                                    'original_trade_id': trade_id
+                                }
+                            }
+                            self.trade_logger.log_trade(treasury_data)
+                            logger.info(f"TREASURY CREATED: TradeID: {treasury_trade_id} | "
+                                        f"Quantity: {hodl_asset_amount:.8f} BTC | "
+                                        f"Value at cost: ${treasury_usd_value:,.2f}")
+                        # --- END TREASURY LOGIC ---
+
                         total_capital_allocated -= position['usd_value']
                         del open_positions[trade_id]
 
