@@ -217,7 +217,7 @@ class TUIApp(App):
             self.run_script(["python", "scripts/force_sell.py", self.selected_trade_id, percentage])
 
             self.query_one("#action_bar").add_class("hidden")
-            self.query_one("#positions_table").cursor_row = -1
+            self.query_one("#positions_table").move_cursor(row=-1)
             self.selected_trade_id = None
 
     async def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
