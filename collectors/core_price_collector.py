@@ -150,6 +150,7 @@ class CorePriceCollector:
         # Format the dataframe
         df = pd.DataFrame(all_klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'qav', 'nt', 'tbbav', 'tbqav', 'ignore'])
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms', utc=True)
+        df.drop_duplicates(subset=['timestamp'], inplace=True)
         df.set_index('timestamp', inplace=True)
         df = df[['open', 'high', 'low', 'close', 'volume']].astype(float)
         df = df.loc[start_dt:end_dt]
@@ -199,6 +200,7 @@ def prepare_backtest_data(days: int, force_reload: bool = False):
 
     if force_reload:
         logger.warning("`--force-reload` flag detected. Deleting all existing price data for a full refresh.")
+        collector.db_manager.clear_price_history()
         collector.db_manager.clear_backtest_trades()
 
     # --- New Logic to ensure sufficient historical data ---
@@ -215,6 +217,7 @@ def prepare_backtest_data(days: int, force_reload: bool = False):
             return
 
         logger.info(f"Clearing existing data (if any) and downloading full {days}-day history from {required_start_date} to {end_date}.")
+        collector.db_manager.clear_price_history()
         collector.db_manager.clear_backtest_trades()
         
         df_to_write = collector._get_historical_klines(required_start_date, end_date)

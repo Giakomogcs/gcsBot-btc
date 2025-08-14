@@ -267,6 +267,17 @@ class PostgresManager:
                 db.rollback()
                 logger.error(f"Failed to clear tables: {e}")
 
+    def clear_price_history(self):
+        """Deletes all data from the 'price_history' table."""
+        with self.get_db() as db:
+            try:
+                db.execute(text("TRUNCATE TABLE price_history RESTART IDENTITY;"))
+                db.commit()
+                logger.info("Price history table cleared successfully.")
+            except Exception as e:
+                db.rollback()
+                logger.error(f"Failed to clear price history table: {e}")
+
     def query_first_timestamp(self, measurement: str) -> Optional[pd.Timestamp]:
         """
         Queries the very first timestamp for a specific measurement in the table.
