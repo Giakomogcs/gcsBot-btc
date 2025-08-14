@@ -112,49 +112,48 @@ class CorePriceCollector:
 
     def _get_historical_klines(self, start_dt: datetime.datetime, end_dt: datetime.datetime) -> pd.DataFrame:
         """
-        Fetches historical OHLCV data from Binance, handling pagination automatically.
+        Fetches historical OHLCV data from Binance using the robust klines generator.
         """
         logger.info(f"Fetching OHLCV data for {self.symbol} from {start_dt} to {end_dt}...")
         if not self.binance_client:
             logger.warning("Binance client not initialized. Cannot fetch historical klines.")
             return pd.DataFrame()
 
-        all_klines = []
-        current_start_dt = start_dt
-        end_ms = int(end_dt.timestamp() * 1000)
+        # Convert datetimes to the string format required by the generator
+        start_str = start_dt.strftime("%d %b, %Y %H:%M:%S")
+        end_str = end_dt.strftime("%d %b, %Y %H:%M:%S")
 
-        with tqdm(total=(end_dt - start_dt).total_seconds() / 60, desc="Downloading from Binance", unit=" candles") as pbar:
-            while True:
-                current_start_ms = int(current_start_dt.timestamp() * 1000)
-                try:
-                    klines = self.binance_client.get_historical_klines(
-                        self.symbol, Client.KLINE_INTERVAL_1MINUTE, start_str=current_start_ms, end_str=end_ms, limit=1000
-                    )
-                    if not klines:
-                        break
-                    all_klines.extend(klines)
-                    pbar.update(len(klines))
-                    last_kline_ts_ms = klines[-1][0]
-                    next_start_dt = pd.to_datetime(last_kline_ts_ms, unit='ms', utc=True) + pd.Timedelta(minutes=1)
-                    if next_start_dt > end_dt:
-                        break
-                    current_start_dt = next_start_dt
-                    time.sleep(0.1) # Small delay to be respectful to the API
-                except (BinanceAPIException, BinanceRequestException) as e:
-                    logger.error(f"API Error fetching klines: {e}", exc_info=True)
-                    break
-        
+        klines_generator = self.binance_client.get_historical_klines_generator(
+            self.symbol, Client.KLINE_INTERVAL_1MINUTE, start_str, end_str=end_str
+        )
+
+        # Use tqdm to show progress as we consume the generator
+        total_minutes = (end_dt - start_dt).total_seconds() / 60
+        all_klines = []
+        with tqdm(total=total_minutes, desc="Downloading from Binance", unit=" candles") as pbar:
+            for kline in klines_generator:
+                all_klines.append(kline)
+                pbar.update(1)
+
         if not all_klines:
+            logger.warning("No klines returned from Binance generator.")
             return pd.DataFrame()
 
         # Format the dataframe
         df = pd.DataFrame(all_klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'qav', 'nt', 'tbbav', 'tbqav', 'ignore'])
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms', utc=True)
+
+        # Remove duplicates and set index
         df.drop_duplicates(subset=['timestamp'], inplace=True)
         df.set_index('timestamp', inplace=True)
+
+        # Select and cast columns
         df = df[['open', 'high', 'low', 'close', 'volume']].astype(float)
+
+        # The generator can sometimes fetch data slightly outside the requested range, so we filter it.
         df = df.loc[start_dt:end_dt]
-        logger.info(f"\nFetched a total of {len(df)} candles from Binance.")
+
+        logger.info(f"\nFetched a total of {len(df)} unique candles from Binance.")
         return df
 
     def run(self):
