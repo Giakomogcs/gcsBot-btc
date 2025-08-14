@@ -195,26 +195,44 @@ class TUIApp(App):
             self.log_display.clear()
             self.log_display.write("[bold green]Log filter applied. Tailing new logs...[/bold green]")
 
-    # NOVO: Worker para executar scripts e enviar o resultado via mensagem
+    # --- Workers & Background Tasks ---
+
     @work(thread=True)
     def run_script_worker(self, command: list[str], message_type: type[Message]) -> None:
-        """Executa um script em um worker e posta o resultado como uma mensagem."""
+        """
+        Executa um script de longa duração em um 'worker' para não bloquear a UI.
+        Isso é crucial para a responsividade do dashboard. O worker executa a tarefa
+        em um thread separado e, quando concluído, posta uma 'Message' com o resultado.
+        A UI principal então lida com essa mensagem em seu próprio thread.
+        """
         self.log_display.write(f"Executing: [yellow]{' '.join(command)}[/]")
         try:
-            process = subprocess.run(command, capture_output=True, text=True, check=False)
+            # Executa o subprocesso de forma robusta e compatível com Windows/Linux.
+            # - `encoding='utf-8'`: Garante que o output seja lido como UTF-8.
+            # - `errors='replace'`: Previne falhas se o script gerar caracteres inválidos.
+            process = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                check=False,
+                encoding='utf-8',
+                errors='replace'
+            )
+
             if process.returncode != 0:
                 output = process.stderr.strip()
                 success = False
+                # `call_from_thread` é necessário para atualizar widgets de um worker.
                 self.call_from_thread(self.log_display.write, f"[bold red]Script Error:[/bold red] {output}")
             else:
                 output = process.stdout.strip()
                 success = True
             
-            # Tenta decodificar o JSON, se falhar, envia como texto
+            # Tenta decodificar o JSON, se falhar, envia como texto bruto.
             try:
                 data = json.loads(output)
                 self.post_message(message_type(data, success))
-            except json.JSONDecodeError:
+            except (json.JSONDecodeError, TypeError):
                 self.post_message(message_type(output, success))
 
         except FileNotFoundError:

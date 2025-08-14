@@ -46,11 +46,22 @@ def get_docker_compose_command():
     raise FileNotFoundError("Could not find a valid 'docker-compose' or 'docker compose' command. Please ensure Docker is installed and in your PATH.")
 
 def run_docker_command(command_args: list, **kwargs):
-    """Helper para executar comandos docker e lidar com erros."""
+    """
+    Helper para executar comandos docker e lidar com erros de forma robusta.
+    Garante a decodificação de output em UTF-8.
+    """
     try:
         base_command = get_docker_compose_command()
         full_command = base_command + command_args
         print(f"   (usando comando: `{' '.join(full_command)}`)")
+
+        # Se o output for capturado, garante que seja decodificado como texto UTF-8.
+        # Isso evita a necessidade de `.decode()` no bloco de exceção e previne erros de encoding.
+        if kwargs.get("capture_output"):
+            kwargs.setdefault("text", True)
+            kwargs.setdefault("encoding", "utf-8")
+            kwargs.setdefault("errors", "replace")
+
         # Para comandos de ambiente, não precisamos de output em tempo real, então 'run' é ok.
         subprocess.run(full_command, check=True, **kwargs)
         return True
@@ -58,11 +69,11 @@ def run_docker_command(command_args: list, **kwargs):
         print(f"❌ Erro: {e}")
     except subprocess.CalledProcessError as e:
         print(f"❌ Erro ao executar comando. Código de saída: {e.returncode}")
+        # Com text=True, stdout/stderr já são strings, não bytes.
         if e.stderr:
-            # Em alguns casos, o stderr é usado para output normal, então decodificamos se possível
-            print(f"   Stderr:\n{e.stderr.decode('utf-8', 'ignore')}")
+            print(f"   Stderr:\n{e.stderr}")
         if e.stdout:
-            print(f"   Stdout:\n{e.stdout.decode('utf-8', 'ignore')}")
+            print(f"   Stdout:\n{e.stdout}")
     except Exception as e:
         print(f"❌ Ocorreu um erro inesperado: {e}")
     return False
@@ -148,9 +159,13 @@ def _run_in_container(command: list, env_vars: dict = {}, interactive: bool = Fa
         print(f"   (executando: `{' '.join(exec_cmd)}`)")
 
         if interactive:
-            # Para TUIs, precisamos que o processo anexe ao terminal do host.
-            # `subprocess.run` sem capturar output e com `check=False` é ideal.
-            # Deixamos o processo filho controlar o terminal.
+            # Para TUIs e outros aplicativos interativos, precisamos que o processo
+            # anexe diretamente ao terminal do host.
+            # `subprocess.run` sem capturar I/O (stdout, stderr, stdin) é a forma
+            # correta de ceder o controle do terminal ao processo filho.
+            # NOTA PARA WINDOWS: Para que a TUI funcione corretamente, é altamente
+            # recomendável usar um terminal moderno como o Windows Terminal. O CMD
+            # e o PowerShell legados podem ter problemas com a renderização.
             result = subprocess.run(exec_cmd, check=False)
             if result.returncode != 0:
                 print(f"\n❌ Comando interativo finalizado com código de saída: {result.returncode}")
