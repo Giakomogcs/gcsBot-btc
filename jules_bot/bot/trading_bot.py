@@ -80,14 +80,21 @@ class TradingBot:
 
                     elif cmd_type == "force_sell":
                         trade_id = command.get("trade_id")
+                        percentage = command.get("percentage", 100.0) # Default to 100%
                         if trade_id:
                             open_positions = state_manager.get_open_positions()
                             position_to_sell = next((p for p in open_positions if p.trade_id == trade_id), None)
                             if position_to_sell:
+                                sell_fraction = float(percentage) / 100.0
+                                original_quantity = float(position_to_sell.quantity or 0)
+                                quantity_to_sell = original_quantity * sell_fraction
+
+                                logger.info(f"Executing force sell for {percentage}% of trade {trade_id} ({quantity_to_sell:.8f} units).")
+
                                 # Convert the Trade object to a dict for selling
                                 sell_position_data = position_to_sell.to_dict()
-                                sell_position_data['quantity'] = float(position_to_sell.quantity or 0)
-                                trader.execute_sell(sell_position_data, self.run_id, {"reason": "manual_override"})
+                                sell_position_data['quantity'] = quantity_to_sell
+                                trader.execute_sell(sell_position_data, self.run_id, {"reason": f"manual_override_{percentage}%_sell"})
                             else:
                                 logger.warning(f"Could not find open position with trade_id: {trade_id} for force_sell.")
 

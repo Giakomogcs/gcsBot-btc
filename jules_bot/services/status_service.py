@@ -1,13 +1,16 @@
 import logging
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.core_logic.strategy_rules import StrategyRules
-from jules_bot.core.market_data_provider import MarketDataProvider
 from jules_bot.core.exchange_connector import ExchangeManager
 from jules_bot.utils.config_manager import ConfigManager
+from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
+
 
 logger = logging.getLogger(__name__)
 
 def _calculate_progress_pct(current_price, start_price, target_price):
+    if target_price is None or start_price is None or current_price is None:
+        return 0.0
     if target_price == start_price:
         return 100.0 if current_price >= target_price else 0.0
 
@@ -15,10 +18,10 @@ def _calculate_progress_pct(current_price, start_price, target_price):
     return max(0, min(progress, 100))
 
 class StatusService:
-    def __init__(self, db_manager: PostgresManager, config_manager: ConfigManager, market_data_provider: MarketDataProvider):
+    def __init__(self, db_manager: PostgresManager, config_manager: ConfigManager, feature_calculator: LiveFeatureCalculator):
         self.db_manager = db_manager
         self.strategy = StrategyRules(config_manager)
-        self.market_data_provider = market_data_provider
+        self.feature_calculator = feature_calculator
         # Note: ExchangeManager is instantiated per-request in get_extended_status
         # to ensure it's created with the correct mode (live/test).
 
@@ -31,30 +34,32 @@ class StatusService:
             exchange_manager = ExchangeManager(mode=environment)
             symbol = "BTCUSDT" # Assuming BTCUSDT for now
 
-            # 1. Fetch current market data
-            market_data = self.market_data_provider.get_latest_data("BTC/USDT")
+            # 1. Fetch current market data with all features
+            market_data_series = self.feature_calculator.get_current_candle_with_features()
+            if market_data_series.empty:
+                return {"error": "Could not fetch current market data."}
+
+            market_data = market_data_series.to_dict()
             current_price = market_data.get('close', 0)
 
             # 2. Fetch open positions from local DB
-            open_positions_db = self.db_manager.get_open_positions(environment, bot_id)
+            # CORRECTED LOGIC: Only filter by bot_id in 'backtest' mode.
+            # For 'trade' and 'test' modes, we want to see all open positions for the environment.
+            bot_id_to_filter = bot_id if environment == 'backtest' else None
+            open_positions_db = self.db_manager.get_open_positions(environment, bot_id_to_filter)
 
-            # 3. Reconcile open positions with the exchange
-            live_open_orders = exchange_manager.get_open_orders(symbol)
-            # Create a set of stringified order IDs for efficient lookup
-            live_open_order_ids = {str(order['orderId']) for order in live_open_orders}
-
+            # 3. Process open positions
             positions_status = []
             for trade in open_positions_db:
-                # If a trade marked as OPEN in our DB is not in the exchange's open orders, it was likely filled or cancelled.
-                # We now correctly compare our stored exchange_order_id with the live order IDs from the exchange.
-                if str(trade.exchange_order_id) not in live_open_order_ids:
-                    # This position is no longer open on the exchange. We can skip it for status display.
-                    continue
-
-                unrealized_pnl = (current_price - trade.price) * trade.quantity
+                unrealized_pnl = (current_price - trade.price) * trade.quantity if trade.price and trade.quantity else 0
                 progress_to_sell_target_pct = _calculate_progress_pct(
                     current_price, trade.price, trade.sell_target_price
                 )
+
+                # Add the new requested data fields
+                price_to_target = (trade.sell_target_price - current_price) if trade.sell_target_price and current_price else 0
+                usd_to_target = price_to_target * trade.quantity if trade.quantity and price_to_target else 0
+
                 positions_status.append({
                     "trade_id": trade.trade_id,
                     "entry_price": trade.price,
@@ -63,6 +68,8 @@ class StatusService:
                     "unrealized_pnl": unrealized_pnl,
                     "sell_target_price": trade.sell_target_price,
                     "progress_to_sell_target_pct": progress_to_sell_target_pct,
+                    "price_to_target": price_to_target,
+                    "usd_to_target": usd_to_target,
                 })
 
             # 4. Determine buy signal status
@@ -80,6 +87,13 @@ class StatusService:
             # 6. Fetch live wallet data
             wallet_balances = exchange_manager.get_account_balance()
 
+            # Filter for relevant assets to keep the output clean
+            relevant_assets = {'BTC', 'USDT'}
+            filtered_balances = [
+                balance for balance in wallet_balances
+                if balance.get('asset') in relevant_assets
+            ]
+
             # 7. Assemble the final status object
             extended_status = {
                 "mode": environment,
@@ -93,7 +107,7 @@ class StatusService:
                     "btc_purchase_progress_pct": btc_purchase_progress_pct
                 },
                 "trade_history": trade_history_dicts,
-                "wallet_balances": wallet_balances
+                "wallet_balances": filtered_balances
             }
 
             return extended_status
