@@ -4,12 +4,14 @@ import sys
 import os
 from decimal import Decimal, InvalidOperation
 from datetime import datetime
+import time
 
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll, Horizontal
 from textual.widgets import Header, Footer, DataTable, Input, Button, Label, Static, RichLog, ProgressBar
 from textual.timer import Timer
 from textual.validation import Validator, ValidationResult
+from textual.worker import worker
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -33,12 +35,12 @@ class TUIApp(App):
         layout: horizontal;
     }
     #left_pane {
-        width: 30%;
+        width: 35%;
         padding: 1;
         border-right: solid $accent;
     }
     #right_pane {
-        width: 70%;
+        width: 65%;
         padding: 1;
     }
     .title {
@@ -48,12 +50,17 @@ class TUIApp(App):
         padding: 0 1;
         margin-top: 1;
     }
-    #positions_table {
+    #positions_table, #wallet_table {
         margin-top: 1;
-        height: 15;
+        height: 12;
     }
-    #action_bar {
+    #log_display {
+        height: 20;
+    }
+    #action_bar, #log_filter_bar {
         margin-top: 1;
+        height: auto;
+        align: right;
     }
     .hidden {
         display: none;
@@ -63,9 +70,11 @@ class TUIApp(App):
     def __init__(self, mode: str = "test", *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.mode = mode
-        self.update_timer: Timer | None = None
         self.selected_trade_id: str | None = None
         self.log_display: RichLog | None = None
+        self.log_file_path = os.path.join("logs", "jules_bot.jsonl")
+        self.log_file_handle = None
+        self.log_filter = ""
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -81,8 +90,11 @@ class TUIApp(App):
                     yield Button("Sell 100%", id="force_sell_100_button", variant="error")
                     yield Button("Sell 90%", id="force_sell_90_button", variant="warning")
 
-                yield Static("Live Log", classes="title", id="log_title")
-                yield RichLog(id="log_display", wrap=True, markup=True)
+                yield Static("Live Log", classes="title")
+                with Horizontal(id="log_filter_bar"):
+                    yield Label("Filter:", id="log_filter_label")
+                    yield Input(placeholder="e.g., ERROR", id="log_filter_input")
+                yield RichLog(id="log_display", wrap=True, markup=True, min_width=0)
 
             with VerticalScroll(id="right_pane"):
                 yield Static("Bot Status", classes="title")
@@ -96,14 +108,11 @@ class TUIApp(App):
 
                 yield Static("Wallet Balances", classes="title")
                 yield DataTable(id="wallet_table")
-
         yield Footer()
 
     def on_mount(self) -> None:
         self.log_display = self.query_one(RichLog)
         self.log_display.write("[bold green]TUI Initialized.[/bold green]")
-        self.log_display.write(f"Mode: [bold]{self.mode}[/bold]")
-        self.log_display.write("Starting data refresh timer...")
 
         positions_table = self.query_one("#positions_table", DataTable)
         positions_table.cursor_type = "row"
@@ -112,31 +121,81 @@ class TUIApp(App):
         wallet_table = self.query_one("#wallet_table", DataTable)
         wallet_table.add_columns("Asset", "Free", "Locked", "USD Value")
 
-        self.update_timer = self.set_interval(5.0, self.update_dashboard)
+        self.set_interval(5.0, self.update_dashboard)
         self.query_one("#manual_buy_input").focus()
+
+        # Start tailing the log file in the background
+        self.tail_log_file()
+
+    def on_unmount(self) -> None:
+        if self.log_file_handle:
+            self.log_file_handle.close()
+
+    @worker(group="log_tailer", exclusive=True)
+    def tail_log_file(self) -> None:
+        self.log_display.write(f"Tailing log file: [yellow]{self.log_file_path}[/]")
+        try:
+            if not os.path.exists(self.log_file_path):
+                self.log_display.write(f"[dim]Log file not found. Creating...[/dim]")
+                os.makedirs(os.path.dirname(self.log_file_path), exist_ok=True)
+                with open(self.log_file_path, 'w') as f:
+                    pass # create empty file
+
+            self.log_file_handle = open(self.log_file_path, 'r')
+            self.log_file_handle.seek(0, 2) # Go to the end of the file
+
+            while self.is_running:
+                line = self.log_file_handle.readline()
+                if not line:
+                    time.sleep(0.5)
+                    continue
+
+                self.call_from_thread(self.process_log_line, line)
+
+        except Exception as e:
+            self.call_from_thread(self.log_display.write, f"[bold red]Error tailing log file: {e}[/]")
+
+    def process_log_line(self, line: str) -> None:
+        try:
+            log_entry = json.loads(line)
+            level = log_entry.get("level", "INFO")
+            message = log_entry.get("message", "")
+
+            if self.log_filter.lower() in message.lower() or self.log_filter.upper() in level:
+                color = "white"
+                if level == "INFO": color = "green"
+                elif level == "WARNING": color = "yellow"
+                elif level == "ERROR": color = "red"
+                elif level == "CRITICAL": color = "bold red"
+
+                self.log_display.write(f"[[{color}]{level}[/{color}]] {message}")
+        except json.JSONDecodeError:
+            if self.log_filter == "":
+                self.log_display.write(f"[dim]{line.strip()}[/dim]")
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id == "log_filter_input":
+            self.log_filter = event.value
+            self.log_display.clear()
+            self.log_display.write("[bold green]Log filter applied. Tailing new logs...[/bold green]")
+            # A more advanced implementation could re-read and filter the file.
 
     def run_script(self, command: list[str]) -> tuple[bool, str | dict]:
         self.log_display.write(f"Executing: [yellow]{' '.join(command)}[/]")
         try:
-            process = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                check=True
-            )
+            process = subprocess.run(command, capture_output=True, text=True)
+            if process.returncode != 0:
+                self.log_display.write(f"[bold red]Script Error:[/bold red] {process.stderr.strip()}")
+                return False, process.stderr.strip()
+
             output = process.stdout.strip()
-            # Try to parse as JSON, otherwise return raw output
             try:
                 return True, json.loads(output)
             except json.JSONDecodeError:
                 return True, output
-        except subprocess.CalledProcessError as e:
-            error_message = e.stderr.strip()
-            self.log_display.write(f"[bold red]Script Error:[/bold red] {error_message}")
-            return False, error_message
         except FileNotFoundError:
-            self.log_display.write(f"[bold red]Error: Script not found at {command[1]}[/]")
-            return False, f"Script not found at {command[1]}"
+            self.log_display.write(f"[bold red]Error: Script not found.[/bold red]")
+            return False, "Script not found"
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "force_buy_button":

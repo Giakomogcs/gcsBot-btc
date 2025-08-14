@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from jules_bot.utils.config_manager import ConfigManager
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.services.status_service import StatusService
-from jules_bot.core.market_data_provider import MarketDataProvider
+from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
 from jules_bot.utils.logger import logger
 
 def main(
@@ -39,8 +39,8 @@ def main(
         config_manager = ConfigManager()
         db_config = config_manager.get_db_config('POSTGRES')
         db_manager = PostgresManager(config=db_config)
-        market_data_provider = MarketDataProvider(db_manager)
-        status_service = StatusService(db_manager, config_manager, market_data_provider)
+        feature_calculator = LiveFeatureCalculator(db_manager, mode=mode)
+        status_service = StatusService(db_manager, config_manager, feature_calculator)
 
         bot_id = f"jules_{mode}_bot"
 
