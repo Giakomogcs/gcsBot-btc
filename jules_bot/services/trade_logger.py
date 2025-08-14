@@ -13,14 +13,11 @@ class TradeLogger:
     preventing schema collisions by explicitly casting data types.
     This is the single source of truth for logging any trade-related event.
     """
-    def __init__(self, mode: str):
+    def __init__(self, mode: str, db_manager: PostgresManager):
         if mode not in ['trade', 'test', 'backtest']:
             raise ValueError(f"Invalid mode '{mode}' provided to TradeLogger.")
         self.mode = mode
-
-        # Instantiate DB manager here to be used by the log_trade method
-        db_config = config_manager.get_db_config('POSTGRES')
-        self.db_manager = PostgresManager(config=db_config)
+        self.db_manager = db_manager
         logger.info(f"TradeLogger initialized for mode '{self.mode}'.")
 
     def log_trade(self, trade_data: Dict[str, Any]):

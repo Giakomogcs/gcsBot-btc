@@ -11,8 +11,9 @@ from jules_bot.research.feature_engineering import add_all_features
 from jules_bot.services.trade_logger import TradeLogger
 
 class Backtester:
-    def __init__(self, days: int = None, start_date: str = None, end_date: str = None):
+    def __init__(self, db_manager: PostgresManager, days: int = None, start_date: str = None, end_date: str = None):
         self.run_id = f"backtest_{uuid.uuid4()}"
+        self.db_manager = db_manager
         
         log_msg = ""
         if days:
@@ -29,9 +30,7 @@ class Backtester:
 
         logger.info(log_msg)
 
-        db_config = config_manager.get_db_config('POSTGRES')
-        self.db_manager = PostgresManager(config=db_config) # For reading results
-        self.trade_logger = TradeLogger(mode='backtest') # For writing trades
+        self.trade_logger = TradeLogger(mode='backtest', db_manager=self.db_manager)
 
         symbol = config_manager.get('APP', 'symbol')
         

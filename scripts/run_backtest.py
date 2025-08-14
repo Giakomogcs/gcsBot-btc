@@ -64,11 +64,15 @@ def main():
     try:
         logger.info("--- Starting New Backtest Simulation ---")
         
+        # Create a single DB manager instance for the backtest
+        db_config = config_manager.get_db_config('POSTGRES')
+        db_manager = PostgresManager(config=db_config)
+        
         backtester = None
         if args.days:
-            backtester = Backtester(days=args.days)
+            backtester = Backtester(db_manager=db_manager, days=args.days)
         else:
-            backtester = Backtester(start_date=args.start_date, end_date=args.end_date)
+            backtester = Backtester(db_manager=db_manager, start_date=args.start_date, end_date=args.end_date)
         
         backtester.run()
         logger.info("--- Backtest Simulation Finished ---")

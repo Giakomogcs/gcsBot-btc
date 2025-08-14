@@ -17,11 +17,12 @@ class TradingBot:
     The maestro that orchestrates all the components of the bot.
     """
 
-    def __init__(self, mode: str, bot_id: str, market_data_provider: MarketDataProvider):
+    def __init__(self, mode: str, bot_id: str, market_data_provider: MarketDataProvider, db_manager: PostgresManager):
         self.mode = mode
         self.run_id = bot_id
         self.is_running = True
         self.market_data_provider = market_data_provider
+        self.db_manager = db_manager
         self.symbol = config_manager.get('APP', 'symbol')
         self.state_file_path = "/tmp/bot_state.json"
 
@@ -115,11 +116,8 @@ class TradingBot:
             return
 
         # Instantiate core components
-        db_config = config_manager.get_db_config('POSTGRES')
-
-        db_manager = PostgresManager(config=db_config)
-        feature_calculator = LiveFeatureCalculator(db_manager, mode=self.mode)
-        state_manager = StateManager(mode=self.mode, bot_id=self.run_id)
+        feature_calculator = LiveFeatureCalculator(self.db_manager, mode=self.mode)
+        state_manager = StateManager(mode=self.mode, bot_id=self.run_id, db_manager=self.db_manager)
         trader = Trader(mode=self.mode)
         account_manager = AccountManager(trader.client)
         strategy_rules = StrategyRules(config_manager)
@@ -127,7 +125,7 @@ class TradingBot:
         # --- SYNC TRADES ON STARTUP ---
         if trader.is_ready:
             logger.info("Performing initial holdings synchronization...")
-            state_manager.sync_holdings_with_binance(account_manager, strategy_rules)
+            state_manager.sync_holdings_with_binance(account_manager, strategy_rules, trader)
 
         if not trader.is_ready:
             logger.critical("Trader could not be initialized. Shutting down bot.")
