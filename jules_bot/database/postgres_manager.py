@@ -9,7 +9,6 @@ from contextlib import contextmanager
 from jules_bot.core.schemas import TradePoint
 from jules_bot.database.models import Base, Trade, BotStatus, PriceHistory
 from jules_bot.utils.logger import logger
-from datetime import datetime, timedelta, timezone
 
 class PostgresManager:
     def __init__(self, config: dict):
@@ -75,27 +74,40 @@ class PostgresManager:
                 db.rollback()
                 logger.error(f"Failed to log trade to PostgreSQL: {e}", exc_info=True)
 
-    def get_price_data(self, measurement: str, start_date: str = "-30d", end_date: str = "now()") -> pd.DataFrame:
+    def get_price_data(self, measurement: str, start_date: pd.Timestamp, end_date: pd.Timestamp) -> pd.DataFrame:
+        """
+        Fetches price data from the database for a given symbol and date range.
+        It also ensures the data is clean by removing duplicate timestamps.
+        """
+        logger.info(f"Fetching price data for {measurement} from {start_date} to {end_date}")
         with self.get_db() as db:
             try:
-                if start_date.startswith('-') and start_date.endswith('d'):
-                    days_to_subtract = int(start_date[1:-1])
-                    start_date_parsed = datetime.now(timezone.utc) - timedelta(days=days_to_subtract)
-                else:
-                    start_date_parsed = pd.to_datetime(start_date, utc=True)
-
-                end_date_parsed = pd.to_datetime(end_date, utc=True) if end_date != "now()" else datetime.now(timezone.utc)
-
-                logger.info(f"Fetching price data for {measurement} from {start_date_parsed} to {end_date_parsed}")
-
                 query = db.query(PriceHistory).filter(
                     PriceHistory.symbol == measurement,
-                    PriceHistory.timestamp >= start_date_parsed,
-                    PriceHistory.timestamp <= end_date_parsed
+                    PriceHistory.timestamp >= start_date,
+                    PriceHistory.timestamp < end_date
                 ).order_by(PriceHistory.timestamp)
 
-                df = pd.read_sql(query.statement, self.engine)
-                df = df.rename(columns={"timestamp": "timestamp"}).set_index('timestamp')
+                # Load data, setting the timestamp as the index directly
+                df = pd.read_sql(query.statement, self.engine, index_col='timestamp')
+
+                if df.empty:
+                    logger.warning(f"No price data found for {measurement} in the specified range.")
+                    return pd.DataFrame()
+
+                # CRITICAL: Remove duplicates to prevent reindexing errors downstream
+                if df.index.has_duplicates:
+                    num_duplicates = df.index.duplicated().sum()
+                    logger.warning(f"Found and removed {num_duplicates} duplicate timestamps from the data.")
+                    df = df[~df.index.duplicated(keep='first')]
+
+                # Ensure timezone is set (PostgreSQL stores it, but let's be explicit)
+                if df.index.tz is None:
+                    df.index = df.index.tz_localize('UTC')
+                
+                # Ensure data is sorted
+                df.sort_index(inplace=True)
+
                 return df
             except Exception as e:
                 logger.error(f"Failed to get price data: {e}", exc_info=True)
@@ -118,7 +130,7 @@ class PostgresManager:
                 if symbol:
                     filters.append(Trade.symbol == symbol)
                 
-                query = db.query(Trade).filter(and_(*filters)).order_by(desc(Trade.timestamp))
+                query = db.query(Trade).filter(and_(*filters))
                 
                 trades = query.all()
                 return trades
@@ -157,16 +169,6 @@ class PostgresManager:
                 logger.error(f"Failed to get trade by trade_id '{trade_id}': {e}", exc_info=True)
                 raise
 
-    def update_trade(self, trade: Trade):
-        """Updates a trade in the database."""
-        with self.get_db() as db:
-            try:
-                db.merge(trade)
-                db.commit()
-            except Exception as e:
-                db.rollback()
-                logger.error(f"Failed to update trade: {e}")
-
     def update_trade_status(self, trade_id: str, new_status: str):
         """Updates the status of a specific trade in the database."""
         with self.get_db() as db:
@@ -204,11 +206,11 @@ class PostgresManager:
                 logger.error(f"Failed to check for open positions: {e}", exc_info=True)
                 raise
 
-    def get_all_trades_in_range(self, mode: Optional[str] = None, symbol: Optional[str] = None, start_date: str = "1970-01-01T00:00:00Z", end_date: str = "now()"):
+    def get_all_trades_in_range(self, mode: Optional[str] = None, symbol: Optional[str] = None, start_date: str = "-90d", end_date: str = "now()"):
         with self.get_db() as db:
             try:
-                query = db.query(Trade).order_by(desc(Trade.timestamp))
-
+                # This is a simplified version. A more robust implementation would parse the date strings.
+                query = db.query(Trade).order_by(Trade.timestamp)
                 if mode:
                     query = query.filter(Trade.environment == mode)
                 if symbol:
@@ -268,17 +270,6 @@ class PostgresManager:
             except Exception as e:
                 db.rollback()
                 logger.error(f"Failed to clear tables: {e}")
-
-    def clear_price_history(self):
-        """Deletes all data from the 'price_history' table."""
-        with self.get_db() as db:
-            try:
-                db.execute(text("TRUNCATE TABLE price_history RESTART IDENTITY;"))
-                db.commit()
-                logger.info("Price history table cleared successfully.")
-            except Exception as e:
-                db.rollback()
-                logger.error(f"Failed to clear price history table: {e}")
 
     def query_first_timestamp(self, measurement: str) -> Optional[pd.Timestamp]:
         """

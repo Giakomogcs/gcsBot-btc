@@ -9,20 +9,23 @@ from jules_bot.utils.logger import logger
 from jules_bot.core.schemas import TradePoint
 from jules_bot.research.feature_engineering import add_all_features
 from jules_bot.services.trade_logger import TradeLogger
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone, timedelta
 
 class Backtester:
     def __init__(self, db_manager: PostgresManager, days: int = None, start_date: str = None, end_date: str = None):
         self.run_id = f"backtest_{uuid.uuid4()}"
         self.db_manager = db_manager
         
+        start_date_obj, end_date_obj = None, None
+        log_msg = ""
+
         if days:
-            self.end_date = datetime.now(timezone.utc)
-            self.start_date = self.end_date - timedelta(days=days)
+            end_date_obj = datetime.now(timezone.utc)
+            start_date_obj = end_date_obj - timedelta(days=days)
             log_msg = f"Initializing new backtest run with ID: {self.run_id} for the last {days} days."
         elif start_date and end_date:
-            self.start_date = pd.to_datetime(start_date, utc=True)
-            self.end_date = pd.to_datetime(end_date, utc=True)
+            start_date_obj = pd.to_datetime(f"{start_date}T00:00:00Z", utc=True)
+            end_date_obj = pd.to_datetime(f"{end_date}T23:59:59Z", utc=True)
             log_msg = f"Initializing new backtest run with ID: {self.run_id} from {start_date} to {end_date}."
         else:
             raise ValueError("Backtester must be initialized with either 'days' or both 'start_date' and 'end_date'.")
@@ -35,15 +38,15 @@ class Backtester:
         
         price_data = self.db_manager.get_price_data(
             measurement=symbol,
-            start_date=self.start_date.isoformat(),
-            end_date=self.end_date.isoformat()
+            start_date=start_date_obj,
+            end_date=end_date_obj
         )
 
         if price_data.empty:
             raise ValueError("No price data found for the specified period. Cannot run backtest.")
 
         logger.info("Calculating features for the entire backtest period...")
-        self.feature_data = add_all_features(price_data, live_mode=False).dropna()
+        self.feature_data = add_all_features(price_data, live_mode=True).dropna()
         logger.info("Feature calculation complete.")
 
         backtest_settings = config_manager.get_section('BACKTEST')
@@ -71,24 +74,43 @@ class Backtester:
             # 1. Check for potential sales
             for trade_id, position in list(open_positions.items()):
                 target_price = position.get('sell_target_price', float('inf'))
-                if current_price >= target_price:
-                    logger.debug(f"Backtest: Sell condition met for {trade_id} at price {current_price}")
+                
+                # Detailed debug logging to diagnose the "no sells" issue
+                logger.debug(
+                    f"Checking sell for trade {trade_id} at {current_time} | "
+                    f"Candle High: {candle['high']:.2f} | "
+                    f"Target Price: {target_price:.2f} | "
+                    f"Condition Met: {candle['high'] >= target_price}"
+                )
+
+                # Check if the candle's high crossed the target price
+                if candle['high'] >= target_price:
+                    # Simulate the sell executing at the target_price, not the candle's close
+                    fill_price = target_price
+                    logger.info(f"SELL TRIGGERED for {trade_id}. High: {candle['high']:.2f}, Target: {target_price:.2f}. Filling at {fill_price:.2f}")
 
                     original_quantity = position['quantity']
                     sell_quantity = original_quantity * float(strategy_rules.rules.get('sell_factor', 0.9))
                     hodl_asset_amount = original_quantity - sell_quantity
 
-                    success, sell_result = self.mock_trader.execute_sell({'quantity': sell_quantity})
+                    # Execute sell using the specific fill_price
+                    success, sell_result = self.mock_trader.execute_sell({
+                        'quantity': sell_quantity,
+                        'fill_price': fill_price
+                    })
+
                     if success:
                         # --- CORRECTED PNL CALCULATION ---
                         buy_price = position['price']
                         sell_price = sell_result['price']
 
-                        # Note: The mock_trader uses a 'commission_fee' from the [BACKTEST] section,
-                        # but for consistency in PnL calculation, we use the same commission_rate
-                        # as the live bot from [STRATEGY_RULES].
-                        commission_rate = float(strategy_rules.rules.get('commission_rate'))
+                        # Use the single source of truth for commission rate from the mock trader
+                        # to ensure consistency in backtest execution and PnL reporting.
+                        commission_rate = self.mock_trader.commission_rate
 
+                        # Formula: (Net Sell Price - Net Buy Price) * Quantity
+                        # Net Sell Price = sell_price * (1 - commission_rate)
+                        # Net Buy Price = buy_price * (1 + commission_rate) -> This is an approximation, but consistent with sell target logic
                         realized_pnl_usd = ((sell_price * (1 - commission_rate)) - (buy_price * (1 + commission_rate))) * sell_result['quantity']
                         # --- END CORRECTED PNL CALCULATION ---
 
@@ -98,15 +120,27 @@ class Backtester:
                         decision_context = candle.to_dict()
                         decision_context.pop('symbol', None)
 
-                        # Update the original trade
-                        original_trade = self.db_manager.get_trade_by_trade_id(trade_id)
-                        if original_trade:
-                            original_trade.status = "CLOSED"
-                            original_trade.realized_pnl_usd = realized_pnl_usd
-                            original_trade.commission_usd = commission_usd
-                            original_trade.hodl_asset_amount = hodl_asset_amount
-                            original_trade.hodl_asset_value_at_sell = hodl_asset_value_at_sell
-                            self.db_manager.update_trade(original_trade)
+                        trade_data = {
+                            'run_id': self.run_id,
+                            'strategy_name': strategy_name,
+                            'symbol': symbol,
+                            'trade_id': trade_id,
+                            'exchange': "backtest_engine",
+                            'order_type': "sell",
+                            'status': "CLOSED",
+                            'price': sell_result['price'],
+                            'quantity': sell_result['quantity'],
+                            'usd_value': sell_result['usd_value'],
+                            'commission': commission_usd,
+                            'commission_asset': "USDT",
+                            'timestamp': current_time,
+                            'decision_context': decision_context,
+                            'commission_usd': commission_usd,
+                            'realized_pnl_usd': realized_pnl_usd,
+                            'hodl_asset_amount': hodl_asset_amount,
+                            'hodl_asset_value_at_sell': hodl_asset_value_at_sell
+                        }
+                        self.trade_logger.log_trade(trade_data)
 
                         logger.info(f"SELL EXECUTED: TradeID: {trade_id} | "
                                     f"Buy Price: ${position['price']:,.2f} | "
@@ -164,7 +198,8 @@ class Backtester:
                                 'commission_asset': "USDT",
                                 'timestamp': current_time,
                                 'decision_context': decision_context,
-                                'sell_target_price': sell_target_price
+                                'sell_target_price': sell_target_price,
+                                'commission_usd': buy_result['commission']
                             }
                             self.trade_logger.log_trade(trade_data)
 
@@ -183,7 +218,7 @@ class Backtester:
     def _generate_and_save_summary(self):
         logger.info("--- Generating and saving backtest summary ---")
 
-        all_trades = self.db_manager.get_all_trades_in_range(mode="backtest", start_date=self.start_date.isoformat(), end_date=self.end_date.isoformat())
+        all_trades = self.db_manager.get_all_trades_in_range(start_date="0", end_date="now()")
         all_trades_df = pd.DataFrame([t.to_dict() for t in all_trades])
 
         if not all_trades_df.empty:
@@ -198,7 +233,7 @@ class Backtester:
         else:
             # After the fix in PostgresManager, all trades retain their original 'buy' order_type.
             # A "sell" is now represented by a trade's status being 'CLOSED'.
-            num_buy_trades = len(all_trades_df[all_trades_df['order_type'] == 'buy'])
+            num_buy_trades = len(all_trades_df)
             sell_trades = all_trades_df[all_trades_df['status'] == 'CLOSED']
             num_sell_trades = len(sell_trades)
             total_realized_pnl = sell_trades['realized_pnl_usd'].sum() if 'realized_pnl_usd' in sell_trades.columns else 0.0

@@ -112,48 +112,84 @@ class CorePriceCollector:
 
     def _get_historical_klines(self, start_dt: datetime.datetime, end_dt: datetime.datetime) -> pd.DataFrame:
         """
-        Fetches historical OHLCV data from Binance using the robust klines generator.
+        Fetches historical OHLCV data from Binance, handling pagination and API errors with retries.
         """
         logger.info(f"Fetching OHLCV data for {self.symbol} from {start_dt} to {end_dt}...")
         if not self.binance_client:
             logger.warning("Binance client not initialized. Cannot fetch historical klines.")
             return pd.DataFrame()
 
-        # Convert datetimes to the string format required by the generator
-        start_str = start_dt.strftime("%d %b, %Y %H:%M:%S")
-        end_str = end_dt.strftime("%d %b, %Y %H:%M:%S")
-
-        klines_generator = self.binance_client.get_historical_klines_generator(
-            self.symbol, Client.KLINE_INTERVAL_1MINUTE, start_str, end_str=end_str
-        )
-
-        # Use tqdm to show progress as we consume the generator
-        total_minutes = (end_dt - start_dt).total_seconds() / 60
         all_klines = []
-        with tqdm(total=total_minutes, desc="Downloading from Binance", unit=" candles") as pbar:
-            for kline in klines_generator:
-                all_klines.append(kline)
-                pbar.update(1)
+        current_start_dt = start_dt
+        end_ms = int(end_dt.timestamp() * 1000)
+        
+        retries = 5
+        backoff_factor = 0.5
+
+        with tqdm(total=(end_dt - start_dt).total_seconds() / 60, desc="Downloading from Binance", unit=" candles") as pbar:
+            while current_start_dt < end_dt:
+                klines_fetched_in_batch = False
+                for i in range(retries):
+                    try:
+                        current_start_ms = int(current_start_dt.timestamp() * 1000)
+                        klines = self.binance_client.get_historical_klines(
+                            self.symbol, Client.KLINE_INTERVAL_1MINUTE, start_str=current_start_ms, end_str=end_ms, limit=1000
+                        )
+                        
+                        if not klines:
+                            # This can happen on testnet if there's a gap in trading.
+                            # Instead of stopping, we log it and advance our start time to skip the gap.
+                            logger.warning(f"No klines returned from Binance for start time {current_start_dt}. Advancing to next chunk.")
+                            current_start_dt += pd.Timedelta(minutes=1000) # Advance by the API limit
+                            klines_fetched_in_batch = True
+                            break # Exit retry loop and continue pagination
+
+                        all_klines.extend(klines)
+                        pbar.update(len(klines))
+                        
+                        last_kline_ts_ms = klines[-1][0]
+                        current_start_dt = pd.to_datetime(last_kline_ts_ms, unit='ms', utc=True) + pd.Timedelta(minutes=1)
+                        
+                        klines_fetched_in_batch = True
+                        time.sleep(0.1) # Be respectful to the API
+                        break # Success, exit retry loop
+
+                    except (BinanceAPIException, BinanceRequestException) as e:
+                        if i < retries - 1:
+                            sleep_time = backoff_factor * (2 ** i)
+                            logger.warning(f"API Error fetching klines: {e}. Retrying in {sleep_time} seconds...")
+                            time.sleep(sleep_time)
+                        else:
+                            logger.error(f"API Error after {retries} retries for start time {current_start_dt}. Skipping this chunk.")
+                            # Advance the start time to skip the problematic chunk and continue downloading
+                            current_start_dt += pd.Timedelta(minutes=1000)
+                            klines_fetched_in_batch = True # Mark as 'handled' to continue the main loop
+                            break # Exit retry loop
+                
+                if not klines_fetched_in_batch:
+                    # This should now be unreachable, but as a safeguard:
+                    logger.error("A downloader logic error occurred. Aborting.")
+                    break
 
         if not all_klines:
-            logger.warning("No klines returned from Binance generator.")
             return pd.DataFrame()
 
         # Format the dataframe
         df = pd.DataFrame(all_klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'qav', 'nt', 'tbbav', 'tbqav', 'ignore'])
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms', utc=True)
-
-        # Remove duplicates and set index
-        df.drop_duplicates(subset=['timestamp'], inplace=True)
         df.set_index('timestamp', inplace=True)
+        
+        if df.index.has_duplicates:
+            num_duplicates = df.index.duplicated().sum()
+            logger.warning(f"Received {num_duplicates} duplicate timestamps from Binance. Removing them.")
+            df = df[~df.index.duplicated(keep='first')]
 
-        # Select and cast columns
         df = df[['open', 'high', 'low', 'close', 'volume']].astype(float)
-
-        # The generator can sometimes fetch data slightly outside the requested range, so we filter it.
+        df = df.sort_index() # Ensure data is sorted before slicing
         df = df.loc[start_dt:end_dt]
-
-        logger.info(f"\nFetched a total of {len(df)} unique candles from Binance.")
+        
+        unique_candles = len(df)
+        logger.info(f"\nFetched a total of {unique_candles} unique candles from Binance.")
         return df
 
     def run(self):
@@ -189,8 +225,8 @@ class CorePriceCollector:
 def prepare_backtest_data(days: int, force_reload: bool = False):
     """
     Acts as a smart guardian for the historical database. It ensures the database
-    contains AT LEAST the required number of days of data, and that this data is
-    up-to-date by downloading only missing data from Binance.
+    is up-to-date and contains at least the required number of days of data.
+    This function is non-destructive, only downloading missing data.
     """
     logger.info("--- Starting Intelligent Data Preparation ---")
     
@@ -199,49 +235,54 @@ def prepare_backtest_data(days: int, force_reload: bool = False):
 
     if force_reload:
         logger.warning("`--force-reload` flag detected. Deleting all existing price data for a full refresh.")
-        collector.db_manager.clear_price_history()
-        collector.db_manager.clear_backtest_trades()
+        collector.db_manager.clear_all_tables()
 
-    # --- New Logic to ensure sufficient historical data ---
-    end_date = datetime.datetime.now(datetime.timezone.utc)
-    required_start_date = end_date - timedelta(days=days)
-    
-    first_ts_in_db = collector.db_manager.query_first_timestamp(collector.measurement)
-
-    if first_ts_in_db is None or first_ts_in_db > required_start_date:
-        download_start_date = required_start_date
-        download_end_date = first_ts_in_db if first_ts_in_db is not None else end_date
-
-        logger.info(f"Database is missing older data. Downloading from {download_start_date} to {download_end_date}.")
-        if not online_mode:
-            logger.error(f"CRITICAL: Database needs older data, but Binance is offline. Cannot proceed.")
-            return
-
-        df_to_write = collector._get_historical_klines(download_start_date, download_end_date)
-        if not df_to_write.empty:
-            collector._write_dataframe_to_postgres(df_to_write)
-        else:
-            logger.warning("Failed to download any historical data.")
-
-    # --- Incremental update logic (runs after ensuring history is sufficient) ---
     if not online_mode:
-        logger.warning("Binance is offline. Cannot perform incremental update. Using existing data.")
+        logger.warning("Binance is offline. Using existing local data only.")
         logger.info("--- Data Preparation Finished (Offline Mode) ---")
         return
 
+    now = datetime.datetime.now(datetime.timezone.utc)
+    
+    # --- Phase 1: Historical Backfill (Backward-fill) ---
+    # Ensures the database has at least the required number of days of history.
+    required_start_date = now - timedelta(days=days)
+    first_ts_in_db = collector.db_manager.query_first_timestamp(collector.measurement)
+
+    if first_ts_in_db is None:
+        # Database is empty. Perform an initial download for the entire required period.
+        logger.info(f"Database is empty. Performing initial download for the last {days} days...")
+        df_historical = collector._get_historical_klines(required_start_date, now)
+        if not df_historical.empty:
+            collector._write_dataframe_to_postgres(df_historical)
+    elif first_ts_in_db > required_start_date:
+        # We have data, but not enough history. Download only the missing older chunk.
+        backward_fill_end_date = first_ts_in_db - timedelta(minutes=1)
+        logger.info(f"Insufficient history. Back-filling older data from {required_start_date} to {backward_fill_end_date}.")
+        df_historical = collector._get_historical_klines(required_start_date, backward_fill_end_date)
+        if not df_historical.empty:
+            collector._write_dataframe_to_postgres(df_historical)
+    else:
+        # The oldest record is older than or at the required start date.
+        logger.info(f"Sufficient historical data found (oldest record at {first_ts_in_db}). No back-fill needed.")
+
+    # --- Phase 2: Incremental Update (Forward-fill) ---
+    # Ensures the data is up-to-date from the last record to now.
     last_ts_in_db = collector._query_last_timestamp()
 
     if last_ts_in_db:
-        incremental_start_date = last_ts_in_db + timedelta(minutes=1)
-
-        if incremental_start_date < end_date:
-            logger.info(f"History is sufficient. Synchronizing new data from {incremental_start_date} to {end_date}.")
-            df_to_write = collector._get_historical_klines(incremental_start_date, end_date)
-            if not df_to_write.empty:
-                collector._write_dataframe_to_postgres(df_to_write)
+        forward_fill_start_date = last_ts_in_db + timedelta(minutes=1)
+        if forward_fill_start_date < now:
+            logger.info(f"Synchronizing new data from {forward_fill_start_date} up to present.")
+            df_new = collector._get_historical_klines(forward_fill_start_date, now)
+            if not df_new.empty:
+                collector._write_dataframe_to_postgres(df_new)
         else:
-            logger.info(f"Data is already up-to-date. Last record at {last_ts_in_db}. No action needed.")
-    
+            logger.info("Data is already up-to-date. No forward-fill needed.")
+    else:
+        # This case should ideally not be hit if the backfill logic is correct, but is here as a safeguard.
+        logger.warning("No data found after historical backfill. Forward-fill will not run.")
+
     logger.info("--- Intelligent Data Preparation Finished ---")
 
 

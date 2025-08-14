@@ -60,13 +60,18 @@ class MockTrader(Trader):
         return True, trade_data
 
     def execute_sell(self, position_data: dict) -> tuple[bool, dict]:
-        """Simulates a market sell order."""
+        """
+        Simulates a market sell order.
+        Can be executed at the current market price or at a specific `fill_price`.
+        """
         quantity_to_sell = position_data.get('quantity')
-        if self.btc_balance < quantity_to_sell:
+        if not quantity_to_sell or self.btc_balance < quantity_to_sell:
             logging.warning(f"Insufficient BTC to sell. Required: {quantity_to_sell}, Available: {self.btc_balance}")
             return False, {"error": "Insufficient BTC balance."}
 
-        price = self.get_current_price()
+        # Use a specific fill_price if provided (for limit orders), otherwise use current market price
+        price = position_data.get('fill_price', self.get_current_price())
+        
         usd_value = quantity_to_sell * price
         commission = usd_value * self.commission_rate
         net_usd_value = usd_value - commission
