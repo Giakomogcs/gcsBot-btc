@@ -11,7 +11,7 @@ from textual.containers import VerticalScroll, Horizontal
 from textual.widgets import Header, Footer, DataTable, Input, Button, Label, Static, RichLog, ProgressBar
 from textual.timer import Timer
 from textual.validation import Validator, ValidationResult
-from textual.worker import Worker
+from textual.worker import work
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -65,6 +65,23 @@ class TUIApp(App):
     .hidden {
         display: none;
     }
+    .summary-container {
+        layout: grid;
+        grid-size: 2;
+        grid-gutter: 1;
+        margin: 1 0;
+    }
+    .summary-box {
+        border: round $panel-lighten-2;
+        padding: 1;
+        height: auto;
+    }
+    .summary-title {
+        color: $text-muted;
+    }
+    .summary-value {
+        font-size: 110%;
+    }
     """
 
     def __init__(self, mode: str = "test", *args, **kwargs):
@@ -103,6 +120,29 @@ class TUIApp(App):
                     yield Static("Symbol: N/A", id="status_symbol")
                     yield Static("Price: N/A", id="status_price")
 
+                yield Static("Performance Summary", classes="title")
+                with Horizontal(classes="summary-container"):
+                    with VerticalScroll(classes="summary-box"):
+                        yield Label("Total Investment", classes="summary-title")
+                        yield Static("N/A", id="summary_investment", classes="summary-value")
+                    with VerticalScroll(classes="summary-box"):
+                        yield Label("Wallet Value", classes="summary-title")
+                        yield Static("N/A", id="summary_wallet_value", classes="summary-value")
+                with Horizontal(classes="summary-container"):
+                    with VerticalScroll(classes="summary-box"):
+                        yield Label("Unrealized PnL", classes="summary-title")
+                        yield Static("N/A", id="summary_unrealized_pnl", classes="summary-value")
+                    with VerticalScroll(classes="summary-box"):
+                        yield Label("Realized PnL", classes="summary-title")
+                        yield Static("N/A", id="summary_realized_pnl", classes="summary-value")
+                with Horizontal(classes="summary-container"):
+                    with VerticalScroll(classes="summary-box"):
+                        yield Label("Trading vs HODL", classes="summary-title")
+                        yield Static("N/A", id="summary_hodl_comp", classes="summary-value")
+                    with VerticalScroll(classes="summary-box"):
+                        yield Label("Buy Signal", classes="summary-title")
+                        yield ProgressBar(total=100, show_eta=False, show_value=True, id="buy_signal_progress")
+
                 yield Static("Open Positions", classes="title")
                 yield DataTable(id="positions_table")
 
@@ -131,7 +171,7 @@ class TUIApp(App):
         if self.log_file_handle:
             self.log_file_handle.close()
 
-    @Worker(group="log_tailer")
+    @work(group="log_tailer")
     def tail_log_file(self) -> None:
         self.log_display.write(f"Tailing log file: [yellow]{self.log_file_path}[/]")
         try:
@@ -226,15 +266,34 @@ class TUIApp(App):
 
     async def update_dashboard(self) -> None:
         success, data = self.run_script(["python", "scripts/get_bot_data.py", self.mode])
-        if not success:
+        if not success or not isinstance(data, dict):
             return
 
-        # Update status bar
+        # --- Update Status Bar ---
         price = Decimal(data.get("current_btc_price", 0))
         self.query_one("#status_symbol").update(f"Symbol: {data.get('symbol', 'N/A')}")
         self.query_one("#status_price").update(f"Price: ${price:,.2f}")
 
-        # Update positions table
+        # --- Update Summary Panel ---
+        summary = data.get("summary", {})
+        
+        def format_pnl(value):
+            pnl = Decimal(value)
+            color = "green" if pnl >= 0 else "red"
+            return f"[{color}]${pnl:,.2f}[/]"
+
+        self.query_one("#summary_investment").update(f"${Decimal(summary.get('total_investment_usd', 0)):,.2f}")
+        self.query_one("#summary_wallet_value").update(f"${Decimal(summary.get('wallet_total_usd', 0)):,.2f}")
+        self.query_one("#summary_unrealized_pnl").update(format_pnl(summary.get('total_unrealized_pnl', 0)))
+        self.query_one("#summary_realized_pnl").update(format_pnl(summary.get('total_realized_pnl', 0)))
+        self.query_one("#summary_hodl_comp").update(format_pnl(summary.get('trading_vs_hodl_usd', 0)))
+        
+        # --- Update Buy Signal Progress ---
+        buy_signal = data.get("buy_signal_status", {})
+        buy_progress = float(buy_signal.get("btc_purchase_progress_pct", 0))
+        self.query_one("#buy_signal_progress").progress = buy_progress
+
+        # --- Update Positions Table ---
         pos_table = self.query_one("#positions_table", DataTable)
         pos_table.clear()
         positions = data.get("open_positions_status", [])
@@ -246,8 +305,8 @@ class TUIApp(App):
                 pnl = Decimal(pos.get("unrealized_pnl", 0))
                 sell_target = Decimal(pos.get("sell_target_price", 0))
                 progress = float(pos.get("progress_to_sell_target_pct", 0))
+                
                 pnl_color = "green" if pnl >= 0 else "red"
-
                 progress_bar = ProgressBar(total=100, show_eta=False, show_value=True)
                 progress_bar.progress = progress
 
@@ -263,18 +322,17 @@ class TUIApp(App):
         else:
             pos_table.add_row("No open positions.")
 
-        # Update wallet table
+        # --- Update Wallet Table ---
         wallet_table = self.query_one("#wallet_table", DataTable)
         wallet_table.clear()
         balances = data.get("wallet_balances", [])
         if balances:
             for bal in balances:
                 asset = bal.get("asset")
-                if asset in ["USDT", "BTC"]: # Only show relevant assets
-                    free = Decimal(bal.get("free", 0))
-                    locked = Decimal(bal.get("locked", 0))
-                    usd_val = Decimal(bal.get("usd_value", 0))
-                    wallet_table.add_row(asset, f"{free:.8f}", f"{locked:.8f}", f"${usd_val:,.2f}")
+                free = Decimal(bal.get("free", 0))
+                locked = Decimal(bal.get("locked", 0))
+                usd_val = Decimal(bal.get("usd_value", 0))
+                wallet_table.add_row(asset, f"{free:.8f}", f"{locked:.8f}", f"${usd_val:,.2f}")
         else:
             wallet_table.add_row("No wallet data.")
 

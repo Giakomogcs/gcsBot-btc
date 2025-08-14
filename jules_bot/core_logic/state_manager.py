@@ -6,6 +6,7 @@ from jules_bot.utils.config_manager import config_manager
 from jules_bot.services.trade_logger import TradeLogger
 from jules_bot.bot.account_manager import AccountManager
 from jules_bot.core_logic.strategy_rules import StrategyRules
+import datetime
 
 class StateManager:
     def __init__(self, mode: str, bot_id: str):
@@ -123,23 +124,74 @@ class StateManager:
                     )
                     self.db_manager.update_trade_status(pos.trade_id, 'RECONCILED')
 
-            # 4. Reconcile: Log warnings for untracked assets on the exchange
+            # 4. Reconcile: Create positions for untracked assets on the exchange
             quote_asset = config_manager.get('APP', 'quote_asset', fallback='USDT')
             for asset, balance in holdings_map.items():
                 if asset == quote_asset: # Ignore the quote asset (e.g., USDT)
                     continue
                 if asset not in db_positions_map:
-                    logger.warning(
-                        f"Found untracked asset {asset} on the exchange with balance {balance}. "
-                        "This holding is not associated with any 'OPEN' or 'TREASURY' position in the database. "
-                        "Manual review may be needed."
-                    )
+                    self._create_position_from_untracked_asset(asset, balance, account_manager, strategy_rules)
 
             logger.info("--- Holdings synchronization finished ---")
 
         except Exception as e:
             logger.error(f"An error occurred during holdings synchronization: {e}", exc_info=True)
 
+    def _create_position_from_untracked_asset(self, asset: str, balance: float, account_manager: AccountManager, strategy_rules: StrategyRules):
+        """
+        Creates a new 'OPEN' position in the database for an untracked asset found on the exchange.
+        """
+        logger.info(f"Attempting to create a new position for untracked asset: {asset}")
+        
+        # Assuming USDT is the quote asset, which is a common case.
+        # This could be made more robust by fetching pairs from the exchange info.
+        symbol = f"{asset}USDT"
+        
+        # Check if a position for this symbol already exists in the database to avoid duplicates.
+        # This relies on a new method in PostgresManager that needs to be implemented.
+        if self.db_manager.get_open_position_by_symbol(symbol=symbol, environment=self.mode):
+            logger.warning(f"An open position for {symbol} already exists in the database. Skipping creation.")
+            return
+
+        # Fetch the most recent trade from Binance to infer the purchase details.
+        # We limit to the last 1 trade to get the most recent purchase.
+        trade_history = account_manager.get_trade_history(symbol=symbol, limit=1)
+        if not trade_history:
+            logger.error(f"Could not fetch trade history for {symbol}. Cannot create position for untracked asset.")
+            return
+
+        last_trade = trade_history[0]
+        purchase_price = float(last_trade['price'])
+        commission = float(last_trade['commission'])
+        commission_asset = last_trade['commissionAsset']
+        
+        # Calculate the sell target price based on the strategy rules.
+        sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
+
+        # Construct the trade data dictionary for logging.
+        trade_data = {
+            'run_id': self.bot_id,
+            'environment': self.mode,
+            'strategy_name': 'sync', # Mark as a synchronized trade
+            'symbol': symbol,
+            'trade_id': str(uuid.uuid4()),
+            'exchange': 'binance',
+            'status': 'OPEN',
+            'order_type': 'buy',
+            'price': purchase_price,
+            'quantity': balance,
+            'usd_value': balance * purchase_price,
+            'commission': commission,
+            'commission_asset': commission_asset,
+            'timestamp': datetime.datetime.fromtimestamp(last_trade['time'] / 1000, tz=datetime.timezone.utc),
+            'exchange_order_id': last_trade['orderId'],
+            'binance_trade_id': last_trade.get('id'), # Use .get() for safety
+            'sell_target_price': sell_target_price,
+            'decision_context': {'reason': 'untracked_asset_sync'}
+        }
+        
+        self.trade_logger.log_trade(trade_data)
+        logger.info(f"Successfully created a new 'OPEN' position for {symbol} from an untracked on-exchange asset.")
 
     def record_partial_sell(self, original_trade_id: str, remaining_quantity: float, sell_data: dict):
         """

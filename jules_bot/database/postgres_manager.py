@@ -141,6 +141,26 @@ class PostgresManager:
                 logger.error(f"Failed to get open positions from DB: {e}")
                 raise
 
+    def get_open_position_by_symbol(self, symbol: str, environment: str) -> Optional[Trade]:
+        """
+        Fetches a single open position for a given symbol and environment.
+        Returns the Trade model instance if found, otherwise None.
+        """
+        with self.get_db() as db:
+            try:
+                query = db.query(Trade).filter(
+                    and_(
+                        Trade.status == "OPEN",
+                        Trade.symbol == symbol,
+                        Trade.environment == environment
+                    )
+                )
+                trade = query.first()
+                return trade
+            except Exception as e:
+                logger.error(f"Failed to get open position for symbol {symbol} from DB: {e}")
+                raise
+
     def get_treasury_positions(self, environment: str, bot_id: Optional[str] = None) -> list:
         """
         Fetches all trades marked as 'TREASURY' for the current environment.
