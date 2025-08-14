@@ -33,11 +33,9 @@ class StateManager:
         """Queries the database and returns the number of currently open trades."""
         return len(self.get_open_positions())
 
-    def get_trade_history(self, mode: str) -> list[dict]:
+    def get_trade_history(self, mode: str, start_date: str = "1970-01-01T00:00:00Z", end_date: str = "now()") -> list[dict]:
         """Fetches all trades (open and closed) from the database for the given mode."""
-        # Note: The date range parameters are omitted to use the default values,
-        # effectively fetching all trades for the given mode.
-        return self.db_manager.get_all_trades_in_range(mode=mode)
+        return self.db_manager.get_all_trades_in_range(mode=mode, start_date=start_date, end_date=end_date)
 
     def get_last_purchase_price(self) -> float:
         """
@@ -95,7 +93,7 @@ class StateManager:
                 return
 
             # 2. Fetch all trades from the local DB for the same symbol and environment
-            db_trades = self.db_manager.get_all_trades_in_range(mode=self.mode, symbol=symbol)
+            db_trades = self.get_trade_history(self.mode, symbol=symbol)
             existing_binance_trade_ids = {t.binance_trade_id for t in db_trades if t.binance_trade_id}
             logger.info(f"Found {len(existing_binance_trade_ids)} existing trades in the database for {symbol}.")
 

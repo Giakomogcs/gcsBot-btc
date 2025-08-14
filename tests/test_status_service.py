@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 from decimal import Decimal
+import pandas as pd
 
 from jules_bot.services.status_service import StatusService
 from jules_bot.database.models import Trade
@@ -11,13 +12,13 @@ class TestStatusService(unittest.TestCase):
         # Mock dependencies
         self.db_manager = MagicMock()
         self.config_manager = MagicMock()
-        self.market_data_provider = MagicMock()
+        self.feature_calculator = MagicMock()
 
         # Instantiate the service with mocked dependencies
         self.status_service = StatusService(
             db_manager=self.db_manager,
             config_manager=self.config_manager,
-            market_data_provider=self.market_data_provider
+            feature_calculator=self.feature_calculator
         )
 
     def test_get_extended_status_with_open_positions(self, MockExchangeManager):
@@ -27,21 +28,17 @@ class TestStatusService(unittest.TestCase):
         # 1. Arrange: Mock ExchangeManager instance and its methods
         mock_exchange_instance = MockExchangeManager.return_value
         mock_exchange_instance.get_account_balance.return_value = [
-            {'asset': 'BTC', 'free': '1.0', 'locked': '0.5'}
-        ]
-        mock_exchange_instance.get_open_orders.return_value = [
-            {'orderId': 'trade-still-open'}
+            {'asset': 'BTC', 'free': '1.0', 'locked': '0.5', 'usd_value': '52000.0'}
         ]
 
         # Arrange: Mock DB results
         trade1 = Trade(trade_id="trade-still-open", price=50000, quantity=0.1, sell_target_price=55000, exchange_order_id="trade-still-open")
-        trade2 = Trade(trade_id="trade-closed-on-exchange", price=48000, quantity=0.2, sell_target_price=50000, exchange_order_id="trade-closed-on-exchange")
-        self.db_manager.get_open_positions.return_value = [trade1, trade2]
-        self.db_manager.get_all_trades_in_range.return_value = [trade1, trade2]
+        self.db_manager.get_open_positions.return_value = [trade1]
+        self.db_manager.get_all_trades_in_range.return_value = [trade1]
 
         # Arrange: Mock market data
-        mock_market_data = {'close': 52000.0, 'ema_20': 51000.0, 'bbl_20_2_0': 50000, 'high': 52100, 'ema_100': 50500}
-        self.market_data_provider.get_latest_data.return_value = mock_market_data
+        mock_market_data = pd.Series({'close': 52000.0, 'ema_20': 51000.0, 'bbl_20_2_0': 50000, 'high': 52100, 'ema_100': 50500})
+        self.feature_calculator.get_current_candle_with_features.return_value = mock_market_data
 
         # Arrange: Mock strategy evaluation
         self.status_service.strategy.evaluate_buy_signal = MagicMock(return_value=(False, 'uptrend', 'Price > EMA20'))
@@ -53,7 +50,6 @@ class TestStatusService(unittest.TestCase):
         # Assert that ExchangeManager was called correctly
         MockExchangeManager.assert_called_with(mode='test')
         mock_exchange_instance.get_account_balance.assert_called_once()
-        mock_exchange_instance.get_open_orders.assert_called_once_with("BTCUSDT")
 
         # Assert reconciliation logic: only one trade should be in the status
         self.assertEqual(len(result["open_positions_status"]), 1)

@@ -199,7 +199,7 @@ def prepare_backtest_data(days: int, force_reload: bool = False):
 
     if force_reload:
         logger.warning("`--force-reload` flag detected. Deleting all existing price data for a full refresh.")
-        collector.db_manager.clear_all_tables()
+        collector.db_manager.clear_backtest_trades()
 
     # --- New Logic to ensure sufficient historical data ---
     end_date = datetime.datetime.now(datetime.timezone.utc)
@@ -215,7 +215,7 @@ def prepare_backtest_data(days: int, force_reload: bool = False):
             return
 
         logger.info(f"Clearing existing data (if any) and downloading full {days}-day history from {required_start_date} to {end_date}.")
-        collector.db_manager.clear_all_tables()
+        collector.db_manager.clear_backtest_trades()
         
         df_to_write = collector._get_historical_klines(required_start_date, end_date)
         if not df_to_write.empty:

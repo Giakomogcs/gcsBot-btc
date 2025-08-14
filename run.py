@@ -259,7 +259,7 @@ def clear_backtest_trades():
     """Deletes all trades from the 'backtest' environment in the database."""
     print("🗑️  Attempting to clear all backtest trades from the database...")
     _run_in_container(
-        command=["scripts/clear_trades_measurement.py", "backtest"],
+        command=["scripts/clear_backtest_trades.py"],
         interactive=True
     )
 

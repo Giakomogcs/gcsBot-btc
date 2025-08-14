@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from jules_bot.core.schemas import TradePoint
 from jules_bot.database.models import Base, Trade, BotStatus, PriceHistory
 from jules_bot.utils.logger import logger
+from datetime import datetime, timedelta
 
 class PostgresManager:
     def __init__(self, config: dict):
@@ -77,8 +78,15 @@ class PostgresManager:
     def get_price_data(self, measurement: str, start_date: str = "-30d", end_date: str = "now()") -> pd.DataFrame:
         with self.get_db() as db:
             try:
-                # This is a simplified version. A more robust implementation would parse the date strings.
-                query = db.query(PriceHistory).filter(PriceHistory.symbol == measurement).order_by(PriceHistory.timestamp)
+                start_date_parsed = pd.to_datetime(start_date)
+                end_date_parsed = pd.to_datetime(end_date) if end_date != "now()" else datetime.utcnow()
+
+                query = db.query(PriceHistory).filter(
+                    PriceHistory.symbol == measurement,
+                    PriceHistory.timestamp >= start_date_parsed,
+                    PriceHistory.timestamp <= end_date_parsed
+                ).order_by(PriceHistory.timestamp)
+
                 df = pd.read_sql(query.statement, self.engine)
                 df = df.rename(columns={"timestamp": "timestamp"}).set_index('timestamp')
                 return df
@@ -103,7 +111,7 @@ class PostgresManager:
                 if symbol:
                     filters.append(Trade.symbol == symbol)
                 
-                query = db.query(Trade).filter(and_(*filters))
+                query = db.query(Trade).filter(and_(*filters)).order_by(desc(Trade.timestamp))
                 
                 trades = query.all()
                 return trades
@@ -142,6 +150,16 @@ class PostgresManager:
                 logger.error(f"Failed to get trade by trade_id '{trade_id}': {e}", exc_info=True)
                 raise
 
+    def update_trade(self, trade: Trade):
+        """Updates a trade in the database."""
+        with self.get_db() as db:
+            try:
+                db.merge(trade)
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                logger.error(f"Failed to update trade: {e}")
+
     def update_trade_status(self, trade_id: str, new_status: str):
         """Updates the status of a specific trade in the database."""
         with self.get_db() as db:
@@ -179,11 +197,11 @@ class PostgresManager:
                 logger.error(f"Failed to check for open positions: {e}", exc_info=True)
                 raise
 
-    def get_all_trades_in_range(self, mode: Optional[str] = None, symbol: Optional[str] = None, start_date: str = "-90d", end_date: str = "now()"):
+    def get_all_trades_in_range(self, mode: Optional[str] = None, symbol: Optional[str] = None, start_date: str = "1970-01-01T00:00:00Z", end_date: str = "now()"):
         with self.get_db() as db:
             try:
-                # This is a simplified version. A more robust implementation would parse the date strings.
-                query = db.query(Trade).order_by(Trade.timestamp)
+                query = db.query(Trade).order_by(desc(Trade.timestamp))
+
                 if mode:
                     query = query.filter(Trade.environment == mode)
                 if symbol:

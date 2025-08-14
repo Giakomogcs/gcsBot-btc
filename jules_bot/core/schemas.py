@@ -57,7 +57,6 @@ class TradePoint:
     hodl_asset_value_at_sell: Optional[float] = None
 
     # --- Legacy Fields (to be deprecated) ---
-    backtest_id: Optional[str] = None
     realized_pnl: Optional[float] = None
     held_quantity: Optional[float] = None
 

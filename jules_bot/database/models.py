@@ -52,7 +52,6 @@ class Trade(Base):
     realized_pnl_usd = Column(Float)
     hodl_asset_amount = Column(Float)
     hodl_asset_value_at_sell = Column(Float)
-    backtest_id = Column(String)
     realized_pnl = Column(Float)
     held_quantity = Column(Float)
 

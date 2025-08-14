@@ -99,27 +99,15 @@ class Backtester:
                         decision_context = candle.to_dict()
                         decision_context.pop('symbol', None)
 
-                        trade_data = {
-                            'run_id': self.run_id,
-                            'strategy_name': strategy_name,
-                            'symbol': symbol,
-                            'trade_id': trade_id,
-                            'exchange': "backtest_engine",
-                            'order_type': "sell",
-                            'status': "CLOSED",
-                            'price': sell_result['price'],
-                            'quantity': sell_result['quantity'],
-                            'usd_value': sell_result['usd_value'],
-                            'commission': commission_usd,
-                            'commission_asset': "USDT",
-                            'timestamp': current_time,
-                            'decision_context': decision_context,
-                            'commission_usd': commission_usd,
-                            'realized_pnl_usd': realized_pnl_usd,
-                            'hodl_asset_amount': hodl_asset_amount,
-                            'hodl_asset_value_at_sell': hodl_asset_value_at_sell
-                        }
-                        self.trade_logger.log_trade(trade_data)
+                        # Update the original trade
+                        original_trade = self.db_manager.get_trade_by_trade_id(trade_id)
+                        if original_trade:
+                            original_trade.status = "CLOSED"
+                            original_trade.realized_pnl_usd = realized_pnl_usd
+                            original_trade.commission_usd = commission_usd
+                            original_trade.hodl_asset_amount = hodl_asset_amount
+                            original_trade.hodl_asset_value_at_sell = hodl_asset_value_at_sell
+                            self.db_manager.update_trade(original_trade)
 
                         logger.info(f"SELL EXECUTED: TradeID: {trade_id} | "
                                     f"Buy Price: ${position['price']:,.2f} | "
@@ -196,7 +184,7 @@ class Backtester:
     def _generate_and_save_summary(self):
         logger.info("--- Generating and saving backtest summary ---")
 
-        all_trades = self.db_manager.get_all_trades_in_range(start_date="0", end_date="now()")
+        all_trades = self.db_manager.get_all_trades_in_range(mode="backtest", start_date="0", end_date="now()")
         all_trades_df = pd.DataFrame([t.to_dict() for t in all_trades])
 
         if not all_trades_df.empty:
