@@ -39,30 +39,29 @@ logger.setLevel(logging.DEBUG)
 logger.propagate = False # Impede que os logs sejam passados para o logger root
 
 if not logger.handlers:
-    # 1. Handler para o ARQUIVO DE DEBUG (gcs_bot.log)
-    log_file_path = os.path.join(LOGS_DIR, 'jules_bot.log')
+    json_formatter = JsonFormatter()
+
+    # 1. Handler para o ARQUIVO DE LOG ESTRUTURADO (jules_bot.jsonl)
+    log_file_path = os.path.join(LOGS_DIR, 'jules_bot.jsonl')
     file_handler = TimedRotatingFileHandler(log_file_path, when="midnight", interval=1, backupCount=14, encoding='utf-8')
-    file_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    file_handler.setFormatter(file_formatter)
-    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(json_formatter)
+    file_handler.setLevel(logging.DEBUG) # Captura todos os níveis no arquivo
     logger.addHandler(file_handler)
 
-    # 2. Handler para o CONSOLE
+    # 2. Handler para o CONSOLE (também estruturado)
     console_handler = logging.StreamHandler(sys.stdout)
-    console_formatter = logging.Formatter('%(levelname)s: %(message)s') # Formato mais limpo
-    console_handler.setFormatter(console_formatter)
+    console_handler.setFormatter(json_formatter)
     console_handler.setLevel(logging.INFO) # Nível INFO para o console para não poluir
     logger.addHandler(console_handler)
 
-    # 3. Handler para o ARQUIVO DE PERFORMANCE (performance.jsonl)
+    # 3. Handler para o ARQUIVO DE PERFORMANCE (performance.jsonl) - Mantido por consistência
     perf_log_path = os.path.join(LOGS_DIR, 'performance.jsonl')
     perf_handler = logging.FileHandler(perf_log_path, mode='a', encoding='utf-8')
-    perf_formatter = JsonFormatter()
-    perf_handler.setFormatter(perf_formatter)
+    perf_handler.setFormatter(json_formatter)
     perf_handler.setLevel(PERFORMANCE_LEVEL_NUM)
     logger.addHandler(perf_handler)
 
-    logger.info("Logger configurado. Logs de console a partir do nível INFO.")
+    logger.info("Logger configurado para output JSON estruturado.")
 
 def log_table(title, data, headers="keys", tablefmt="heavy_grid"):
     try:
