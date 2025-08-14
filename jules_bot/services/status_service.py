@@ -87,6 +87,13 @@ class StatusService:
             # 6. Fetch live wallet data
             wallet_balances = exchange_manager.get_account_balance()
 
+            # Filter for relevant assets to keep the output clean
+            relevant_assets = {'BTC', 'USDT'}
+            filtered_balances = [
+                balance for balance in wallet_balances
+                if balance.get('asset') in relevant_assets
+            ]
+
             # 7. Assemble the final status object
             extended_status = {
                 "mode": environment,
@@ -100,7 +107,7 @@ class StatusService:
                     "btc_purchase_progress_pct": btc_purchase_progress_pct
                 },
                 "trade_history": trade_history_dicts,
-                "wallet_balances": wallet_balances
+                "wallet_balances": filtered_balances
             }
 
             return extended_status
