@@ -9,7 +9,7 @@ from contextlib import contextmanager
 from jules_bot.core.schemas import TradePoint
 from jules_bot.database.models import Base, Trade, BotStatus, PriceHistory
 from jules_bot.utils.logger import logger
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 class PostgresManager:
     def __init__(self, config: dict):
@@ -80,11 +80,13 @@ class PostgresManager:
             try:
                 if start_date.startswith('-') and start_date.endswith('d'):
                     days_to_subtract = int(start_date[1:-1])
-                    start_date_parsed = datetime.utcnow() - timedelta(days=days_to_subtract)
+                    start_date_parsed = datetime.now(timezone.utc) - timedelta(days=days_to_subtract)
                 else:
-                    start_date_parsed = pd.to_datetime(start_date)
+                    start_date_parsed = pd.to_datetime(start_date, utc=True)
 
-                end_date_parsed = pd.to_datetime(end_date) if end_date != "now()" else datetime.utcnow()
+                end_date_parsed = pd.to_datetime(end_date, utc=True) if end_date != "now()" else datetime.now(timezone.utc)
+
+                logger.info(f"Fetching price data for {measurement} from {start_date_parsed} to {end_date_parsed}")
 
                 query = db.query(PriceHistory).filter(
                     PriceHistory.symbol == measurement,

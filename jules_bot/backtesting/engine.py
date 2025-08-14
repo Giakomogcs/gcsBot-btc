@@ -9,21 +9,20 @@ from jules_bot.utils.logger import logger
 from jules_bot.core.schemas import TradePoint
 from jules_bot.research.feature_engineering import add_all_features
 from jules_bot.services.trade_logger import TradeLogger
+from datetime import datetime, timedelta, timezone
 
 class Backtester:
     def __init__(self, db_manager: PostgresManager, days: int = None, start_date: str = None, end_date: str = None):
         self.run_id = f"backtest_{uuid.uuid4()}"
         self.db_manager = db_manager
         
-        log_msg = ""
         if days:
-            self.start_date_str = f"-{days}d"
-            self.end_date_str = "now()"
+            self.end_date = datetime.now(timezone.utc)
+            self.start_date = self.end_date - timedelta(days=days)
             log_msg = f"Initializing new backtest run with ID: {self.run_id} for the last {days} days."
         elif start_date and end_date:
-            # Format dates to RFC3339 format for InfluxDB, which is timezone-aware
-            self.start_date_str = f"{start_date}T00:00:00Z"
-            self.end_date_str = f"{end_date}T23:59:59Z"
+            self.start_date = pd.to_datetime(start_date, utc=True)
+            self.end_date = pd.to_datetime(end_date, utc=True)
             log_msg = f"Initializing new backtest run with ID: {self.run_id} from {start_date} to {end_date}."
         else:
             raise ValueError("Backtester must be initialized with either 'days' or both 'start_date' and 'end_date'.")
@@ -36,8 +35,8 @@ class Backtester:
         
         price_data = self.db_manager.get_price_data(
             measurement=symbol,
-            start_date=self.start_date_str,
-            end_date=self.end_date_str
+            start_date=self.start_date.isoformat(),
+            end_date=self.end_date.isoformat()
         )
 
         if price_data.empty:
@@ -184,7 +183,7 @@ class Backtester:
     def _generate_and_save_summary(self):
         logger.info("--- Generating and saving backtest summary ---")
 
-        all_trades = self.db_manager.get_all_trades_in_range(mode="backtest", start_date="0", end_date="now()")
+        all_trades = self.db_manager.get_all_trades_in_range(mode="backtest", start_date=self.start_date.isoformat(), end_date=self.end_date.isoformat())
         all_trades_df = pd.DataFrame([t.to_dict() for t in all_trades])
 
         if not all_trades_df.empty:
@@ -199,7 +198,7 @@ class Backtester:
         else:
             # After the fix in PostgresManager, all trades retain their original 'buy' order_type.
             # A "sell" is now represented by a trade's status being 'CLOSED'.
-            num_buy_trades = len(all_trades_df)
+            num_buy_trades = len(all_trades_df[all_trades_df['order_type'] == 'buy'])
             sell_trades = all_trades_df[all_trades_df['status'] == 'CLOSED']
             num_sell_trades = len(sell_trades)
             total_realized_pnl = sell_trades['realized_pnl_usd'].sum() if 'realized_pnl_usd' in sell_trades.columns else 0.0
