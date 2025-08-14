@@ -36,40 +36,56 @@ The system is fully containerized using Docker, ensuring a consistent and reprod
 - **Situational Awareness Model**: Utilizes a K-Means clustering model to classify the market into one of several "regimes" (e.g., Bull Volatile, Bear Quiet), allowing the strategy to adapt to changing conditions. The code for this is in the `research` directory.
 - **Dockerized Environment**: The entire application stack, including the Python application and the PostgreSQL database, is managed by Docker and Docker Compose for easy setup and deployment.
 - **Command-Line Interface**: A central script `run.py` provides a simple interface for managing the entire lifecycle of the bot and its environment.
-- **Interactive Terminal UI (TUI)**: A new, high-performance dashboard built with Textual that provides a real-time view of the bot's status, open positions, wallet balances, and live logs.
-- **Script-Based Control**: The bot is controlled by a set of powerful, fast, and reliable command-line scripts, giving you direct control without needing a web server.
+- **Interactive Terminal UI (TUI)**: A sophisticated, real-time dashboard built with Textual that connects to a dedicated API service. It provides live updates on per-position unrealized PnL, progress towards buy/sell targets, and live wallet balances.
+- **Live Data Synchronization**: The bot's status service actively reconciles its internal database state with live open orders from the Binance exchange, ensuring the UI always displays an accurate view of your real positions.
 - **Resilient and Modular Architecture**: The code is organized into decoupled components (bot logic, database management, exchange connection), making it easier to maintain and extend.
 
 ## 3. Architecture
 
-The bot's architecture is now centered around a main bot process that can be monitored and controlled via local scripts and a terminal dashboard, removing the need for a web API.
+The bot is designed with a modular architecture, separating concerns to improve maintainability and testability.
 
 ```
 +-------------------+      +----------------------+      +--------------------+
-|      run.py       |----->| docker-compose.yml   |----->|  jules_bot/main.py   |
-| (Control Script)  |      | (Service Definition) |      |  (Bot Entry Point) |
+|     run.py        |----->| docker-compose.yml   |----->|   jules_bot/main.py  |
+| (User Interface)  |      | (Service Definition) |      | (App Entry Point)  |
 +-------------------+      +----------------------+      +--------------------+
-        ^                                                       |
-        |                                                       V
-+-------------------+      +--------------------+      +----------------------+
-|  scripts/*.py     |<---->|     commands/      |<---->|  TradingBot          |
-| (Manual Commands) |      |   (File-based      |      |  (Orchestrator)      |
-+-------------------+      |      Queue)        |      +----------------------+
-        ^                  +--------------------+
-        |
-+-------------------+
-|  tui/app.py       |
-| (Dashboard)       |
-+-------------------+
+                                                            |
+                                                            V
++---------------------------------------------------------------------------------+
+|                                  TradingBot (`trading_bot.py`)                  |
+|                                     (Orchestrator)                              |
+|---------------------------------------------------------------------------------|
+| - Initializes all managers based on BOT_MODE (trade, test, backtest)            |
+| - Runs the main trading loop or the backtest process.                           |
++---------------------------------------------------------------------------------+
+      |                 |                  |
+      V                 V                  V
++----------------+ +---------------------+ +--------------------------+
+| PositionManager| |   AccountManager    | |     PostgresManager      |
+| (Strategy)     | |     (Execution)     | |     (Persistence)        |
++----------------+ +---------------------+ +--------------------------+
+      |                 |                     |
+      |                 V                     |
+      |       +-------------------+           |
+      +------>| ExchangeManager   |<----------+
+              | (API Connector)   |
+              +-------------------+
+
 ```
 
-- **`run.py` (CLI)**: The main entry point for managing the bot's lifecycle (starting, stopping, running).
-- **`jules_bot/main.py`**: The entry point inside the container; it instantiates and starts the `TradingBot`.
-- **`TradingBot`**: The central orchestrator. It runs the main trading loop and continuously checks the `commands/` directory for manual instructions.
-- **`scripts/`**: A folder containing standalone Python scripts for direct interaction:
-  - `get_bot_data.py`: Fetches a complete status snapshot of the bot.
-  - `force_buy.py` & `force_sell.py`: Create command files in the `commands/` directory to manually trigger trades.
-- **`tui/app.py`**: A Textual application that provides a dashboard view. It calls the scripts to get data and issue commands.
+- **`run.py` (CLI)**: The main entry point for the user. It parses user commands and executes the appropriate `docker-compose` commands to build, start, stop, and interact with the application.
+- **`docker-compose.yml`**: Defines the services that make up the application:
+  - `postgres`: The PostgreSQL container for data storage.
+  - `pgadmin`: A web-based administration tool for PostgreSQL.
+  - `app`: The Python application container where the bot logic runs.
+- **`jules_bot/main.py`**: The main function inside the `app` container. It reads the `BOT_MODE` environment variable and instantiates the `TradingBot`.
+- **`TradingBot`**: The central orchestrator. It initializes all the necessary manager classes and runs the main trading loop (for live/test) or the backtesting process.
+- **`PositionManager`**: Contains the core trading strategy logic. It decides when to buy or sell based on the data from the database.
+- **`AccountManager` / `SimulatedAccountManager`**: Handles the execution of trades.
+  - `AccountManager`: Interacts with the live or testnet exchange via the `ExchangeManager`. It validates and formats orders before placing them.
+  - `SimulatedAccountManager`: Simulates an exchange account for backtesting, tracking balances locally without making real API calls.
+- **`ExchangeManager`**: A low-level wrapper around the `python-binance` client. It handles all direct communication with the Binance API (e.g., fetching prices, placing orders).
+- **`PostgresManager`**: Abstracts the database. It provides methods to read and write to PostgreSQL using SQLAlchemy.
 
 ## 4. Project Structure
 
@@ -77,16 +93,26 @@ The repository is organized into several key directories:
 
 ```
 gcsbot-btc/
+├── .dvc/                   # Data Version Control (for large data files)
+├── collectors/             # Scripts for collecting data
+├── config/                 # Configuration files for services (e.g., postgres.conf)
+├── data/                   # Local data storage (e.g., historical CSVs, models)
+├── postgres_setup/         # Scripts for automated PostgreSQL initialization
+│   └── init.sql
 ├── jules_bot/              # Main Python source code for the bot application
 │   ├── bot/                # Core trading logic and position management
-│   ├── core/               # Core components (connectors, schemas)
-│   ├── database/           # Database interaction
+│   ├── core/               # Core components like schemas and connectors
+│   ├── database/           # Database interaction and data management
 │   └── utils/              # Utility modules like logging and configuration
-├── logs/                   # Structured JSON log files
-├── scripts/                # Standalone Python scripts for automation and control
-├── tui/                    # Source for the new Terminal User Interface
-├── ... (other config folders)
-└── run.py                  # Main command-line interface
+├── logs/                   # Log files and trading status JSONs
+├── research/               # Scripts for research and feature engineering
+├── scripts/                # Standalone Python scripts for automation and analysis
+├── tests/                  # Automated tests for the application
+├── .env.example            # Example environment variables file
+├── config.ini              # Main application configuration file
+├── docker-compose.yml      # Docker service definitions
+├── Dockerfile              # Docker image definition for the application
+└── run.py                  # Main command-line interface for controlling the bot
 ```
 
 ## 5. Setup and Installation
@@ -139,37 +165,40 @@ These commands control the Docker environment.
 
 ### Application Control
 
-The application is controlled via a combination of the main `run.py` script, a new interactive dashboard, and standalone scripts for direct manual control.
+These commands execute tasks inside the `app` container.
 
 #### Running the Bot
-To start the bot, use the `trade` or `test` commands. This will run the main bot loop in the container. You should run this in one terminal window.
+
+The bot can be run in `live` or `test` mode. These commands will start the trading logic, and you can follow the bot's activity through its logs.
+
 - **Live Trading**: `python run.py trade`
 - **Paper Trading (Testnet)**: `python run.py test`
 
+While the bot is running, you can use the `dashboard` command in a separate terminal to monitor it.
+
 #### Monitoring with the Dashboard
-To monitor a running bot, open a **second terminal window** and use the `dashboard` command.
-- **To monitor the Testnet bot**: `python run.py dashboard --mode test`
-- **To monitor the Live bot**: `python run.py dashboard --mode trade`
 
-#### Direct Script-Based Control
-For automation or direct manual intervention, you can use the scripts in the `scripts/` folder from your host machine's terminal.
+The primary way to monitor the bot is through the interactive TUI. The `dashboard` command is the easiest way to get started, as it launches both the necessary API service and the UI.
 
-| Command | Description |
-|---|---|
-| `python scripts/get_bot_data.py <mode>` | Dumps a full JSON report of the bot's status. `<mode>` can be `trade` or `test`. |
-| `python scripts/force_buy.py <amount>` | Commands the bot to buy a specific USD amount of crypto. |
-| `python scripts/force_sell.py <id> <pct>`| Commands the bot to sell a percentage of an open trade. Example: `... force_sell.py <trade_id> 90`. |
+- **To monitor the Testnet bot:**
+  ```bash
+  python run.py dashboard --mode test
+  ```
 
-#### Summary of `run.py` Application Commands
+- **To monitor the Live bot:**
+  ```bash
+  python run.py dashboard --mode trade
+  ```
 
 | Command | Description |
 |---|---|
-| `trade` | Starts the bot in **live trading mode**. |
-| `test` | Starts the bot in **paper trading mode**. |
-| `dashboard` | Starts the new interactive TUI for monitoring and control. Use `--mode` to specify `trade` or `test`. |
-| `backtest` | Prepares historical data and runs a full backtest. |
-| `clear-backtest-trades` | Deletes all `backtest` trades from the database. |
-| `clear-testnet-trades` | Deletes all `test` trades from the database. |
+| `trade` | Starts the bot in **live trading mode** using your main Binance account. |
+| `test` | Starts the bot in **paper trading mode** using your Binance testnet account. |
+| `dashboard` | Starts the API and the interactive TUI for live monitoring. Use `--mode` to specify `trade` or `test`. |
+| `backtest` | Prepares historical data and runs a full backtest. Use the `--days` option (e.g., `--days 30`) to specify the period. |
+| `api` | Starts the API service independently. Use `--mode` to specify `trade` or `test`. |
+| `clear-backtest-trades` | **Deletes all trades** from the `backtest` environment in the database. Useful for starting a fresh backtest analysis. |
+| `clear-testnet-trades` | **Deletes all trades** from the `test` environment in the database. Useful for resetting your testnet account. |
 
 
 ## 7. Database Schema
@@ -256,35 +285,39 @@ This formula ensures that the profit is only calculated on the capital that was 
 
 ## 9. Terminal User Interface (TUI)
 
-The bot includes a new, high-performance Terminal User Interface (TUI) for monitoring and manual control, launched with the `run.py dashboard` command. This TUI is built on the new script-based architecture, ensuring it is fast and reliable.
+The bot includes a powerful, real-time Terminal User Interface (TUI) for monitoring and manual control, launched with the `run.py dashboard` command.
 
 ### TUI Preview
-A preview of the new dashboard layout:
+
 ```
- +---------------------------------------------------------------------------------------------+
- | Jules Bot                                                                     मोड: TEST      |
- +---------------------------------------------------------------------------------------------+
- | Bot Control                        | Bot Status                                             |
- | Manual Buy (USD): [ 50.00 ]        | Symbol: BTC/USDT   Price: $34,567.89                     |
- | [ FORCE BUY ]                      |                                                        |
- |                                    | Open Positions                                         |
- | Selected Trade Actions (ID: ab12)  | ID   | Entry   | Value   | PnL     | Sell Target | Pr.. |
- | [ Sell 100% ] [ Sell 90% ]         |------|---------|---------|---------|-------------|------|
- |                                    | ab12 | 34000.0 | $345.67 | +$5.67  | $35000.0    | 56.7%|
- | Live Log                           | cd34 | 33950.0 | $691.35 | +$11.35 | $34800.0    | 70.1%|
- | [INFO] Bot cycle complete.         |                                                        |
- | [ERROR] Failed to fetch...         | Wallet Balances                                        |
- |                                    | Asset | Free      | Locked    | USD Value              |
- |                                    |-------|-----------|-----------|------------------------|
- |                                    | BTC   | 0.01234567| 0.00000000| $427.81                  |
- |                                    | USDT  | 1000.00   | 0.00      | $1000.00               |
- +---------------------------------------------------------------------------------------------+
++------------------------------------------------------------------------------------------------+
+| Jules Bot        Last Update: 2023-10-27 10:30:00                                              |
++------------------------------------------------------------------------------------------------+
+| Left Pane (Bot Control & Logs)      | Right Pane (Status & Positions)                          |
+|                                     |                                                          |
+| Bot Control                         | Bot Status                                               |
+| Manual Buy (USD): [ 100.00 ]        | Mode: TEST   Symbol: BTC/USDT   Price: $34,123.45         |
+| [ FORCE BUY ]                       |                                                          |
+|                                     | Strategy                                                 |
+| Live Log                            | Buy Signal: Uptrend pullback                             |
+| > UI: Sent command...               | Buy Target: $34,050.00   Progress: 75.5%                 |
+| > Bot: Sell condition met...        |                                                          |
+|                                     | Open Positions                                           |
+|                                     | ID   | Entry   | Qty    | Value   | PnL     | Sell Target | Progress |
+|                                     |------|---------|--------|---------|---------|-------------|----------|
+|                                     | ab12 | 34000.0 | 0.01   | $341.23 | +$1.23  | $34500.00   | 24.6%    |
+|                                     | cd34 | 33950.0 | 0.02   | $682.46 | +$3.46  | $34400.00   | 38.8%    |
+|                                     |                                                          |
+|                                     | [ Force Sell ] [ Mark as Treasury ]                      |
++------------------------------------------------------------------------------------------------+
 ```
 
 ### Key UI Features
 
-- **Live Status**: Real-time updates on the bot's mode and the current asset price.
+- **Live Status**: Real-time updates on the bot's mode, the current asset price, and buy signal status.
 - **Bot Control**: A panel to manually trigger a buy order for a specific USD amount.
-- **Live Log Panel**: A dedicated panel that streams the bot's most important messages directly from its structured log file, with color-coding for different log levels.
-- **Open Positions Table**: A detailed list of all open trades, including unrealized PnL and a progress bar showing how close each position is to its sell target.
-- **Manual Intervention**: Select a trade in the table to bring up options to **Force Sell** either 100% or 90% of the position.
+- **Live Log**: A stream of the latest log messages from the bot.
+- **Open Positions Table**: A detailed list of all open trades, including:
+  - **Unrealized PnL**: The current profit or loss for each position.
+  - **Sell Target & Progress**: The target price for selling and how close the current price is to reaching it.
+- **Manual Intervention**: Select a trade in the table to bring up options to **Force Sell** it or mark it as **Treasury** (a long-term hold).

@@ -4,8 +4,15 @@ from jules_bot.database.postgres_manager import PostgresManager
 import uuid
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.services.trade_logger import TradeLogger
+import pandas as pd
+from jules_bot.utils.logger import logger
+from jules_bot.database.postgres_manager import PostgresManager
+import uuid
+from jules_bot.utils.config_manager import config_manager
+from jules_bot.services.trade_logger import TradeLogger
 from jules_bot.bot.account_manager import AccountManager
 from jules_bot.core_logic.strategy_rules import StrategyRules
+from jules_bot.core_logic.trader import Trader
 
 class StateManager:
     def __init__(self, mode: str, bot_id: str):
@@ -78,20 +85,20 @@ class StateManager:
 
         self.trade_logger.log_trade(trade_data)
 
-    def sync_holdings_with_binance(self, account_manager: AccountManager, strategy_rules: StrategyRules):
+    def sync_holdings_with_binance(self, account_manager: AccountManager, strategy_rules: StrategyRules, trader: Trader):
         """
-        Synchronizes the database with current Binance holdings by checking for discrepancies.
-        It closes local 'OPEN' positions that no longer exist on the exchange.
-        It also logs warnings for assets held on the exchange but not tracked in the database.
+        Synchronizes the database with current Binance holdings.
+        - Closes local positions that no longer exist on the exchange.
+        - Creates new 'OPEN' positions for assets found on the exchange but not tracked in the database.
         """
         logger.info("--- Starting holdings synchronization with Binance ---")
 
         try:
-            # 1. Get current holdings from the exchange
-            # We pass an empty dict for prices because, for this logic, we only need asset names and amounts.
+            # 1. Get current holdings from Binance and all market prices
             current_holdings = account_manager.get_all_account_balances({})
+            all_prices = trader.get_all_prices()
+            quote_asset = config_manager.get('APP', 'quote_asset', fallback='USDT')
 
-            # Create a map of holdings for easy lookup, ignoring dust amounts.
             holdings_map = {
                 h['asset']: float(h['free']) + float(h['locked'])
                 for h in current_holdings if (float(h['free']) + float(h['locked'])) > 0.00001
@@ -104,8 +111,7 @@ class StateManager:
 
             db_positions_map = {}
             for pos in open_positions + treasury_positions:
-                # Assuming all symbols are against USDT, which is a simplification.
-                asset = pos.symbol.replace('USDT', '')
+                asset = pos.symbol.replace(quote_asset, '')
                 if asset not in db_positions_map:
                     db_positions_map[asset] = []
                 db_positions_map[asset].append(pos)
@@ -113,9 +119,9 @@ class StateManager:
             if db_positions_map:
                 logger.info(f"Found {len(db_positions_map)} assets with OPEN/TREASURY status in DB: {list(db_positions_map.keys())}")
 
-            # 3. Reconcile: Close local positions that are no longer on the exchange
+            # 3. Reconcile Part 1: Close local positions that are no longer on the exchange
             for pos in open_positions:
-                asset = pos.symbol.replace('USDT', '')
+                asset = pos.symbol.replace(quote_asset, '')
                 if asset not in holdings_map:
                     logger.warning(
                         f"Position {pos.trade_id} for asset {asset} is 'OPEN' in the database, "
@@ -123,17 +129,48 @@ class StateManager:
                     )
                     self.db_manager.update_trade_status(pos.trade_id, 'RECONCILED')
 
-            # 4. Reconcile: Log warnings for untracked assets on the exchange
-            quote_asset = config_manager.get('APP', 'quote_asset', fallback='USDT')
+            # 4. Reconcile Part 2: Create new positions for untracked assets found on the exchange
             for asset, balance in holdings_map.items():
-                if asset == quote_asset: # Ignore the quote asset (e.g., USDT)
+                if asset == quote_asset:
                     continue
+
                 if asset not in db_positions_map:
-                    logger.warning(
-                        f"Found untracked asset {asset} on the exchange with balance {balance}. "
-                        "This holding is not associated with any 'OPEN' or 'TREASURY' position in the database. "
-                        "Manual review may be needed."
+                    symbol = f"{asset}{quote_asset}"
+                    current_price = all_prices.get(symbol)
+
+                    if current_price is None:
+                        logger.warning(f"Could not find price for symbol {symbol}. Cannot create synced position.")
+                        continue
+
+                    logger.info(
+                        f"Found untracked asset {asset} on exchange with balance {balance}. "
+                        f"Creating a new 'OPEN' position in the database."
                     )
+
+                    usd_value = balance * current_price
+                    new_trade_id = str(uuid.uuid4())
+
+                    # Create a placeholder buy_result dictionary
+                    buy_result = {
+                        'trade_id': new_trade_id,
+                        'symbol': symbol,
+                        'price': current_price,
+                        'quantity': balance,
+                        'usd_value': usd_value,
+                        'commission': 0.0,
+                        'commission_asset': 'N/A',
+                        'run_id': self.bot_id,
+                        'environment': self.mode,
+                        'decision_context': {'reason': 'synced_from_exchange'},
+                        'strategy_name': 'sync_strategy',
+                        'exchange': 'binance'
+                    }
+
+                    # Calculate a sell target based on the current price
+                    sell_target_price = strategy_rules.calculate_sell_target_price(current_price)
+
+                    # Use the existing method to create the new position
+                    self.create_new_position(buy_result, sell_target_price)
 
             logger.info("--- Holdings synchronization finished ---")
 
