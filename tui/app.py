@@ -12,6 +12,7 @@ from textual.widgets import Header, Footer, DataTable, Input, Button, Label, Sta
 from textual.timer import Timer
 from textual.validation import Validator, ValidationResult
 from textual.worker import Worker
+from textual import work
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -60,7 +61,7 @@ class TUIApp(App):
     #action_bar, #log_filter_bar {
         margin-top: 1;
         height: auto;
-        align: right;
+        align: right middle;
     }
     .hidden {
         display: none;
@@ -131,7 +132,7 @@ class TUIApp(App):
         if self.log_file_handle:
             self.log_file_handle.close()
 
-    @Worker(group="log_tailer")
+    @work(group="log_tailer", thread=True)
     def tail_log_file(self) -> None:
         self.log_display.write(f"Tailing log file: [yellow]{self.log_file_path}[/]")
         try:
@@ -248,7 +249,7 @@ class TUIApp(App):
                 progress = float(pos.get("progress_to_sell_target_pct", 0))
                 pnl_color = "green" if pnl >= 0 else "red"
 
-                progress_bar = ProgressBar(total=100, show_eta=False, show_value=True)
+                progress_bar = ProgressBar(total=100, show_eta=False, show_percentage=True)
                 progress_bar.progress = progress
 
                 pos_table.add_row(

@@ -49,7 +49,7 @@ if not logger.handlers:
     logger.addHandler(file_handler)
 
     # 2. Handler para o CONSOLE (também estruturado)
-    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setFormatter(json_formatter)
     console_handler.setLevel(logging.INFO) # Nível INFO para o console para não poluir
     logger.addHandler(console_handler)
