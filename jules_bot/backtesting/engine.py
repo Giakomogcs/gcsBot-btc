@@ -64,10 +64,16 @@ class Backtester:
         open_positions = {}
         last_buy_price = float('inf')
         total_capital_allocated = 0.0
+        portfolio_history = []
 
         for current_time, candle in self.feature_data.iterrows():
             self.mock_trader.set_current_time_and_price(current_time, candle['close'])
             current_price = candle['close']
+
+            cash_balance = self.mock_trader.get_account_balance()
+            crypto_balance_in_usd = self.mock_trader.get_crypto_balance_in_usd()
+            total_portfolio_value = cash_balance + crypto_balance_in_usd
+            portfolio_history.append(total_portfolio_value)
 
             # 1. Check for potential sales
             for trade_id, position in list(open_positions.items()):
@@ -190,10 +196,10 @@ class Backtester:
                             open_positions[new_trade_id] = position_data
                             total_capital_allocated += buy_result['usd_value']
 
-        self._generate_and_save_summary()
+        self._generate_and_save_summary(open_positions, portfolio_history)
         logger.info(f"--- Backtest {self.run_id} finished ---")
 
-    def _generate_and_save_summary(self):
+    def _generate_and_save_summary(self, open_positions: dict, portfolio_history: list):
         logger.info("--- Generating and saving backtest summary ---")
 
         all_trades = self.db_manager.get_all_trades_in_range(start_date="0", end_date="now()")
@@ -208,20 +214,53 @@ class Backtester:
             num_sell_trades = 0
             total_realized_pnl = 0.0
             total_fees_usd = 0.0
+            win_rate = 0.0
+            payoff_ratio = 0.0
+            winning_trades_df = pd.DataFrame()
+            losing_trades_df = pd.DataFrame()
         else:
-            # After the fix in PostgresManager, all trades retain their original 'buy' order_type.
-            # A "sell" is now represented by a trade's status being 'CLOSED'.
-            num_buy_trades = len(all_trades_df)
+            num_buy_trades = len(all_trades_df[all_trades_df['order_type'] == 'buy'])
             sell_trades = all_trades_df[all_trades_df['status'] == 'CLOSED']
             num_sell_trades = len(sell_trades)
             total_realized_pnl = sell_trades['realized_pnl_usd'].sum() if 'realized_pnl_usd' in sell_trades.columns else 0.0
             total_fees_usd = all_trades_df['commission_usd'].sum() if 'commission_usd' in all_trades_df.columns else 0.0
 
+            winning_trades_df = sell_trades[sell_trades['realized_pnl_usd'] > 0]
+            losing_trades_df = sell_trades[sell_trades['realized_pnl_usd'] <= 0]
+
+            if num_sell_trades > 0:
+                win_rate = (len(winning_trades_df) / num_sell_trades) * 100
+            else:
+                win_rate = 0.0
+
+            if len(losing_trades_df) > 0 and losing_trades_df['realized_pnl_usd'].sum() != 0:
+                avg_gain = winning_trades_df['realized_pnl_usd'].mean() if len(winning_trades_df) > 0 else 0
+                avg_loss = abs(losing_trades_df['realized_pnl_usd'].mean()) if len(losing_trades_df) > 0 else 0
+                payoff_ratio = avg_gain / avg_loss if avg_loss > 0 else float('inf')
+            else:
+                payoff_ratio = float('inf')
+
         initial_balance = self.mock_trader.initial_balance
-        final_balance = self.mock_trader.get_account_balance()
-        final_btc_balance = self.mock_trader.btc_balance
+        final_balance = self.mock_trader.get_total_portfolio_value()
+        
+        unrealized_pnl = 0.0
+        if open_positions:
+            current_price = self.mock_trader.get_current_price()
+            for trade_id, position in open_positions.items():
+                unrealized_pnl += (current_price * position['quantity']) - position['usd_value']
+
         total_pnl_balance = final_balance - initial_balance
         total_pnl_percent = (total_pnl_balance / initial_balance) * 100 if initial_balance > 0 else 0
+
+        max_drawdown = 0.0
+        peak = -float('inf')
+        if portfolio_history:
+            for value in portfolio_history:
+                if value > peak:
+                    peak = value
+                drawdown = (peak - value) / peak if peak > 0 else 0
+                if drawdown > max_drawdown:
+                    max_drawdown = drawdown
 
         logger.info("========== BACKTEST RESULTS ==========")
         logger.info(f" Backtest Run ID: {self.run_id}")
@@ -230,11 +269,15 @@ class Backtester:
             end_time = self.feature_data.index[-1]
             logger.info(f" Period: {start_time.date()} to {end_time.date()}")
         logger.info(f" Initial Balance: ${initial_balance:,.2f}")
-        logger.info(f" Final Balance:   ${final_balance:,.2f} (Final BTC: {final_btc_balance:.8f})")
+        logger.info(f" Final Balance:   ${final_balance:,.2f}")
         logger.info(f" Net P&L:         ${total_pnl_balance:,.2f} ({total_pnl_percent:.2f}%)")
-        logger.info(f" Sum of Realized PnL (from sells): ${total_realized_pnl:,.2f}")
+        logger.info(f"   - Realized PnL:   ${total_realized_pnl:,.2f}")
+        logger.info(f"   - Unrealized PnL: ${unrealized_pnl:,.2f}")
         logger.info(f" Total Buy Trades:    {num_buy_trades}")
-        logger.info(f" Total Sell Trades:   {num_sell_trades}")
+        logger.info(f" Total Sell Trades:   {num_sell_trades} (Completed Trades)")
+        logger.info(f" Success Rate:    {win_rate:.2f}%")
+        logger.info(f" Payoff Ratio:    {payoff_ratio:.2f}")
+        logger.info(f" Maximum Drawdown: {max_drawdown:.2%}")
         logger.info(f" Total Fees Paid: ${total_fees_usd:,.2f}")
         logger.info("========================================")
 

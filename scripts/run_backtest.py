@@ -38,6 +38,11 @@ def main():
         type=str,
         help="The end date for the backtest in YYYY-MM-DD format."
     )
+    parser.add_argument(
+        "--clear-backtest-trades",
+        action="store_true",
+        help="If set, the script will clear all previous backtest trades before running the new simulation."
+    )
 
     args = parser.parse_args()
 
@@ -67,6 +72,10 @@ def main():
         # Create a single DB manager instance for the backtest
         db_config = config_manager.get_db_config('POSTGRES')
         db_manager = PostgresManager(config=db_config)
+
+        if args.clear_backtest_trades:
+            logger.info("Clearing previous backtest trades as requested...")
+            db_manager.clear_backtest_trades()
         
         backtester = None
         if args.days:

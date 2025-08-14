@@ -22,19 +22,13 @@ def main():
         type=int,
         help="The number of days of historical data to prepare."
     )
-    parser.add_argument(
-        "--force-reload",
-        action="store_true",
-        help="If set, the script will clear and re-populate the database even if it already contains data."
-    )
+    
     args = parser.parse_args()
 
     try:
         logger.info(f"Starting backtest data preparation for the last {args.days} days...")
-        if args.force_reload:
-            logger.info("Force reload flag is set. Data will be re-populated.")
         
-        prepare_backtest_data(days=args.days, force_reload=args.force_reload)
+        prepare_backtest_data(days=args.days)
         
         logger.info("✅ Backtest data preparation finished successfully.")
     except Exception as e:

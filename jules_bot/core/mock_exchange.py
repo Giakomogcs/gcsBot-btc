@@ -85,6 +85,18 @@ class MockTrader(Trader):
 
     def get_account_balance(self) -> float:
         """
+        Returns the cash balance in USD.
+        """
+        return self.usd_balance
+
+    def get_crypto_balance_in_usd(self) -> float:
+        """
+        Returns the value of the crypto balance in USD.
+        """
+        return self.btc_balance * self.get_current_price()
+
+    def get_total_portfolio_value(self) -> float:
+        """
         Returns the total portfolio value in USD (cash + value of BTC holdings).
         """
         current_price = self.get_current_price()
