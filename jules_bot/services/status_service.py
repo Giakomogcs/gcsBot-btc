@@ -1,13 +1,16 @@
 import logging
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.core_logic.strategy_rules import StrategyRules
-from jules_bot.core.market_data_provider import MarketDataProvider
 from jules_bot.core.exchange_connector import ExchangeManager
 from jules_bot.utils.config_manager import ConfigManager
+from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
+
 
 logger = logging.getLogger(__name__)
 
 def _calculate_progress_pct(current_price, start_price, target_price):
+    if target_price is None or start_price is None or current_price is None:
+        return 0.0
     if target_price == start_price:
         return 100.0 if current_price >= target_price else 0.0
 
@@ -15,10 +18,10 @@ def _calculate_progress_pct(current_price, start_price, target_price):
     return max(0, min(progress, 100))
 
 class StatusService:
-    def __init__(self, db_manager: PostgresManager, config_manager: ConfigManager, market_data_provider: MarketDataProvider):
+    def __init__(self, db_manager: PostgresManager, config_manager: ConfigManager, feature_calculator: LiveFeatureCalculator):
         self.db_manager = db_manager
         self.strategy = StrategyRules(config_manager)
-        self.market_data_provider = market_data_provider
+        self.feature_calculator = feature_calculator
         # Note: ExchangeManager is instantiated per-request in get_extended_status
         # to ensure it's created with the correct mode (live/test).
 
@@ -31,8 +34,12 @@ class StatusService:
             exchange_manager = ExchangeManager(mode=environment)
             symbol = "BTCUSDT" # Assuming BTCUSDT for now
 
-            # 1. Fetch current market data
-            market_data = self.market_data_provider.get_latest_data("BTC/USDT")
+            # 1. Fetch current market data with all features
+            market_data_series = self.feature_calculator.get_current_candle_with_features()
+            if market_data_series.empty:
+                return {"error": "Could not fetch current market data."}
+
+            market_data = market_data_series.to_dict()
             current_price = market_data.get('close', 0)
 
             # 2. Fetch open positions from local DB
