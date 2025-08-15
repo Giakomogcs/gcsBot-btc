@@ -1,10 +1,10 @@
+from binance.client import Client
 from jules_bot.database.portfolio_manager import PortfolioManager
-from jules_bot.core.exchange_connector import ExchangeManager
 
 class TransactionSyncService:
-    def __init__(self, portfolio_manager: PortfolioManager, exchange_manager: ExchangeManager):
+    def __init__(self, portfolio_manager: PortfolioManager, client: Client):
         self.portfolio_manager = portfolio_manager
-        self.client = exchange_manager.client
+        self.client = client
 
     def sync_transactions(self):
         self._sync_deposits()

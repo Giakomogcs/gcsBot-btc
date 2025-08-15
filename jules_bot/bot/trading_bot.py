@@ -28,7 +28,7 @@ class TradingBot:
         self.db_manager = db_manager
         self.trader = Trader(mode=self.mode)
         self.portfolio_manager = PortfolioManager(config_manager.get_section('POSTGRES'))
-        self.transaction_sync_service = TransactionSyncService(self.portfolio_manager, self.trader.exchange_manager)
+        self.transaction_sync_service = TransactionSyncService(self.portfolio_manager, self.trader.client)
         self.symbol = config_manager.get('APP', 'symbol')
         self.state_file_path = "/tmp/bot_state.json"
         self.last_transaction_sync = 0
