@@ -214,9 +214,14 @@ class TradingBot:
                             if success:
                                 buy_price = float(position.price or 0)
                                 sell_price = float(sell_result.get('price'))
-                                commission_rate = float(strategy_rules.rules.get('commission_rate'))
 
-                                realized_pnl_usd = ((sell_price * (1 - commission_rate)) - (buy_price * (1 + commission_rate))) * sell_quantity
+                                # Refactored PnL calculation
+                                realized_pnl_usd = strategy_rules.calculate_realized_pnl(
+                                    buy_price=buy_price,
+                                    sell_price=sell_price,
+                                    quantity_sold=sell_quantity
+                                )
+                                
                                 hodl_asset_value_at_sell = hodl_asset_amount * current_price
                                 commission_usd = float(sell_result.get('commission', 0))
 

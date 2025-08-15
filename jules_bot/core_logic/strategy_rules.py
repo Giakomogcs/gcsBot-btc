@@ -82,3 +82,54 @@ class StrategyRules:
         sell_target_price = break_even_price * (1 + target_profit)
 
         return sell_target_price
+
+    def calculate_realized_pnl(self, buy_price: float, sell_price: float, quantity_sold: float) -> float:
+        """
+        Calculates the realized profit or loss from a trade, considering commissions.
+
+        Args:
+            buy_price (float): The price at which the asset was purchased.
+            sell_price (float): The price at which the asset was sold.
+            quantity_sold (float): The amount of the asset that was sold.
+
+        Returns:
+            float: The realized profit or loss in USD.
+        """
+        commission_rate = float(self.rules.get('commission_rate', 0.001))
+
+        # Net Sales Revenue per unit = sell_price * (1 - commission_rate)
+        # Proportional Purchase Cost per unit = buy_price * (1 + commission_rate)
+        
+        net_revenue_per_unit = sell_price * (1 - commission_rate)
+        net_cost_per_unit = buy_price * (1 + commission_rate)
+        
+        profit_per_unit = net_revenue_per_unit - net_cost_per_unit
+        
+        realized_pnl = profit_per_unit * quantity_sold
+        
+        return realized_pnl
+
+    def calculate_net_unrealized_pnl(self, entry_price: float, current_price: float, total_quantity: float) -> float:
+        """
+        Calculates the net unrealized PnL for an open position, factoring in
+        the partial sale rule (90%) and commissions.
+
+        Args:
+            entry_price (float): The price at which the asset was purchased.
+            current_price (float): The current market price of the asset.
+            total_quantity (float): The total quantity of the asset held.
+
+        Returns:
+            float: The net unrealized profit or loss in USD.
+        """
+        # Calculate the PnL based on selling 90% of the position at the current price.
+        quantity_to_sell = total_quantity * self.sell_factor
+        
+        # Reuse the realized PnL calculation with the current price as the sell price.
+        net_unrealized_pnl = self.calculate_realized_pnl(
+            buy_price=entry_price,
+            sell_price=current_price,
+            quantity_sold=quantity_to_sell
+        )
+        
+        return net_unrealized_pnl

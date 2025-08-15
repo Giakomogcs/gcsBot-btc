@@ -53,11 +53,13 @@ class Backtester:
             commission_fee_percent=float(backtest_settings['commission_fee']),
             symbol=symbol
         )
+        self.strategy_rules = StrategyRules(config_manager)
+
 
     def run(self):
         logger.info(f"--- Starting backtest run {self.run_id} ---")
 
-        strategy_rules = StrategyRules(config_manager)
+        strategy_rules = self.strategy_rules
         symbol = config_manager.get('APP', 'symbol')
         strategy_name = config_manager.get('APP', 'strategy_name', fallback='default_strategy')
 
@@ -87,17 +89,16 @@ class Backtester:
 
                     success, sell_result = self.mock_trader.execute_sell({'quantity': sell_quantity})
                     if success:
-                        # --- CORRECTED PNL CALCULATION ---
+                        # --- UNIFIED PNL CALCULATION ---
                         buy_price = position['price']
                         sell_price = sell_result['price']
-
-                        # Note: The mock_trader uses a 'commission_fee' from the [BACKTEST] section,
-                        # but for consistency in PnL calculation, we use the same commission_rate
-                        # as the live bot from [STRATEGY_RULES].
-                        commission_rate = float(strategy_rules.rules.get('commission_rate'))
-
-                        realized_pnl_usd = ((sell_price * (1 - commission_rate)) - (buy_price * (1 + commission_rate))) * sell_result['quantity']
-                        # --- END CORRECTED PNL CALCULATION ---
+                        
+                        realized_pnl_usd = strategy_rules.calculate_realized_pnl(
+                            buy_price=buy_price,
+                            sell_price=sell_price,
+                            quantity_sold=sell_result['quantity']
+                        )
+                        # --- END UNIFIED PNL CALCULATION ---
 
                         commission_usd = sell_result['commission'] # This is the actual commission charged by mock_trader
                         hodl_asset_value_at_sell = hodl_asset_amount * sell_result['price']

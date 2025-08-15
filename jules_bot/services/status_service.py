@@ -60,7 +60,12 @@ class StatusService:
             # 3. Process open positions
             positions_status = []
             for trade in open_positions_db:
-                unrealized_pnl = (current_price - trade.price) * trade.quantity if trade.price and trade.quantity else 0
+                unrealized_pnl = self.strategy.calculate_net_unrealized_pnl(
+                    entry_price=trade.price,
+                    current_price=current_price,
+                    total_quantity=trade.quantity
+                ) if trade.price and trade.quantity else 0
+
                 progress_to_sell_target_pct = _calculate_progress_pct(
                     current_price,
                     start_price=trade.price,
