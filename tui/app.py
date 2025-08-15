@@ -41,6 +41,13 @@ class CommandOutput(Message):
         self.success = success
         super().__init__()
 
+class PortfolioData(Message):
+    """A message to transport portfolio evolution data."""
+    def __init__(self, data: dict | str, success: bool) -> None:
+        self.data = data
+        self.success = success
+        super().__init__()
+
 class TUIApp(App):
     """A Textual app to display and control the trading bot's status via command-line scripts."""
 
@@ -50,12 +57,17 @@ class TUIApp(App):
         layout: horizontal;
     }
     #left_pane {
-        width: 35%;
+        width: 25%;
+        padding: 1;
+        border-right: solid $accent;
+    }
+    #middle_pane {
+        width: 40%;
         padding: 1;
         border-right: solid $accent;
     }
     #right_pane {
-        width: 65%;
+        width: 35%;
         padding: 1;
     }
     .title {
@@ -117,7 +129,7 @@ class TUIApp(App):
                     yield Input(placeholder="e.g., ERROR", id="log_filter_input")
                 yield RichLog(id="log_display", wrap=True, markup=True, min_width=0)
 
-            with VerticalScroll(id="right_pane"):
+            with VerticalScroll(id="middle_pane"):
                 yield Static("Bot Status", classes="title")
                 with Static(id="status_container"):
                     yield Static(f"Mode: {self.mode.upper()}", id="status_mode")
@@ -136,6 +148,19 @@ class TUIApp(App):
 
                 yield Static("Open Positions", classes="title")
                 yield DataTable(id="positions_table")
+
+            with VerticalScroll(id="right_pane"):
+                yield Static("Portfolio Evolution", classes="title")
+                yield Static("Total Portfolio Value: N/A", id="portfolio_total_value")
+                yield Static("Evolution (Total): N/A", id="portfolio_evolution_total")
+                yield Static("Realized Profit/Loss: N/A", id_="portfolio_realized_pnl")
+                yield Static("Evolution (24h): N/A", id="portfolio_evolution_24h")
+                yield Static("BTC Treasury: N/A", id="portfolio_btc_treasury")
+                yield Static("Accumulated BTC: N/A", id="portfolio_accumulated_btc")
+
+                yield Static("Portfolio Value History", classes="title")
+                yield Static("[red]Chart not implemented yet.[/red]", id="portfolio_chart")
+
         yield Footer()
 
     def on_mount(self) -> None:
@@ -150,6 +175,10 @@ class TUIApp(App):
         # MODIFICADO: Chama o update_dashboard uma vez e depois define o intervalo de 30s
         self.update_dashboard()
         self.set_interval(30.0, self.update_dashboard) # Atualiza a cada 30 segundos
+
+        self.update_portfolio_dashboard()
+        self.set_interval(60.0, self.update_portfolio_dashboard) # Update portfolio every 60 seconds
+
         self.query_one("#manual_buy_input").focus()
 
         self.tail_log_file()
@@ -287,6 +316,11 @@ class TUIApp(App):
         command = ["python", "scripts/get_bot_data.py", self.mode]
         self.run_script_worker(command, DashboardData)
 
+    def update_portfolio_dashboard(self) -> None:
+        """Initiates the portfolio dashboard update in a worker."""
+        command = ["python", "scripts/get_portfolio_data.py"]
+        self.run_script_worker(command, PortfolioData)
+
     # NOVO: Handler para a mensagem DashboardData, que atualiza a UI
     def on_dashboard_data(self, message: DashboardData) -> None:
         """Atualiza a UI com os dados recebidos do worker."""
@@ -370,6 +404,37 @@ class TUIApp(App):
         self.query_one("#strategy_buy_signal").update(buy_signal_text)
         self.query_one("#strategy_buy_target").update(buy_target_text)
         self.query_one("#strategy_buy_progress").update(buy_progress_text)
+
+    def on_portfolio_data(self, message: PortfolioData) -> None:
+        """Updates the TUI with portfolio evolution data."""
+        if not message.success or not isinstance(message.data, dict):
+            self.log_display.write(f"[bold red]Failed to get portfolio data: {message.data}[/]")
+            return
+
+        data = message.data
+        snapshot = data.get("latest_snapshot")
+
+        if snapshot:
+            total_value = Decimal(snapshot.get("total_portfolio_value_usd", 0))
+            realized_pnl = Decimal(snapshot.get("realized_pnl_usd", 0))
+            btc_treasury_amount = Decimal(snapshot.get("btc_treasury_amount", 0))
+            btc_treasury_value = Decimal(snapshot.get("btc_treasury_value_usd", 0))
+
+            self.query_one("#portfolio_total_value").update(f"Total Portfolio Value: ${total_value:,.2f} USD")
+            self.query_one("#portfolio_realized_pnl").update(f"Realized Profit/Loss: ${realized_pnl:,.2f} USD")
+            self.query_one("#portfolio_btc_treasury").update(f"BTC Treasury: ₿{btc_treasury_amount:.8f} (${btc_treasury_value:,.2f} USD)")
+
+        evolution_total = Decimal(data.get("evolution_total", 0))
+        evolution_24h = Decimal(data.get("evolution_24h", 0))
+
+        self.query_one("#portfolio_evolution_total").update(f"Evolution (Total): {evolution_total:+.2f}%")
+        self.query_one("#portfolio_evolution_24h").update(f"Evolution (24h): {evolution_24h:+.2f}%")
+
+        # Note: The 'Accumulated BTC' is not clearly defined yet.
+        # I'll use the evolution of the treasury amount as a placeholder.
+        # This can be refined later.
+        self.query_one("#portfolio_accumulated_btc").update("Accumulated BTC: +0.0%")
+
 
     # NOVO: Handler para a mensagem CommandOutput (opcional, mas bom para feedback)
     def on_command_output(self, message: CommandOutput) -> None:

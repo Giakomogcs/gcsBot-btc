@@ -10,6 +10,7 @@ from jules_bot.core_logic.trader import Trader
 from jules_bot.core_logic.strategy_rules import StrategyRules
 from jules_bot.core.market_data_provider import MarketDataProvider
 from jules_bot.database.postgres_manager import PostgresManager
+from jules_bot.database.portfolio_manager import PortfolioManager
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
 
 class TradingBot:
@@ -23,6 +24,7 @@ class TradingBot:
         self.is_running = True
         self.market_data_provider = market_data_provider
         self.db_manager = db_manager
+        self.portfolio_manager = PortfolioManager(config_manager.get_section('POSTGRES'))
         self.symbol = config_manager.get('APP', 'symbol')
         self.state_file_path = "/tmp/bot_state.json"
 
@@ -105,6 +107,53 @@ class TradingBot:
                     logger.error(f"Error processing command file {filename}: {e}", exc_info=True)
                     # Optionally, move to an 'error' directory instead of deleting
                     # os.rename(filepath, os.path.join(command_dir, "error", filename))
+
+    def _create_portfolio_snapshot(self, trader: Trader, state_manager: StateManager, current_price: float):
+        """
+        Gathers all necessary data and creates a new portfolio snapshot.
+        """
+        logger.info("Creating portfolio snapshot...")
+        try:
+            # 1. Get current USD balance
+            usd_balance = trader.get_account_balance(asset='USDT')
+
+            # 2. Get open positions and calculate their total value
+            open_positions = state_manager.get_open_positions()
+            open_positions_value_usd = sum(
+                float(p.quantity) * current_price for p in open_positions
+            )
+
+            # 3. Calculate total portfolio value
+            total_portfolio_value_usd = usd_balance + open_positions_value_usd
+
+            # 4. Get cumulative realized PnL from the database
+            all_trades = self.db_manager.get_all_trades_in_range(mode=self.mode)
+            realized_pnl_usd = sum(t.realized_pnl_usd for t in all_trades if t.realized_pnl_usd is not None)
+
+            # 5. Calculate BTC Treasury
+            # Simple rule: sum of all 'hodl_asset_amount' from closed trades
+            btc_treasury_amount = sum(t.hodl_asset_amount for t in all_trades if t.hodl_asset_amount is not None)
+
+            # 6. Get current BTC price to value the treasury
+            # The 'current_price' is for the trading symbol, which might not be BTC.
+            # I need to fetch the BTC price specifically.
+            btc_price_usd = trader.get_current_price('BTCUSDT')
+            btc_treasury_value_usd = btc_treasury_amount * btc_price_usd if btc_price_usd else 0
+
+            snapshot_data = {
+                "total_portfolio_value_usd": total_portfolio_value_usd,
+                "usd_balance": usd_balance,
+                "open_positions_value_usd": open_positions_value_usd,
+                "realized_pnl_usd": realized_pnl_usd,
+                "btc_treasury_amount": btc_treasury_amount,
+                "btc_treasury_value_usd": btc_treasury_value_usd,
+            }
+
+            self.portfolio_manager.create_portfolio_snapshot(snapshot_data)
+            logger.info("Portfolio snapshot created successfully.")
+
+        except Exception as e:
+            logger.error(f"Failed to create portfolio snapshot: {e}", exc_info=True)
 
 
     def run(self):
@@ -238,6 +287,9 @@ class TradingBot:
                                     remaining_quantity=hodl_asset_amount,
                                     sell_data=sell_result
                                 )
+
+                                # Create a portfolio snapshot after every successful sale
+                                self._create_portfolio_snapshot(trader, state_manager, float(current_price))
                             else:
                                 logger.error(f"Sell execution failed for position {trade_id}.")
 

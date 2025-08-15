@@ -7,7 +7,9 @@ from sqlalchemy import create_engine, desc, and_, text, inspect
 from sqlalchemy.orm import sessionmaker, Session
 from contextlib import contextmanager
 from jules_bot.core.schemas import TradePoint
-from jules_bot.database.models import Base, Trade, BotStatus, PriceHistory
+from jules_bot.database.base import Base
+from jules_bot.database.models import Trade, BotStatus, PriceHistory
+from jules_bot.database.portfolio_models import PortfolioSnapshot, FinancialMovement
 from jules_bot.utils.logger import logger
 
 class PostgresManager:
