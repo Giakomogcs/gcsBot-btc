@@ -87,12 +87,22 @@ class StatusService:
             # 6. Fetch live wallet data
             wallet_balances = exchange_manager.get_account_balance()
 
-            # Filter for relevant assets to keep the output clean
+            # Filter for relevant assets and calculate USD value
             relevant_assets = {'BTC', 'USDT'}
-            filtered_balances = [
-                balance for balance in wallet_balances
-                if balance.get('asset') in relevant_assets
-            ]
+            processed_balances = []
+            for bal in wallet_balances:
+                asset = bal.get('asset')
+                if asset in relevant_assets:
+                    free = float(bal.get('free', 0))
+                    locked = float(bal.get('locked', 0))
+                    total = free + locked
+                    
+                    if asset == 'BTC':
+                        bal['usd_value'] = total * current_price
+                    elif asset == 'USDT':
+                        bal['usd_value'] = total
+                    
+                    processed_balances.append(bal)
 
             # 7. Assemble the final status object
             extended_status = {
@@ -107,7 +117,7 @@ class StatusService:
                     "btc_purchase_progress_pct": btc_purchase_progress_pct
                 },
                 "trade_history": trade_history_dicts,
-                "wallet_balances": filtered_balances
+                "wallet_balances": processed_balances
             }
 
             return extended_status
