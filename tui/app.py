@@ -77,7 +77,7 @@ class TUIApp(App):
         padding: 0 1;
         margin-top: 1;
     }
-    #status_container, #strategy_container {
+    #status_container, #strategy_container, #dcom_status_container {
         layout: grid;
         grid-gutter: 1;
         height: auto;
@@ -153,6 +153,14 @@ class TUIApp(App):
                     yield Static("Buy Signal: N/A", id="strategy_buy_signal")
                     yield Static("Buy Target: N/A", id="strategy_buy_target")
                     yield Static("Buy Progress: N/A", id="strategy_buy_progress")
+
+                yield Static("DCOM Status", classes="title")
+                with Vertical(id="dcom_status_container"):
+                    yield Static("Total Equity: N/A", id="dcom_total_equity")
+                    yield Static("Working Capital: N/A", id="dcom_wc")
+                    yield Static("Strategic Reserve: N/A", id="dcom_sr")
+                    yield Static("Operating Mode: N/A", id="dcom_mode")
+                    yield Static("Next Order Size: N/A", id="dcom_next_order")
 
                 yield Static("Open Positions", classes="title")
                 yield DataTable(id="positions_table")
@@ -427,6 +435,26 @@ class TUIApp(App):
         self.query_one("#strategy_buy_signal").update(buy_signal_text)
         self.query_one("#strategy_buy_target").update(buy_target_text)
         self.query_one("#strategy_buy_progress").update(buy_progress_text)
+
+        # Update DCOM status panel
+        dcom_data = data.get("dcom_status", {})
+        if dcom_data:
+            total_equity = Decimal(dcom_data.get("total_equity", 0))
+            wc_target = Decimal(dcom_data.get("working_capital_target", 0))
+            capital_in_use = Decimal(dcom_data.get("capital_in_use", 0))
+            remaining_bp = Decimal(dcom_data.get("remaining_buying_power", 0))
+            sr_val = Decimal(dcom_data.get("strategic_reserve", 0))
+            mode = dcom_data.get("operating_mode", "N/A")
+            next_order_size = Decimal(dcom_data.get("next_order_size_usd", 0))
+
+            wc_text = f"WC: ${wc_target:,.2f} (In Use: ${capital_in_use:,.2f} / Free: ${remaining_bp:,.2f})"
+
+            self.query_one("#dcom_total_equity").update(f"Total Equity: ${total_equity:,.2f}")
+            self.query_one("#dcom_wc").update(wc_text)
+            self.query_one("#dcom_sr").update(f"Strategic Reserve: ${sr_val:,.2f}")
+            self.query_one("#dcom_mode").update(f"Operating Mode: {mode}")
+            self.query_one("#dcom_next_order").update(f"Next Order Size: ${next_order_size:,.2f}")
+
 
     def _render_text_chart(self, history: list[dict], width: int = 50, height: int = 10) -> str:
         """Renders a simple text-based bar chart from portfolio history."""

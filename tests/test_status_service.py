@@ -40,8 +40,8 @@ class TestStatusService(unittest.TestCase):
         ]
 
         # Arrange: Mock DB results for open positions
-        trade1 = Trade(trade_id="open-trade-1", price=50000, quantity=0.1, sell_target_price=55000)
-        trade2 = Trade(trade_id="open-trade-2", price=48000, quantity=0.2, sell_target_price=50000)
+        trade1 = Trade(trade_id="open-trade-1", price=50000, quantity=0.1, sell_target_price=55000, timestamp='2023-01-01T12:00:00Z')
+        trade2 = Trade(trade_id="open-trade-2", price=48000, quantity=0.2, sell_target_price=50000, timestamp='2023-01-01T11:00:00Z')
         self.db_manager.get_open_positions.return_value = [trade1, trade2]
         self.db_manager.get_all_trades_in_range.return_value = [] # Not the focus of this test
 
@@ -51,7 +51,7 @@ class TestStatusService(unittest.TestCase):
         self.feature_calculator.get_current_candle_with_features.return_value = pd.Series(mock_market_data)
 
         # Arrange: Mock strategy evaluation
-        self.status_service.strategy.evaluate_buy_signal = MagicMock(return_value=(False, 'uptrend', 'Price > EMA20'))
+        self.status_service.strategy.evaluate_buy_signal = MagicMock(return_value=(False, 'Aggressive', 'Price has not dropped >2.0%'))
 
         # 2. Act: Call the method under test
         result = self.status_service.get_extended_status("test", "test_bot")
@@ -80,8 +80,21 @@ class TestStatusService(unittest.TestCase):
         self.assertAlmostEqual(pos1_status["price_to_target"], 3000)
         self.assertAlmostEqual(pos1_status["usd_to_target"], 300)
         
-        # Assert that the buy signal status is included
+        # Assert that the buy signal status is included and has the correct simple format
         self.assertIn("buy_signal_status", result)
+        self.assertEqual(result["buy_signal_status"]["should_buy"], False)
+        self.assertEqual(result["buy_signal_status"]["reason"], "Price has not dropped >2.0%")
+        self.assertNotIn("btc_purchase_target", result["buy_signal_status"])
+
+        # Assert that the DCOM status is included and has the correct keys
+        self.assertIn("dcom_status", result)
+        dcom_keys = [
+            "total_equity", "working_capital_target", "capital_in_use",
+            "remaining_buying_power", "strategic_reserve", "operating_mode",
+            "next_order_size_usd"
+        ]
+        for key in dcom_keys:
+            self.assertIn(key, result["dcom_status"])
 
 if __name__ == '__main__':
     unittest.main()

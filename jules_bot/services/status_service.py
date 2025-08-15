@@ -95,11 +95,15 @@ class StatusService:
                 })
 
             # 4. Determine buy signal status
+            last_buy_price = None
+            if open_positions_db:
+                latest_position = sorted(open_positions_db, key=lambda p: p.timestamp, reverse=True)[0]
+                last_buy_price = latest_position.price
+
             should_buy, _, reason = self.strategy.evaluate_buy_signal(
-                market_data, len(positions_status) # Use the count of reconciled open positions
-            )
-            btc_purchase_target, btc_purchase_progress_pct = self._calculate_buy_progress(
-                market_data, len(positions_status)
+                market_data,
+                open_positions=open_positions_db,
+                last_buy_price=last_buy_price
             )
 
             # 5. Fetch trade history from DB
@@ -129,7 +133,15 @@ class StatusService:
             # Calculate total wallet value in USD
             total_wallet_usd_value = sum(bal.get('usd_value', 0) for bal in processed_balances)
 
-            # 7. Assemble the final status object
+            # 7. DCOM Status Calculation
+            dcom_status = self._calculate_dcom_status(
+                wallet_balances=processed_balances,
+                open_positions=positions_status,
+                market_data=market_data,
+                current_price=current_price
+            )
+
+            # 8. Assemble the final status object
             extended_status = {
                 "mode": environment,
                 "symbol": "BTC/USDT",
@@ -139,9 +151,8 @@ class StatusService:
                 "buy_signal_status": {
                     "should_buy": should_buy,
                     "reason": reason,
-                    "btc_purchase_target": btc_purchase_target,
-                    "btc_purchase_progress_pct": btc_purchase_progress_pct
                 },
+                "dcom_status": dcom_status,
                 "trade_history": trade_history_dicts,
                 "wallet_balances": processed_balances
             }
@@ -152,33 +163,53 @@ class StatusService:
             logger.error(f"Error getting extended status: {e}", exc_info=True)
             return {"error": str(e)}
 
-    def _calculate_buy_progress(self, market_data: dict, open_positions_count: int) -> tuple[float, float]:
+    def _calculate_dcom_status(self, wallet_balances: list, open_positions: list, market_data: dict, current_price: float) -> dict:
         """
-        Calculates the target price for the next buy and the progress towards it.
+        Calculates all metrics for the Dynamic Capital & Opportunity Management module.
         """
-        current_price = market_data.get('close')
-        ema_20 = market_data.get('ema_20')
-        bbl = market_data.get('bbl_20_2_0')
-        ema_100 = market_data.get('ema_100')
+        # Get DCOM parameters from strategy config
+        dcom_rules = self.strategy.rules # Assuming rules are loaded in strategy
+        wc_percent = float(dcom_rules.get('working_capital_percent', 0.6))
+        ema_anchor_period = int(dcom_rules.get('ema_anchor_period', 200))
+        initial_order_size = float(dcom_rules.get('initial_order_size_usd', 5.0))
+        order_prog_factor = float(dcom_rules.get('order_progression_factor', 1.2))
 
-        if any(v is None for v in [current_price, ema_20, bbl, ema_100]):
-            return 0, 0
+        # 1. Equity Calculation
+        cash_balance = float(next((bal.get('free', 0) for bal in wallet_balances if bal.get('asset') == 'USDT'), 0))
 
-        if open_positions_count == 0:
-            if current_price > ema_100: # Uptrend
-                target_price = ema_20
-                progress = 100.0 if current_price > target_price else \
-                           _calculate_progress_pct(current_price, current_price * 1.05, target_price)
-            else: # Downtrend
-                target_price = bbl
-                progress = _calculate_progress_pct(current_price, market_data.get('high', current_price), target_price)
-            return target_price, progress
+        # Calculate current market value of all open positions
+        capital_in_use = sum(
+            pos.get('quantity', 0) * current_price for pos in open_positions
+        )
 
-        if current_price > ema_100: # Uptrend pullback
-            target_price = ema_20
-            progress = _calculate_progress_pct(current_price, market_data.get('high', current_price), target_price)
-        else: # Downtrend breakout
-            target_price = bbl
-            progress = _calculate_progress_pct(current_price, market_data.get('high', current_price), target_price)
+        total_equity = cash_balance + capital_in_use
 
-        return target_price, progress
+        # 2. Strategic Split
+        working_capital_target = total_equity * wc_percent
+        strategic_reserve = total_equity - working_capital_target
+        remaining_buying_power = working_capital_target - capital_in_use
+
+        # 3. Market Anchor (Operating Mode)
+        ema_anchor_key = f'ema_{ema_anchor_period}'
+        ema_anchor_value = market_data.get(ema_anchor_key)
+
+        operating_mode = "N/A"
+        if ema_anchor_value is not None:
+            if current_price > ema_anchor_value:
+                operating_mode = "AGGRESSIVE"
+            else:
+                operating_mode = "CONSERVATIVE"
+
+        # 4. Next Order Size Calculation
+        num_open_positions = len(open_positions)
+        next_order_size = initial_order_size * (order_prog_factor ** num_open_positions)
+
+        return {
+            "total_equity": total_equity,
+            "working_capital_target": working_capital_target,
+            "capital_in_use": capital_in_use,
+            "remaining_buying_power": remaining_buying_power,
+            "strategic_reserve": strategic_reserve,
+            "operating_mode": operating_mode,
+            "next_order_size_usd": next_order_size,
+        }

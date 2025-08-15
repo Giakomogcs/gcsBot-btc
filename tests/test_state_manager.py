@@ -109,9 +109,9 @@ def test_close_position_logs_trade(state_manager, mock_db_manager):
     assert logged_data['order_type'] == 'sell'
     assert logged_data['realized_pnl'] == 10.0
 
-def test_get_last_purchase_price_with_open_positions(state_manager):
+def test_get_last_buy_price_with_open_positions(state_manager):
     """
-    Test that `get_last_purchase_price` returns the price of the most recent trade
+    Test that `get_last_buy_price` returns the price of the most recent trade
     when there are open positions.
     """
     # Arrange: Mock the return value of get_open_positions to return mock objects
@@ -131,21 +131,20 @@ def test_get_last_purchase_price_with_open_positions(state_manager):
     state_manager.get_open_positions = Mock(return_value=[trade1, trade2, trade3])
 
     # Act
-    last_price = state_manager.get_last_purchase_price()
+    last_price = state_manager.get_last_buy_price()
 
     # Assert
     assert last_price == 105.0
 
-def test_get_last_purchase_price_with_no_open_positions(state_manager):
+def test_get_last_buy_price_with_no_open_positions(state_manager):
     """
-    Test that `get_last_purchase_price` returns infinity when there are no open positions
-    to prevent accidental buy triggers.
+    Test that `get_last_buy_price` returns None when there are no open positions.
     """
     # Arrange: Mock get_open_positions to return an empty list
     state_manager.get_open_positions = Mock(return_value=[])
 
     # Act
-    last_price = state_manager.get_last_purchase_price()
+    last_price = state_manager.get_last_buy_price()
 
     # Assert
-    assert last_price == float('inf')
+    assert last_price is None

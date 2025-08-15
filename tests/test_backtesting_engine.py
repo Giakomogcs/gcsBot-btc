@@ -12,12 +12,15 @@ def mock_config_manager():
     def get_section_side_effect(section_name):
         if section_name == 'STRATEGY_RULES':
             return {
-                'max_capital_per_trade_percent': '0.02',
-                'base_usd_per_trade': '100.0',
                 'commission_rate': '0.001',
                 'sell_factor': '0.9',
                 'target_profit': '0.05',
-                'max_open_positions': '20'
+                'working_capital_percent': '0.60',
+                'ema_anchor_period': '200',
+                'aggressive_spacing_percent': '0.02',
+                'conservative_spacing_percent': '0.04',
+                'initial_order_size_usd': '100.00', # Set to 100 for consistency with old test
+                'order_progression_factor': '1.5'
             }
         if section_name == 'BACKTEST':
             return {
@@ -72,8 +75,12 @@ def test_backtester_pnl_calculation(mock_add_all_features, mock_config_manager, 
          patch('jules_bot.core_logic.strategy_rules.StrategyRules.evaluate_buy_signal') as mock_buy_signal, \
          patch('jules_bot.core_logic.strategy_rules.StrategyRules.calculate_sell_target_price') as mock_sell_target:
 
-        # Mock to buy only on the first call
-        mock_buy_signal.side_effect = [(True, 'uptrend', 'test_buy_signal')] + [(False, '', '')] * (len(feature_data) - 1)
+        # Mock to buy only on the first candle because there are no open positions
+        mock_buy_signal.side_effect = [
+            (True, 'Aggressive', 'Ready for initial position'),
+            (False, 'Aggressive', 'Price has not dropped >2.0%'),
+            (False, 'Aggressive', 'Price has not dropped >2.0%')
+        ]
         
         # Sell if price is >= 110 (the close of the second candle)
         mock_sell_target.return_value = 110.0
@@ -88,8 +95,6 @@ def test_backtester_pnl_calculation(mock_add_all_features, mock_config_manager, 
 
         # Assert
         # The backtester should have called update_trade on the logger for the sell transaction.
-        # We need to find that call and inspect the `realized_pnl_usd`.
-        
         update_calls = [c for c in trade_logger_mock.method_calls if c[0] == 'update_trade']
         assert len(update_calls) == 1, "Expected one sell trade to be updated"
         
@@ -97,33 +102,21 @@ def test_backtester_pnl_calculation(mock_add_all_features, mock_config_manager, 
         realized_pnl = sell_trade_data.get('realized_pnl_usd')
 
         # Manually calculate the expected PnL
-        # From the data, buy price is 101 (close of first candle).
-        # Sell price is 110 (close of second candle).
-        # Commission is 0.1% (0.001)
-        # Buy amount is $100 (base_usd_per_trade)
-        # Quantity bought = 100 / 101 = 0.990099
-        # Commission on buy = 100 * 0.001 = 0.1
-        # Net cost of buy = 100.1
-        # Quantity sold = 0.990099 * 0.9 = 0.891089
+        buy_price = 101.0  # From mock trader execute_buy (first candle close)
+        sell_price = 110.0 # From mock trader execute_sell (second candle close)
         
-        # Let's use the formula from StrategyRules to be sure
-        # realized_pnl = (sell_price * (1 - commission) - buy_price * (1 + commission)) * quantity_sold
-        buy_price = 101.0  # From mock trader execute_buy
-        sell_price = 110.0 # From mock trader execute_sell
+        # DCOM logic for buy amount:
+        # Initial buy amount is initial_order_size_usd = 100.0
+        buy_amount_usdt = 100.0
+        quantity_bought = buy_amount_usdt / buy_price
         
-        # MockTrader logic: buy_amount_usdt / price
-        # buy_amount_usdt is min(10000 * 0.02, 100) = 100
-        # quantity_bought = 100 / 101 = 0.9900990099
-        quantity_bought = 100 / 101
-        
-        # sell_quantity = quantity_bought * sell_factor
         sell_factor = 0.9
         quantity_sold = quantity_bought * sell_factor
 
         commission_rate = 0.001
         expected_pnl = (sell_price * (1 - commission_rate) - buy_price * (1 + commission_rate)) * quantity_sold
-        # expected_pnl = (110 * 0.999 - 101 * 1.001) * (0.990099 * 0.9)
-        # expected_pnl = (109.89 - 101.101) * 0.891089
-        # expected_pnl = 8.789 * 0.891089 = 7.832
+        # expected_pnl = (110 * 0.999 - 101 * 1.001) * ( (100/101) * 0.9)
+        # expected_pnl = (109.89 - 101.101) * 0.8910891
+        # expected_pnl = 8.789 * 0.8910891 = 7.8315...
         
         assert realized_pnl == pytest.approx(expected_pnl)

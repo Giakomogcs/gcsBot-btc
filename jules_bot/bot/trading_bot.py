@@ -328,50 +328,57 @@ class TradingBot:
                             else:
                                 logger.error(f"Sell execution failed for position {trade_id}.")
 
-                # 3. Check for a potential buy (New "Adaptive Momentum Grid" Strategy)
-                open_positions_count = state_manager.get_open_positions_count()
-                max_open_positions = int(config_manager.get('STRATEGY_RULES', 'max_open_positions', fallback=20))
+                # 3. Check for a potential buy (DCOM Strategy)
+                market_data = final_candle.to_dict()
+                open_positions = state_manager.get_open_positions() # Re-fetch for consistency
+                last_buy_price = state_manager.get_last_buy_price()
 
-                if open_positions_count < max_open_positions:
-                    market_data = final_candle.to_dict()
-                    should_buy, regime, reason = strategy_rules.evaluate_buy_signal(
-                        market_data,
-                        open_positions_count=open_positions_count
+                should_buy, mode, reason = strategy_rules.evaluate_buy_signal(
+                    market_data,
+                    open_positions=open_positions,
+                    last_buy_price=last_buy_price
+                )
+
+                if should_buy:
+                    logger.info(f"DCOM buy signal triggered. Mode: {mode}, Reason: {reason}. Evaluating capital.")
+
+                    # Get capital details for DCOM calculation
+                    cash_balance = self.trader.get_account_balance(asset='USDT')
+                    open_positions_value = sum(float(p.quantity) * current_price for p in open_positions)
+                    num_open_positions = len(open_positions)
+
+                    buy_amount_usdt = strategy_rules.get_next_buy_amount(
+                        cash_balance=cash_balance,
+                        open_positions_value=open_positions_value,
+                        num_open_positions=num_open_positions
                     )
 
-                    if should_buy:
-                        logger.info(f"Buy signal triggered. Reason: {reason}. Evaluating capital.")
-                        available_balance = self.trader.get_account_balance()
+                    min_trade_size = float(config_manager.get('TRADING_STRATEGY', 'min_trade_size_usdt', fallback=10.0))
 
-                        if available_balance <= 0:
-                            logger.warning("Available balance is zero or less. Cannot execute buy.")
+                    if buy_amount_usdt > 0:
+                        if buy_amount_usdt >= min_trade_size:
+                            logger.info(f"Executing DCOM buy for ${buy_amount_usdt:.2f} USD.")
+
+                            decision_context = {
+                                "dcom_mode": mode,
+                                "buy_trigger_reason": reason,
+                                f"ema_{strategy_rules.ema_anchor_period}": market_data.get(f'ema_{strategy_rules.ema_anchor_period}'),
+                                "last_buy_price": last_buy_price
+                            }
+
+                            success, buy_result = self.trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
+                            if success:
+                                logger.info("DCOM Buy successful. Calculating sell target and creating new position.")
+                                purchase_price = float(buy_result.get('price'))
+                                sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
+                                state_manager.create_new_position(buy_result, sell_target_price)
                         else:
-                            buy_amount_usdt = strategy_rules.get_next_buy_amount(available_balance)
-                            min_trade_size = float(config_manager.get('TRADING_STRATEGY', 'min_trade_size_usdt', fallback=10.0))
+                             logger.warning(f"Calculated DCOM buy amount (${buy_amount_usdt:.2f}) is below the minimum threshold of ${min_trade_size}. Skipping buy.")
+                    else:
+                        logger.info("DCOM rules prevented buy: calculated order size is 0 (likely insufficient buying power).")
 
-                            if buy_amount_usdt > min_trade_size:
-                                logger.info(f"Executing buy for ${buy_amount_usdt:.2f} USD.")
-
-                                # Enhanced data logging
-                                decision_context = {
-                                    "market_regime": regime,
-                                    "buy_trigger_reason": reason,
-                                    "ema_100_value": market_data.get('ema_100'),
-                                    "ema_20_value": market_data.get('ema_20'),
-                                    "lower_bollinger_band": market_data.get('bbl_20_2_0'),
-                                    "regime_strength": None # Placeholder
-                                }
-
-                                success, buy_result = self.trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
-                                if success:
-                                    logger.info("Buy successful. Calculating sell target and creating new position.")
-                                    purchase_price = float(buy_result.get('price'))
-                                    sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
-                                    state_manager.create_new_position(buy_result, sell_target_price)
-                            else:
-                                logger.warning(f"Calculated buy amount (${buy_amount_usdt:.2f}) is below the minimum threshold of ${min_trade_size}. Skipping buy.")
                 else:
-                    logger.info(f"Maximum open positions ({max_open_positions}) reached. No new buys will be considered.")
+                    logger.info(f"No DCOM buy signal. Reason: {reason}")
 
                 logger.info("--- Cycle complete. Waiting 60 seconds... ---")
                 time.sleep(60)

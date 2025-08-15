@@ -170,65 +170,80 @@ class Backtester:
                         total_capital_allocated -= position['usd_value']
                         del open_positions[trade_id]
 
-            # 2. Check for a potential buy (New "Adaptive Momentum Grid" Strategy)
-            open_positions_count = len(open_positions)
-            max_open_positions = int(config_manager.get('STRATEGY_RULES', 'max_open_positions', fallback=20))
+            # 2. Check for a potential buy (DCOM Strategy)
+            market_data = candle.to_dict()
 
-            if open_positions_count < max_open_positions:
-                market_data = candle.to_dict()
-                should_buy, regime, reason = strategy_rules.evaluate_buy_signal(market_data, open_positions_count)
+            # Find the last buy price from our local open_positions dict
+            last_buy_price = None
+            if open_positions:
+                # Sort positions by timestamp to find the most recent one
+                latest_trade_id = max(open_positions, key=lambda k: open_positions[k]['timestamp'])
+                last_buy_price = open_positions[latest_trade_id]['price']
 
-                if should_buy:
-                    available_balance = self.mock_trader.get_account_balance()
-                    buy_amount_usdt = strategy_rules.get_next_buy_amount(available_balance)
-                    min_trade_size = float(config_manager.get('TRADING_STRATEGY', 'min_trade_size_usdt', fallback=10.0))
+            should_buy, mode, reason = strategy_rules.evaluate_buy_signal(
+                market_data,
+                open_positions=list(open_positions.values()), # Pass the list of position dicts
+                last_buy_price=last_buy_price
+            )
 
-                    if available_balance > 10 and buy_amount_usdt > min_trade_size:
-                        logger.debug(f"Backtest: {reason}. Attempting to buy ${buy_amount_usdt:.2f}")
-                        success, buy_result = self.mock_trader.execute_buy(buy_amount_usdt)
+            if should_buy:
+                # Get capital details for DCOM calculation
+                cash_balance = self.mock_trader.get_account_balance()
+                open_positions_value = self.mock_trader.get_crypto_balance_in_usd()
+                num_open_positions = len(open_positions)
 
-                        if success:
-                            new_trade_id = str(uuid.uuid4())
-                            buy_price = buy_result['price']
-                            sell_target_price = strategy_rules.calculate_sell_target_price(buy_price)
+                buy_amount_usdt = strategy_rules.get_next_buy_amount(
+                    cash_balance=cash_balance,
+                    open_positions_value=open_positions_value,
+                    num_open_positions=num_open_positions
+                )
 
-                            # Enhanced data logging
-                            decision_context = {
-                                "market_regime": regime,
-                                "buy_trigger_reason": reason,
-                                "ema_100_value": market_data.get('ema_100'),
-                                "ema_20_value": market_data.get('ema_20'),
-                                "lower_bollinger_band": market_data.get('bbl_20_2_0'),
-                                "regime_strength": None # Placeholder as per implementation
-                            }
+                min_trade_size = float(config_manager.get('TRADING_STRATEGY', 'min_trade_size_usdt', fallback=10.0))
 
-                            trade_data = {
-                                'run_id': self.run_id,
-                                'strategy_name': strategy_name,
-                                'symbol': symbol,
-                                'trade_id': new_trade_id,
-                                'exchange': "backtest_engine",
-                                'order_type': "buy",
-                                'status': "OPEN",
-                                'price': buy_price,
-                                'quantity': buy_result['quantity'],
-                                'usd_value': buy_result['usd_value'],
-                                'commission': buy_result['commission'],
-                                'commission_asset': "USDT",
-                                'timestamp': current_time,
-                                'decision_context': decision_context,
-                                'sell_target_price': sell_target_price
-                            }
-                            self.trade_logger.log_trade(trade_data)
+                if buy_amount_usdt > 0 and buy_amount_usdt >= min_trade_size:
+                    logger.debug(f"Backtest: {reason}. Attempting to buy ${buy_amount_usdt:.2f}")
+                    success, buy_result = self.mock_trader.execute_buy(buy_amount_usdt)
 
-                            position_data = {
-                                'price': buy_price,
-                                'quantity': buy_result['quantity'],
-                                'usd_value': buy_result['usd_value'],
-                                'sell_target_price': sell_target_price
-                            }
-                            open_positions[new_trade_id] = position_data
-                            total_capital_allocated += buy_result['usd_value']
+                    if success:
+                        new_trade_id = str(uuid.uuid4())
+                        buy_price = buy_result['price']
+                        sell_target_price = strategy_rules.calculate_sell_target_price(buy_price)
+
+                        decision_context = {
+                            "dcom_mode": mode,
+                            "buy_trigger_reason": reason,
+                            f"ema_{strategy_rules.ema_anchor_period}": market_data.get(f'ema_{strategy_rules.ema_anchor_period}'),
+                            "last_buy_price": last_buy_price
+                        }
+
+                        trade_data = {
+                            'run_id': self.run_id,
+                            'strategy_name': strategy_name,
+                            'symbol': symbol,
+                            'trade_id': new_trade_id,
+                            'exchange': "backtest_engine",
+                            'order_type': "buy",
+                            'status': "OPEN",
+                            'price': buy_price,
+                            'quantity': buy_result['quantity'],
+                            'usd_value': buy_result['usd_value'],
+                            'commission': buy_result['commission'],
+                            'commission_asset': "USDT",
+                            'timestamp': current_time,
+                            'decision_context': decision_context,
+                            'sell_target_price': sell_target_price
+                        }
+                        self.trade_logger.log_trade(trade_data)
+
+                        position_data = {
+                            'price': buy_price,
+                            'quantity': buy_result['quantity'],
+                            'usd_value': buy_result['usd_value'],
+                            'sell_target_price': sell_target_price,
+                            'timestamp': current_time # Store timestamp for sorting
+                        }
+                        open_positions[new_trade_id] = position_data
+                        total_capital_allocated += buy_result['usd_value']
 
         self._generate_and_save_summary(open_positions, portfolio_history)
         logger.info(f"--- Backtest {self.run_id} finished ---")

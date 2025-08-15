@@ -39,14 +39,14 @@ class StateManager:
         # effectively fetching all trades for the given mode.
         return self.db_manager.get_all_trades_in_range(mode=mode)
 
-    def get_last_purchase_price(self) -> float:
+    def get_last_buy_price(self) -> float | None:
         """
         Retrieves the purchase price of the most recent 'buy' trade.
-        Returns float('inf') if no open positions are found.
+        Returns None if no open positions are found.
         """
         open_positions = self.get_open_positions()
         if not open_positions:
-            return float('inf')
+            return None
 
         # Sort by time to find the most recent position.
         # The returned objects are SQLAlchemy models, so we use attribute access.
