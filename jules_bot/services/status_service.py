@@ -8,13 +8,22 @@ from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
 
 logger = logging.getLogger(__name__)
 
-def _calculate_progress_pct(current_price, start_price, target_price):
-    if target_price is None or start_price is None or current_price is None:
+def _calculate_progress_pct(current_price: float, start_price: float, target_price: float) -> float:
+    """
+    Calculates the percentage progress of a value from a starting point to a target.
+    Clamps the result between 0 and 100.
+    """
+    if current_price is None or start_price is None or target_price is None:
         return 0.0
+
+    # Avoid division by zero if start and target prices are the same.
     if target_price == start_price:
         return 100.0 if current_price >= target_price else 0.0
 
+    # Calculate progress as a percentage. This works for both long and short scenarios.
     progress = (current_price - start_price) / (target_price - start_price) * 100
+
+    # Clamp the result between 0% and 100%.
     return max(0, min(progress, 100))
 
 class StatusService:
@@ -53,12 +62,20 @@ class StatusService:
             for trade in open_positions_db:
                 unrealized_pnl = (current_price - trade.price) * trade.quantity if trade.price and trade.quantity else 0
                 progress_to_sell_target_pct = _calculate_progress_pct(
-                    current_price, trade.price, trade.sell_target_price
+                    current_price,
+                    start_price=trade.price,
+                    target_price=trade.sell_target_price
                 )
 
-                # Add the new requested data fields
-                price_to_target = (trade.sell_target_price - current_price) if trade.sell_target_price and current_price else 0
-                usd_to_target = price_to_target * trade.quantity if trade.quantity and price_to_target else 0
+                # Calculate how far the current price is from the sell target.
+                price_to_target = 0
+                if trade.sell_target_price is not None and current_price is not None:
+                    price_to_target = trade.sell_target_price - current_price
+                
+                # Calculate the USD value of that price difference.
+                usd_to_target = 0
+                if trade.quantity is not None:
+                    usd_to_target = price_to_target * trade.quantity
 
                 positions_status.append({
                     "trade_id": trade.trade_id,

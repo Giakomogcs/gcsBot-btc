@@ -131,7 +131,7 @@ class TUIApp(App):
 
         positions_table = self.query_one("#positions_table", DataTable)
         positions_table.cursor_type = "row"
-        positions_table.add_columns("ID", "Entry", "Value", "PnL", "Sell Target", "Progress")
+        positions_table.add_columns("ID", "Entry", "Value", "PnL", "Sell Target", "Target Status")
 
         wallet_table = self.query_one("#wallet_table", DataTable)
         wallet_table.add_columns("Asset", "Free", "Locked", "USD Value")
@@ -301,11 +301,15 @@ class TUIApp(App):
                 current_value = Decimal(pos.get("quantity", 0)) * price
                 pnl = Decimal(pos.get("unrealized_pnl", 0))
                 sell_target = Decimal(pos.get("sell_target_price", 0))
-                progress = float(pos.get("progress_to_sell_target_pct", 0))
+                
+                progress_pct = float(pos.get("progress_to_sell_target_pct", 0))
+                # price_to_target = Decimal(pos.get("price_to_target", 0))
+                usd_to_target = Decimal(pos.get("usd_to_target", 0))
+                
                 pnl_color = "green" if pnl >= 0 else "red"
                 
-                progress_bar = ProgressBar(total=100, show_eta=False, show_percentage=True)
-                progress_bar.progress = progress
+                # Format the progress to be more informative
+                progress_text = f"{progress_pct:.1f}% (${usd_to_target:,.2f})"
 
                 pos_table.add_row(
                     pos_id.split('-')[0],
@@ -313,7 +317,7 @@ class TUIApp(App):
                     f"${current_value:,.2f}",
                     f"[{pnl_color}]${pnl:,.2f}[/]",
                     f"${sell_target:,.2f}",
-                    progress_bar,
+                    progress_text,
                     key=pos_id,
                 )
         else:
