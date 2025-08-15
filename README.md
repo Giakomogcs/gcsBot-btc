@@ -346,7 +346,9 @@ The `scripts/get_bot_data.py` script provides a comprehensive JSON snapshot of t
   "portfolio_performance": {
     "cumulative_realized_pnl_usd": 150.75,
     "cumulative_deposits_usd": 1000.0,
-    "net_portfolio_growth_usd": -849.25
+    "net_portfolio_growth_usd": -849.25,
+    "btc_treasury_amount": 0.0012,
+    "portfolio_growth_pct": -84.93
   },
   "buy_signal_status": {
     "should_buy": false,

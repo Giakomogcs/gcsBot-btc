@@ -137,6 +137,13 @@ class StatusService:
             cumulative_deposits_usd = sum(d.amount_usd for d in all_deposits)
             net_portfolio_growth_usd = total_wallet_usd_value - cumulative_deposits_usd
 
+            btc_treasury_amount = sum(t.hodl_asset_amount for t in all_trades if t.hodl_asset_amount is not None)
+
+            if cumulative_deposits_usd > 0:
+                portfolio_growth_pct = (net_portfolio_growth_usd / cumulative_deposits_usd) * 100
+            else:
+                portfolio_growth_pct = 0
+
             # 8. Assemble the final status object
             extended_status = {
                 "mode": environment,
@@ -154,6 +161,8 @@ class StatusService:
                     "cumulative_realized_pnl_usd": cumulative_realized_pnl_usd,
                     "cumulative_deposits_usd": cumulative_deposits_usd,
                     "net_portfolio_growth_usd": net_portfolio_growth_usd,
+                    "btc_treasury_amount": btc_treasury_amount,
+                    "portfolio_growth_pct": portfolio_growth_pct,
                 },
                 "trade_history": [t.to_dict() for t in all_trades],
                 "wallet_balances": processed_balances

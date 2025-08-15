@@ -73,7 +73,6 @@ class TUIApp(App):
     }
     #positions_table {
         margin-top: 1;
-        height: 12;
     }
     #log_display {
         height: 20;
@@ -139,6 +138,8 @@ class TUIApp(App):
                     yield Static("Cumulative PnL: N/A", id="perf_pnl")
                     yield Static("Total Deposits: N/A", id="perf_deposits")
                     yield Static("Net Growth: N/A", id="perf_growth")
+                    yield Static("BTC Treasury: N/A", id="perf_btc_treasury")
+                    yield Static("Portfolio Growth: N/A", id="perf_growth_pct")
 
                 yield Static("Open Positions", classes="title")
                 yield DataTable(id="positions_table")
@@ -385,10 +386,15 @@ class TUIApp(App):
 
         pnl_color = "green" if pnl >= 0 else "red"
         growth_color = "green" if growth >= 0 else "red"
+        growth_pct = Decimal(perf_data.get("portfolio_growth_pct", 0))
+        growth_pct_color = "green" if growth_pct >= 0 else "red"
+        btc_treasury = Decimal(perf_data.get("btc_treasury_amount", 0))
 
         self.query_one("#perf_pnl").update(f"Cumulative PnL: [{pnl_color}]${pnl:,.2f}[/]")
         self.query_one("#perf_deposits").update(f"Total Deposits: ${deposits:,.2f}")
         self.query_one("#perf_growth").update(f"Net Growth: [{growth_color}]${growth:,.2f}[/]")
+        self.query_one("#perf_btc_treasury").update(f"BTC Treasury: {btc_treasury:.8f} BTC")
+        self.query_one("#perf_growth_pct").update(f"Portfolio Growth: [{growth_pct_color}]{growth_pct:.2f}%[/]")
 
     # NOVO: Handler para a mensagem CommandOutput (opcional, mas bom para feedback)
     def on_command_output(self, message: CommandOutput) -> None:
