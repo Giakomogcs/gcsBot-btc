@@ -33,7 +33,8 @@ class ExchangeManager:
         if not api_key or not api_secret:
             raise ValueError(f"API keys for {self.mode} mode are not set in the environment.")
 
-        client = Client(api_key, api_secret, testnet=testnet)
+        requests_params = {"timeout": 30}
+        client = Client(api_key, api_secret, testnet=testnet, requests_params=requests_params)
         logging.info(f"Binance client initialized for {'testnet' if testnet else 'mainnet'}.")
         return client
 
@@ -83,3 +84,40 @@ class ExchangeManager:
         except Exception as e:
             logging.error(f"Error fetching current price for {symbol}: {e}")
             return None
+
+    def get_account_balance(self) -> list:
+        """
+        Fetches account balance from Binance.
+        """
+        if not self.client:
+            logging.error("Binance client not initialized.")
+            return []
+        try:
+            account_info = self.client.get_account()
+            balances = [
+                {
+                    'asset': balance['asset'],
+                    'free': balance['free'],
+                    'locked': balance['locked']
+                }
+                for balance in account_info['balances']
+                if float(balance['free']) > 0 or float(balance['locked']) > 0
+            ]
+            return balances
+        except Exception as e:
+            logging.error(f"Error fetching account balance from Binance: {e}")
+            return []
+
+    def get_open_orders(self, symbol: str) -> list:
+        """
+        Fetches open orders for a specific symbol from Binance.
+        """
+        if not self.client:
+            logging.error("Binance client not initialized.")
+            return []
+        try:
+            open_orders = self.client.get_open_orders(symbol=symbol)
+            return open_orders
+        except Exception as e:
+            logging.error(f"Error fetching open orders for {symbol}: {e}")
+            return []

@@ -10,18 +10,23 @@ from jules_bot.core_logic.trader import Trader
 from jules_bot.core_logic.strategy_rules import StrategyRules
 from jules_bot.core.market_data_provider import MarketDataProvider
 from jules_bot.database.postgres_manager import PostgresManager
+from jules_bot.database.portfolio_manager import PortfolioManager
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
+
 
 class TradingBot:
     """
     The maestro that orchestrates all the components of the bot.
     """
 
-    def __init__(self, mode: str, bot_id: str, market_data_provider: MarketDataProvider):
+    def __init__(self, mode: str, bot_id: str, market_data_provider: MarketDataProvider, db_manager: PostgresManager):
         self.mode = mode
         self.run_id = bot_id
         self.is_running = True
         self.market_data_provider = market_data_provider
+        self.db_manager = db_manager
+        self.trader = Trader(mode=self.mode)
+        self.portfolio_manager = PortfolioManager(config_manager.get_section('POSTGRES'))
         self.symbol = config_manager.get('APP', 'symbol')
         self.state_file_path = "/tmp/bot_state.json"
 
@@ -80,14 +85,56 @@ class TradingBot:
 
                     elif cmd_type == "force_sell":
                         trade_id = command.get("trade_id")
+                        percentage = command.get("percentage", 100.0) # Default to 100%
                         if trade_id:
                             open_positions = state_manager.get_open_positions()
                             position_to_sell = next((p for p in open_positions if p.trade_id == trade_id), None)
                             if position_to_sell:
+                                sell_fraction = float(percentage) / 100.0
+                                original_quantity = float(position_to_sell.quantity or 0)
+                                quantity_to_sell = original_quantity * sell_fraction
+
+                                logger.info(f"Executing force sell for {percentage}% of trade {trade_id} ({quantity_to_sell:.8f} units).")
+
                                 # Convert the Trade object to a dict for selling
                                 sell_position_data = position_to_sell.to_dict()
-                                sell_position_data['quantity'] = float(position_to_sell.quantity or 0)
-                                trader.execute_sell(sell_position_data, self.run_id, {"reason": "manual_override"})
+                                sell_position_data['quantity'] = quantity_to_sell
+
+                                success, sell_result = trader.execute_sell(sell_position_data, self.run_id, {"reason": f"manual_override_{percentage}%_sell"})
+
+                                if success:
+                                    current_price = trader.get_current_price(self.symbol)
+                                    buy_price = float(position_to_sell.price or 0)
+                                    sell_price = float(sell_result.get('price'))
+                                    hodl_asset_amount = original_quantity - quantity_to_sell
+
+                                    realized_pnl_usd = strategy_rules.calculate_realized_pnl(
+                                        buy_price=buy_price,
+                                        sell_price=sell_price,
+                                        quantity_sold=quantity_to_sell
+                                    )
+
+                                    hodl_asset_value_at_sell = hodl_asset_amount * current_price if current_price else 0
+                                    commission_usd = float(sell_result.get('commission', 0))
+
+                                    sell_result.update({
+                                        "commission_usd": commission_usd,
+                                        "realized_pnl_usd": realized_pnl_usd,
+                                        "hodl_asset_amount": hodl_asset_amount,
+                                        "hodl_asset_value_at_sell": hodl_asset_value_at_sell
+                                    })
+
+                                    logger.info(f"Force sell successful for {trade_id}. Recording partial sell and updating position.")
+                                    state_manager.record_partial_sell(
+                                        original_trade_id=trade_id,
+                                        remaining_quantity=hodl_asset_amount,
+                                        sell_data=sell_result
+                                    )
+
+                                    # Create a portfolio snapshot after the manual sale
+                                    self._create_portfolio_snapshot(trader, state_manager, float(current_price))
+                                else:
+                                    logger.error(f"Force sell execution failed for position {trade_id}.")
                             else:
                                 logger.warning(f"Could not find open position with trade_id: {trade_id} for force_sell.")
 
@@ -98,6 +145,52 @@ class TradingBot:
                     # Optionally, move to an 'error' directory instead of deleting
                     # os.rename(filepath, os.path.join(command_dir, "error", filename))
 
+    def _create_portfolio_snapshot(self, trader: Trader, state_manager: StateManager, current_price: float):
+        """
+        Gathers all necessary data and creates a new portfolio snapshot.
+        """
+        logger.info("Creating portfolio snapshot...")
+        try:
+            # 1. Get current USD balance
+            usd_balance = trader.get_account_balance(asset='USDT')
+
+            # 2. Get open positions and calculate their total value
+            open_positions = state_manager.get_open_positions()
+            open_positions_value_usd = sum(
+                float(p.quantity) * current_price for p in open_positions
+            )
+
+            # 3. Calculate total portfolio value
+            total_portfolio_value_usd = usd_balance + open_positions_value_usd
+
+            # 4. Get cumulative realized PnL from the database
+            all_trades = self.db_manager.get_all_trades_in_range(mode=self.mode)
+            realized_pnl_usd = sum(t.realized_pnl_usd for t in all_trades if t.realized_pnl_usd is not None)
+
+            # 5. Calculate BTC Treasury
+            # Simple rule: sum of all 'hodl_asset_amount' from closed trades
+            btc_treasury_amount = sum(t.hodl_asset_amount for t in all_trades if t.hodl_asset_amount is not None)
+
+            # 6. Get current BTC price to value the treasury
+            # The 'current_price' is for the trading symbol, which might not be BTC.
+            # I need to fetch the BTC price specifically.
+            btc_price_usd = trader.get_current_price('BTCUSDT')
+            btc_treasury_value_usd = btc_treasury_amount * btc_price_usd if btc_price_usd else 0
+
+            snapshot_data = {
+                "total_portfolio_value_usd": total_portfolio_value_usd,
+                "usd_balance": usd_balance,
+                "open_positions_value_usd": open_positions_value_usd,
+                "realized_pnl_usd": realized_pnl_usd,
+                "btc_treasury_amount": btc_treasury_amount,
+                "btc_treasury_value_usd": btc_treasury_value_usd,
+            }
+
+            self.portfolio_manager.create_portfolio_snapshot(snapshot_data)
+            logger.info("Portfolio snapshot created successfully.")
+
+        except Exception as e:
+            logger.error(f"Failed to create portfolio snapshot: {e}", exc_info=True)
 
     def run(self):
         """
@@ -108,28 +201,34 @@ class TradingBot:
             return
 
         # Instantiate core components
-        db_config = config_manager.get_db_config('POSTGRES')
-
-        db_manager = PostgresManager(config=db_config)
-        feature_calculator = LiveFeatureCalculator(db_manager, mode=self.mode)
-        state_manager = StateManager(mode=self.mode, bot_id=self.run_id)
-        trader = Trader(mode=self.mode)
-        account_manager = AccountManager(trader.client)
+        feature_calculator = LiveFeatureCalculator(self.db_manager, mode=self.mode)
+        state_manager = StateManager(mode=self.mode, bot_id=self.run_id, db_manager=self.db_manager)
+        account_manager = AccountManager(self.trader.client)
         strategy_rules = StrategyRules(config_manager)
 
-        if not trader.is_ready:
+        # --- SYNC TRADES ON STARTUP ---
+        if self.trader.is_ready:
+            logger.info("Performing initial holdings synchronization...")
+            state_manager.sync_holdings_with_binance(account_manager, strategy_rules, self.trader)
+
+        if not self.trader.is_ready:
             logger.critical("Trader could not be initialized. Shutting down bot.")
             return
 
         self.is_running = True
         logger.info(f"🚀 --- TRADING BOT STARTED --- RUN ID: {self.run_id} --- SYMBOL: {self.symbol} --- MODE: {self.mode.upper()} --- 🚀")
 
+        # Determine the base asset once (e.g., BTC from BTCUSDT)
+        quote_asset = "USDT"
+        base_asset = self.symbol.replace(quote_asset, "") if self.symbol.endswith(quote_asset) else self.symbol[:3]
+
+
         while self.is_running:
             try:
                 logger.info("--- Starting new trading cycle ---")
 
                 # 0. Check for and handle any UI commands
-                self._handle_ui_commands(trader, state_manager, strategy_rules)
+                self._handle_ui_commands(self.trader, state_manager, strategy_rules)
 
                 # 1. Get the latest market data with all features
                 final_candle = feature_calculator.get_current_candle_with_features()
@@ -146,62 +245,88 @@ class TradingBot:
                 logger.info(f"Found {len(open_positions)} open position(s).")
 
                 # Fetch all wallet balances
-                all_prices = trader.get_all_prices()
+                all_prices = self.trader.get_all_prices()
                 wallet_balances = account_manager.get_all_account_balances(all_prices)
                 trade_history = state_manager.get_trade_history(mode=self.mode)
 
                 # Update UI state file
                 self._write_state_to_file(open_positions, float(current_price), wallet_balances, trade_history)
 
-                for position in open_positions:
-                    trade_id = position.trade_id
-                    # Use direct attribute access; handle potential None value for sell_target_price
-                    target_price = position.sell_target_price or float('inf')
+                # --- Refactored Sell Logic ---
 
-                    if current_price >= target_price:
-                        logger.info(f"Sell condition met for position {trade_id}. Executing sell.")
+                # 1. Identify all positions that meet the sell criteria
+                positions_to_sell = [
+                    p for p in open_positions
+                    if float(current_price) >= (p.sell_target_price or float('inf'))
+                ]
 
-                        # Use direct attribute access
-                        original_quantity = float(position.quantity or 0)
-                        sell_quantity = original_quantity * strategy_rules.sell_factor
-                        hodl_asset_amount = original_quantity - sell_quantity
+                if positions_to_sell:
+                    logger.info(f"Found {len(positions_to_sell)} positions meeting sell criteria.")
 
-                        # Convert the Trade object to a dict for modification and selling
-                        sell_position_data = position.to_dict()
-                        sell_position_data['quantity'] = sell_quantity
+                    # 2. Calculate the total quantity required for all sales
+                    total_sell_quantity = sum(
+                        float(p.quantity or 0) * strategy_rules.sell_factor for p in positions_to_sell
+                    )
 
-                        success, sell_result = trader.execute_sell(sell_position_data, self.run_id, decision_context)
+                    # 3. Fetch available balance ONCE
+                    available_balance = self.trader.get_account_balance(asset=base_asset)
 
-                        if success:
-                            # --- CORRECTED PNL CALCULATION ---
-                            buy_price = float(position.price or 0)
-                            sell_price = float(sell_result.get('price'))
+                    # 4. Perform a single, consolidated balance check
+                    if total_sell_quantity > available_balance:
+                        logger.warning(
+                            f"INSUFFICIENT BALANCE: Attempting to sell a total of {total_sell_quantity:.8f} {base_asset}, "
+                            f"but only {available_balance:.8f} is available. "
+                            f"Skipping all sales for this cycle."
+                        )
+                    else:
+                        logger.info(
+                            f"Balance check passed. Available: {available_balance:.8f} {base_asset}, "
+                            f"Required: {total_sell_quantity:.8f} {base_asset}. Proceeding with sales."
+                        )
+                        # 5. Execute sales if balance is sufficient
+                        for position in positions_to_sell:
+                            trade_id = position.trade_id
+                            original_quantity = float(position.quantity or 0)
+                            sell_quantity = original_quantity * strategy_rules.sell_factor
+                            hodl_asset_amount = original_quantity - sell_quantity
 
-                            commission_rate = float(strategy_rules.rules.get('commission_rate'))
+                            sell_position_data = position.to_dict()
+                            sell_position_data['quantity'] = sell_quantity
 
-                            # This formula correctly accounts for commissions on both buy and sell side
-                            # for the portion of the asset that was sold.
-                            realized_pnl_usd = ((sell_price * (1 - commission_rate)) - (buy_price * (1 + commission_rate))) * sell_quantity
+                            success, sell_result = self.trader.execute_sell(sell_position_data, self.run_id, decision_context)
 
-                            # --- END CORRECTED PNL CALCULATION ---
+                            if success:
+                                buy_price = float(position.price or 0)
+                                sell_price = float(sell_result.get('price'))
 
-                            hodl_asset_value_at_sell = hodl_asset_amount * current_price
+                                # Refactored PnL calculation
+                                realized_pnl_usd = strategy_rules.calculate_realized_pnl(
+                                    buy_price=buy_price,
+                                    sell_price=sell_price,
+                                    quantity_sold=sell_quantity
+                                )
+                                
+                                hodl_asset_value_at_sell = hodl_asset_amount * current_price
+                                commission_usd = float(sell_result.get('commission', 0))
 
-                            # The total commission for this sell transaction
-                            commission_usd = float(sell_result.get('commission', 0))
+                                sell_result.update({
+                                    "commission_usd": commission_usd,
+                                    "realized_pnl_usd": realized_pnl_usd,
+                                    "hodl_asset_amount": hodl_asset_amount,
+                                    "hodl_asset_value_at_sell": hodl_asset_value_at_sell
+                                })
 
-                            # Update sell_result with the calculated financial details for state update
-                            sell_result.update({
-                                "commission_usd": commission_usd, # Log the actual commission for the sell
-                                "realized_pnl_usd": realized_pnl_usd,
-                                "hodl_asset_amount": hodl_asset_amount,
-                                "hodl_asset_value_at_sell": hodl_asset_value_at_sell
-                            })
+                                logger.info(f"Sell successful for {trade_id}. Recording partial sell and updating position.")
+                                state_manager.record_partial_sell(
+                                    original_trade_id=trade_id,
+                                    remaining_quantity=hodl_asset_amount,
+                                    sell_data=sell_result
+                                )
 
-                            logger.info(f"Sell successful for {trade_id}. Closing position.")
-                            state_manager.close_position(trade_id, sell_result)
-                        else:
-                            logger.error(f"Sell execution failed for position {trade_id}.")
+                                # Create a portfolio snapshot after every successful sale
+                                self._create_portfolio_snapshot(self.trader, state_manager, float(current_price))
+                            else:
+                                logger.error(f"Sell execution failed for position {trade_id}.")
 
                 # 3. Check for a potential buy (New "Adaptive Momentum Grid" Strategy)
                 open_positions_count = state_manager.get_open_positions_count()
@@ -216,7 +341,7 @@ class TradingBot:
 
                     if should_buy:
                         logger.info(f"Buy signal triggered. Reason: {reason}. Evaluating capital.")
-                        available_balance = trader.get_account_balance()
+                        available_balance = self.trader.get_account_balance()
 
                         if available_balance <= 0:
                             logger.warning("Available balance is zero or less. Cannot execute buy.")
@@ -237,7 +362,7 @@ class TradingBot:
                                     "regime_strength": None # Placeholder
                                 }
 
-                                success, buy_result = trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
+                                success, buy_result = self.trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
                                 if success:
                                     logger.info("Buy successful. Calculating sell target and creating new position.")
                                     purchase_price = float(buy_result.get('price'))

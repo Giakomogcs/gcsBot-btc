@@ -46,7 +46,8 @@ def main():
         bot = TradingBot(
             mode=bot_mode,
             bot_id=bot_id,
-            market_data_provider=market_data_provider
+            market_data_provider=market_data_provider,
+            db_manager=db_manager
         )
         
         logger.info(f"Bot instanciado com sucesso em modo '{bot_mode}'.")

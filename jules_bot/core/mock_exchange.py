@@ -35,17 +35,24 @@ class MockTrader(Trader):
         return self._current_timestamp
 
     def execute_buy(self, amount_usdt: float) -> tuple[bool, dict]:
-        """Simulates a market buy order."""
-        if self.usd_balance < amount_usdt:
-            logging.warning(f"Insufficient funds to place buy order of ${amount_usdt:,.2f}.")
+        """
+        Simulates a market buy order.
+        The `amount_usdt` is the gross value of the asset to be purchased.
+        The commission is calculated on this amount and added to the total cost.
+        """
+        price = self.get_current_price()
+        if price <= 0:
+            return False, {"error": "Invalid price."}
+
+        quantity_bought = amount_usdt / price
+        commission = amount_usdt * self.commission_rate
+        total_cost = amount_usdt + commission
+
+        if self.usd_balance < total_cost:
+            logging.warning(f"Insufficient funds. Required: ${total_cost:,.2f}, Available: ${self.usd_balance:,.2f}.")
             return False, {"error": "Insufficient USD balance."}
 
-        price = self.get_current_price()
-        commission = amount_usdt * self.commission_rate
-        net_usd_amount = amount_usdt - commission
-        quantity_bought = net_usd_amount / price if price > 0 else 0
-
-        self.usd_balance -= amount_usdt
+        self.usd_balance -= total_cost
         self.btc_balance += quantity_bought
 
         trade_data = {
@@ -53,7 +60,7 @@ class MockTrader(Trader):
             "symbol": self.symbol,
             "price": price,
             "quantity": quantity_bought,
-            "usd_value": amount_usdt,
+            "usd_value": amount_usdt, # Gross value before commission
             "commission": commission,
             "timestamp": self.get_current_timestamp()
         }
@@ -84,6 +91,18 @@ class MockTrader(Trader):
         return True, exit_data
 
     def get_account_balance(self) -> float:
+        """
+        Returns the cash balance in USD.
+        """
+        return self.usd_balance
+
+    def get_crypto_balance_in_usd(self) -> float:
+        """
+        Returns the value of the crypto balance in USD.
+        """
+        return self.btc_balance * self.get_current_price()
+
+    def get_total_portfolio_value(self) -> float:
         """
         Returns the total portfolio value in USD (cash + value of BTC holdings).
         """

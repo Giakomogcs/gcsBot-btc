@@ -1,9 +1,7 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, JSON, Boolean
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, Boolean
 from sqlalchemy.sql import func
 import datetime
-
-Base = declarative_base()
+from .base import Base
 
 class PriceHistory(Base):
     __tablename__ = 'price_history'
@@ -45,6 +43,7 @@ class Trade(Base):
     commission_asset = Column(String)
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
     exchange_order_id = Column(String)
+    binance_trade_id = Column(Integer)
     decision_context = Column(JSON)
     sell_target_price = Column(Float)
     commission_usd = Column(Float)

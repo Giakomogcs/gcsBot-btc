@@ -1,4 +1,5 @@
 import uuid
+import math
 from binance.client import Client
 from binance.exceptions import BinanceAPIException, BinanceRequestException
 from jules_bot.utils.config_manager import config_manager
@@ -18,9 +19,8 @@ class Trader:
         self.client = self._init_binance_client()
         self.symbol = config_manager.get('APP', 'symbol')
         self.strategy_name = config_manager.get('APP', 'strategy_name', fallback='default_strategy')
-
-        db_config = config_manager.get_db_config('POSTGRES')
-        self.db_manager = PostgresManager(config=db_config)
+        self.step_size = None
+        self._fetch_exchange_info()
 
     def _map_mode_to_environment(self, mode: str) -> str:
         """Maps the internal 'mode' to the user-facing 'environment' tag."""
@@ -161,6 +161,8 @@ class Trader:
         commission_asset = order['fills'][0].get('commissionAsset', 'N/A') if order['fills'] else 'N/A'
 
         # Return a standardized dictionary
+        binance_trade_id = order['fills'][0]['tradeId'] if order.get('fills') else None
+
         return {
             "trade_id": trade_id,
             "symbol": self.symbol,
@@ -170,11 +172,61 @@ class Trader:
             "commission": commission,
             "commission_asset": commission_asset,
             "exchange_order_id": str(order.get('orderId')),
+            "binance_trade_id": binance_trade_id,
             "timestamp": order.get('transactTime'),
             "decision_context": decision_context,
             "environment": self.environment
         }
 
+
+    def _format_quantity(self, quantity):
+        """
+        Formats the quantity to comply with the LOT_SIZE filter.
+        Returns a string to avoid scientific notation issues.
+        """
+        if self.step_size is None:
+            logger.warning(f"step_size not available for symbol {self.symbol}. Quantity will not be formatted.")
+            return str(quantity)
+        
+        try:
+            step_size_float = float(self.step_size)
+            # Use floor to comply with LOT_SIZE filter
+            formatted_quantity_float = math.floor(quantity / step_size_float) * step_size_float
+            
+            # Determine the number of decimal places from the step_size string
+            if 'e-' in self.step_size:
+                precision = int(self.step_size.split('e-')[-1])
+            elif '.' in self.step_size:
+                trimmed_step_size = self.step_size.rstrip('0')
+                precision = len(trimmed_step_size.split('.')[1]) if '.' in trimmed_step_size else 0
+            else:
+                precision = 0
+            
+            # Format the floored quantity to a string with the correct number of decimal places
+            final_quantity_str = f"{formatted_quantity_float:.{precision}f}"
+
+            if float(final_quantity_str) != quantity:
+                logger.info(f"Formatted quantity from {quantity} to {final_quantity_str} using stepSize {self.step_size}")
+            
+            return final_quantity_str
+
+        except (ValueError, TypeError) as e:
+            logger.error(f"Error formatting quantity {quantity} with step_size {self.step_size}: {e}")
+            return str(quantity)
+
+    def _fetch_exchange_info(self):
+        if not self.is_ready:
+            return
+        try:
+            logger.info(f"Fetching exchange info for {self.symbol}...")
+            info = self.client.get_symbol_info(self.symbol)
+            for f in info['filters']:
+                if f['filterType'] == 'LOT_SIZE':
+                    self.step_size = f['stepSize']
+                    logger.info(f"LOT_SIZE filter for {self.symbol}: stepSize is {self.step_size}")
+                    break
+        except Exception as e:
+            logger.error(f"Could not fetch exchange info for {self.symbol}: {e}")
 
     def execute_buy(self, amount_usdt: float, run_id: str, decision_context: Optional[Dict[str, Any]]) -> Tuple[bool, Optional[dict]]:
         """
@@ -214,8 +266,12 @@ class Trader:
 
         try:
             quantity_to_sell = position_data.get('quantity')
-            logger.info(f"EXECUTING SELL: {quantity_to_sell:.8f} of {self.symbol} | Trade ID: {trade_id}")
-            order = self.client.order_market_sell(symbol=self.symbol, quantity=quantity_to_sell)
+            
+            # Format the quantity to comply with exchange filters
+            formatted_quantity = self._format_quantity(quantity_to_sell)
+            
+            logger.info(f"EXECUTING SELL: {formatted_quantity} of {self.symbol} | Trade ID: {trade_id}")
+            order = self.client.order_market_sell(symbol=self.symbol, quantity=formatted_quantity)
             logger.info(f"✅ SELL ORDER EXECUTED: {order}")
 
             # Parse the response to get accurate, standardized data
@@ -234,6 +290,52 @@ class Trader:
         except Exception as e:
             logger.error(f"ERROR EXECUTING SELL (Trade ID: {trade_id}): {e}", exc_info=True)
             return False, None
+
+    def get_all_my_trades(self, symbol: str) -> list[dict]:
+        """
+        Fetches all historical trades for a given symbol from Binance,
+        handling pagination to get the complete history.
+        """
+        if not self.is_ready:
+            logger.warning("Trader is not ready. Cannot fetch trades.")
+            return []
+
+        all_trades = []
+        from_id = 0  # Start from the first trade
+        limit = 1000  # Max limit per request for myTrades endpoint
+
+        logger.info(f"Fetching all historical trades for {symbol} from Binance...")
+        
+        while True:
+            try:
+                logger.debug(f"Fetching trades for {symbol} starting from trade ID {from_id}...")
+                trades = self.client.get_my_trades(symbol=symbol, fromId=from_id, limit=limit)
+                
+                if not trades:
+                    # No more trades to fetch
+                    break
+                
+                all_trades.extend(trades)
+                
+                # The API returns trades in ascending order of ID.
+                # Set the next from_id to be the ID of the last trade fetched.
+                # The `fromId` parameter is inclusive, so we need to start from the next ID.
+                from_id = trades[-1]['id'] + 1
+                
+                # If the number of trades fetched is less than the limit, we're at the end.
+                if len(trades) < limit:
+                    break
+
+            except BinanceAPIException as e:
+                # This can happen if the fromId is too old or there are other API issues.
+                logger.error(f"API error while fetching trades for {symbol} from ID {from_id}: {e}")
+                return []  # Return empty on error to be safe
+            except Exception as e:
+                logger.error(f"Unexpected error while fetching trades for {symbol}: {e}", exc_info=True)
+                return []
+                
+        logger.info(f"Found a total of {len(all_trades)} trades for {symbol} on the exchange.")
+        return all_trades
 
     def close_connection(self):
         """Closes the connection to the exchange."""

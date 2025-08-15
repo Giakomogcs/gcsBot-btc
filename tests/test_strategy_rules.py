@@ -41,6 +41,70 @@ def test_get_next_buy_amount_when_balance_is_high(mock_config_manager):
     # Assert
     assert buy_amount == 100.0
 
+def test_calculate_realized_pnl(mock_config_manager):
+    """
+    Tests the realized PnL calculation under different scenarios.
+    """
+    # Arrange
+    strategy_rules = StrategyRules(mock_config_manager)
+    commission_rate = 0.001 # 0.1%
+
+    # --- Scenario 1: Profitable Trade ---
+    buy_price_profit = 100.0
+    sell_price_profit = 110.0
+    quantity_sold = 1.0
+
+    # Calculation according to the formula:
+    # Net Sales Revenue = (110 * (1 - 0.001)) = 109.89
+    # Proportional Purchase Cost = (100 * (1 + 0.001)) = 100.10
+    # Realized Profit = (109.89 - 100.10) * 1.0 = 9.79
+    expected_pnl_profit = 9.79
+
+    # Act
+    realized_pnl_profit = strategy_rules.calculate_realized_pnl(
+        buy_price=buy_price_profit,
+        sell_price=sell_price_profit,
+        quantity_sold=quantity_sold
+    )
+
+    # Assert
+    assert realized_pnl_profit == pytest.approx(expected_pnl_profit)
+
+    # --- Scenario 2: Losing Trade ---
+    buy_price_loss = 100.0
+    sell_price_loss = 90.0
+
+    # Calculation:
+    # Net Sales Revenue = (90 * (1 - 0.001)) = 89.91
+    # Proportional Purchase Cost = (100 * (1 + 0.001)) = 100.10
+    # Realized Loss = (89.91 - 100.10) * 1.0 = -10.19
+    expected_pnl_loss = -10.19
+
+    # Act
+    realized_pnl_loss = strategy_rules.calculate_realized_pnl(
+        buy_price=buy_price_loss,
+        sell_price=sell_price_loss,
+        quantity_sold=quantity_sold
+    )
+
+    # Assert
+    assert realized_pnl_loss == pytest.approx(expected_pnl_loss)
+
+    # --- Scenario 3: Break-even Trade (considering commissions) ---
+    buy_price_breakeven = 100.0
+    # P_sell * (1 - 0.001) = 100 * (1 + 0.001) => P_sell = 100.1 / 0.999 = 100.2002
+    sell_price_breakeven = 100.2002002
+
+    # Act
+    realized_pnl_breakeven = strategy_rules.calculate_realized_pnl(
+        buy_price=buy_price_breakeven,
+        sell_price=sell_price_breakeven,
+        quantity_sold=quantity_sold
+    )
+
+    # Assert
+    assert realized_pnl_breakeven == pytest.approx(0.0, abs=1e-6)
+
 def test_get_next_buy_amount_when_balance_is_low(mock_config_manager):
     """
     Test that the buy amount is capped by the percentage of available

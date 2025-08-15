@@ -20,16 +20,24 @@ def state_manager(mock_db_manager):
     Provides a StateManager instance with a mocked PostgresManager.
     This fixture ensures that the real PostgresManager is not used during tests.
     """
-    # We use patch to temporarily replace the PostgresManager class during instantiation
-    with patch('jules_bot.core_logic.state_manager.PostgresManager', return_value=mock_db_manager), \
-         patch('jules_bot.core_logic.state_manager.TradeLogger') as MockTradeLogger:
-        sm = StateManager(mode="test", bot_id="test_bot")
-        # The old tests assumed log_trade was on db_manager. To avoid rewriting all tests,
-        # we can monkey-patch the mock_db_manager to have the log_trade method from the
-        # (mocked) TradeLogger instance.
-        sm.db_manager = mock_db_manager
-        sm.db_manager.log_trade = MockTradeLogger.return_value.log_trade
-        return sm
+    # We use patch to mock the TradeLogger that StateManager instantiates.
+    with patch('jules_bot.core_logic.state_manager.TradeLogger') as MockTradeLogger:
+        # Provide the mocked db_manager directly to the constructor.
+        sm = StateManager(mode="test", bot_id="test_bot", db_manager=mock_db_manager)
+        
+        # For tests that assert log_trade, we need to ensure the mock is correctly configured.
+        # The StateManager passes its db_manager to TradeLogger, so the mock setup is simpler.
+        # We can mock the instance of TradeLogger created inside StateManager.
+        sm.trade_logger = MockTradeLogger()
+        
+        # The tests are written to assert on db_manager.log_trade.
+        # To avoid rewriting them all, we'll redirect the call from the mock trade_logger
+        # to the mock_db_manager. This is a test-specific workaround.
+        def redirect_log(*args, **kwargs):
+            mock_db_manager.log_trade(*args, **kwargs)
+
+        sm.trade_logger.log_trade.side_effect = redirect_log
+        yield sm
 
 from jules_bot.core.schemas import TradePoint
 
@@ -106,12 +114,21 @@ def test_get_last_purchase_price_with_open_positions(state_manager):
     Test that `get_last_purchase_price` returns the price of the most recent trade
     when there are open positions.
     """
-    # Arrange: Mock the return value of get_open_positions
-    state_manager.get_open_positions = Mock(return_value=[
-        {'_time': '2023-01-01T12:00:00Z', 'price': 100.0},
-        {'_time': '2023-01-01T13:00:00Z', 'price': 105.0}, # Most recent
-        {'_time': '2023-01-01T11:00:00Z', 'price': 99.0}
-    ])
+    # Arrange: Mock the return value of get_open_positions to return mock objects
+    # with attributes, to simulate SQLAlchemy model objects.
+    trade1 = Mock()
+    trade1.timestamp = '2023-01-01T12:00:00Z'
+    trade1.price = 100.0
+
+    trade2 = Mock()
+    trade2.timestamp = '2023-01-01T13:00:00Z'
+    trade2.price = 105.0
+
+    trade3 = Mock()
+    trade3.timestamp = '2023-01-01T11:00:00Z'
+    trade3.price = 99.0
+
+    state_manager.get_open_positions = Mock(return_value=[trade1, trade2, trade3])
 
     # Act
     last_price = state_manager.get_last_purchase_price()

@@ -15,24 +15,53 @@ app = typer.Typer()
 def get_docker_compose_command():
     """
     Verifica se 'docker-compose' (V1) ou 'docker compose' (V2) está disponível.
+    Adiciona 'sudo' se o usuário não for root para evitar problemas de permissão.
     """
+    # Lista de comandos base. Adiciona 'sudo' se não formos o usuário root.
+    base_cmd = []
+    try:
+        # os.geteuid() não existe no Windows, então tratamos o erro.
+        # No Windows, o gerenciamento de permissões do Docker é diferente e geralmente não requer sudo.
+        if os.geteuid() != 0:
+            base_cmd = ["sudo"]
+    except AttributeError:
+        # Se geteuid não existe, estamos provavelmente no Windows. Não fazemos nada.
+        pass
+
+    # Tenta encontrar um comando docker-compose válido
     if shutil.which("docker-compose"):
-        return ["docker-compose"]
+        return base_cmd + ["docker-compose"]
     elif shutil.which("docker"):
         try:
-            result = subprocess.run(["docker", "compose", "--version"], capture_output=True, text=True, check=True)
+            # Constrói o comando de teste completo (ex: ['sudo', 'docker', 'compose', '--version'])
+            test_command = base_cmd + ["docker", "compose", "--version"]
+            result = subprocess.run(test_command, capture_output=True, text=True, check=True)
             if "Docker Compose version" in result.stdout:
-                return ["docker", "compose"]
+                return base_cmd + ["docker", "compose"]
         except (subprocess.CalledProcessError, FileNotFoundError):
+            # Se o teste falhar, continuamos para o erro final
             pass
+    
+    # Se nenhuma versão do comando foi encontrada
     raise FileNotFoundError("Could not find a valid 'docker-compose' or 'docker compose' command. Please ensure Docker is installed and in your PATH.")
 
 def run_docker_command(command_args: list, **kwargs):
-    """Helper para executar comandos docker e lidar com erros."""
+    """
+    Helper para executar comandos docker e lidar com erros de forma robusta.
+    Garante a decodificação de output em UTF-8.
+    """
     try:
         base_command = get_docker_compose_command()
         full_command = base_command + command_args
         print(f"   (usando comando: `{' '.join(full_command)}`)")
+
+        # Se o output for capturado, garante que seja decodificado como texto UTF-8.
+        # Isso evita a necessidade de `.decode()` no bloco de exceção e previne erros de encoding.
+        if kwargs.get("capture_output"):
+            kwargs.setdefault("text", True)
+            kwargs.setdefault("encoding", "utf-8")
+            kwargs.setdefault("errors", "replace")
+
         # Para comandos de ambiente, não precisamos de output em tempo real, então 'run' é ok.
         subprocess.run(full_command, check=True, **kwargs)
         return True
@@ -40,11 +69,11 @@ def run_docker_command(command_args: list, **kwargs):
         print(f"❌ Erro: {e}")
     except subprocess.CalledProcessError as e:
         print(f"❌ Erro ao executar comando. Código de saída: {e.returncode}")
+        # Com text=True, stdout/stderr já são strings, não bytes.
         if e.stderr:
-            # Em alguns casos, o stderr é usado para output normal, então decodificamos se possível
-            print(f"   Stderr:\n{e.stderr.decode('utf-8', 'ignore')}")
+            print(f"   Stderr:\n{e.stderr}")
         if e.stdout:
-            print(f"   Stdout:\n{e.stdout.decode('utf-8', 'ignore')}")
+            print(f"   Stdout:\n{e.stdout}")
     except Exception as e:
         print(f"❌ Ocorreu um erro inesperado: {e}")
     return False
@@ -104,18 +133,20 @@ def build():
 
 # --- Comandos da Aplicação ---
 
-def _run_in_container(command: list, env_vars: dict = {}, interactive: bool = False):
+def _run_in_container(command: list, env_vars: dict = {}, interactive: bool = False, detached: bool = False):
     """
     Executa um comando Python dentro do container 'app'.
-    - Modo Padrão (interactive=False): Captura e exibe o output em tempo real, ideal para logs.
-    - Modo Interativo (interactive=True): Anexa o terminal ao processo, necessário para TUIs.
+    - Modo Padrão (interactive=False): Captura e exibe o output em tempo real.
+    - Modo Interativo (interactive=True): Anexa o terminal ao processo (para TUIs).
+    - Modo Detached (detached=True): Executa o comando em segundo plano.
     """
     try:
         docker_cmd = get_docker_compose_command()
 
         exec_cmd = docker_cmd + ["exec"]
-        # O modo interativo do Docker requer -it para alocar um pseudo-TTY
-        if interactive:
+        if detached:
+            exec_cmd.append("-d")
+        elif interactive:
             exec_cmd.append("-it")
 
         for key, value in env_vars.items():
@@ -128,9 +159,13 @@ def _run_in_container(command: list, env_vars: dict = {}, interactive: bool = Fa
         print(f"   (executando: `{' '.join(exec_cmd)}`)")
 
         if interactive:
-            # Para TUIs, precisamos que o processo anexe ao terminal do host.
-            # `subprocess.run` sem capturar output e com `check=False` é ideal.
-            # Deixamos o processo filho controlar o terminal.
+            # Para TUIs e outros aplicativos interativos, precisamos que o processo
+            # anexe diretamente ao terminal do host.
+            # `subprocess.run` sem capturar I/O (stdout, stderr, stdin) é a forma
+            # correta de ceder o controle do terminal ao processo filho.
+            # NOTA PARA WINDOWS: Para que a TUI funcione corretamente, é altamente
+            # recomendável usar um terminal moderno como o Windows Terminal. O CMD
+            # e o PowerShell legados podem ter problemas com a renderização.
             result = subprocess.run(exec_cmd, check=False)
             if result.returncode != 0:
                 print(f"\n❌ Comando interativo finalizado com código de saída: {result.returncode}")
@@ -160,20 +195,22 @@ def _run_in_container(command: list, env_vars: dict = {}, interactive: bool = Fa
 
 @app.command()
 def trade():
-    """Inicia o bot em modo de negociação (live) dentro do container."""
-    print("🚀 Iniciando o bot em modo 'TRADE'...")
+    """Inicia o bot em modo de negociação (live)."""
+    mode = "trade"
+    print(f"🚀 Iniciando o bot em modo '{mode.upper()}'...")
     _run_in_container(
         command=["jules_bot/main.py"],
-        env_vars={"BOT_MODE": "trade"}
+        env_vars={"BOT_MODE": mode}
     )
 
 @app.command()
 def test():
-    """Inicia o bot em modo de teste (testnet) dentro do container."""
-    print("🚀 Iniciando o bot em modo 'TEST'...")
+    """Inicia o bot em modo de teste (testnet)."""
+    mode = "test"
+    print(f"🚀 Iniciando o bot em modo '{mode.upper()}'...")
     _run_in_container(
         command=["jules_bot/main.py"],
-        env_vars={"BOT_MODE": "test"}
+        env_vars={"BOT_MODE": mode}
     )
 
 @app.command()
@@ -197,36 +234,58 @@ def backtest(
 
     print("\n✅ Backtest finalizado com sucesso.")
 
-@app.command()
-def ui():
-    """Inicia a interface de usuário (TUI) para monitorar e controlar o bot."""
-    print("🖥️  Iniciando a Interface de Usuário (TUI)...")
-    print("   Lembre-se que o bot (usando 'trade' ou 'test') deve estar rodando em outro terminal.")
-    _run_in_container(
-        command=["jules_bot/ui/app.py"],
-        interactive=True
-    )
 
 @app.command()
-def api():
-    """Inicia o serviço da API com o WebSocket."""
-    print("🚀 Iniciando o serviço de API...")
-    _run_in_container(
-        command=["api/main.py"],
-        interactive=True # Change to True to use subprocess.run and -it
+def dashboard(
+    mode: str = typer.Option(
+        "test", "--mode", "-m", help="O modo de operação a ser monitorado ('trade' ou 'test')."
     )
+):
+    """Inicia a nova Interface de Usuário (TUI) para monitoramento e controle."""
+    print(f"🚀 Iniciando o dashboard para o modo '{mode.upper()}'...")
+    print("   Lembre-se que o bot (usando 'trade' ou 'test') deve estar rodando em outro terminal.")
+
+    command_to_run = ["tui/app.py", "--mode", mode]
+
+    _run_in_container(
+        command=command_to_run,
+        interactive=True
+    )
+    print("\n✅ Dashboard encerrado.")
+
 
 @app.command("clear-backtest-trades")
 def clear_backtest_trades():
     """Deletes all trades from the 'backtest' environment in the database."""
     print("🗑️  Attempting to clear all backtest trades from the database...")
-    try:
-        db_config = config_manager.get_db_config('POSTGRES')
-        db_manager = PostgresManager(config=db_config)
-        db_manager.clear_backtest_trades()
-        print("✅ Backtest trades cleared successfully.")
-    except Exception as e:
-        print(f"❌ An error occurred while clearing backtest trades: {e}")
+    _run_in_container(
+        command=["scripts/clear_trades_measurement.py", "backtest"],
+        interactive=True
+    )
+
+@app.command("clear-testnet-trades")
+def clear_testnet_trades():
+    """Deletes all trades from the 'test' environment in the database."""
+    print("🗑️  Attempting to clear all testnet trades from the database...")
+    _run_in_container(
+        command=["scripts/clear_testnet_trades.py"],
+        interactive=True
+    )
+
+
+@app.command("wipe-db")
+def wipe_db():
+    """
+    Shows a confirmation prompt and then wipes all data from the main tables.
+    This is a destructive operation.
+    """
+    print("🗑️  Attempting to wipe the database...")
+    print("   This will run the script inside the container.")
+
+    _run_in_container(
+        command=["scripts/wipe_database.py"],
+        interactive=True
+    )
 
 
 if __name__ == "__main__":
