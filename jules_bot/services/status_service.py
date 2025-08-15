@@ -80,7 +80,7 @@ class StatusService:
             trade_history_dicts = [trade.to_dict() for trade in trade_history]
 
             # 6. Fetch live wallet data with USD values
-            all_prices = trader.exchange_manager.get_all_prices()
+            all_prices = trader.get_all_prices()
             wallet_balances = account_manager.get_all_account_balances(all_prices)
 
             # Filter for relevant assets to keep the output clean
