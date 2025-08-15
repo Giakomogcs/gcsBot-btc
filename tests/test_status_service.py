@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 from decimal import Decimal
+import pandas as pd
 
 from jules_bot.services.status_service import StatusService
 from jules_bot.database.models import Trade
@@ -11,37 +12,36 @@ class TestStatusService(unittest.TestCase):
         # Mock dependencies
         self.db_manager = MagicMock()
         self.config_manager = MagicMock()
-        self.market_data_provider = MagicMock()
+        self.feature_calculator = MagicMock()
 
         # Instantiate the service with mocked dependencies
         self.status_service = StatusService(
             db_manager=self.db_manager,
             config_manager=self.config_manager,
-            market_data_provider=self.market_data_provider
+            feature_calculator=self.feature_calculator
         )
 
     def test_get_extended_status_with_open_positions(self, MockExchangeManager):
         """
-        Test the get_extended_status method with live data integration.
+        Test the get_extended_status method to ensure it correctly processes and returns data.
         """
         # 1. Arrange: Mock ExchangeManager instance and its methods
         mock_exchange_instance = MockExchangeManager.return_value
         mock_exchange_instance.get_account_balance.return_value = [
-            {'asset': 'BTC', 'free': '1.0', 'locked': '0.5'}
-        ]
-        mock_exchange_instance.get_open_orders.return_value = [
-            {'orderId': 'trade-still-open'}
+            {'asset': 'BTC', 'free': '1.0', 'locked': '0.5'},
+            {'asset': 'USDT', 'free': '10000', 'locked': '0'}
         ]
 
-        # Arrange: Mock DB results
-        trade1 = Trade(trade_id="trade-still-open", price=50000, quantity=0.1, sell_target_price=55000, exchange_order_id="trade-still-open")
-        trade2 = Trade(trade_id="trade-closed-on-exchange", price=48000, quantity=0.2, sell_target_price=50000, exchange_order_id="trade-closed-on-exchange")
+        # Arrange: Mock DB results for open positions
+        trade1 = Trade(trade_id="open-trade-1", price=50000, quantity=0.1, sell_target_price=55000)
+        trade2 = Trade(trade_id="open-trade-2", price=48000, quantity=0.2, sell_target_price=50000)
         self.db_manager.get_open_positions.return_value = [trade1, trade2]
-        self.db_manager.get_all_trades_in_range.return_value = [trade1, trade2]
+        self.db_manager.get_all_trades_in_range.return_value = [] # Not the focus of this test
 
-        # Arrange: Mock market data
+        # Arrange: Mock market data from feature_calculator
         mock_market_data = {'close': 52000.0, 'ema_20': 51000.0, 'bbl_20_2_0': 50000, 'high': 52100, 'ema_100': 50500}
-        self.market_data_provider.get_latest_data.return_value = mock_market_data
+        # The feature calculator returns a pandas Series
+        self.feature_calculator.get_current_candle_with_features.return_value = pd.Series(mock_market_data)
 
         # Arrange: Mock strategy evaluation
         self.status_service.strategy.evaluate_buy_signal = MagicMock(return_value=(False, 'uptrend', 'Price > EMA20'))
@@ -53,18 +53,27 @@ class TestStatusService(unittest.TestCase):
         # Assert that ExchangeManager was called correctly
         MockExchangeManager.assert_called_with(mode='test')
         mock_exchange_instance.get_account_balance.assert_called_once()
-        mock_exchange_instance.get_open_orders.assert_called_once_with("BTCUSDT")
+        self.feature_calculator.get_current_candle_with_features.assert_called_once()
 
-        # Assert reconciliation logic: only one trade should be in the status
-        self.assertEqual(len(result["open_positions_status"]), 1)
-        self.assertEqual(result["open_positions_status"][0]['trade_id'], 'trade-still-open')
+        # Assert that both open positions are present, as no reconciliation happens here
+        self.assertEqual(len(result["open_positions_status"]), 2)
+        self.assertEqual(result["open_positions_status"][0]['trade_id'], 'open-trade-1')
+        self.assertEqual(result["open_positions_status"][1]['trade_id'], 'open-trade-2')
 
-        # Assert wallet balance is live data
-        self.assertEqual(len(result["wallet_balances"]), 1)
-        self.assertEqual(result["wallet_balances"][0]['asset'], 'BTC')
+        # Assert wallet balances are processed correctly
+        self.assertEqual(len(result["wallet_balances"]), 2)
+        self.assertIn('usd_value', result["wallet_balances"][0])
+        self.assertIn('usd_value', result["wallet_balances"][1])
 
-        # Assert other calculations are still correct
-        self.assertAlmostEqual(result["open_positions_status"][0]["unrealized_pnl"], (52000 - 50000) * 0.1)
+        # Assert PnL and progress calculations are correct for the first trade
+        pos1_status = result["open_positions_status"][0]
+        self.assertAlmostEqual(pos1_status["unrealized_pnl"], (52000 - 50000) * 0.1)
+        # Progress: (52000 - 50000) / (55000 - 50000) * 100 = 40%
+        self.assertAlmostEqual(pos1_status["progress_to_sell_target_pct"], 40.0)
+        self.assertAlmostEqual(pos1_status["price_to_target"], 3000)
+        self.assertAlmostEqual(pos1_status["usd_to_target"], 300)
+        
+        # Assert that the buy signal status is included
         self.assertIn("buy_signal_status", result)
 
 if __name__ == '__main__':

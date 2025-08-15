@@ -121,11 +121,15 @@ class StatusService:
                     
                     processed_balances.append(bal)
 
+            # Calculate total wallet value in USD
+            total_wallet_usd_value = sum(bal.get('usd_value', 0) for bal in processed_balances)
+
             # 7. Assemble the final status object
             extended_status = {
                 "mode": environment,
                 "symbol": "BTC/USDT",
                 "current_btc_price": current_price,
+                "total_wallet_usd_value": total_wallet_usd_value,
                 "open_positions_status": positions_status,
                 "buy_signal_status": {
                     "should_buy": should_buy,

@@ -6,7 +6,7 @@ from decimal import Decimal
 import time
 
 from textual.app import App, ComposeResult
-from textual.containers import VerticalScroll, Horizontal
+from textual.containers import VerticalScroll, Horizontal, Vertical
 from textual.widgets import Header, Footer, DataTable, Input, Button, Label, Static, RichLog, ProgressBar
 from textual.validation import Validator, ValidationResult
 from textual.worker import Worker, get_current_worker
@@ -65,7 +65,13 @@ class TUIApp(App):
         padding: 0 1;
         margin-top: 1;
     }
-    #positions_table, #wallet_table {
+    #status_container {
+        layout: grid;
+        grid-size: 3;
+        grid-gutter: 1;
+        height: auto;
+    }
+    #positions_table {
         margin-top: 1;
         height: 12;
     }
@@ -113,16 +119,22 @@ class TUIApp(App):
 
             with VerticalScroll(id="right_pane"):
                 yield Static("Bot Status", classes="title")
-                with Horizontal(id="status_bar"):
+                with Static(id="status_container"):
                     yield Static(f"Mode: {self.mode.upper()}", id="status_mode")
                     yield Static("Symbol: N/A", id="status_symbol")
-                    yield Static("Price: N/A", id="status_price")
+                    yield Static("BTC Price: N/A", id="status_price")
+                    yield Static("BTC: N/A", id="status_btc")
+                    yield Static("USD: N/A", id="status_usdt")
+                    yield Static("Wallet: N/A", id="status_wallet_usd")
+
+                yield Static("Strategy Status", classes="title")
+                with Vertical(id="strategy_container"):
+                    yield Static("Buy Signal: N/A", id="strategy_buy_signal")
+                    yield Static("Buy Target: N/A", id="strategy_buy_target")
+                    yield Static("Buy Progress: N/A", id="strategy_buy_progress")
 
                 yield Static("Open Positions", classes="title")
                 yield DataTable(id="positions_table")
-
-                yield Static("Wallet Balances", classes="title")
-                yield DataTable(id="wallet_table")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -133,8 +145,6 @@ class TUIApp(App):
         positions_table.cursor_type = "row"
         positions_table.add_columns("ID", "Entry", "Value", "PnL", "Sell Target", "Target Status")
 
-        wallet_table = self.query_one("#wallet_table", DataTable)
-        wallet_table.add_columns("Asset", "Free", "Locked", "USD Value")
 
         # MODIFICADO: Chama o update_dashboard uma vez e depois define o intervalo de 30s
         self.update_dashboard()
@@ -323,20 +333,41 @@ class TUIApp(App):
         else:
             pos_table.add_row("No open positions.")
 
-        # Update wallet table
-        wallet_table = self.query_one("#wallet_table", DataTable)
-        wallet_table.clear()
+        # Update wallet balances in status bar
         balances = data.get("wallet_balances", [])
-        if balances:
-            for bal in balances:
-                asset = bal.get("asset")
-                if asset in ["USDT", "BTC"]:
-                    free = Decimal(bal.get("free", 0))
-                    locked = Decimal(bal.get("locked", 0))
-                    usd_val = Decimal(bal.get("usd_value", 0))
-                    wallet_table.add_row(asset, f"{free:.8f}", f"{locked:.8f}", f"${usd_val:,.2f}")
+        btc_balance = next((bal for bal in balances if bal.get("asset") == "BTC"), None)
+        usdt_balance = next((bal for bal in balances if bal.get("asset") == "USDT"), None)
+        total_wallet_usd = Decimal(data.get("total_wallet_usd_value", 0))
+
+        if btc_balance:
+            free_btc = Decimal(btc_balance.get("free", 0))
+            usd_value_btc = Decimal(btc_balance.get("usd_value", 0))
+            self.query_one("#status_btc").update(f"BTC: {free_btc:.8f} (${usd_value_btc:,.2f})")
         else:
-            wallet_table.add_row("No wallet data.")
+            self.query_one("#status_btc").update("BTC: N/A")
+
+        if usdt_balance:
+            free_usdt = Decimal(usdt_balance.get("free", 0))
+            self.query_one("#status_usdt").update(f"USD: ${free_usdt:,.2f}")
+        else:
+            self.query_one("#status_usdt").update("USD: N/A")
+            
+        self.query_one("#status_wallet_usd").update(f"Wallet: ${total_wallet_usd:,.2f}")
+
+        # Update strategy status
+        buy_signal_status = data.get("buy_signal_status", {})
+        should_buy = buy_signal_status.get("should_buy", False)
+        reason = buy_signal_status.get("reason", "N/A")
+        buy_target = Decimal(buy_signal_status.get("btc_purchase_target", 0))
+        buy_progress = float(buy_signal_status.get("btc_purchase_progress_pct", 0))
+
+        buy_signal_text = f"Buy Signal: {'YES' if should_buy else 'NO'} ({reason})"
+        buy_target_text = f"Buy Target: ${buy_target:,.2f}"
+        buy_progress_text = f"Buy Progress: {buy_progress:.1f}%"
+        
+        self.query_one("#strategy_buy_signal").update(buy_signal_text)
+        self.query_one("#strategy_buy_target").update(buy_target_text)
+        self.query_one("#strategy_buy_progress").update(buy_progress_text)
 
     # NOVO: Handler para a mensagem CommandOutput (opcional, mas bom para feedback)
     def on_command_output(self, message: CommandOutput) -> None:
