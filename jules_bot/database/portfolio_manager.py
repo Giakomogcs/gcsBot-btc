@@ -59,13 +59,18 @@ class PortfolioManager:
                 logger.error(f"Failed to create portfolio snapshot: {e}", exc_info=True)
                 return None
 
-    def record_financial_movement(self, movement_data: dict) -> Optional[FinancialMovement]:
+    def create_financial_movement(self, movement_type: str, amount_usd: float, notes: str, transaction_id: Optional[str] = None) -> Optional[FinancialMovement]:
         """
         Records a financial movement (deposit or withdrawal) in the database.
         """
         with self.get_db() as db:
             try:
-                new_movement = FinancialMovement(**movement_data)
+                new_movement = FinancialMovement(
+                    transaction_id=transaction_id,
+                    movement_type=movement_type,
+                    amount_usd=amount_usd,
+                    notes=notes
+                )
                 db.add(new_movement)
                 db.commit()
                 db.refresh(new_movement)
@@ -75,6 +80,11 @@ class PortfolioManager:
                 db.rollback()
                 logger.error(f"Failed to record financial movement: {e}", exc_info=True)
                 return None
+
+    def get_financial_movement_by_transaction_id(self, transaction_id: str) -> Optional[FinancialMovement]:
+        """Retrieves a financial movement by its transaction ID."""
+        with self.get_db() as db:
+            return db.query(FinancialMovement).filter(FinancialMovement.transaction_id == transaction_id).first()
 
     def get_latest_snapshot(self, db: Optional[Session] = None) -> Optional[PortfolioSnapshot]:
         """

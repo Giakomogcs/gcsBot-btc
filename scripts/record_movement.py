@@ -41,13 +41,11 @@ def record_movement():
         db_config = config_manager.get_section('POSTGRES')
         portfolio_manager = PortfolioManager(db_config)
 
-        movement_data = {
-            "movement_type": args.movement_type.upper(),
-            "amount_usd": args.amount_usd,
-            "notes": args.notes
-        }
-
-        result = portfolio_manager.record_financial_movement(movement_data)
+        result = portfolio_manager.create_financial_movement(
+            movement_type=args.movement_type.upper(),
+            amount_usd=args.amount_usd,
+            notes=args.notes
+        )
 
         if result:
             print(f"Successfully recorded {result.movement_type} of ${result.amount_usd:.2f}")

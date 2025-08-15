@@ -18,6 +18,7 @@ class PortfolioSnapshot(Base):
 class FinancialMovement(Base):
     __tablename__ = 'financial_movements'
     id = Column(Integer, primary_key=True, autoincrement=True)
+    transaction_id = Column(String, unique=True, nullable=True)
     timestamp = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
     movement_type = Column(String, nullable=False)  # 'DEPOSIT' or 'WITHDRAWAL'
     amount_usd = Column(Float, nullable=False)
