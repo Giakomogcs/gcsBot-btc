@@ -6,12 +6,12 @@ from decimal import Decimal
 import time
 
 from textual.app import App, ComposeResult
-from textual.containers import VerticalScroll, Horizontal
+from textual.containers import VerticalScroll, Horizontal, Vertical, Container
 from textual.widgets import Header, Footer, DataTable, Input, Button, Label, Static, RichLog, ProgressBar
 from textual.validation import Validator, ValidationResult
 from textual.worker import Worker, get_current_worker
 from textual import work
-from textual.message import Message # NOVO
+from textual.message import Message
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -26,16 +26,15 @@ class NumberValidator(Validator):
         except ValueError:
             return self.failure("Invalid number format.")
 
-# NOVO: Mensagens personalizadas para comunicação entre workers e a UI
 class DashboardData(Message):
-    """Uma mensagem para transportar dados do dashboard."""
+    """A message to transport dashboard data."""
     def __init__(self, data: dict | str, success: bool) -> None:
         self.data = data
         self.success = success
         super().__init__()
 
 class CommandOutput(Message):
-    """Uma mensagem para transportar a saída de um comando."""
+    """A message to transport the output of a command."""
     def __init__(self, output: str, success: bool) -> None:
         self.output = output
         self.success = success
@@ -46,39 +45,89 @@ class TUIApp(App):
 
     BINDINGS = [("d", "toggle_dark", "Toggle Dark Mode"), ("q", "quit", "Quit")]
     CSS = """
+    Screen {
+        background: $surface-darken-1;
+        color: $text;
+    }
+
     #main_container {
         layout: horizontal;
+        padding: 1;
     }
+
     #left_pane {
         width: 35%;
-        padding: 1;
-        border-right: solid $accent;
+        padding-right: 1;
+        border-right: solid $primary;
     }
+
     #right_pane {
         width: 65%;
-        padding: 1;
+        padding-left: 1;
     }
+
     .title {
-        background: $accent;
+        background: $primary;
         color: $text;
         width: 100%;
         padding: 0 1;
-        margin-top: 1;
+        margin-bottom: 1;
+        text-style: bold;
     }
+
+    .container {
+        border: solid $primary-lighten-2;
+        padding: 1;
+        margin-bottom: 1;
+        border-radius: 5px;
+    }
+
     #positions_table, #wallet_table {
         margin-top: 1;
-        height: 12;
+        height: auto;
+        max-height: 15;
+        border: solid $primary-lighten-2;
     }
+
     #log_display {
-        height: 20;
+        height: 25;
+        border: solid $primary-lighten-2;
+        padding: 1;
     }
+
     #action_bar, #log_filter_bar {
-        margin-top: 1;
         height: auto;
         align: right middle;
     }
+
+    #force_buy_button {
+        width: 100%;
+        margin-top: 1;
+    }
+
     .hidden {
         display: none;
+    }
+
+    #status_bar {
+        align: center middle;
+        height: auto;
+    }
+
+    #status_bar > Static {
+        margin-right: 2;
+    }
+
+    #next_buy_container {
+        padding: 1;
+        border: round $primary;
+        margin-top: 1;
+    }
+
+    #terminal_note {
+        margin-top: 1;
+        text-align: center;
+        color: $text-muted;
     }
     """
 
@@ -95,34 +144,48 @@ class TUIApp(App):
         yield Header()
         with Horizontal(id="main_container"):
             with VerticalScroll(id="left_pane"):
-                yield Static("Bot Control", classes="title")
-                yield Label("Manual Buy (USD):")
-                yield Input(placeholder="e.g., 50.00", id="manual_buy_input", validators=[NumberValidator()])
-                yield Button("FORCE BUY", id="force_buy_button", variant="primary")
+                with Container(classes="container"):
+                    yield Static("Bot Control", classes="title")
+                    yield Label("Manual Buy (USD):")
+                    yield Input(placeholder="e.g., 50.00", id="manual_buy_input", validators=[NumberValidator()])
+                    yield Button("🚀 FORCE BUY", id="force_buy_button", variant="success")
 
-                yield Static("Selected Trade Actions", classes="title")
-                with Horizontal(id="action_bar", classes="hidden"):
-                    yield Button("Sell 100%", id="force_sell_100_button", variant="error")
-                    yield Button("Sell 90%", id="force_sell_90_button", variant="warning")
+                with Container(id="selected_trade_container", classes="container"):
+                    yield Static("Selected Trade Actions", classes="title")
+                    with Horizontal(id="action_bar", classes="hidden"):
+                        yield Button("💰 Sell 100%", id="force_sell_100_button", variant="error")
+                        yield Button("💸 Sell 90%", id="force_sell_90_button", variant="warning")
 
-                yield Static("Live Log", classes="title")
-                with Horizontal(id="log_filter_bar"):
-                    yield Label("Filter:", id="log_filter_label")
-                    yield Input(placeholder="e.g., ERROR", id="log_filter_input")
-                yield RichLog(id="log_display", wrap=True, markup=True, min_width=0)
+                with Container(classes="container"):
+                    yield Static("Live Log", classes="title")
+                    with Horizontal(id="log_filter_bar"):
+                        yield Label("Filter:", id="log_filter_label")
+                        yield Input(placeholder="e.g., ERROR", id="log_filter_input")
+                    yield RichLog(id="log_display", wrap=True, markup=True, min_width=0)
 
             with VerticalScroll(id="right_pane"):
-                yield Static("Bot Status", classes="title")
-                with Horizontal(id="status_bar"):
-                    yield Static(f"Mode: {self.mode.upper()}", id="status_mode")
-                    yield Static("Symbol: N/A", id="status_symbol")
-                    yield Static("Price: N/A", id="status_price")
+                with Container(classes="container"):
+                    yield Static("Bot Status", classes="title")
+                    with Horizontal(id="status_bar"):
+                        yield Static(f"Mode: {self.mode.upper()}", id="status_mode")
+                        yield Static("Symbol: N/A", id="status_symbol")
+                        yield Static("Price: N/A", id="status_price")
 
-                yield Static("Open Positions", classes="title")
-                yield DataTable(id="positions_table")
+                with Container(id="next_buy_container"):
+                    yield Static("Next Buy Opportunity", classes="title")
+                    yield Label("Target Price: N/A", id="next_buy_target")
+                    yield ProgressBar(total=100, show_eta=False, show_percentage=True, id="next_buy_progress")
 
-                yield Static("Wallet Balances", classes="title")
-                yield DataTable(id="wallet_table")
+                with Container(classes="container"):
+                    yield Static("Open Positions", classes="title")
+                    yield DataTable(id="positions_table")
+
+                with Container(classes="container"):
+                    yield Static("Wallet Balances", classes="title")
+                    yield DataTable(id="wallet_table")
+
+                yield Static("Tip: For best results, use a modern terminal emulator.", id="terminal_note")
+
         yield Footer()
 
     def on_mount(self) -> None:
@@ -131,14 +194,13 @@ class TUIApp(App):
 
         positions_table = self.query_one("#positions_table", DataTable)
         positions_table.cursor_type = "row"
-        positions_table.add_columns("ID", "Entry", "Value", "PnL", "Sell Target", "Progress")
+        positions_table.add_columns("ID", "Entry", "Value", "$ to Trg", "PnL", "Sell Target", "Progress")
 
         wallet_table = self.query_one("#wallet_table", DataTable)
         wallet_table.add_columns("Asset", "Free", "Locked", "USD Value")
 
-        # MODIFICADO: Chama o update_dashboard uma vez e depois define o intervalo de 30s
         self.update_dashboard()
-        self.set_interval(30.0, self.update_dashboard) # Atualiza a cada 30 segundos
+        self.set_interval(30.0, self.update_dashboard)
         self.query_one("#manual_buy_input").focus()
 
         self.tail_log_file()
@@ -160,7 +222,6 @@ class TUIApp(App):
             self.log_file_handle = open(self.log_file_path, 'r')
             self.log_file_handle.seek(0, 2)
 
-            # MODIFICADO: Usa um método para checar se o worker deve parar
             worker = get_current_worker()
             while not worker.is_cancelled:
                 line = self.log_file_handle.readline()
@@ -195,21 +256,10 @@ class TUIApp(App):
             self.log_display.clear()
             self.log_display.write("[bold green]Log filter applied. Tailing new logs...[/bold green]")
 
-    # --- Workers & Background Tasks ---
-
     @work(thread=True)
     def run_script_worker(self, command: list[str], message_type: type[Message]) -> None:
-        """
-        Executa um script de longa duração em um 'worker' para não bloquear a UI.
-        Isso é crucial para a responsividade do dashboard. O worker executa a tarefa
-        em um thread separado e, quando concluído, posta uma 'Message' com o resultado.
-        A UI principal então lida com essa mensagem em seu próprio thread.
-        """
-        self.log_display.write(f"Executing: [yellow]{' '.join(command)}[/]")
+        self.call_from_thread(self.log_display.write, f"Executing: [yellow]{' '.join(command)}[/]")
         try:
-            # Executa o subprocesso de forma robusta e compatível com Windows/Linux.
-            # - `encoding='utf-8'`: Garante que o output seja lido como UTF-8.
-            # - `errors='replace'`: Previne falhas se o script gerar caracteres inválidos.
             process = subprocess.run(
                 command,
                 capture_output=True,
@@ -222,13 +272,11 @@ class TUIApp(App):
             if process.returncode != 0:
                 output = process.stderr.strip()
                 success = False
-                # `call_from_thread` é necessário para atualizar widgets de um worker.
                 self.call_from_thread(self.log_display.write, f"[bold red]Script Error:[/bold red] {output}")
             else:
                 output = process.stdout.strip()
                 success = True
             
-            # Tenta decodificar o JSON, se falhar, envia como texto bruto.
             try:
                 data = json.loads(output)
                 self.post_message(message_type(data, success))
@@ -239,9 +287,7 @@ class TUIApp(App):
             self.post_message(message_type("Script not found", False))
             self.call_from_thread(self.log_display.write, f"[bold red]Error: Script not found.[/bold red]")
 
-    # MODIFICADO: on_button_pressed agora chama um worker em vez de executar o script diretamente
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Lida com cliques de botão de forma não-bloqueante."""
         if event.button.id == "force_buy_button":
             input_widget = self.query_one("#manual_buy_input", Input)
             if not input_widget.is_valid:
@@ -249,7 +295,7 @@ class TUIApp(App):
                 return
             amount = input_widget.value
             command = ["python", "scripts/force_buy.py", amount]
-            self.run_script_worker(command, CommandOutput) # Executa em segundo plano
+            self.run_script_worker(command, CommandOutput)
             input_widget.value = ""
 
         elif event.button.id in ["force_sell_100_button", "force_sell_90_button"]:
@@ -259,7 +305,7 @@ class TUIApp(App):
 
             percentage = "100" if event.button.id == "force_sell_100_button" else "90"
             command = ["python", "scripts/force_sell.py", self.selected_trade_id, percentage]
-            self.run_script_worker(command, CommandOutput) # Executa em segundo plano
+            self.run_script_worker(command, CommandOutput)
 
             self.query_one("#action_bar").add_class("hidden")
             self.query_one("#positions_table").move_cursor(row=-1)
@@ -270,25 +316,27 @@ class TUIApp(App):
             self.selected_trade_id = event.row_key.value
             self.query_one("#action_bar").remove_class("hidden")
     
-    # MODIFICADO: update_dashboard agora chama um worker
     def update_dashboard(self) -> None:
-        """Inicia a atualização do dashboard em um worker."""
         command = ["python", "scripts/get_bot_data.py", self.mode]
         self.run_script_worker(command, DashboardData)
 
-    # NOVO: Handler para a mensagem DashboardData, que atualiza a UI
     def on_dashboard_data(self, message: DashboardData) -> None:
-        """Atualiza a UI com os dados recebidos do worker."""
         if not message.success or not isinstance(message.data, dict):
             self.log_display.write(f"[bold red]Failed to get dashboard data: {message.data}[/]")
             return
         
         data = message.data
         
-        # Update status bar
         price = Decimal(data.get("current_btc_price", 0))
         self.query_one("#status_symbol").update(f"Symbol: {data.get('symbol', 'N/A')}")
         self.query_one("#status_price").update(f"Price: ${price:,.2f}")
+
+        # Update Next Buy Info
+        buy_signal_info = data.get("buy_signal_status", {})
+        buy_target = Decimal(buy_signal_info.get("btc_purchase_target", 0))
+        buy_progress = float(buy_signal_info.get("btc_purchase_progress_pct", 0))
+        self.query_one("#next_buy_target").update(f"Target Price: ${buy_target:,.2f}")
+        self.query_one("#next_buy_progress", ProgressBar).progress = buy_progress
 
         # Update positions table
         pos_table = self.query_one("#positions_table", DataTable)
@@ -302,6 +350,7 @@ class TUIApp(App):
                 pnl = Decimal(pos.get("unrealized_pnl", 0))
                 sell_target = Decimal(pos.get("sell_target_price", 0))
                 progress = float(pos.get("progress_to_sell_target_pct", 0))
+                usd_to_target = Decimal(pos.get("usd_to_target", 0))
                 pnl_color = "green" if pnl >= 0 else "red"
                 
                 progress_bar = ProgressBar(total=100, show_eta=False, show_percentage=True)
@@ -311,6 +360,7 @@ class TUIApp(App):
                     pos_id.split('-')[0],
                     f"${entry_price:,.2f}",
                     f"${current_value:,.2f}",
+                    f"${usd_to_target:,.2f}",
                     f"[{pnl_color}]${pnl:,.2f}[/]",
                     f"${sell_target:,.2f}",
                     progress_bar,
@@ -334,18 +384,14 @@ class TUIApp(App):
         else:
             wallet_table.add_row("No wallet data.")
 
-    # NOVO: Handler para a mensagem CommandOutput (opcional, mas bom para feedback)
     def on_command_output(self, message: CommandOutput) -> None:
-        """Exibe o resultado de um comando no log."""
         if message.success:
             self.log_display.write(f"[green]Command success:[/green] {message.output}")
         else:
             self.log_display.write(f"[bold red]Command failed:[/bold red] {message.output}")
-        # Aciona uma atualização do dashboard para vermos o resultado da ação
         self.update_dashboard()
 
 def run_tui():
-    """Ponto de entrada da linha de comando para a TUI."""
     import argparse
     parser = argparse.ArgumentParser(description="Executa o dashboard do Jules Bot.")
     parser.add_argument(
