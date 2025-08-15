@@ -129,7 +129,15 @@ class StatusService:
             # Calculate total wallet value in USD
             total_wallet_usd_value = sum(bal.get('usd_value', 0) for bal in processed_balances)
 
-            # 7. Assemble the final status object
+            # 7. Calculate portfolio performance metrics
+            all_trades = self.db_manager.get_all_trades_in_range(environment)
+            all_deposits = self.db_manager.get_all_deposits()
+
+            cumulative_realized_pnl_usd = sum(t.realized_pnl_usd for t in all_trades if t.realized_pnl_usd is not None)
+            cumulative_deposits_usd = sum(d.amount_usd for d in all_deposits)
+            net_portfolio_growth_usd = total_wallet_usd_value - cumulative_deposits_usd
+
+            # 8. Assemble the final status object
             extended_status = {
                 "mode": environment,
                 "symbol": "BTC/USDT",
@@ -142,7 +150,12 @@ class StatusService:
                     "btc_purchase_target": btc_purchase_target,
                     "btc_purchase_progress_pct": btc_purchase_progress_pct
                 },
-                "trade_history": trade_history_dicts,
+                "portfolio_performance": {
+                    "cumulative_realized_pnl_usd": cumulative_realized_pnl_usd,
+                    "cumulative_deposits_usd": cumulative_deposits_usd,
+                    "net_portfolio_growth_usd": net_portfolio_growth_usd,
+                },
+                "trade_history": [t.to_dict() for t in all_trades],
                 "wallet_balances": processed_balances
             }
 

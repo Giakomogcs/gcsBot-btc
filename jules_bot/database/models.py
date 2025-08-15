@@ -56,14 +56,30 @@ class Trade(Base):
     realized_pnl = Column(Float)
     held_quantity = Column(Float)
 
-class BotStatus(Base):
-    __tablename__ = 'bot_status'
+class PortfolioSnapshot(Base):
+    __tablename__ = 'portfolio_snapshots'
     id = Column(Integer, primary_key=True)
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
     bot_id = Column(String, nullable=False)
     mode = Column(String, nullable=False)
-    is_running = Column(Boolean, default=False)
-    session_pnl_usd = Column(Float, default=0.0)
-    session_pnl_percent = Column(Float, default=0.0)
-    open_positions = Column(Integer, default=0)
-    portfolio_value_usd = Column(Float, default=0.0)
-    timestamp = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+    # Portfolio Value
+    total_portfolio_value_usd = Column(Float)
+    btc_balance = Column(Float)
+    usdt_balance = Column(Float)
+
+    # Investment Performance
+    cumulative_deposits_usd = Column(Float)
+    cumulative_realized_pnl_usd = Column(Float)
+    net_portfolio_growth_usd = Column(Float) # total_value - deposits
+
+    # Trade Status
+    open_positions_count = Column(Integer)
+    avg_entry_price = Column(Float)
+
+class Deposit(Base):
+    __tablename__ = 'deposits'
+    id = Column(Integer, primary_key=True)
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+    amount_usd = Column(Float, nullable=False)
+    notes = Column(String)

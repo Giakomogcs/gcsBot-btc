@@ -41,5 +41,6 @@ def test_create_tables(postgres_manager):
     # We can check if the tables exist in the database.
     with postgres_manager.get_db() as db:
         assert db.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='trades'")).scalar() is not None
-        assert db.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='bot_status'")).scalar() is not None
+        assert db.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='portfolio_snapshots'")).scalar() is not None
+        assert db.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='deposits'")).scalar() is not None
         assert db.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='price_history'")).scalar() is not None

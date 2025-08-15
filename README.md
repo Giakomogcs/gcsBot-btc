@@ -166,6 +166,8 @@ For automation or direct manual intervention, you can use the scripts in the `sc
 | `python scripts/get_bot_data.py`             | Dumps a JSON report of the bot's current status.                            | `mode` (optional, default: `test`): The environment to get data for (`trade` or `test`).        |
 | `python scripts/force_buy.py`                | Issues a manual buy command to a running bot.                               | `amount_usd` (required): The amount in USD to buy.                                              |
 | `python scripts/force_sell.py`               | Issues a manual sell command to a running bot.                              | `trade_id` (required), `percentage` (required): The ID of the trade and the percentage to sell. |
+| `python scripts/log_deposit.py`              | Logs a manual deposit of USD capital to the database.                       | `amount` (required), `--notes` (optional): The amount in USD and optional notes.                |
+| `python scripts/take_snapshot.py`            | Takes a snapshot of portfolio performance and saves it to the database.     | `mode` (optional, default: `test`): The environment to snapshot (`trade` or `test`).            |
 | `python scripts/prepare_backtest_data.py`    | Fetches and prepares historical data for backtesting.                       | `days` (required): The number of days of historical data to prepare.                            |
 | `python scripts/run_backtest.py`             | Runs a backtesting simulation.                                              | `days` or (`--start-date`, `--end-date`), `--clear-backtest-trades` (optional).                 |
 | `python scripts/verify_data.py`              | Checks data integrity for a hardcoded date range in InfluxDB.               | None.                                                                                           |
@@ -232,21 +234,35 @@ The central table for recording all trading activity. A single row represents th
 | `hodl_asset_amount`        | Float    | The amount of the asset held back from the sell (if not selling 100%).                                              |
 | `hodl_asset_value_at_sell` | Float    | The USD value of the `hodl_asset_amount` at the time of the sell.                                                   |
 
-### `bot_status`
+### `deposits`
 
-A simple table for storing the last known state of a running bot instance, used primarily by the UI.
+A simple table for logging manual deposits of capital into the trading account. This allows for accurate tracking of portfolio growth net of new capital.
 
-| Column                | Type     | Description                                                  |
-| --------------------- | -------- | ------------------------------------------------------------ |
-| `id`                  | Integer  | Primary key.                                                 |
-| `bot_id`              | String   | The unique ID of the bot session.                            |
-| `mode`                | String   | The mode the bot is running in ('trade' or 'test').          |
-| `is_running`          | Boolean  | Whether the bot is currently running.                        |
-| `session_pnl_usd`     | Float    | The profit or loss for the current session.                  |
-| `session_pnl_percent` | Float    | The profit or loss for the current session, as a percentage. |
-| `open_positions`      | Integer  | The number of currently open positions.                      |
-| `portfolio_value_usd` | Float    | The total current value of the portfolio.                    |
-| `timestamp`           | DateTime | The last time the status was updated.                        |
+| Column      | Type     | Description                                     |
+| ----------- | -------- | ----------------------------------------------- |
+| `id`        | Integer  | Primary key.                                    |
+| `timestamp` | DateTime | The timestamp when the deposit was made.        |
+| `amount_usd`| Float    | The amount of the deposit in USD.               |
+| `notes`     | String   | Optional user-provided notes for the deposit.   |
+
+### `portfolio_snapshots`
+
+Stores historical snapshots of the portfolio's state and performance metrics at regular intervals.
+
+| Column                        | Type     | Description                                                              |
+| ----------------------------- | -------- | ------------------------------------------------------------------------ |
+| `id`                          | Integer  | Primary key.                                                             |
+| `timestamp`                   | DateTime | The timestamp when the snapshot was taken.                               |
+| `bot_id`                      | String   | The unique ID of the bot session.                                        |
+| `mode`                        | String   | The mode the bot is running in ('trade' or 'test').                      |
+| `total_portfolio_value_usd`   | Float    | The total value of the portfolio (BTC + USDT) in USD at that time.       |
+| `btc_balance`                 | Float    | The amount of BTC held.                                                  |
+| `usdt_balance`                | Float    | The amount of USDT held.                                                 |
+| `cumulative_deposits_usd`     | Float    | The total amount of USD deposited into the account up to that point.     |
+| `cumulative_realized_pnl_usd` | Float    | The sum of all realized PnL from closed trades up to that point.         |
+| `net_portfolio_growth_usd`    | Float    | The net growth of the portfolio, calculated as `total_value - deposits`. |
+| `open_positions_count`        | Integer  | The number of currently open positions.                                  |
+| `avg_entry_price`             | Float    | The average entry price of all open positions.                           |
 
 ## 8. Key Calculations
 
@@ -327,6 +343,11 @@ The `scripts/get_bot_data.py` script provides a comprehensive JSON snapshot of t
       "usd_to_target": 399.95
     }
   ],
+  "portfolio_performance": {
+    "cumulative_realized_pnl_usd": 150.75,
+    "cumulative_deposits_usd": 1000.0,
+    "net_portfolio_growth_usd": -849.25
+  },
   "buy_signal_status": {
     "should_buy": false,
     "reason": "Price is above the buy threshold.",

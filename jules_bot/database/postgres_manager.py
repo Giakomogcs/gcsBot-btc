@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, desc, and_, text, inspect
 from sqlalchemy.orm import sessionmaker, Session
 from contextlib import contextmanager
 from jules_bot.core.schemas import TradePoint
-from jules_bot.database.models import Base, Trade, BotStatus, PriceHistory
+from jules_bot.database.models import Base, Trade, PriceHistory, Deposit, PortfolioSnapshot
 from jules_bot.utils.logger import logger
 
 class PostgresManager:
@@ -43,21 +43,6 @@ class PostgresManager:
         finally:
             db.close()
 
-    def write_bot_status(self, bot_id: str, mode: str, status_data: dict):
-        with self.get_db() as db:
-            try:
-                bot_status = db.query(BotStatus).filter(BotStatus.bot_id == bot_id).first()
-                if bot_status:
-                    for key, value in status_data.items():
-                        setattr(bot_status, key, value)
-                else:
-                    bot_status = BotStatus(bot_id=bot_id, mode=mode, **status_data)
-                    db.add(bot_status)
-                db.commit()
-            except Exception as e:
-                db.rollback()
-                logger.error(f"Failed to write bot status to PostgreSQL: {e}")
-
     def log_trade(self, trade_point: TradePoint):
         """
         Logs a trade to the database by creating a new record.
@@ -73,6 +58,26 @@ class PostgresManager:
             except Exception as e:
                 db.rollback()
                 logger.error(f"Failed to log trade to PostgreSQL: {e}", exc_info=True)
+
+    def log_deposit(self, deposit: Deposit):
+        with self.get_db() as db:
+            try:
+                db.add(deposit)
+                db.commit()
+                logger.info(f"Successfully logged deposit of {deposit.amount_usd} USD.")
+            except Exception as e:
+                db.rollback()
+                logger.error(f"Failed to log deposit to PostgreSQL: {e}", exc_info=True)
+
+    def log_portfolio_snapshot(self, snapshot: PortfolioSnapshot):
+        with self.get_db() as db:
+            try:
+                db.add(snapshot)
+                db.commit()
+                logger.info("Successfully logged portfolio snapshot.")
+            except Exception as e:
+                db.rollback()
+                logger.error(f"Failed to log portfolio snapshot to PostgreSQL: {e}", exc_info=True)
 
     def update_trade_on_sell(self, trade_id: str, sell_data: dict):
         """
@@ -247,6 +252,15 @@ class PostgresManager:
                 logger.error(f"Failed to get all trades from DB: {e}", exc_info=True)
                 raise
 
+    def get_all_deposits(self) -> list[Deposit]:
+        """Fetches all deposits from the database."""
+        with self.get_db() as db:
+            try:
+                return db.query(Deposit).order_by(Deposit.timestamp).all()
+            except Exception as e:
+                logger.error(f"Failed to get all deposits from DB: {e}", exc_info=True)
+                return []
+
     def get_trades_by_run_id(self, run_id: str) -> list:
         """Fetches all trades associated with a specific run_id."""
         with self.get_db() as db:
@@ -299,7 +313,7 @@ class PostgresManager:
     def clear_all_tables(self):
         with self.get_db() as db:
             try:
-                db.execute(text("TRUNCATE TABLE trades, bot_status, price_history RESTART IDENTITY;"))
+                db.execute(text("TRUNCATE TABLE trades, portfolio_snapshots, deposits, price_history RESTART IDENTITY;"))
                 db.commit()
                 logger.info("All tables cleared successfully.")
             except Exception as e:

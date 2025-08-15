@@ -129,9 +129,16 @@ class TUIApp(App):
 
                 yield Static("Strategy Status", classes="title")
                 with Vertical(id="strategy_container"):
+                    yield Static("Current Price: N/A", id="strategy_current_price")
                     yield Static("Buy Signal: N/A", id="strategy_buy_signal")
                     yield Static("Buy Target: N/A", id="strategy_buy_target")
                     yield Static("Buy Progress: N/A", id="strategy_buy_progress")
+
+                yield Static("Portfolio Performance", classes="title")
+                with Vertical(id="performance_container"):
+                    yield Static("Cumulative PnL: N/A", id="perf_pnl")
+                    yield Static("Total Deposits: N/A", id="perf_deposits")
+                    yield Static("Net Growth: N/A", id="perf_growth")
 
                 yield Static("Open Positions", classes="title")
                 yield DataTable(id="positions_table")
@@ -299,6 +306,7 @@ class TUIApp(App):
         price = Decimal(data.get("current_btc_price", 0))
         self.query_one("#status_symbol").update(f"Symbol: {data.get('symbol', 'N/A')}")
         self.query_one("#status_price").update(f"Price: ${price:,.2f}")
+        self.query_one("#strategy_current_price").update(f"Current Price: ${price:,.2f}")
 
         # Update positions table
         pos_table = self.query_one("#positions_table", DataTable)
@@ -368,6 +376,19 @@ class TUIApp(App):
         self.query_one("#strategy_buy_signal").update(buy_signal_text)
         self.query_one("#strategy_buy_target").update(buy_target_text)
         self.query_one("#strategy_buy_progress").update(buy_progress_text)
+
+        # Update portfolio performance
+        perf_data = data.get("portfolio_performance", {})
+        pnl = Decimal(perf_data.get("cumulative_realized_pnl_usd", 0))
+        deposits = Decimal(perf_data.get("cumulative_deposits_usd", 0))
+        growth = Decimal(perf_data.get("net_portfolio_growth_usd", 0))
+
+        pnl_color = "green" if pnl >= 0 else "red"
+        growth_color = "green" if growth >= 0 else "red"
+
+        self.query_one("#perf_pnl").update(f"Cumulative PnL: [{pnl_color}]${pnl:,.2f}[/]")
+        self.query_one("#perf_deposits").update(f"Total Deposits: ${deposits:,.2f}")
+        self.query_one("#perf_growth").update(f"Net Growth: [{growth_color}]${growth:,.2f}[/]")
 
     # NOVO: Handler para a mensagem CommandOutput (opcional, mas bom para feedback)
     def on_command_output(self, message: CommandOutput) -> None:
