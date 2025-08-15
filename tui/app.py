@@ -85,7 +85,7 @@ class TUIApp(App):
     #status_container {
         grid-size: 3;
     }
-    #strategy_container {
+    #strategy_container, #dcom_container {
         grid-size: 2;
     }
     #positions_table {
@@ -153,6 +153,16 @@ class TUIApp(App):
                     yield Static("Buy Signal: N/A", id="strategy_buy_signal")
                     yield Static("Buy Target: N/A", id="strategy_buy_target")
                     yield Static("Buy Progress: N/A", id="strategy_buy_progress")
+                
+                yield Static("DCOM Status", classes="title")
+                with Static(id="dcom_container"):
+                    yield Static("Total Equity: N/A", id="dcom_total_equity")
+                    yield Static("Strategic Reserve: N/A", id="dcom_strategic_reserve")
+                    yield Static("WC Target: N/A", id="dcom_wc_target")
+                    yield Static("WC In Use: N/A", id="dcom_wc_in_use")
+                    yield Static("WC Remaining: N/A", id="dcom_wc_remaining")
+                    yield Static("Next Order Size: N/A", id="dcom_next_order_size")
+                    yield Static("Operating Mode: N/A", id="dcom_operating_mode")
 
                 yield Static("Open Positions", classes="title")
                 yield DataTable(id="positions_table")
@@ -427,6 +437,26 @@ class TUIApp(App):
         self.query_one("#strategy_buy_signal").update(buy_signal_text)
         self.query_one("#strategy_buy_target").update(buy_target_text)
         self.query_one("#strategy_buy_progress").update(buy_progress_text)
+
+        # Update DCOM Status Panel
+        dcom_data = data.get("dcom_status", {})
+        if dcom_data:
+            total_equity = Decimal(dcom_data.get("total_equity", 0))
+            strategic_reserve = Decimal(dcom_data.get("strategic_reserve", 0))
+            wc_target = Decimal(dcom_data.get("working_capital_target", 0))
+            wc_in_use = Decimal(dcom_data.get("working_capital_in_use", 0))
+            wc_remaining = Decimal(dcom_data.get("working_capital_remaining", 0))
+            next_order_size = Decimal(dcom_data.get("next_order_size", 0))
+            operating_mode = dcom_data.get("operating_mode", "N/A")
+
+            self.query_one("#dcom_total_equity").update(f"Total Equity: ${total_equity:,.2f}")
+            self.query_one("#dcom_strategic_reserve").update(f"Strategic Reserve: ${strategic_reserve:,.2f}")
+            self.query_one("#dcom_wc_target").update(f"WC Target: ${wc_target:,.2f}")
+            self.query_one("#dcom_wc_in_use").update(f"WC In Use: ${wc_in_use:,.2f}")
+            self.query_one("#dcom_wc_remaining").update(f"WC Remaining: ${wc_remaining:,.2f}")
+            self.query_one("#dcom_next_order_size").update(f"Next Order Size: ${next_order_size:,.2f}")
+            self.query_one("#dcom_operating_mode").update(f"Operating Mode: {operating_mode}")
+
 
     def _render_text_chart(self, history: list[dict], width: int = 50, height: int = 10) -> str:
         """Renders a simple text-based bar chart from portfolio history."""

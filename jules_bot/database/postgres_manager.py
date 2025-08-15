@@ -260,6 +260,27 @@ class PostgresManager:
                 logger.error(f"Failed to get trades by run_id '{run_id}': {e}", exc_info=True)
                 raise
 
+    def get_last_trade_by_type(self, trade_type: str, environment: str, bot_id: Optional[str] = None) -> Optional[Trade]:
+        """
+        Fetches the most recent trade of a specific type for a given environment.
+        """
+        with self.get_db() as db:
+            try:
+                filters = [
+                    Trade.order_type == trade_type,
+                    Trade.environment == environment
+                ]
+                if bot_id:
+                    filters.append(Trade.run_id == bot_id)
+                
+                query = db.query(Trade).filter(and_(*filters)).order_by(desc(Trade.timestamp))
+                
+                last_trade = query.first()
+                return last_trade
+            except Exception as e:
+                logger.error(f"Failed to get last trade by type '{trade_type}': {e}", exc_info=True)
+                return None
+
     def get_last_trade_id(self, environment: str) -> int:
         """
         Fetches the ID of the last trade for a given environment from the database.

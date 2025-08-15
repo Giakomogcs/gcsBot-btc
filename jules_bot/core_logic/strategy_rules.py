@@ -1,77 +1,90 @@
 from jules_bot.utils.config_manager import ConfigManager
+from jules_bot.utils.logger import logger
 
 class StrategyRules:
+    """
+    Implements the Dynamic Capital & Opportunity Management (DCOM) strategy rules.
+    This class is responsible for calculating order sizes and evaluating
+    market conditions based on the DCOM framework, but it does not make the
+    final buy/sell decision.
+    """
     def __init__(self, config_manager: ConfigManager):
         self.rules = config_manager.get_section('STRATEGY_RULES')
-        self.max_capital_per_trade_percent = float(self.rules.get('max_capital_per_trade_percent', 0.02))
-        self.base_usd_per_trade = float(self.rules.get('base_usd_per_trade', 20.0))
+        
+        # --- Sell & Profit Logic ---
+        self.commission_rate = float(self.rules.get('commission_rate', 0.001))
         self.sell_factor = float(self.rules.get('sell_factor', 0.9))
+        self.target_profit = float(self.rules.get('target_profit', 0.002))
 
-    def evaluate_buy_signal(self, market_data: dict, open_positions_count: int) -> tuple[bool, str, str]:
+        # --- DCOM Configuration ---
+        self.working_capital_percent = float(self.rules.get('working_capital_percent', 0.60))
+        self.ema_anchor_period = int(self.rules.get('ema_anchor_period', 200))
+        self.aggressive_spacing_percent = float(self.rules.get('aggressive_spacing_percent', 0.02))
+        self.conservative_spacing_percent = float(self.rules.get('conservative_spacing_percent', 0.04))
+        
+        # --- Order Sizing Logic ---
+        self.initial_order_size_usd = float(self.rules.get('initial_order_size_usd', 5.00))
+        self.order_progression_factor = float(self.rules.get('order_progression_factor', 1.20))
+
+    def get_operating_mode(self, current_price: float, ema_anchor: float) -> tuple[str, float]:
         """
-        Evaluates if a buy signal is present based on the market regime.
-        Uses a more aggressive strategy if there are no open positions.
-        Returns a tuple of (should_buy, regime, reason).
+        Determines the current operating mode (Aggressive/Conservative) and the
+        corresponding spacing percentage based on the anchor EMA.
+
+        Returns:
+            A tuple containing the mode ('AGGRESSIVE' or 'CONSERVATIVE') and the
+            spacing percentage for that mode.
         """
-        current_price = market_data.get('close')
-        high_price = market_data.get('high')
-        ema_100 = market_data.get('ema_100')
-        ema_20 = market_data.get('ema_20')
-        bbl = market_data.get('bbl_20_2_0')
-
-        if any(v is None for v in [current_price, high_price, ema_100, ema_20, bbl]):
-            return False, "unknown", "Not enough indicator data"
-
-        # --- Aggressive Strategy for First Entry ---
-        if open_positions_count == 0:
-            if current_price > ema_100:
-                # Aggressive uptrend entry: Buy if price is simply above the 20 EMA
-                if current_price > ema_20:
-                    return True, "uptrend", "Aggressive first entry (price > ema_20)"
-            else:
-                # Aggressive downtrend entry: Use existing volatility breakout signal
-                if current_price <= bbl:
-                    return True, "downtrend", "Aggressive first entry (volatility breakout)"
-
-        # --- Standard Strategy for Subsequent Entries ---
-        if current_price > ema_100:
-            regime = "uptrend"
-            # Standard Uptrend Logic: Wait for a pullback to the 20 EMA
-            if high_price > ema_20 and current_price < ema_20:
-                return True, regime, "Uptrend pullback"
+        if current_price > ema_anchor:
+            return "AGGRESSIVE", self.aggressive_spacing_percent
         else:
-            regime = "downtrend"
-            # Standard Downtrend Logic: Volatility breakout
-            if current_price <= bbl:
-                return True, regime, "Downtrend volatility breakout"
+            return "CONSERVATIVE", self.conservative_spacing_percent
 
-        return False, "unknown", "No signal"
-
-    def get_next_buy_amount(self, available_balance: float) -> float:
+    def should_place_new_order(self, current_price: float, last_buy_price: float | None, required_spacing: float) -> bool:
         """
-        Calculates the USDT amount for the next purchase.
+        Checks if the price has dropped enough since the last buy to justify a new order.
         """
-        # Calculate trade size based on percentage of available capital
-        capital_based_size = available_balance * self.max_capital_per_trade_percent
+        if last_buy_price is None:
+            # This is the first purchase, so it's always allowed.
+            return True
+        
+        price_fall_percent = (last_buy_price - current_price) / last_buy_price
+        
+        if price_fall_percent >= required_spacing:
+            logger.info(f"Price fell {price_fall_percent:.2%} since last buy (required: {required_spacing:.2%}). Triggering new buy evaluation.")
+            return True
+            
+        return False
 
-        # The trade size is the smaller of the base amount or the capital-based amount
-        trade_size = min(self.base_usd_per_trade, capital_based_size)
+    def calculate_next_order_size(self, open_positions_count: int) -> float:
+        """
+        Calculates the size of the next buy order in USD, using progressive sizing.
+        The first order is the initial size, and each subsequent order is
+        increased by the progression factor.
 
-        return trade_size
+        Args:
+            open_positions_count (int): The number of currently open positions.
+
+        Returns:
+            The calculated size for the next order in USD.
+        """
+        if open_positions_count == 0:
+            return self.initial_order_size_usd
+        else:
+            # The formula is: initial_size * (factor ^ n)
+            # where n is the number of existing positions.
+            return self.initial_order_size_usd * (self.order_progression_factor ** open_positions_count)
 
     def calculate_sell_target_price(self, purchase_price: float) -> float:
         """
         Calculates the target sell price based on the purchase price, commission,
-        and target profit.
+        and target profit. (Unchanged from original logic).
         """
-        commission_rate = float(self.rules.get('commission_rate', 0.001))
-        target_profit = float(self.rules.get('target_profit', 0.01))
-
         # Formula to calculate the price needed to break even, accounting for commissions on both buy and sell
         # P_sell * (1 - commission) = P_buy * (1 + commission)
         # P_sell_breakeven = P_buy * (1 + commission) / (1 - commission)
-        numerator = purchase_price * (1 + commission_rate)
-        denominator = (1 - commission_rate)
+        numerator = purchase_price * (1 + self.commission_rate)
+        denominator = (1 - self.commission_rate)
 
         if denominator == 0:
             return float('inf') # Avoid division by zero, return infinity
@@ -79,57 +92,30 @@ class StrategyRules:
         break_even_price = numerator / denominator
 
         # Apply the target profit to the break-even price
-        sell_target_price = break_even_price * (1 + target_profit)
+        sell_target_price = break_even_price * (1 + self.target_profit)
 
         return sell_target_price
 
     def calculate_realized_pnl(self, buy_price: float, sell_price: float, quantity_sold: float) -> float:
         """
         Calculates the realized profit or loss from a trade, considering commissions.
-
-        Args:
-            buy_price (float): The price at which the asset was purchased.
-            sell_price (float): The price at which the asset was sold.
-            quantity_sold (float): The amount of the asset that was sold.
-
-        Returns:
-            float: The realized profit or loss in USD.
+        (Unchanged from original logic).
         """
-        commission_rate = float(self.rules.get('commission_rate', 0.001))
-
-        # Net Sales Revenue per unit = sell_price * (1 - commission_rate)
-        # Proportional Purchase Cost per unit = buy_price * (1 + commission_rate)
-        
-        net_revenue_per_unit = sell_price * (1 - commission_rate)
-        net_cost_per_unit = buy_price * (1 + commission_rate)
-        
+        net_revenue_per_unit = sell_price * (1 - self.commission_rate)
+        net_cost_per_unit = buy_price * (1 + self.commission_rate)
         profit_per_unit = net_revenue_per_unit - net_cost_per_unit
-        
         realized_pnl = profit_per_unit * quantity_sold
-        
         return realized_pnl
 
     def calculate_net_unrealized_pnl(self, entry_price: float, current_price: float, total_quantity: float) -> float:
         """
         Calculates the net unrealized PnL for an open position, factoring in
-        the partial sale rule (90%) and commissions.
-
-        Args:
-            entry_price (float): The price at which the asset was purchased.
-            current_price (float): The current market price of the asset.
-            total_quantity (float): The total quantity of the asset held.
-
-        Returns:
-            float: The net unrealized profit or loss in USD.
+        the partial sale rule (90%) and commissions. (Unchanged from original logic).
         """
-        # Calculate the PnL based on selling 90% of the position at the current price.
         quantity_to_sell = total_quantity * self.sell_factor
-        
-        # Reuse the realized PnL calculation with the current price as the sell price.
         net_unrealized_pnl = self.calculate_realized_pnl(
             buy_price=entry_price,
             sell_price=current_price,
             quantity_sold=quantity_to_sell
         )
-        
         return net_unrealized_pnl

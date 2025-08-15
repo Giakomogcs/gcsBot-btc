@@ -34,30 +34,83 @@ class StatusService:
         # Note: ExchangeManager is instantiated per-request in get_extended_status
         # to ensure it's created with the correct mode (live/test).
 
+    def _calculate_dcom_equity(self, exchange_manager: ExchangeManager, open_positions: list, current_price: float) -> dict:
+        """
+        Calculates the total equity and its components based on the DCOM strategy.
+        """
+        try:
+            # 1. Get current cash balance (USD)
+            cash_balance = exchange_manager.get_usdt_balance()
+
+            # 2. Get open positions and their current market value
+            capital_in_use = sum(
+                float(p.quantity) * current_price for p in open_positions
+            )
+
+            # 3. Calculate Total Equity
+            total_equity = cash_balance + capital_in_use
+
+            return {
+                "total_equity": total_equity,
+                "cash_balance": cash_balance,
+                "capital_in_use": capital_in_use
+            }
+        except Exception as e:
+            logger.error(f"Failed to calculate DCOM equity in StatusService: {e}", exc_info=True)
+            return {
+                "total_equity": 0,
+                "cash_balance": 0,
+                "capital_in_use": 0
+            }
+
     def get_extended_status(self, environment: str, bot_id: str):
         """
-        Gathers and calculates extended status information, including
-        open positions' PnL, progress towards sell targets, and buy signal readiness.
+        Gathers and calculates extended status information, including DCOM metrics.
         """
         try:
             exchange_manager = ExchangeManager(mode=environment)
-            symbol = "BTCUSDT" # Assuming BTCUSDT for now
+            symbol = "BTCUSDT"
 
-            # 1. Fetch current market data with all features
+            # 1. Fetch market data
             market_data_series = self.feature_calculator.get_current_candle_with_features()
             if market_data_series.empty:
                 return {"error": "Could not fetch current market data."}
-
             market_data = market_data_series.to_dict()
             current_price = market_data.get('close', 0)
 
-            # 2. Fetch open positions from local DB
-            # CORRECTED LOGIC: Only filter by bot_id in 'backtest' mode.
-            # For 'trade' and 'test' modes, we want to see all open positions for the environment.
+            # 2. Fetch open positions
             bot_id_to_filter = bot_id if environment == 'backtest' else None
             open_positions_db = self.db_manager.get_open_positions(environment, bot_id_to_filter)
 
-            # 3. Process open positions
+            # 3. Calculate DCOM Equity and Capital Allocation
+            equity_data = self._calculate_dcom_equity(exchange_manager, open_positions_db, current_price)
+            total_equity = equity_data['total_equity']
+            capital_in_use = equity_data['capital_in_use']
+            working_capital = total_equity * self.strategy.working_capital_percent
+            strategic_reserve = total_equity - working_capital
+            remaining_buying_power = working_capital - capital_in_use
+
+            # 4. Determine DCOM Operating Mode
+            ema_anchor_key = f'ema_{self.strategy.ema_anchor_period}'
+            ema_anchor_value = market_data.get(ema_anchor_key)
+            operating_mode = "N/A"
+            if ema_anchor_value:
+                operating_mode, _ = self.strategy.get_operating_mode(current_price, ema_anchor_value)
+
+            # 5. Calculate Next Order Size
+            next_order_size = self.strategy.calculate_next_order_size(len(open_positions_db))
+
+            dcom_status = {
+                "total_equity": total_equity,
+                "working_capital_target": working_capital,
+                "working_capital_in_use": capital_in_use,
+                "working_capital_remaining": remaining_buying_power,
+                "strategic_reserve": strategic_reserve,
+                "operating_mode": operating_mode,
+                "next_order_size": next_order_size
+            }
+
+            # 6. Process open positions (for PnL, etc.)
             positions_status = []
             for trade in open_positions_db:
                 unrealized_pnl = self.strategy.calculate_net_unrealized_pnl(
@@ -71,13 +124,9 @@ class StatusService:
                     start_price=trade.price,
                     target_price=trade.sell_target_price
                 )
-
-                # Calculate how far the current price is from the sell target.
                 price_to_target = 0
                 if trade.sell_target_price is not None and current_price is not None:
                     price_to_target = trade.sell_target_price - current_price
-                
-                # Calculate the USD value of that price difference.
                 usd_to_target = 0
                 if trade.quantity is not None:
                     usd_to_target = price_to_target * trade.quantity
@@ -94,56 +143,37 @@ class StatusService:
                     "usd_to_target": usd_to_target,
                 })
 
-            # 4. Determine buy signal status
-            should_buy, _, reason = self.strategy.evaluate_buy_signal(
-                market_data, len(positions_status) # Use the count of reconciled open positions
-            )
-            btc_purchase_target, btc_purchase_progress_pct = self._calculate_buy_progress(
-                market_data, len(positions_status)
-            )
-
-            # 5. Fetch trade history from DB
+            # 7. Fetch other data (trade history, wallet balances)
             trade_history = self.db_manager.get_all_trades_in_range(environment)
             trade_history_dicts = [trade.to_dict() for trade in trade_history]
-
-            # 6. Fetch live wallet data
             wallet_balances = exchange_manager.get_account_balance()
-
-            # Filter for relevant assets and calculate USD value
-            relevant_assets = {'BTC', 'USDT'}
+            
             processed_balances = []
             for bal in wallet_balances:
                 asset = bal.get('asset')
-                if asset in relevant_assets:
-                    free = float(bal.get('free', 0))
-                    locked = float(bal.get('locked', 0))
-                    total = free + locked
-                    
+                free = float(bal.get('free', 0))
+                locked = float(bal.get('locked', 0))
+                total = free + locked
+                if total > 0:
                     if asset == 'BTC':
                         bal['usd_value'] = total * current_price
                     elif asset == 'USDT':
                         bal['usd_value'] = total
-                    
                     processed_balances.append(bal)
 
-            # Calculate total wallet value in USD
             total_wallet_usd_value = sum(bal.get('usd_value', 0) for bal in processed_balances)
 
-            # 7. Assemble the final status object
+            # 8. Assemble final status object
             extended_status = {
                 "mode": environment,
                 "symbol": "BTC/USDT",
                 "current_btc_price": current_price,
                 "total_wallet_usd_value": total_wallet_usd_value,
                 "open_positions_status": positions_status,
-                "buy_signal_status": {
-                    "should_buy": should_buy,
-                    "reason": reason,
-                    "btc_purchase_target": btc_purchase_target,
-                    "btc_purchase_progress_pct": btc_purchase_progress_pct
-                },
                 "trade_history": trade_history_dicts,
-                "wallet_balances": processed_balances
+                "wallet_balances": processed_balances,
+                "dcom_status": dcom_status,
+                "buy_signal_status": {} 
             }
 
             return extended_status

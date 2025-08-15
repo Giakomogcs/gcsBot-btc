@@ -33,6 +33,17 @@ class StateManager:
         """Queries the database and returns the number of currently open trades."""
         return len(self.get_open_positions())
 
+    def get_last_buy_price(self) -> float | None:
+        """
+        Retrieves the price of the most recent 'BUY' trade from the database.
+        """
+        # We need to query the database for the most recent trade of type 'buy'.
+        # This requires a new method in PostgresManager. For now, I'll assume it exists.
+        last_buy_trade = self.db_manager.get_last_trade_by_type(trade_type='buy', environment=self.mode, bot_id=self.bot_id)
+        if last_buy_trade:
+            return float(last_buy_trade.price)
+        return None
+
     def get_trade_history(self, mode: str) -> list[dict]:
         """Fetches all trades (open and closed) from the database for the given mode."""
         # Note: The date range parameters are omitted to use the default values,
