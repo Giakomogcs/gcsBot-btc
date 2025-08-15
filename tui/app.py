@@ -79,7 +79,6 @@ class TUIApp(App):
         border: solid $primary-lighten-2;
         padding: 1;
         margin-bottom: 1;
-        border-radius: 5px;
     }
 
     #positions_table, #wallet_table {
