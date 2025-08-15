@@ -90,7 +90,7 @@ class TUIApp(App):
     }
     #positions_table {
         margin-top: 1;
-        height: 12;
+        height: 20;
     }
     #log_display {
         height: 1fr;
