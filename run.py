@@ -46,11 +46,22 @@ def get_docker_compose_command():
     raise FileNotFoundError("Could not find a valid 'docker-compose' or 'docker compose' command. Please ensure Docker is installed and in your PATH.")
 
 def run_docker_command(command_args: list, **kwargs):
-    """Helper para executar comandos docker e lidar com erros."""
+    """
+    Helper para executar comandos docker e lidar com erros de forma robusta.
+    Garante a decodificação de output em UTF-8.
+    """
     try:
         base_command = get_docker_compose_command()
         full_command = base_command + command_args
         print(f"   (usando comando: `{' '.join(full_command)}`)")
+
+        # Se o output for capturado, garante que seja decodificado como texto UTF-8.
+        # Isso evita a necessidade de `.decode()` no bloco de exceção e previne erros de encoding.
+        if kwargs.get("capture_output"):
+            kwargs.setdefault("text", True)
+            kwargs.setdefault("encoding", "utf-8")
+            kwargs.setdefault("errors", "replace")
+
         # Para comandos de ambiente, não precisamos de output em tempo real, então 'run' é ok.
         subprocess.run(full_command, check=True, **kwargs)
         return True
@@ -58,11 +69,11 @@ def run_docker_command(command_args: list, **kwargs):
         print(f"❌ Erro: {e}")
     except subprocess.CalledProcessError as e:
         print(f"❌ Erro ao executar comando. Código de saída: {e.returncode}")
+        # Com text=True, stdout/stderr já são strings, não bytes.
         if e.stderr:
-            # Em alguns casos, o stderr é usado para output normal, então decodificamos se possível
-            print(f"   Stderr:\n{e.stderr.decode('utf-8', 'ignore')}")
+            print(f"   Stderr:\n{e.stderr}")
         if e.stdout:
-            print(f"   Stdout:\n{e.stdout.decode('utf-8', 'ignore')}")
+            print(f"   Stdout:\n{e.stdout}")
     except Exception as e:
         print(f"❌ Ocorreu um erro inesperado: {e}")
     return False
@@ -148,9 +159,13 @@ def _run_in_container(command: list, env_vars: dict = {}, interactive: bool = Fa
         print(f"   (executando: `{' '.join(exec_cmd)}`)")
 
         if interactive:
-            # Para TUIs, precisamos que o processo anexe ao terminal do host.
-            # `subprocess.run` sem capturar output e com `check=False` é ideal.
-            # Deixamos o processo filho controlar o terminal.
+            # Para TUIs e outros aplicativos interativos, precisamos que o processo
+            # anexe diretamente ao terminal do host.
+            # `subprocess.run` sem capturar I/O (stdout, stderr, stdin) é a forma
+            # correta de ceder o controle do terminal ao processo filho.
+            # NOTA PARA WINDOWS: Para que a TUI funcione corretamente, é altamente
+            # recomendável usar um terminal moderno como o Windows Terminal. O CMD
+            # e o PowerShell legados podem ter problemas com a renderização.
             result = subprocess.run(exec_cmd, check=False)
             if result.returncode != 0:
                 print(f"\n❌ Comando interativo finalizado com código de saída: {result.returncode}")
@@ -180,23 +195,9 @@ def _run_in_container(command: list, env_vars: dict = {}, interactive: bool = Fa
 
 @app.command()
 def trade():
-    """Inicia a API em background e o bot em modo de negociação (live)."""
+    """Inicia o bot em modo de negociação (live)."""
     mode = "trade"
-    print(f"🚀 Iniciando o bot em modo '{mode.upper()}' com API...")
-
-    print("\n--- Etapa 1 de 2: Iniciando a API em segundo plano ---")
-    if not _run_in_container(
-        command=["api/main.py"],
-        env_vars={"BOT_MODE": mode},
-        detached=True
-    ):
-        print("❌ Falha ao iniciar a API. Abortando.")
-        return
-
-    print("   Aguardando 3 segundos para a API inicializar...")
-    time.sleep(3)
-
-    print(f"\n--- Etapa 2 de 2: Iniciando o bot em modo '{mode.upper()}' ---")
+    print(f"🚀 Iniciando o bot em modo '{mode.upper()}'...")
     _run_in_container(
         command=["jules_bot/main.py"],
         env_vars={"BOT_MODE": mode}
@@ -204,23 +205,9 @@ def trade():
 
 @app.command()
 def test():
-    """Inicia a API em background e o bot em modo de teste (testnet)."""
+    """Inicia o bot em modo de teste (testnet)."""
     mode = "test"
-    print(f"🚀 Iniciando o bot em modo '{mode.upper()}' com API...")
-
-    print("\n--- Etapa 1 de 2: Iniciando a API em segundo plano ---")
-    if not _run_in_container(
-        command=["api/main.py"],
-        env_vars={"BOT_MODE": mode},
-        detached=True
-    ):
-        print("❌ Falha ao iniciar a API. Abortando.")
-        return
-
-    print("   Aguardando 3 segundos para a API inicializar...")
-    time.sleep(3)
-
-    print(f"\n--- Etapa 2 de 2: Iniciando o bot em modo '{mode.upper()}' ---")
+    print(f"🚀 Iniciando o bot em modo '{mode.upper()}'...")
     _run_in_container(
         command=["jules_bot/main.py"],
         env_vars={"BOT_MODE": mode}
@@ -247,61 +234,24 @@ def backtest(
 
     print("\n✅ Backtest finalizado com sucesso.")
 
-@app.command()
-def ui():
-    """Inicia a interface de usuário (TUI) para monitorar e controlar o bot."""
-    print("🖥️  Iniciando a Interface de Usuário (TUI)...")
-    print("   Lembre-se que o bot (usando 'trade' ou 'test') deve estar rodando em outro terminal.")
-    _run_in_container(
-        command=["jules_bot/ui/app.py"],
-        interactive=True
-    )
-
-@app.command()
-def api(
-    mode: str = typer.Option(
-        "live", "--mode", "-m", help="O modo de operação para a API (ex: 'live', 'test')."
-    )
-):
-    """Inicia o serviço da API, configurando o BOT_MODE."""
-    print(f"🚀 Iniciando o serviço de API em modo '{mode.upper()}'...")
-    _run_in_container(
-        command=["api/main.py"],
-        env_vars={"BOT_MODE": mode},
-        interactive=True
-    )
-
-import time
 
 @app.command()
 def dashboard(
-    mode: str = typer.Argument(..., help="O modo de operação a ser monitorado (ex: 'trade', 'test').")
+    mode: str = typer.Option(
+        "test", "--mode", "-m", help="O modo de operação a ser monitorado ('trade' ou 'test')."
+    )
 ):
-    """Inicia a API em segundo plano e a TUI em primeiro plano para monitoramento."""
+    """Inicia a nova Interface de Usuário (TUI) para monitoramento e controle."""
     print(f"🚀 Iniciando o dashboard para o modo '{mode.upper()}'...")
+    print("   Lembre-se que o bot (usando 'trade' ou 'test') deve estar rodando em outro terminal.")
 
-    print("\n--- Etapa 1 de 2: Iniciando a API em segundo plano ---")
-    if not _run_in_container(
-        command=["api/main.py"],
-        env_vars={"BOT_MODE": mode},
-        detached=True
-    ):
-        print("❌ Falha ao iniciar a API. Abortando.")
-        return
+    command_to_run = ["tui/app.py", "--mode", mode]
 
-    print("   Aguardando 3 segundos para a API inicializar...")
-    time.sleep(3)
-
-    print("\n--- Etapa 2 de 2: Iniciando a Interface de Usuário (TUI) ---")
-    if not _run_in_container(
-        command=["jules_bot/ui/app.py"],
+    _run_in_container(
+        command=command_to_run,
         interactive=True
-    ):
-        print("❌ A TUI foi encerrada ou falhou ao iniciar.")
-
+    )
     print("\n✅ Dashboard encerrado.")
-    print("   Lembre-se que o serviço da API ainda pode estar rodando em segundo plano.")
-    print("   Use `docker ps` para verificar e `docker kill <container_id>` se necessário.")
 
 
 @app.command("clear-backtest-trades")

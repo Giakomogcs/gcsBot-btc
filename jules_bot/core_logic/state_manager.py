@@ -8,16 +8,13 @@ from jules_bot.bot.account_manager import AccountManager
 from jules_bot.core_logic.strategy_rules import StrategyRules
 
 class StateManager:
-    def __init__(self, mode: str, bot_id: str):
+    def __init__(self, mode: str, bot_id: str, db_manager: PostgresManager):
         self.mode = mode
         self.bot_id = bot_id
-
-        # This DB manager is for READING operations (get_open_positions, etc.)
-        db_config = config_manager.get_db_config('POSTGRES')
-        self.db_manager = PostgresManager(config=db_config)
+        self.db_manager = db_manager
 
         # The TradeLogger is now responsible for ALL WRITE operations.
-        self.trade_logger = TradeLogger(mode=self.mode)
+        self.trade_logger = TradeLogger(mode=self.mode, db_manager=self.db_manager)
 
         logger.info(f"StateManager initialized for mode: '{self.mode}', bot_id: '{self.bot_id}'")
 
@@ -78,67 +75,140 @@ class StateManager:
 
         self.trade_logger.log_trade(trade_data)
 
-    def sync_holdings_with_binance(self, account_manager: AccountManager, strategy_rules: StrategyRules):
+    def sync_holdings_with_binance(self, account_manager: AccountManager, strategy_rules: StrategyRules, trader):
         """
-        Synchronizes the database with current Binance holdings by checking for discrepancies.
-        It closes local 'OPEN' positions that no longer exist on the exchange.
-        It also logs warnings for assets held on the exchange but not tracked in the database.
+        Synchronizes the database with current Binance trades. It ensures that every
+        buy trade on Binance is represented as an 'OPEN' or 'CLOSED' position in the
+        local database, preventing duplicates.
         """
-        logger.info("--- Starting holdings synchronization with Binance ---")
-
+        logger.info("--- Starting trade synchronization with Binance ---")
         try:
-            # 1. Get current holdings from the exchange
-            # We pass an empty dict for prices because, for this logic, we only need asset names and amounts.
-            current_holdings = account_manager.get_all_account_balances({})
+            symbol = config_manager.get('APP', 'symbol')
+            if not symbol:
+                logger.error("No symbol configured in APP section. Cannot perform sync.")
+                return
 
-            # Create a map of holdings for easy lookup, ignoring dust amounts.
-            holdings_map = {
-                h['asset']: float(h['free']) + float(h['locked'])
-                for h in current_holdings if (float(h['free']) + float(h['locked'])) > 0.00001
-            }
-            logger.info(f"Found {len(holdings_map)} non-dust assets on Binance: {list(holdings_map.keys())}")
+            # 1. Fetch all trades from Binance for the given symbol
+            binance_trades = trader.get_all_my_trades(symbol=symbol)
+            if not binance_trades:
+                logger.info(f"No trades found on Binance for {symbol}. Sync complete.")
+                return
 
-            # 2. Get all 'OPEN' and 'TREASURY' positions from our database
-            open_positions = self.get_open_positions()
-            treasury_positions = self.db_manager.get_treasury_positions(environment=self.mode)
+            # 2. Fetch all trades from the local DB for the same symbol and environment
+            db_trades = self.db_manager.get_all_trades_in_range(mode=self.mode, symbol=symbol)
+            existing_binance_trade_ids = {t.binance_trade_id for t in db_trades if t.binance_trade_id}
+            logger.info(f"Found {len(existing_binance_trade_ids)} existing trades in the database for {symbol}.")
 
-            db_positions_map = {}
-            for pos in open_positions + treasury_positions:
-                # Assuming all symbols are against USDT, which is a simplification.
-                asset = pos.symbol.replace('USDT', '')
-                if asset not in db_positions_map:
-                    db_positions_map[asset] = []
-                db_positions_map[asset].append(pos)
-
-            if db_positions_map:
-                logger.info(f"Found {len(db_positions_map)} assets with OPEN/TREASURY status in DB: {list(db_positions_map.keys())}")
-
-            # 3. Reconcile: Close local positions that are no longer on the exchange
-            for pos in open_positions:
-                asset = pos.symbol.replace('USDT', '')
-                if asset not in holdings_map:
-                    logger.warning(
-                        f"Position {pos.trade_id} for asset {asset} is 'OPEN' in the database, "
-                        f"but the asset is no longer held on the exchange. Closing it as 'RECONCILED'."
-                    )
-                    self.db_manager.update_trade_status(pos.trade_id, 'RECONCILED')
-
-            # 4. Reconcile: Log warnings for untracked assets on the exchange
-            quote_asset = config_manager.get('APP', 'quote_asset', fallback='USDT')
-            for asset, balance in holdings_map.items():
-                if asset == quote_asset: # Ignore the quote asset (e.g., USDT)
+            # 3. Reconcile: Iterate through Binance trades and create local records for new BUYS
+            new_trades_synced = 0
+            for b_trade in binance_trades:
+                if b_trade['id'] in existing_binance_trade_ids:
                     continue
-                if asset not in db_positions_map:
-                    logger.warning(
-                        f"Found untracked asset {asset} on the exchange with balance {balance}. "
-                        "This holding is not associated with any 'OPEN' or 'TREASURY' position in the database. "
-                        "Manual review may be needed."
-                    )
 
-            logger.info("--- Holdings synchronization finished ---")
+                if b_trade['isBuyer']:
+                    logger.info(f"Found new BUY trade on Binance (ID: {b_trade['id']}). Creating local position.")
+                    self._create_position_from_trade(b_trade, strategy_rules)
+                    new_trades_synced += 1
+
+            if new_trades_synced > 0:
+                logger.info(f"Successfully synced {new_trades_synced} new buy trades from Binance.")
+                # After syncing, reconcile the total position with the actual balance
+                self._reconcile_synced_positions_with_balance(symbol, trader)
+            else:
+                logger.info("Database is already in sync with Binance. No new trades to add.")
+
+            logger.info("--- Trade synchronization finished ---")
 
         except Exception as e:
-            logger.error(f"An error occurred during holdings synchronization: {e}", exc_info=True)
+            logger.error(f"An error occurred during trade synchronization: {e}", exc_info=True)
+
+    def _create_position_from_trade(self, binance_trade: dict, strategy_rules: StrategyRules):
+        """Helper to create a new DB position from a single Binance trade record."""
+        try:
+            purchase_price = float(binance_trade['price'])
+            quantity = float(binance_trade['qty'])
+            
+            # Create a new, unique internal trade_id
+            internal_trade_id = str(uuid.uuid4())
+            sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
+
+            buy_result = {
+                "trade_id": internal_trade_id,
+                "symbol": binance_trade['symbol'],
+                "price": purchase_price,
+                "quantity": quantity,
+                "usd_value": purchase_price * quantity,
+                "commission": float(binance_trade['commission']),
+                "commission_asset": binance_trade['commissionAsset'],
+                "exchange_order_id": str(binance_trade['orderId']),
+                "binance_trade_id": int(binance_trade['id']),
+                "timestamp": pd.to_datetime(binance_trade['time'], unit='ms', utc=True),
+                "decision_context": {"reason": "sync_from_binance_trade"},
+                "environment": self.mode,
+            }
+            
+            self.create_new_position(buy_result, sell_target_price)
+            logger.info(f"Successfully created new position for Binance trade ID: {binance_trade['id']}")
+
+        except Exception as e:
+            logger.error(f"Failed to create position from trade {binance_trade.get('id')}: {e}", exc_info=True)
+
+    def _reconcile_synced_positions_with_balance(self, symbol: str, trader):
+        """
+        Adjusts the quantities of synced positions to match the actual exchange balance.
+        This accounts for sell trades by reducing the quantity of the oldest buy positions first (FIFO).
+        """
+        logger.info(f"Reconciling synced position quantities for {symbol} with actual balance...")
+        try:
+            # 1. Get all open positions for the symbol from the DB, sorted oldest first
+            open_positions = sorted(
+                self.db_manager.get_open_positions(environment=self.mode, symbol=symbol),
+                key=lambda p: p.timestamp
+            )
+            if not open_positions:
+                logger.info("No open positions found to reconcile.")
+                return
+
+            # 2. Get the total quantity held by the bot for this symbol
+            bot_total_quantity = sum(p.quantity for p in open_positions)
+
+            # 3. Get the actual balance from the exchange
+            asset = symbol.replace('USDT', '')
+            exchange_balance = trader.get_account_balance(asset=asset)
+            
+            logger.info(f"Bot's calculated total quantity for {asset}: {bot_total_quantity:.8f}")
+            logger.info(f"Actual exchange balance for {asset}: {exchange_balance:.8f}")
+
+            # 4. Calculate the discrepancy
+            discrepancy = bot_total_quantity - exchange_balance
+            if discrepancy <= 0.00000001: # Use a small tolerance for float comparison
+                logger.info("Bot's position quantities are already in sync with the exchange balance.")
+                return
+            
+            logger.warning(f"Discrepancy of {discrepancy:.8f} {asset} found. Reconciling by closing oldest positions...")
+
+            # 5. Reconcile by reducing quantity from oldest positions first (FIFO)
+            for position in open_positions:
+                if discrepancy <= 0:
+                    break
+
+                quantity_to_reduce = min(position.quantity, discrepancy)
+                
+                new_quantity = position.quantity - quantity_to_reduce
+                
+                if new_quantity <= 0.00000001: # If position is fully "spent"
+                    logger.info(f"Closing position {position.trade_id} as it has been fully sold (reconciled).")
+                    self.db_manager.update_trade_status(position.trade_id, 'CLOSED')
+                else:
+                    logger.info(f"Reducing quantity of position {position.trade_id} by {quantity_to_reduce:.8f}.")
+                    self.db_manager.update_trade_quantity(position.trade_id, new_quantity)
+                
+                discrepancy -= quantity_to_reduce
+
+            logger.info("Finished reconciling position quantities.")
+
+        except Exception as e:
+            logger.error(f"An error occurred during balance reconciliation for {symbol}: {e}", exc_info=True)
 
 
     def record_partial_sell(self, original_trade_id: str, remaining_quantity: float, sell_data: dict):

@@ -7,7 +7,9 @@ from sqlalchemy import create_engine, desc, and_, text, inspect
 from sqlalchemy.orm import sessionmaker, Session
 from contextlib import contextmanager
 from jules_bot.core.schemas import TradePoint
-from jules_bot.database.models import Base, Trade, BotStatus, PriceHistory
+from jules_bot.database.base import Base
+from jules_bot.database.models import Trade, BotStatus, PriceHistory
+from jules_bot.database.portfolio_models import PortfolioSnapshot, FinancialMovement
 from jules_bot.utils.logger import logger
 
 class PostgresManager:
@@ -60,80 +62,101 @@ class PostgresManager:
 
     def log_trade(self, trade_point: TradePoint):
         """
-        Logs a trade to the database.
-        If the trade_id already exists, it updates the record with sell information.
-        Otherwise, it creates a new record for a new buy trade.
+        Logs a trade to the database by creating a new record.
+        Updates to existing trades should be handled by specific update methods.
         """
         with self.get_db() as db:
             try:
-                existing_trade = db.query(Trade).filter(Trade.trade_id == trade_point.trade_id).first()
-
-                if existing_trade:
-                    # This is an update for a sell, closing a buy.
-                    # We selectively update fields. Crucially, order_type is NOT changed.
-                    logger.info(f"Updating existing trade {trade_point.trade_id} with status '{trade_point.status}'.")
-                    
-                    existing_trade.status = trade_point.status
-                    existing_trade.timestamp = trade_point.timestamp # Update to sell time
-                    
-                    # Update fields to reflect the sell transaction details
-                    existing_trade.price = trade_point.price
-                    existing_trade.quantity = trade_point.quantity
-                    existing_trade.usd_value = trade_point.usd_value
-                    existing_trade.commission = trade_point.commission
-
-                    # Add sell-specific financial details
-                    existing_trade.realized_pnl_usd = trade_point.realized_pnl_usd
-                    existing_trade.commission_usd = trade_point.commission_usd
-                    existing_trade.hodl_asset_amount = trade_point.hodl_asset_amount
-                    existing_trade.hodl_asset_value_at_sell = trade_point.hodl_asset_value_at_sell
-                    
-                    # Update context to reflect the sell decision
-                    existing_trade.decision_context = trade_point.decision_context
-
-                else:
-                    # This is a new trade (a buy)
-                    logger.info(f"Creating new trade record for trade_id: {trade_point.trade_id}")
-                    new_trade = Trade(**trade_point.__dict__)
-                    db.add(new_trade)
-
+                logger.info(f"Creating new trade record for trade_id: {trade_point.trade_id}")
+                new_trade = Trade(**trade_point.__dict__)
+                db.add(new_trade)
                 db.commit()
-                # Clarify log message
-                action_type = "buy" if not existing_trade else "sell (update)"
-                logger.info(f"Successfully logged '{action_type}' for trade_id: {trade_point.trade_id}")
-
+                logger.info(f"Successfully logged '{new_trade.order_type}' for trade_id: {trade_point.trade_id}")
             except Exception as e:
                 db.rollback()
                 logger.error(f"Failed to log trade to PostgreSQL: {e}", exc_info=True)
 
-    def get_price_data(self, measurement: str, start_date: str = "-30d", end_date: str = "now()") -> pd.DataFrame:
+    def update_trade_on_sell(self, trade_id: str, sell_data: dict):
+        """
+        Updates an existing trade record with sell-side information, marking it as 'CLOSED'.
+        """
         with self.get_db() as db:
             try:
-                # This is a simplified version. A more robust implementation would parse the date strings.
-                query = db.query(PriceHistory).filter(PriceHistory.symbol == measurement).order_by(PriceHistory.timestamp)
-                df = pd.read_sql(query.statement, self.engine)
-                df = df.rename(columns={"timestamp": "timestamp"}).set_index('timestamp')
+                trade_to_update = db.query(Trade).filter(Trade.trade_id == trade_id).first()
+
+                if not trade_to_update:
+                    logger.error(f"DB: Could not find trade with trade_id '{trade_id}' to update with sell data.")
+                    return
+
+                logger.info(f"DB: Updating and closing trade {trade_id} with sell information.")
+
+                trade_to_update.status = 'CLOSED'
+                trade_to_update.order_type = 'sell' # Reflects the last action on the trade
+                
+                # Update all relevant fields from the sell_data dictionary
+                trade_to_update.price = sell_data.get('price', trade_to_update.price)
+                trade_to_update.quantity = sell_data.get('quantity', trade_to_update.quantity)
+                trade_to_update.usd_value = sell_data.get('usd_value', trade_to_update.usd_value)
+                trade_to_update.commission = sell_data.get('commission', trade_to_update.commission)
+                trade_to_update.timestamp = sell_data.get('timestamp', trade_to_update.timestamp)
+                trade_to_update.decision_context = sell_data.get('decision_context', trade_to_update.decision_context)
+                trade_to_update.commission_usd = sell_data.get('commission_usd')
+                trade_to_update.realized_pnl_usd = sell_data.get('realized_pnl_usd')
+                trade_to_update.hodl_asset_amount = sell_data.get('hodl_asset_amount')
+                trade_to_update.hodl_asset_value_at_sell = sell_data.get('hodl_asset_value_at_sell')
+
+                db.commit()
+                logger.info(f"DB: Successfully updated and closed trade {trade_id}.")
+
+            except Exception as e:
+                db.rollback()
+                logger.error(f"DB: Failed to update trade on sell for trade_id '{trade_id}': {e}", exc_info=True)
+                raise
+
+    def get_price_data(self, measurement: str, start_date: str = "-30d", end_date: str = "now()") -> pd.DataFrame:
+        """
+        Fetches price data from the database for a specific measurement within a given date range.
+        `start_date` and `end_date` should be in a format that PostgreSQL can understand,
+        e.g., 'YYYY-MM-DD HH:MI:SS' or relative like '-30d'.
+        """
+        logger.info(f"DB: Fetching price data for {measurement} from {start_date} to {end_date}")
+        with self.get_db() as db:
+            try:
+                # The query now correctly uses the date range to filter data at the database level.
+                query = db.query(PriceHistory).filter(
+                    PriceHistory.symbol == measurement,
+                    PriceHistory.timestamp >= text(f"now() - interval '{start_date.replace('-', '')}'") if '-' in start_date else text(f"'{start_date}'"),
+                    PriceHistory.timestamp <= text("now()") if end_date == "now()" else text(f"'{end_date}'")
+                ).order_by(PriceHistory.timestamp)
+
+                df = pd.read_sql(query.statement, self.engine, index_col='timestamp')
+
+                if df.empty:
+                    logger.warning(f"DB: No price data found for {measurement} in the specified range.")
+                
                 return df
             except Exception as e:
-                logger.error(f"Failed to get price data: {e}", exc_info=True)
+                logger.error(f"DB: Failed to get price data: {e}", exc_info=True)
                 return pd.DataFrame()
 
-    def get_open_positions(self, environment: str, bot_id: Optional[str] = None) -> list:
+    def get_open_positions(self, environment: str, bot_id: Optional[str] = None, symbol: Optional[str] = None) -> list:
         """
         Fetches open positions for a given environment.
-        If bot_id is provided, it also filters by bot_id (for backtesting).
+        Can optionally filter by bot_id (for backtesting) and symbol.
         Returns a list of Trade model instances.
         """
         with self.get_db() as db:
             try:
-                query = db.query(Trade).filter(
-                    and_(
-                        Trade.status == "OPEN",
-                        Trade.environment == environment
-                    )
-                )
+                filters = [
+                    Trade.status == "OPEN",
+                    Trade.environment == environment
+                ]
                 if bot_id:
-                    query = query.filter(Trade.run_id == bot_id)
+                    filters.append(Trade.run_id == bot_id)
+                if symbol:
+                    filters.append(Trade.symbol == symbol)
+                
+                query = db.query(Trade).filter(and_(*filters))
                 
                 trades = query.all()
                 return trades
@@ -209,19 +232,32 @@ class PostgresManager:
                 logger.error(f"Failed to check for open positions: {e}", exc_info=True)
                 raise
 
-    def get_all_trades_in_range(self, mode: Optional[str] = None, start_date: str = "-90d", end_date: str = "now()"):
+    def get_all_trades_in_range(self, mode: Optional[str] = None, symbol: Optional[str] = None, start_date: str = "-90d", end_date: str = "now()"):
         with self.get_db() as db:
             try:
                 # This is a simplified version. A more robust implementation would parse the date strings.
                 query = db.query(Trade).order_by(Trade.timestamp)
                 if mode:
                     query = query.filter(Trade.environment == mode)
+                if symbol:
+                    query = query.filter(Trade.symbol == symbol)
 
                 trades = query.all()
                 return trades
 
             except Exception as e:
                 logger.error(f"Failed to get all trades from DB: {e}", exc_info=True)
+                raise
+
+    def get_trades_by_run_id(self, run_id: str) -> list:
+        """Fetches all trades associated with a specific run_id."""
+        with self.get_db() as db:
+            try:
+                query = db.query(Trade).filter(Trade.run_id == run_id).order_by(Trade.timestamp)
+                trades = query.all()
+                return trades
+            except Exception as e:
+                logger.error(f"Failed to get trades by run_id '{run_id}': {e}", exc_info=True)
                 raise
 
     def get_last_trade_id(self, environment: str) -> int:

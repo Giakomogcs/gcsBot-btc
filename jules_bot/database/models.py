@@ -1,9 +1,7 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, JSON, Boolean
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, Boolean
 from sqlalchemy.sql import func
 import datetime
-
-Base = declarative_base()
+from .base import Base
 
 class PriceHistory(Base):
     __tablename__ = 'price_history'

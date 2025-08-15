@@ -22,9 +22,6 @@ class Trader:
         self.step_size = None
         self._fetch_exchange_info()
 
-        db_config = config_manager.get_db_config('POSTGRES')
-        self.db_manager = PostgresManager(config=db_config)
-
     def _map_mode_to_environment(self, mode: str) -> str:
         """Maps the internal 'mode' to the user-facing 'environment' tag."""
         if mode == 'backtest':
@@ -293,6 +290,52 @@ class Trader:
         except Exception as e:
             logger.error(f"ERROR EXECUTING SELL (Trade ID: {trade_id}): {e}", exc_info=True)
             return False, None
+
+    def get_all_my_trades(self, symbol: str) -> list[dict]:
+        """
+        Fetches all historical trades for a given symbol from Binance,
+        handling pagination to get the complete history.
+        """
+        if not self.is_ready:
+            logger.warning("Trader is not ready. Cannot fetch trades.")
+            return []
+
+        all_trades = []
+        from_id = 0  # Start from the first trade
+        limit = 1000  # Max limit per request for myTrades endpoint
+
+        logger.info(f"Fetching all historical trades for {symbol} from Binance...")
+        
+        while True:
+            try:
+                logger.debug(f"Fetching trades for {symbol} starting from trade ID {from_id}...")
+                trades = self.client.get_my_trades(symbol=symbol, fromId=from_id, limit=limit)
+                
+                if not trades:
+                    # No more trades to fetch
+                    break
+                
+                all_trades.extend(trades)
+                
+                # The API returns trades in ascending order of ID.
+                # Set the next from_id to be the ID of the last trade fetched.
+                # The `fromId` parameter is inclusive, so we need to start from the next ID.
+                from_id = trades[-1]['id'] + 1
+                
+                # If the number of trades fetched is less than the limit, we're at the end.
+                if len(trades) < limit:
+                    break
+
+            except BinanceAPIException as e:
+                # This can happen if the fromId is too old or there are other API issues.
+                logger.error(f"API error while fetching trades for {symbol} from ID {from_id}: {e}")
+                return []  # Return empty on error to be safe
+            except Exception as e:
+                logger.error(f"Unexpected error while fetching trades for {symbol}: {e}", exc_info=True)
+                return []
+                
+        logger.info(f"Found a total of {len(all_trades)} trades for {symbol} on the exchange.")
+        return all_trades
 
     def close_connection(self):
         """Closes the connection to the exchange."""

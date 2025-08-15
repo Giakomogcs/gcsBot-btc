@@ -1,5 +1,6 @@
 # jules_bot/bot/feature_engineering.py (VERSÃO FINAL E FLEXÍVEL)
 
+import sys
 import pandas as pd
 import numpy as np
 import pandas_ta as ta
@@ -92,7 +93,7 @@ def add_all_features(df: pd.DataFrame, live_mode: bool = False) -> pd.DataFrame:
         stop_loss_levels = df_copy['close'] - (atr * stop_mult)
         target = pd.Series(np.nan, index=df_copy.index)
 
-        for i in tqdm(range(len(df_copy) - future_periods), desc="Calculando Target"):
+        for i in tqdm(range(len(df_copy) - future_periods), desc="Calculando Target", file=sys.stderr):
             if pd.isna(take_profit_levels.iloc[i]) or pd.isna(stop_loss_levels.iloc[i]):
                 continue
 

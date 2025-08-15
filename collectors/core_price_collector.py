@@ -92,14 +92,14 @@ class CorePriceCollector:
             except Exception as e:
                 logger.error(f"\nError writing data to PostgreSQL: {e}", exc_info=True)
 
-    def _query_last_timestamp(self) -> Optional[pd.Timestamp]:
+    def _query_last_timestamp(self, symbol: str) -> Optional[pd.Timestamp]:
         """
         Queries the last timestamp for the specific symbol.
         """
-        logger.info(f"Querying last timestamp for {self.symbol} in table '{self.measurement}'...")
+        logger.info(f"Querying last timestamp for {symbol} in table '{self.measurement}'...")
         with self.db_manager.get_db() as db:
             try:
-                last_record = db.query(PriceHistory).filter(PriceHistory.symbol == self.symbol).order_by(desc(PriceHistory.timestamp)).first()
+                last_record = db.query(PriceHistory).filter(PriceHistory.symbol == symbol).order_by(desc(PriceHistory.timestamp)).first()
                 if not last_record:
                     logger.info("No existing data found for this series in the table.")
                     return None
@@ -166,7 +166,7 @@ class CorePriceCollector:
             return
         
         while True:
-            last_timestamp = self._query_last_timestamp()
+            last_timestamp = self._query_last_timestamp(self.symbol)
             if last_timestamp:
                 start_date = last_timestamp + pd.Timedelta(minutes=1)
             else:
@@ -186,65 +186,66 @@ class CorePriceCollector:
             time.sleep(60)
 
 
-def prepare_backtest_data(days: int, force_reload: bool = False):
+def prepare_backtest_data(days: int):
     """
     Acts as a smart guardian for the historical database. It ensures the database
-    contains AT LEAST the required number of days of data, and that this data is
-    up-to-date by downloading only missing data from Binance.
+    contains the required range of data, downloading only missing data from Binance
+    without ever deleting existing records.
     """
-    logger.info("--- Starting Intelligent Data Preparation ---")
+    logger.info("--- Starting Intelligent and Safe Data Preparation ---")
     
     collector = CorePriceCollector()
+    symbol = collector.symbol
     online_mode = collector.connect_binance_client()
 
-    if force_reload:
-        logger.warning("`--force-reload` flag detected. Deleting all existing price data for a full refresh.")
-        collector.db_manager.clear_all_tables()
-
-    # --- New Logic to ensure sufficient historical data ---
-    end_date = datetime.datetime.now(datetime.timezone.utc)
-    required_start_date = end_date - timedelta(days=days)
-    
-    first_ts_in_db = collector.db_manager.query_first_timestamp(collector.measurement)
-
-    # If DB is empty or its oldest record is newer than what we need, we must do a full historical download.
-    if first_ts_in_db is None or first_ts_in_db > required_start_date:
-        logger.info("Database is empty or does not contain the required historical range.")
-        if not online_mode:
-            logger.error(f"CRITICAL: Database needs {days} days of data, but Binance is offline. Cannot proceed.")
-            return
-
-        logger.info(f"Clearing existing data (if any) and downloading full {days}-day history from {required_start_date} to {end_date}.")
-        collector.db_manager.clear_all_tables()
-        
-        df_to_write = collector._get_historical_klines(required_start_date, end_date)
-        if not df_to_write.empty:
-            collector._write_dataframe_to_postgres(df_to_write)
-        else:
-            logger.warning("Failed to download any historical data. The database will remain empty.")
-            return # Stop if we couldn't get the base data
-
-    # --- Incremental update logic (runs after ensuring history is sufficient) ---
     if not online_mode:
-        logger.warning("Binance is offline. Cannot perform incremental update. Using existing data.")
-        logger.info("--- Data Preparation Finished (Offline Mode) ---")
-        return
+        logger.warning("Binance client is offline. Data preparation will rely solely on existing database content.")
+        # Even in offline mode, we can proceed with whatever data is available.
+        # The backtester will later fail if the data is insufficient.
 
-    last_ts_in_db = collector._query_last_timestamp()
+    # 1. Define the required data range
+    required_end_date = datetime.datetime.now(datetime.timezone.utc)
+    required_start_date = required_end_date - timedelta(days=days)
+    logger.info(f"Required data range for backtest: {required_start_date} to {required_end_date}")
 
-    # This should always find a timestamp now, unless the initial download failed
-    if last_ts_in_db:
-        incremental_start_date = last_ts_in_db + timedelta(minutes=1)
+    # 2. Check the current state of the database
+    db_first_ts = collector.db_manager.query_first_timestamp(symbol)
+    db_last_ts = collector._query_last_timestamp(symbol)
 
-        if incremental_start_date >= end_date:
-            logger.info(f"Data is already up-to-date. Last record at {last_ts_in_db}. No action needed.")
+    # 3. Download historical data if needed (older than what we have)
+    if online_mode:
+        if db_first_ts is None or db_first_ts > required_start_date:
+            # If DB is empty, download the full range.
+            # If DB has data, but it doesn't go back far enough, download the missing historical part.
+            download_start = required_start_date
+            download_end = (db_first_ts - timedelta(minutes=1)) if db_first_ts else required_end_date
+            
+            logger.info(f"Downloading historical data from {download_start} to {download_end}.")
+            df_hist = collector._get_historical_klines(download_start, download_end)
+            if not df_hist.empty:
+                collector._write_dataframe_to_postgres(df_hist)
         else:
-            logger.info(f"History is sufficient. Synchronizing new data from {incremental_start_date} to {end_date}.")
-            df_to_write = collector._get_historical_klines(incremental_start_date, end_date)
-            if not df_to_write.empty:
-                collector._write_dataframe_to_postgres(df_to_write)
-    
-    logger.info("--- Intelligent Data Preparation Finished ---")
+            logger.info("Sufficient historical data already exists. No historical download needed.")
+
+        # 4. Download recent data if needed (newer than what we have)
+        # Re-query last timestamp in case the historical download just ran
+        db_last_ts = collector._query_last_timestamp(symbol)
+        if db_last_ts is None: # Should not happen if historical download worked, but as a safeguard
+             db_last_ts = required_start_date - timedelta(minutes=1)
+
+        if required_end_date > db_last_ts:
+            download_start = db_last_ts + timedelta(minutes=1)
+            download_end = required_end_date
+            logger.info(f"Downloading recent data from {download_start} to {download_end}.")
+            df_recent = collector._get_historical_klines(download_start, download_end)
+            if not df_recent.empty:
+                collector._write_dataframe_to_postgres(df_recent)
+        else:
+            logger.info("Recent data is already up-to-date. No recent download needed.")
+    else:
+        logger.warning("Cannot download new data in offline mode. Proceeding with existing data.")
+
+    logger.info("--- Intelligent and Safe Data Preparation Finished ---")
 
 
 if __name__ == '__main__':
