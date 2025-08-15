@@ -26,8 +26,9 @@ class TradingBot:
         self.is_running = True
         self.market_data_provider = market_data_provider
         self.db_manager = db_manager
+        self.trader = Trader(mode=self.mode)
         self.portfolio_manager = PortfolioManager(config_manager.get_section('POSTGRES'))
-        self.transaction_sync_service = TransactionSyncService(self.portfolio_manager)
+        self.transaction_sync_service = TransactionSyncService(self.portfolio_manager, self.trader.exchange_manager)
         self.symbol = config_manager.get('APP', 'symbol')
         self.state_file_path = "/tmp/bot_state.json"
         self.last_transaction_sync = 0
@@ -218,19 +219,18 @@ class TradingBot:
         # Instantiate core components
         feature_calculator = LiveFeatureCalculator(self.db_manager, mode=self.mode)
         state_manager = StateManager(mode=self.mode, bot_id=self.run_id, db_manager=self.db_manager)
-        trader = Trader(mode=self.mode)
-        account_manager = AccountManager(trader.client)
+        account_manager = AccountManager(self.trader.client)
         strategy_rules = StrategyRules(config_manager)
 
         # --- SYNC TRADES ON STARTUP ---
-        if trader.is_ready:
+        if self.trader.is_ready:
             logger.info("Performing initial holdings synchronization...")
-            state_manager.sync_holdings_with_binance(account_manager, strategy_rules, trader)
+            state_manager.sync_holdings_with_binance(account_manager, strategy_rules, self.trader)
             logger.info("Performing initial transaction synchronization...")
             self.transaction_sync_service.sync_transactions()
             self.last_transaction_sync = time.time()
 
-        if not trader.is_ready:
+        if not self.trader.is_ready:
             logger.critical("Trader could not be initialized. Shutting down bot.")
             return
 
@@ -250,7 +250,7 @@ class TradingBot:
                 self._sync_transactions_periodically()
 
                 # 0. Check for and handle any UI commands
-                self._handle_ui_commands(trader, state_manager, strategy_rules)
+                self._handle_ui_commands(self.trader, state_manager, strategy_rules)
 
                 # 1. Get the latest market data with all features
                 final_candle = feature_calculator.get_current_candle_with_features()
@@ -267,7 +267,7 @@ class TradingBot:
                 logger.info(f"Found {len(open_positions)} open position(s).")
 
                 # Fetch all wallet balances
-                all_prices = trader.get_all_prices()
+                all_prices = self.trader.get_all_prices()
                 wallet_balances = account_manager.get_all_account_balances(all_prices)
                 trade_history = state_manager.get_trade_history(mode=self.mode)
 
@@ -291,7 +291,7 @@ class TradingBot:
                     )
 
                     # 3. Fetch available balance ONCE
-                    available_balance = trader.get_account_balance(asset=base_asset)
+                    available_balance = self.trader.get_account_balance(asset=base_asset)
 
                     # 4. Perform a single, consolidated balance check
                     if total_sell_quantity > available_balance:
@@ -315,7 +315,7 @@ class TradingBot:
                             sell_position_data = position.to_dict()
                             sell_position_data['quantity'] = sell_quantity
 
-                            success, sell_result = trader.execute_sell(sell_position_data, self.run_id, decision_context)
+                            success, sell_result = self.trader.execute_sell(sell_position_data, self.run_id, decision_context)
 
                             if success:
                                 buy_price = float(position.price or 0)
@@ -346,7 +346,7 @@ class TradingBot:
                                 )
 
                                 # Create a portfolio snapshot after every successful sale
-                                self._create_portfolio_snapshot(trader, state_manager, float(current_price))
+                                self._create_portfolio_snapshot(self.trader, state_manager, float(current_price))
                             else:
                                 logger.error(f"Sell execution failed for position {trade_id}.")
 
@@ -363,7 +363,7 @@ class TradingBot:
 
                     if should_buy:
                         logger.info(f"Buy signal triggered. Reason: {reason}. Evaluating capital.")
-                        available_balance = trader.get_account_balance()
+                        available_balance = self.trader.get_account_balance()
 
                         if available_balance <= 0:
                             logger.warning("Available balance is zero or less. Cannot execute buy.")
@@ -384,7 +384,7 @@ class TradingBot:
                                     "regime_strength": None # Placeholder
                                 }
 
-                                success, buy_result = trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
+                                success, buy_result = self.trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
                                 if success:
                                     logger.info("Buy successful. Calculating sell target and creating new position.")
                                     purchase_price = float(buy_result.get('price'))

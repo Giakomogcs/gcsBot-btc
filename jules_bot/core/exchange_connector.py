@@ -33,7 +33,8 @@ class ExchangeManager:
         if not api_key or not api_secret:
             raise ValueError(f"API keys for {self.mode} mode are not set in the environment.")
 
-        client = Client(api_key, api_secret, testnet=testnet)
+        requests_params = {"timeout": 30}
+        client = Client(api_key, api_secret, testnet=testnet, requests_params=requests_params)
         logging.info(f"Binance client initialized for {'testnet' if testnet else 'mainnet'}.")
         return client
 

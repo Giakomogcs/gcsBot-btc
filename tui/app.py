@@ -57,17 +57,17 @@ class TUIApp(App):
         layout: horizontal;
     }
     #left_pane {
-        width: 30%;
+        width: 25%;
         padding: 1;
         border-right: solid $accent;
     }
     #middle_pane {
-        width: 45%;
+        width: 40%;
         padding: 1;
         border-right: solid $accent;
     }
     #right_pane {
-        width: 25%;
+        width: 35%;
         padding: 1;
     }
     .title {
