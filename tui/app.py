@@ -153,7 +153,7 @@ class TUIApp(App):
                 yield Static("Portfolio Evolution", classes="title")
                 yield Static("Total Portfolio Value: N/A", id="portfolio_total_value")
                 yield Static("Evolution (Total): N/A", id="portfolio_evolution_total")
-                yield Static("Realized Profit/Loss: N/A", id_="portfolio_realized_pnl")
+                yield Static("Realized Profit/Loss: N/A", id="portfolio_realized_pnl")
                 yield Static("Evolution (24h): N/A", id="portfolio_evolution_24h")
                 yield Static("BTC Treasury: N/A", id="portfolio_btc_treasury")
                 yield Static("Accumulated BTC: N/A", id="portfolio_accumulated_btc")
