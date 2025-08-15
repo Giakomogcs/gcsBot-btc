@@ -68,7 +68,9 @@ class StrategyRules:
 
         # 2. Order Sizing
         # Progressively increase order size based on the number of open positions
-        next_order_size = self.initial_order_size_usd * (self.order_progression_factor ** num_open_positions)
+        # Cap the number of positions for sizing to prevent astronomical order sizes
+        num_positions_for_sizing = min(num_open_positions, 20)
+        next_order_size = self.initial_order_size_usd * (self.order_progression_factor ** num_positions_for_sizing)
 
         # 3. Capital Management Check
         # Ensure the bot can't use more than its allocated Working Capital

@@ -112,6 +112,7 @@ class StatusService:
 
             # 6. Fetch live wallet data
             wallet_balances = exchange_manager.get_account_balance()
+            logger.info(f"Raw wallet balances from exchange: {wallet_balances}")
 
             # Filter for relevant assets and calculate USD value
             relevant_assets = {'BTC', 'USDT'}
