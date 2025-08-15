@@ -116,12 +116,10 @@ class TUIApp(App):
                 yield Static("Bot Control", classes="title")
                 yield Label("Manual Buy (USD):")
                 yield Input(placeholder="e.g., 50.00", id="manual_buy_input", validators=[NumberValidator()])
-                yield Button("FORCE BUY", id="force_buy_button", variant="primary")
-
-                yield Static("Selected Trade Actions", classes="title")
-                with Horizontal(id="action_bar", classes="hidden"):
-                    yield Button("Sell 100%", id="force_sell_100_button", variant="error")
-                    yield Button("Sell 90%", id="force_sell_90_button", variant="warning")
+                with Horizontal():
+                    yield Button("FORCE BUY", id="force_buy_button", variant="primary")
+                    yield Button("Sell 100%", id="force_sell_100_button", variant="error", disabled=True)
+                    yield Button("Sell 90%", id="force_sell_90_button", variant="warning", disabled=True)
 
                 yield Static("Live Log", classes="title")
                 with Horizontal(id="log_filter_bar"):
@@ -129,22 +127,23 @@ class TUIApp(App):
                     yield Input(placeholder="e.g., ERROR", id="log_filter_input")
                 yield RichLog(id="log_display", wrap=True, markup=True, min_width=0)
 
-            with VerticalScroll(id="middle_pane"):
-                yield Static("Bot Status", classes="title")
-                with Static(id="status_container"):
-                    yield Static(f"Mode: {self.mode.upper()}", id="status_mode")
-                    yield Static("Symbol: N/A", id="status_symbol")
-                    yield Static("BTC Price: N/A", id="status_price")
-                    yield Static("BTC: N/A", id="status_btc")
-                    yield Static("USD: N/A", id="status_usdt")
-                    yield Static("Wallet: N/A", id="status_wallet_usd")
+            with Vertical(id="middle_pane"):
+                with VerticalScroll():
+                    yield Static("Bot Status", classes="title")
+                    with Static(id="status_container"):
+                        yield Static(f"Mode: {self.mode.upper()}", id="status_mode")
+                        yield Static("Symbol: N/A", id="status_symbol")
+                        yield Static("BTC Price: N/A", id="status_price")
+                        yield Static("BTC: N/A", id="status_btc")
+                        yield Static("USD: N/A", id="status_usdt")
+                        yield Static("Wallet: N/A", id="status_wallet_usd")
 
-                yield Static("Strategy Status", classes="title")
-                with Vertical(id="strategy_container"):
-                    yield Static("Current Price: N/A", id="strategy_current_price")
-                    yield Static("Buy Signal: N/A", id="strategy_buy_signal")
-                    yield Static("Buy Target: N/A", id="strategy_buy_target")
-                    yield Static("Buy Progress: N/A", id="strategy_buy_progress")
+                    yield Static("Strategy Status", classes="title")
+                    with Vertical(id="strategy_container"):
+                        yield Static("Current Price: N/A", id="strategy_current_price")
+                        yield Static("Buy Signal: N/A", id="strategy_buy_signal")
+                        yield Static("Buy Target: N/A", id="strategy_buy_target")
+                        yield Static("Buy Progress: N/A", id="strategy_buy_progress")
 
                 yield Static("Open Positions", classes="title")
                 yield DataTable(id="positions_table")
@@ -301,14 +300,28 @@ class TUIApp(App):
             command = ["python", "scripts/force_sell.py", self.selected_trade_id, percentage]
             self.run_script_worker(command, CommandOutput) # Executa em segundo plano
 
-            self.query_one("#action_bar").add_class("hidden")
+            self.query_one("#force_sell_100_button").disabled = True
+            self.query_one("#force_sell_90_button").disabled = True
             self.query_one("#positions_table").move_cursor(row=-1)
             self.selected_trade_id = None
+
+    def on_click(self, event) -> None:
+        # If the click is not on the datatable, deselect row and disable buttons
+        try:
+            if not self.query_one("#positions_table").hit(event.x, event.y):
+                self.query_one("#force_sell_100_button").disabled = True
+                self.query_one("#force_sell_90_button").disabled = True
+                self.query_one("#positions_table").cursor_type = 'row'
+                self.query_one("#positions_table").move_cursor(row=-1, animate=True)
+                self.selected_trade_id = None
+        except Exception:
+            pass
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         if event.control.id == "positions_table":
             self.selected_trade_id = event.row_key.value
-            self.query_one("#action_bar").remove_class("hidden")
+            self.query_one("#force_sell_100_button").disabled = False
+            self.query_one("#force_sell_90_button").disabled = False
     
     # MODIFICADO: update_dashboard agora chama um worker
     def update_dashboard(self) -> None:
