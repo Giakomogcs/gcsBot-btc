@@ -12,7 +12,6 @@ from jules_bot.core.market_data_provider import MarketDataProvider
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.database.portfolio_manager import PortfolioManager
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
-from jules_bot.services.transaction_sync_service import TransactionSyncService
 
 
 class TradingBot:
@@ -28,10 +27,8 @@ class TradingBot:
         self.db_manager = db_manager
         self.trader = Trader(mode=self.mode)
         self.portfolio_manager = PortfolioManager(config_manager.get_section('POSTGRES'))
-        self.transaction_sync_service = TransactionSyncService(self.portfolio_manager, self.trader.client)
         self.symbol = config_manager.get('APP', 'symbol')
         self.state_file_path = "/tmp/bot_state.json"
-        self.last_transaction_sync = 0
 
     def _write_state_to_file(self, open_positions: list, current_price: float, wallet_balances: list, trade_history: list):
         """Saves the current bot state to a JSON file for the UI to read."""
@@ -195,19 +192,6 @@ class TradingBot:
         except Exception as e:
             logger.error(f"Failed to create portfolio snapshot: {e}", exc_info=True)
 
-    def _sync_transactions_periodically(self):
-        """Syncs transactions with Binance every N minutes."""
-        sync_interval = int(config_manager.get('APP', 'transaction_sync_interval_minutes', fallback=60)) * 60  # in seconds
-        current_time = time.time()
-        if current_time - self.last_transaction_sync > sync_interval:
-            logger.info("Performing periodic transaction synchronization...")
-            try:
-                self.transaction_sync_service.sync_transactions()
-                self.last_transaction_sync = current_time
-                logger.info("Periodic transaction synchronization complete.")
-            except Exception as e:
-                logger.error(f"Error during periodic transaction synchronization: {e}", exc_info=True)
-
     def run(self):
         """
         The main loop for LIVE and PAPER TRADING.
@@ -226,9 +210,6 @@ class TradingBot:
         if self.trader.is_ready:
             logger.info("Performing initial holdings synchronization...")
             state_manager.sync_holdings_with_binance(account_manager, strategy_rules, self.trader)
-            logger.info("Performing initial transaction synchronization...")
-            self.transaction_sync_service.sync_transactions()
-            self.last_transaction_sync = time.time()
 
         if not self.trader.is_ready:
             logger.critical("Trader could not be initialized. Shutting down bot.")
@@ -245,9 +226,6 @@ class TradingBot:
         while self.is_running:
             try:
                 logger.info("--- Starting new trading cycle ---")
-
-                # -1. Sync transactions periodically
-                self._sync_transactions_periodically()
 
                 # 0. Check for and handle any UI commands
                 self._handle_ui_commands(self.trader, state_manager, strategy_rules)
