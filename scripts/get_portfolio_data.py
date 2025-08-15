@@ -18,7 +18,8 @@ def get_portfolio_data():
         portfolio_manager = PortfolioManager(db_config)
 
         latest_snapshot = portfolio_manager.get_latest_snapshot()
-        all_snapshots = portfolio_manager.get_all_snapshots()
+        # Fetch the last 50 snapshots for the chart
+        portfolio_history = portfolio_manager.get_portfolio_history(limit=50)
 
         # Prepare data for JSON serialization
         if latest_snapshot:
@@ -41,22 +42,22 @@ def get_portfolio_data():
                 "timestamp": s.timestamp.isoformat(),
                 "value": s.total_portfolio_value_usd
             }
-            for s in all_snapshots
+            for s in portfolio_history
         ]
 
         # Calculate overall and 24h evolution
         evolution_total = 0
         evolution_24h = 0
-        if len(all_snapshots) > 1:
-            first_snapshot_value = all_snapshots[0].total_portfolio_value_usd
-            latest_snapshot_value = all_snapshots[-1].total_portfolio_value_usd
+        if len(portfolio_history) > 1:
+            first_snapshot_value = portfolio_history[0].total_portfolio_value_usd
+            latest_snapshot_value = portfolio_history[-1].total_portfolio_value_usd
             if first_snapshot_value > 0:
                 evolution_total = ((latest_snapshot_value / first_snapshot_value) - 1) * 100
 
             # Find snapshot from ~24 hours ago
             one_day_ago = datetime.datetime.utcnow() - datetime.timedelta(days=1)
             snapshot_24h_ago = None
-            for s in reversed(all_snapshots):
+            for s in reversed(portfolio_history):
                 if s.timestamp <= one_day_ago:
                     snapshot_24h_ago = s
                     break

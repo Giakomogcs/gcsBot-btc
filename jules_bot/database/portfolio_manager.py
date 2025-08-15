@@ -101,3 +101,13 @@ class PortfolioManager:
         """Retrieves all portfolio snapshots, ordered by timestamp."""
         with self.get_db() as db:
             return db.query(PortfolioSnapshot).order_by(PortfolioSnapshot.timestamp).all()
+
+    def get_portfolio_history(self, limit: int = 100) -> list[PortfolioSnapshot]:
+        """
+        Retrieves a recent history of portfolio snapshots, ordered from oldest to newest.
+        """
+        with self.get_db() as db:
+            # Fetches the most recent `limit` snapshots
+            snapshots = db.query(PortfolioSnapshot).order_by(desc(PortfolioSnapshot.timestamp)).limit(limit).all()
+            # Reverse the list to return them in chronological order (oldest to newest)
+            return snapshots[::-1]

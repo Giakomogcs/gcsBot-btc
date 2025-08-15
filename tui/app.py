@@ -57,17 +57,17 @@ class TUIApp(App):
         layout: horizontal;
     }
     #left_pane {
-        width: 25%;
+        width: 30%;
         padding: 1;
         border-right: solid $accent;
     }
     #middle_pane {
-        width: 40%;
+        width: 45%;
         padding: 1;
         border-right: solid $accent;
     }
     #right_pane {
-        width: 35%;
+        width: 25%;
         padding: 1;
     }
     .title {
@@ -77,18 +77,28 @@ class TUIApp(App):
         padding: 0 1;
         margin-top: 1;
     }
-    #status_container {
+    #status_container, #strategy_container {
         layout: grid;
-        grid-size: 3;
         grid-gutter: 1;
         height: auto;
+    }
+    #status_container {
+        grid-size: 3;
+    }
+    #strategy_container {
+        grid-size: 2;
     }
     #positions_table {
         margin-top: 1;
         height: 12;
     }
     #log_display {
-        height: 20;
+        height: 1fr;
+    }
+    #chart_container {
+        height: 12;
+        border: round $primary;
+        padding: 0 1;
     }
     #action_bar, #log_filter_bar {
         margin-top: 1;
@@ -116,12 +126,10 @@ class TUIApp(App):
                 yield Static("Bot Control", classes="title")
                 yield Label("Manual Buy (USD):")
                 yield Input(placeholder="e.g., 50.00", id="manual_buy_input", validators=[NumberValidator()])
-                yield Button("FORCE BUY", id="force_buy_button", variant="primary")
-
-                yield Static("Selected Trade Actions", classes="title")
-                with Horizontal(id="action_bar", classes="hidden"):
-                    yield Button("Sell 100%", id="force_sell_100_button", variant="error")
-                    yield Button("Sell 90%", id="force_sell_90_button", variant="warning")
+                with Horizontal():
+                    yield Button("FORCE BUY", id="force_buy_button", variant="primary")
+                    yield Button("Sell 100%", id="force_sell_100_button", variant="error", disabled=True)
+                    yield Button("Sell 90%", id="force_sell_90_button", variant="warning", disabled=True)
 
                 yield Static("Live Log", classes="title")
                 with Horizontal(id="log_filter_bar"):
@@ -140,7 +148,7 @@ class TUIApp(App):
                     yield Static("Wallet: N/A", id="status_wallet_usd")
 
                 yield Static("Strategy Status", classes="title")
-                with Vertical(id="strategy_container"):
+                with Static(id="strategy_container"):
                     yield Static("Current Price: N/A", id="strategy_current_price")
                     yield Static("Buy Signal: N/A", id="strategy_buy_signal")
                     yield Static("Buy Target: N/A", id="strategy_buy_target")
@@ -159,7 +167,8 @@ class TUIApp(App):
                 yield Static("Accumulated BTC: N/A", id="portfolio_accumulated_btc")
 
                 yield Static("Portfolio Value History", classes="title")
-                yield Static("[red]Chart not implemented yet.[/red]", id="portfolio_chart")
+                with Vertical(id="chart_container"):
+                    yield Static(id="portfolio_chart")
 
         yield Footer()
 
@@ -301,14 +310,28 @@ class TUIApp(App):
             command = ["python", "scripts/force_sell.py", self.selected_trade_id, percentage]
             self.run_script_worker(command, CommandOutput) # Executa em segundo plano
 
-            self.query_one("#action_bar").add_class("hidden")
+            self.query_one("#force_sell_100_button").disabled = True
+            self.query_one("#force_sell_90_button").disabled = True
             self.query_one("#positions_table").move_cursor(row=-1)
             self.selected_trade_id = None
+
+    def on_click(self, event) -> None:
+        # If the click is not on the datatable, deselect row and disable buttons
+        try:
+            if not self.query_one("#positions_table").hit(event.x, event.y):
+                self.query_one("#force_sell_100_button").disabled = True
+                self.query_one("#force_sell_90_button").disabled = True
+                self.query_one("#positions_table").cursor_type = 'row'
+                self.query_one("#positions_table").move_cursor(row=-1, animate=True)
+                self.selected_trade_id = None
+        except Exception:
+            pass
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         if event.control.id == "positions_table":
             self.selected_trade_id = event.row_key.value
-            self.query_one("#action_bar").remove_class("hidden")
+            self.query_one("#force_sell_100_button").disabled = False
+            self.query_one("#force_sell_90_button").disabled = False
     
     # MODIFICADO: update_dashboard agora chama um worker
     def update_dashboard(self) -> None:
@@ -405,6 +428,49 @@ class TUIApp(App):
         self.query_one("#strategy_buy_target").update(buy_target_text)
         self.query_one("#strategy_buy_progress").update(buy_progress_text)
 
+    def _render_text_chart(self, history: list[dict], width: int = 50, height: int = 10) -> str:
+        """Renders a simple text-based bar chart from portfolio history."""
+        if not history:
+            return "[dim]Not enough data to render chart.[/dim]"
+
+        values = [Decimal(item['value']) for item in history]
+
+        # Sample data to fit the specified width
+        if len(values) > width:
+            indices = [int(i * (len(values) - 1) / (width - 1)) for i in range(width)]
+            sampled_values = [values[i] for i in indices]
+        else:
+            sampled_values = values
+            width = len(sampled_values)
+
+        if not sampled_values or width == 0:
+            return "[dim]Not enough data to render chart.[/dim]"
+
+        min_val = min(sampled_values)
+        max_val = max(sampled_values)
+        value_range = max_val - min_val
+
+        # Initialize grid
+        grid = [[' '] * width for _ in range(height)]
+
+        # Populate grid with bars
+        if value_range > 0:
+            for i, value in enumerate(sampled_values):
+                # Normalize value to the height of the chart
+                bar_height = int(((value - min_val) / value_range) * (height - 1))
+                for j in range(bar_height + 1):
+                    grid[height - 1 - j][i] = '█'
+        else:  # If all values are the same, draw a flat line
+            mid_line = height // 2
+            for i in range(width):
+                grid[mid_line][i] = '█'
+
+        # Convert grid to a list of strings and add a title
+        lines = ["".join(row) for row in grid]
+        top_label = f"Portfolio Value (Range: ${min_val:,.2f} - ${max_val:,.2f})"
+
+        return f"{top_label}\n" + "\n".join(lines)
+
     def on_portfolio_data(self, message: PortfolioData) -> None:
         """Updates the TUI with portfolio evolution data."""
         if not message.success or not isinstance(message.data, dict):
@@ -434,6 +500,14 @@ class TUIApp(App):
         # I'll use the evolution of the treasury amount as a placeholder.
         # This can be refined later.
         self.query_one("#portfolio_accumulated_btc").update("Accumulated BTC: +0.0%")
+
+        # Update the chart
+        history = data.get("history", [])
+        if history:
+            chart_str = self._render_text_chart(history)
+            self.query_one("#portfolio_chart").update(chart_str)
+        else:
+            self.query_one("#portfolio_chart").update("[dim]No portfolio history available.[/dim]")
 
 
     # NOVO: Handler para a mensagem CommandOutput (opcional, mas bom para feedback)
