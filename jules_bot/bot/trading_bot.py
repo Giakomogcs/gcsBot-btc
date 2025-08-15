@@ -10,7 +10,10 @@ from jules_bot.core_logic.trader import Trader
 from jules_bot.core_logic.strategy_rules import StrategyRules
 from jules_bot.core.market_data_provider import MarketDataProvider
 from jules_bot.database.postgres_manager import PostgresManager
+from jules_bot.database.portfolio_manager import PortfolioManager
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
+from jules_bot.services.transaction_sync_service import TransactionSyncService
+
 
 class TradingBot:
     """
@@ -23,8 +26,11 @@ class TradingBot:
         self.is_running = True
         self.market_data_provider = market_data_provider
         self.db_manager = db_manager
+        self.portfolio_manager = PortfolioManager(config_manager.get_section('POSTGRES'))
+        self.transaction_sync_service = TransactionSyncService(self.portfolio_manager)
         self.symbol = config_manager.get('APP', 'symbol')
         self.state_file_path = "/tmp/bot_state.json"
+        self.last_transaction_sync = 0
 
     def _write_state_to_file(self, open_positions: list, current_price: float, wallet_balances: list, trade_history: list):
         """Saves the current bot state to a JSON file for the UI to read."""
@@ -95,7 +101,42 @@ class TradingBot:
                                 # Convert the Trade object to a dict for selling
                                 sell_position_data = position_to_sell.to_dict()
                                 sell_position_data['quantity'] = quantity_to_sell
-                                trader.execute_sell(sell_position_data, self.run_id, {"reason": f"manual_override_{percentage}%_sell"})
+
+                                success, sell_result = trader.execute_sell(sell_position_data, self.run_id, {"reason": f"manual_override_{percentage}%_sell"})
+
+                                if success:
+                                    current_price = trader.get_current_price(self.symbol)
+                                    buy_price = float(position_to_sell.price or 0)
+                                    sell_price = float(sell_result.get('price'))
+                                    hodl_asset_amount = original_quantity - quantity_to_sell
+
+                                    realized_pnl_usd = strategy_rules.calculate_realized_pnl(
+                                        buy_price=buy_price,
+                                        sell_price=sell_price,
+                                        quantity_sold=quantity_to_sell
+                                    )
+
+                                    hodl_asset_value_at_sell = hodl_asset_amount * current_price if current_price else 0
+                                    commission_usd = float(sell_result.get('commission', 0))
+
+                                    sell_result.update({
+                                        "commission_usd": commission_usd,
+                                        "realized_pnl_usd": realized_pnl_usd,
+                                        "hodl_asset_amount": hodl_asset_amount,
+                                        "hodl_asset_value_at_sell": hodl_asset_value_at_sell
+                                    })
+
+                                    logger.info(f"Force sell successful for {trade_id}. Recording partial sell and updating position.")
+                                    state_manager.record_partial_sell(
+                                        original_trade_id=trade_id,
+                                        remaining_quantity=hodl_asset_amount,
+                                        sell_data=sell_result
+                                    )
+
+                                    # Create a portfolio snapshot after the manual sale
+                                    self._create_portfolio_snapshot(trader, state_manager, float(current_price))
+                                else:
+                                    logger.error(f"Force sell execution failed for position {trade_id}.")
                             else:
                                 logger.warning(f"Could not find open position with trade_id: {trade_id} for force_sell.")
 
@@ -106,6 +147,65 @@ class TradingBot:
                     # Optionally, move to an 'error' directory instead of deleting
                     # os.rename(filepath, os.path.join(command_dir, "error", filename))
 
+    def _create_portfolio_snapshot(self, trader: Trader, state_manager: StateManager, current_price: float):
+        """
+        Gathers all necessary data and creates a new portfolio snapshot.
+        """
+        logger.info("Creating portfolio snapshot...")
+        try:
+            # 1. Get current USD balance
+            usd_balance = trader.get_account_balance(asset='USDT')
+
+            # 2. Get open positions and calculate their total value
+            open_positions = state_manager.get_open_positions()
+            open_positions_value_usd = sum(
+                float(p.quantity) * current_price for p in open_positions
+            )
+
+            # 3. Calculate total portfolio value
+            total_portfolio_value_usd = usd_balance + open_positions_value_usd
+
+            # 4. Get cumulative realized PnL from the database
+            all_trades = self.db_manager.get_all_trades_in_range(mode=self.mode)
+            realized_pnl_usd = sum(t.realized_pnl_usd for t in all_trades if t.realized_pnl_usd is not None)
+
+            # 5. Calculate BTC Treasury
+            # Simple rule: sum of all 'hodl_asset_amount' from closed trades
+            btc_treasury_amount = sum(t.hodl_asset_amount for t in all_trades if t.hodl_asset_amount is not None)
+
+            # 6. Get current BTC price to value the treasury
+            # The 'current_price' is for the trading symbol, which might not be BTC.
+            # I need to fetch the BTC price specifically.
+            btc_price_usd = trader.get_current_price('BTCUSDT')
+            btc_treasury_value_usd = btc_treasury_amount * btc_price_usd if btc_price_usd else 0
+
+            snapshot_data = {
+                "total_portfolio_value_usd": total_portfolio_value_usd,
+                "usd_balance": usd_balance,
+                "open_positions_value_usd": open_positions_value_usd,
+                "realized_pnl_usd": realized_pnl_usd,
+                "btc_treasury_amount": btc_treasury_amount,
+                "btc_treasury_value_usd": btc_treasury_value_usd,
+            }
+
+            self.portfolio_manager.create_portfolio_snapshot(snapshot_data)
+            logger.info("Portfolio snapshot created successfully.")
+
+        except Exception as e:
+            logger.error(f"Failed to create portfolio snapshot: {e}", exc_info=True)
+
+    def _sync_transactions_periodically(self):
+        """Syncs transactions with Binance every N minutes."""
+        sync_interval = int(config_manager.get('APP', 'transaction_sync_interval_minutes', fallback=60)) * 60  # in seconds
+        current_time = time.time()
+        if current_time - self.last_transaction_sync > sync_interval:
+            logger.info("Performing periodic transaction synchronization...")
+            try:
+                self.transaction_sync_service.sync_transactions()
+                self.last_transaction_sync = current_time
+                logger.info("Periodic transaction synchronization complete.")
+            except Exception as e:
+                logger.error(f"Error during periodic transaction synchronization: {e}", exc_info=True)
 
     def run(self):
         """
@@ -126,6 +226,9 @@ class TradingBot:
         if trader.is_ready:
             logger.info("Performing initial holdings synchronization...")
             state_manager.sync_holdings_with_binance(account_manager, strategy_rules, trader)
+            logger.info("Performing initial transaction synchronization...")
+            self.transaction_sync_service.sync_transactions()
+            self.last_transaction_sync = time.time()
 
         if not trader.is_ready:
             logger.critical("Trader could not be initialized. Shutting down bot.")
@@ -142,6 +245,9 @@ class TradingBot:
         while self.is_running:
             try:
                 logger.info("--- Starting new trading cycle ---")
+
+                # -1. Sync transactions periodically
+                self._sync_transactions_periodically()
 
                 # 0. Check for and handle any UI commands
                 self._handle_ui_commands(trader, state_manager, strategy_rules)
@@ -238,6 +344,9 @@ class TradingBot:
                                     remaining_quantity=hodl_asset_amount,
                                     sell_data=sell_result
                                 )
+
+                                # Create a portfolio snapshot after every successful sale
+                                self._create_portfolio_snapshot(trader, state_manager, float(current_price))
                             else:
                                 logger.error(f"Sell execution failed for position {trade_id}.")
 
