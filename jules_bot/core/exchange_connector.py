@@ -84,6 +84,20 @@ class ExchangeManager:
             logging.error(f"Error fetching current price for {symbol}: {e}")
             return None
 
+    def get_all_prices(self) -> dict[str, float]:
+        """
+        Fetches all symbol prices from Binance and returns them as a dictionary.
+        """
+        if not self.client:
+            logging.error("Binance client not initialized.")
+            return {}
+        try:
+            all_tickers = self.client.get_all_tickers()
+            return {ticker['symbol']: float(ticker['price']) for ticker in all_tickers}
+        except Exception as e:
+            logging.error(f"Error fetching all prices from Binance: {e}")
+            return {}
+
     def get_account_balance(self) -> list:
         """
         Fetches account balance from Binance.

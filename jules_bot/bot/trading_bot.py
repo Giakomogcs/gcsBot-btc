@@ -11,6 +11,7 @@ from jules_bot.core_logic.strategy_rules import StrategyRules
 from jules_bot.core.market_data_provider import MarketDataProvider
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
+from jules_bot.utils.helpers import _calculate_progress_pct
 
 class TradingBot:
     """
@@ -168,38 +169,39 @@ class TradingBot:
                 # Update UI state file
                 self._write_state_to_file(open_positions, float(current_price), wallet_balances, trade_history)
 
-                # --- Refactored Sell Logic ---
+                # --- Top 3 Trades Sell Logic ---
 
-                # 1. Identify all positions that meet the sell criteria
-                positions_to_sell = [
-                    p for p in open_positions
-                    if float(current_price) >= (p.sell_target_price or float('inf'))
-                ]
+                # 1. Calculate progress for all open positions
+                positions_with_progress = []
+                for p in open_positions:
+                    progress = _calculate_progress_pct(current_price, p.price, p.sell_target_price)
+                    positions_with_progress.append((p, progress))
+
+                # 2. Sort positions by progress, descending
+                positions_with_progress.sort(key=lambda x: x[1], reverse=True)
+
+                # 3. Take the top 3 trades
+                top_3_trades = positions_with_progress[:3]
+                logger.info(f"Top 3 trades by sell progress: {[t[0].trade_id.split('-')[0] for t in top_3_trades]}")
+
+                # 4. Filter top 3 to find positions that are ready to sell (progress >= 100%)
+                positions_to_sell = [p for p, progress in top_3_trades if progress >= 100]
 
                 if positions_to_sell:
-                    logger.info(f"Found {len(positions_to_sell)} positions meeting sell criteria.")
+                    logger.info(f"Found {len(positions_to_sell)} positions in the top 3 that are ready to sell.")
 
-                    # 2. Calculate the total quantity required for all sales
-                    total_sell_quantity = sum(
-                        float(p.quantity or 0) * strategy_rules.sell_factor for p in positions_to_sell
-                    )
-
-                    # 3. Fetch available balance ONCE
+                    # 5. Calculate total quantity for sales and check balance
+                    total_sell_quantity = sum(float(p.quantity or 0) * strategy_rules.sell_factor for p in positions_to_sell)
                     available_balance = trader.get_account_balance(asset=base_asset)
 
-                    # 4. Perform a single, consolidated balance check
                     if total_sell_quantity > available_balance:
                         logger.warning(
-                            f"INSUFFICIENT BALANCE: Attempting to sell a total of {total_sell_quantity:.8f} {base_asset}, "
-                            f"but only {available_balance:.8f} is available. "
-                            f"Skipping all sales for this cycle."
+                            f"INSUFFICIENT BALANCE: Attempting to sell {total_sell_quantity:.8f} {base_asset}, "
+                            f"but only {available_balance:.8f} is available. Skipping sales."
                         )
                     else:
-                        logger.info(
-                            f"Balance check passed. Available: {available_balance:.8f} {base_asset}, "
-                            f"Required: {total_sell_quantity:.8f} {base_asset}. Proceeding with sales."
-                        )
-                        # 5. Execute sales if balance is sufficient
+                        logger.info(f"Balance sufficient. Required: {total_sell_quantity:.8f}, Available: {available_balance:.8f}.")
+                        # 6. Execute sales
                         for position in positions_to_sell:
                             trade_id = position.trade_id
                             original_quantity = float(position.quantity or 0)
@@ -227,7 +229,7 @@ class TradingBot:
                                     "hodl_asset_value_at_sell": hodl_asset_value_at_sell
                                 })
 
-                                logger.info(f"Sell successful for {trade_id}. Recording partial sell and updating position.")
+                                logger.info(f"Sell successful for {trade_id}. Recording partial sell.")
                                 state_manager.record_partial_sell(
                                     original_trade_id=trade_id,
                                     remaining_quantity=hodl_asset_amount,

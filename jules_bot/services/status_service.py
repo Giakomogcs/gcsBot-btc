@@ -2,20 +2,14 @@ import logging
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.core_logic.strategy_rules import StrategyRules
 from jules_bot.core.exchange_connector import ExchangeManager
+from jules_bot.bot.account_manager import AccountManager
+from jules_bot.core_logic.trader import Trader
 from jules_bot.utils.config_manager import ConfigManager
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
+from jules_bot.utils.helpers import _calculate_progress_pct
 
 
 logger = logging.getLogger(__name__)
-
-def _calculate_progress_pct(current_price, start_price, target_price):
-    if target_price is None or start_price is None or current_price is None:
-        return 0.0
-    if target_price == start_price:
-        return 100.0 if current_price >= target_price else 0.0
-
-    progress = (current_price - start_price) / (target_price - start_price) * 100
-    return max(0, min(progress, 100))
 
 class StatusService:
     def __init__(self, db_manager: PostgresManager, config_manager: ConfigManager, feature_calculator: LiveFeatureCalculator):
@@ -31,8 +25,13 @@ class StatusService:
         open positions' PnL, progress towards sell targets, and buy signal readiness.
         """
         try:
-            exchange_manager = ExchangeManager(mode=environment)
-            symbol = "BTCUSDT" # Assuming BTCUSDT for now
+            # Use Trader to get a pre-configured client
+            trader = Trader(mode=environment)
+            if not trader.is_ready:
+                return {"error": "Could not initialize trader."}
+
+            account_manager = AccountManager(trader.client)
+            symbol = "BTCUSDT"
 
             # 1. Fetch current market data with all features
             market_data_series = self.feature_calculator.get_current_candle_with_features()
@@ -43,8 +42,6 @@ class StatusService:
             current_price = market_data.get('close', 0)
 
             # 2. Fetch open positions from local DB
-            # CORRECTED LOGIC: Only filter by bot_id in 'backtest' mode.
-            # For 'trade' and 'test' modes, we want to see all open positions for the environment.
             bot_id_to_filter = bot_id if environment == 'backtest' else None
             open_positions_db = self.db_manager.get_open_positions(environment, bot_id_to_filter)
 
@@ -55,8 +52,6 @@ class StatusService:
                 progress_to_sell_target_pct = _calculate_progress_pct(
                     current_price, trade.price, trade.sell_target_price
                 )
-
-                # Add the new requested data fields
                 price_to_target = (trade.sell_target_price - current_price) if trade.sell_target_price and current_price else 0
                 usd_to_target = price_to_target * trade.quantity if trade.quantity and price_to_target else 0
 
@@ -74,7 +69,7 @@ class StatusService:
 
             # 4. Determine buy signal status
             should_buy, _, reason = self.strategy.evaluate_buy_signal(
-                market_data, len(positions_status) # Use the count of reconciled open positions
+                market_data, len(positions_status)
             )
             btc_purchase_target, btc_purchase_progress_pct = self._calculate_buy_progress(
                 market_data, len(positions_status)
@@ -84,15 +79,23 @@ class StatusService:
             trade_history = self.db_manager.get_all_trades_in_range(environment)
             trade_history_dicts = [trade.to_dict() for trade in trade_history]
 
-            # 6. Fetch live wallet data
-            wallet_balances = exchange_manager.get_account_balance()
+            # 6. Fetch live wallet data with USD values
+            all_prices = trader.exchange_manager.get_all_prices()
+            wallet_balances = account_manager.get_all_account_balances(all_prices)
 
             # Filter for relevant assets to keep the output clean
             relevant_assets = {'BTC', 'USDT'}
             filtered_balances = [
-                balance for balance in wallet_balances
-                if balance.get('asset') in relevant_assets
+                {
+                    "asset": bal['asset'],
+                    "free": bal['free'],
+                    "locked": bal['locked'],
+                    "usd_value": bal.get('usd_value', 0.0) # Ensure usd_value is present
+                }
+                for bal in wallet_balances
+                if bal.get('asset') in relevant_assets
             ]
+
 
             # 7. Assemble the final status object
             extended_status = {

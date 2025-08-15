@@ -56,13 +56,13 @@ class TUIApp(App):
     }
 
     #left_pane {
-        width: 35%;
+        width: 40%;
         padding-right: 1;
         border-right: solid $primary;
     }
 
     #right_pane {
-        width: 65%;
+        width: 60%;
         padding-left: 1;
     }
 
@@ -83,15 +83,14 @@ class TUIApp(App):
 
     #positions_table, #wallet_table {
         margin-top: 1;
-        height: auto;
-        max-height: 15;
         border: solid $primary-lighten-2;
+        height: 1fr;
     }
 
     #log_display {
-        height: 25;
         border: solid $primary-lighten-2;
         padding: 1;
+        height: 1fr;
     }
 
     #action_bar, #log_filter_bar {
@@ -128,6 +127,10 @@ class TUIApp(App):
         text-align: center;
         color: $text-muted;
     }
+
+    .progress-complete {
+        background: $success;
+    }
     """
 
     def __init__(self, mode: str = "test", *args, **kwargs):
@@ -152,8 +155,7 @@ class TUIApp(App):
                 with Container(id="selected_trade_container", classes="container"):
                     yield Static("Selected Trade Actions", classes="title")
                     with Horizontal(id="action_bar", classes="hidden"):
-                        yield Button("💰 Sell 100%", id="force_sell_100_button", variant="error")
-                        yield Button("💸 Sell 90%", id="force_sell_90_button", variant="warning")
+                        yield Button("💸 Sell 90%", id="force_sell_button", variant="warning")
 
                 with Container(classes="container"):
                     yield Static("Live Log", classes="title")
@@ -169,6 +171,7 @@ class TUIApp(App):
                         yield Static(f"Mode: {self.mode.upper()}", id="status_mode")
                         yield Static("Symbol: N/A", id="status_symbol")
                         yield Static("Price: N/A", id="status_price")
+                    yield DataTable(id="wallet_table")
 
                 with Container(id="next_buy_container"):
                     yield Static("Next Buy Opportunity", classes="title")
@@ -178,10 +181,6 @@ class TUIApp(App):
                 with Container(classes="container"):
                     yield Static("Open Positions", classes="title")
                     yield DataTable(id="positions_table")
-
-                with Container(classes="container"):
-                    yield Static("Wallet Balances", classes="title")
-                    yield DataTable(id="wallet_table")
 
                 yield Static("Tip: For best results, use a modern terminal emulator.", id="terminal_note")
 
@@ -196,7 +195,7 @@ class TUIApp(App):
         positions_table.add_columns("ID", "Entry", "Value", "$ to Trg", "PnL", "Sell Target", "Progress")
 
         wallet_table = self.query_one("#wallet_table", DataTable)
-        wallet_table.add_columns("Asset", "Free", "Locked", "USD Value")
+        wallet_table.add_columns("Asset", "USD Value")
 
         self.update_dashboard()
         self.set_interval(30.0, self.update_dashboard)
@@ -297,12 +296,12 @@ class TUIApp(App):
             self.run_script_worker(command, CommandOutput)
             input_widget.value = ""
 
-        elif event.button.id in ["force_sell_100_button", "force_sell_90_button"]:
+        elif event.button.id == "force_sell_button":
             if not self.selected_trade_id:
                 self.log_display.write("[bold red]No trade selected for selling.[/bold red]")
                 return
 
-            percentage = "100" if event.button.id == "force_sell_100_button" else "90"
+            percentage = "90"
             command = ["python", "scripts/force_sell.py", self.selected_trade_id, percentage]
             self.run_script_worker(command, CommandOutput)
 
@@ -353,7 +352,9 @@ class TUIApp(App):
                 pnl_color = "green" if pnl >= 0 else "red"
                 
                 progress_bar = ProgressBar(total=100, show_eta=False, show_percentage=True)
-                progress_bar.progress = progress
+                progress_bar.progress = min(progress, 100) # Cap progress at 100 for display
+                if progress >= 100:
+                    progress_bar.add_class("progress-complete")
 
                 pos_table.add_row(
                     pos_id.split('-')[0],
@@ -376,10 +377,8 @@ class TUIApp(App):
             for bal in balances:
                 asset = bal.get("asset")
                 if asset in ["USDT", "BTC"]:
-                    free = Decimal(bal.get("free", 0))
-                    locked = Decimal(bal.get("locked", 0))
                     usd_val = Decimal(bal.get("usd_value", 0))
-                    wallet_table.add_row(asset, f"{free:.8f}", f"{locked:.8f}", f"${usd_val:,.2f}")
+                    wallet_table.add_row(asset, f"${usd_val:,.2f}")
         else:
             wallet_table.add_row("No wallet data.")
 
