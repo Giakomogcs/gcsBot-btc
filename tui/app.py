@@ -50,12 +50,12 @@ class TUIApp(App):
         layout: horizontal;
     }
     #left_pane {
-        width: 35%;
+        width: 25%;
         padding: 1;
         border-right: solid $accent;
     }
     #right_pane {
-        width: 65%;
+        width: 75%;
         padding: 1;
     }
     .title {
@@ -65,7 +65,7 @@ class TUIApp(App):
         padding: 0 1;
         margin-top: 1;
     }
-    #positions_table, #wallet_table {
+    #positions_table {
         margin-top: 1;
         height: 12;
     }
@@ -103,7 +103,7 @@ class TUIApp(App):
                 yield Static("Selected Trade Actions", classes="title")
                 with Horizontal(id="action_bar", classes="hidden"):
                     yield Button("Sell 100%", id="force_sell_100_button", variant="error")
-                    yield Button("Sell 90%", id="force_sell_90_button", variant="warning")
+                    yield Button("SELL (90%)", id="force_sell_90_button", variant="warning")
 
                 yield Static("Live Log", classes="title")
                 with Horizontal(id="log_filter_bar"):
@@ -117,12 +117,10 @@ class TUIApp(App):
                     yield Static(f"Mode: {self.mode.upper()}", id="status_mode")
                     yield Static("Symbol: N/A", id="status_symbol")
                     yield Static("Price: N/A", id="status_price")
+                    yield Static("Wallet: N/A", id="status_wallet")
 
                 yield Static("Open Positions", classes="title")
                 yield DataTable(id="positions_table")
-
-                yield Static("Wallet Balances", classes="title")
-                yield DataTable(id="wallet_table")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -132,9 +130,6 @@ class TUIApp(App):
         positions_table = self.query_one("#positions_table", DataTable)
         positions_table.cursor_type = "row"
         positions_table.add_columns("ID", "Entry", "Value", "PnL", "Sell Target", "Progress")
-
-        wallet_table = self.query_one("#wallet_table", DataTable)
-        wallet_table.add_columns("Asset", "Free", "Locked", "USD Value")
 
         # MODIFICADO: Chama o update_dashboard uma vez e depois define o intervalo de 30s
         self.update_dashboard()
@@ -290,6 +285,21 @@ class TUIApp(App):
         self.query_one("#status_symbol").update(f"Symbol: {data.get('symbol', 'N/A')}")
         self.query_one("#status_price").update(f"Price: ${price:,.2f}")
 
+        # Update wallet status
+        balances = data.get("wallet_balances", [])
+        if not balances:
+            self.query_one("#status_wallet").update("Wallet: N/A")
+        else:
+            total_usd = Decimal(0)
+            btc_balance = Decimal(0)
+            for bal in balances:
+                if bal.get('asset') == 'BTC':
+                    btc_balance = Decimal(bal.get('free', 0)) + Decimal(bal.get('locked', 0))
+                total_usd += Decimal(bal.get('usd_value', 0))
+            
+            wallet_str = f"Wallet: ${total_usd:,.2f} ({btc_balance:.4f} BTC)"
+            self.query_one("#status_wallet").update(wallet_str)
+
         # Update positions table
         pos_table = self.query_one("#positions_table", DataTable)
         pos_table.clear()
@@ -319,20 +329,7 @@ class TUIApp(App):
         else:
             pos_table.add_row("No open positions.")
 
-        # Update wallet table
-        wallet_table = self.query_one("#wallet_table", DataTable)
-        wallet_table.clear()
-        balances = data.get("wallet_balances", [])
-        if balances:
-            for bal in balances:
-                asset = bal.get("asset")
-                if asset in ["USDT", "BTC"]:
-                    free = Decimal(bal.get("free", 0))
-                    locked = Decimal(bal.get("locked", 0))
-                    usd_val = Decimal(bal.get("usd_value", 0))
-                    wallet_table.add_row(asset, f"{free:.8f}", f"{locked:.8f}", f"${usd_val:,.2f}")
-        else:
-            wallet_table.add_row("No wallet data.")
+        # Update wallet table (REMOVED)
 
     # NOVO: Handler para a mensagem CommandOutput (opcional, mas bom para feedback)
     def on_command_output(self, message: CommandOutput) -> None:
