@@ -129,6 +129,7 @@ class TUIApp(App):
 
                 yield Static("Strategy Status", classes="title")
                 with Vertical(id="strategy_container"):
+                    yield Static("Current Price: N/A", id="strategy_current_price")
                     yield Static("Buy Signal: N/A", id="strategy_buy_signal")
                     yield Static("Buy Target: N/A", id="strategy_buy_target")
                     yield Static("Buy Progress: N/A", id="strategy_buy_progress")
@@ -299,6 +300,7 @@ class TUIApp(App):
         price = Decimal(data.get("current_btc_price", 0))
         self.query_one("#status_symbol").update(f"Symbol: {data.get('symbol', 'N/A')}")
         self.query_one("#status_price").update(f"Price: ${price:,.2f}")
+        self.query_one("#strategy_current_price").update(f"Current Price: ${price:,.2f}")
 
         # Update positions table
         pos_table = self.query_one("#positions_table", DataTable)

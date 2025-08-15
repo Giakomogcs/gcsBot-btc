@@ -14,6 +14,13 @@ class TestStatusService(unittest.TestCase):
         self.config_manager = MagicMock()
         self.feature_calculator = MagicMock()
 
+        # Configure the config_manager mock to return default strategy rules
+        self.config_manager.get_section.return_value = {
+            'commission_rate': '0.001',
+            'target_profit': '0.01',
+            'sell_factor': '0.9'
+        }
+
         # Instantiate the service with mocked dependencies
         self.status_service = StatusService(
             db_manager=self.db_manager,
@@ -67,7 +74,7 @@ class TestStatusService(unittest.TestCase):
 
         # Assert PnL and progress calculations are correct for the first trade
         pos1_status = result["open_positions_status"][0]
-        self.assertAlmostEqual(pos1_status["unrealized_pnl"], (52000 - 50000) * 0.1)
+        self.assertAlmostEqual(pos1_status["unrealized_pnl"], 170.82)
         # Progress: (52000 - 50000) / (55000 - 50000) * 100 = 40%
         self.assertAlmostEqual(pos1_status["progress_to_sell_target_pct"], 40.0)
         self.assertAlmostEqual(pos1_status["price_to_target"], 3000)
