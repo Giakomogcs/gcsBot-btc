@@ -97,7 +97,42 @@ class TradingBot:
                                 # Convert the Trade object to a dict for selling
                                 sell_position_data = position_to_sell.to_dict()
                                 sell_position_data['quantity'] = quantity_to_sell
-                                trader.execute_sell(sell_position_data, self.run_id, {"reason": f"manual_override_{percentage}%_sell"})
+
+                                success, sell_result = trader.execute_sell(sell_position_data, self.run_id, {"reason": f"manual_override_{percentage}%_sell"})
+
+                                if success:
+                                    current_price = trader.get_current_price(self.symbol)
+                                    buy_price = float(position_to_sell.price or 0)
+                                    sell_price = float(sell_result.get('price'))
+                                    hodl_asset_amount = original_quantity - quantity_to_sell
+
+                                    realized_pnl_usd = strategy_rules.calculate_realized_pnl(
+                                        buy_price=buy_price,
+                                        sell_price=sell_price,
+                                        quantity_sold=quantity_to_sell
+                                    )
+
+                                    hodl_asset_value_at_sell = hodl_asset_amount * current_price if current_price else 0
+                                    commission_usd = float(sell_result.get('commission', 0))
+
+                                    sell_result.update({
+                                        "commission_usd": commission_usd,
+                                        "realized_pnl_usd": realized_pnl_usd,
+                                        "hodl_asset_amount": hodl_asset_amount,
+                                        "hodl_asset_value_at_sell": hodl_asset_value_at_sell
+                                    })
+
+                                    logger.info(f"Force sell successful for {trade_id}. Recording partial sell and updating position.")
+                                    state_manager.record_partial_sell(
+                                        original_trade_id=trade_id,
+                                        remaining_quantity=hodl_asset_amount,
+                                        sell_data=sell_result
+                                    )
+
+                                    # Create a portfolio snapshot after the manual sale
+                                    self._create_portfolio_snapshot(trader, state_manager, float(current_price))
+                                else:
+                                    logger.error(f"Force sell execution failed for position {trade_id}.")
                             else:
                                 logger.warning(f"Could not find open position with trade_id: {trade_id} for force_sell.")
 
