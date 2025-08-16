@@ -105,7 +105,7 @@ class ExchangeManager:
             ]
             return balances
         except Exception as e:
-            logging.error(f"Error fetching account balance from Binance: {e}")
+            logging.error(f"CRITICAL_ERROR: Failed to fetch account balance from Binance API. This is likely due to incorrect API keys or permissions. Error: {e}", exc_info=True)
             return []
 
     def get_open_orders(self, symbol: str) -> list:

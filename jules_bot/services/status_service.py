@@ -106,27 +106,36 @@ class StatusService:
             trade_history = self.db_manager.get_all_trades_in_range(environment)
             trade_history_dicts = [trade.to_dict() for trade in trade_history]
 
-            # 6. Fetch live wallet data
+            # 6. Fetch live wallet data and ensure BTC/USDT are always present
             wallet_balances = exchange_manager.get_account_balance()
+            
+            # Create a default structure for balances to ensure BTC and USDT are always present
+            processed_balances_dict = {
+                'BTC': {'asset': 'BTC', 'free': '0.0', 'locked': '0.0', 'usd_value': 0.0},
+                'USDT': {'asset': 'USDT', 'free': '0.0', 'locked': '0.0', 'usd_value': 0.0}
+            }
 
-            # Filter for relevant assets and calculate USD value
-            relevant_assets = {'BTC', 'USDT'}
-            processed_balances = []
+            # Update the default structure with actual balances from the exchange
             for bal in wallet_balances:
                 asset = bal.get('asset')
-                if asset in relevant_assets:
-                    free = float(bal.get('free', 0))
-                    locked = float(bal.get('locked', 0))
-                    total = free + locked
-                    
-                    if asset == 'BTC':
-                        bal['usd_value'] = total * current_price
-                    elif asset == 'USDT':
-                        bal['usd_value'] = total
-                    
-                    processed_balances.append(bal)
+                if asset in processed_balances_dict:
+                    processed_balances_dict[asset] = bal # Replace default with actual
+            
+            # Calculate USD value based on FREE balance (available for trading)
+            # and ensure the list for the JSON output is created
+            processed_balances = []
+            for asset, bal in processed_balances_dict.items():
+                free = float(bal.get('free', 0))
+                
+                # Calculate USD value based on the FREE (available) balance
+                if asset == 'BTC':
+                    bal['usd_value'] = free * current_price
+                elif asset == 'USDT':
+                    bal['usd_value'] = free
+                
+                processed_balances.append(bal)
 
-            # Calculate total wallet value in USD
+            # Calculate total wallet value in USD from the FREE balances
             total_wallet_usd_value = sum(bal.get('usd_value', 0) for bal in processed_balances)
 
             # 7. Assemble the final status object
