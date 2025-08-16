@@ -347,6 +347,8 @@ class TradingBot:
                     open_positions_value = sum(float(p.quantity) * current_price for p in open_positions)
                     num_open_positions = len(open_positions)
 
+                    logger.info(f"Core Strategy Inputs | Cash: {cash_balance}, Positions Value: {open_positions_value}, Num Positions: {num_open_positions}")
+
                     buy_amount_usdt = strategy_rules.get_next_buy_amount(
                         cash_balance=cash_balance,
                         open_positions_value=open_positions_value,
