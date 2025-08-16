@@ -21,10 +21,18 @@ COPY . .
 
 # Create a non-root user for security and create log directory
 RUN groupadd -r jules && useradd --no-log-init -r -g jules jules
+
+# Copy the entrypoint script and make it executable
+COPY entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Create the logs directory and set permissions
 RUN mkdir -p /app/logs && chown -R jules:jules /app
 
 # Switch to the non-root user
 USER jules
 
+# Set the entrypoint
+ENTRYPOINT ["entrypoint.sh"]
 # The command to run your application when the container starts
 CMD ["python", "jules_bot/main.py"]
