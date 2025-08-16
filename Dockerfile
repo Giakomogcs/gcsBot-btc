@@ -39,5 +39,5 @@ USER jules
 
 # Set the entrypoint to our permission-fixing script
 ENTRYPOINT ["entrypoint.sh"]
-# Set the default command to run the bot
-CMD ["python", "jules_bot/main.py"]
+# Keep the container alive by default, waiting for exec commands
+CMD ["tail", "-f", "/dev/null"]
