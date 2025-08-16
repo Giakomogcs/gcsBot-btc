@@ -151,8 +151,6 @@ class TUIApp(App):
                 with Static(id="strategy_container"):
                     yield Static("Current Price: N/A", id="strategy_current_price")
                     yield Static("Buy Signal: N/A", id="strategy_buy_signal")
-                    yield Static("Buy Target: N/A", id="strategy_buy_target")
-                    yield Static("Buy Progress: N/A", id="strategy_buy_progress")
 
                 yield Static("DCOM Status", classes="title")
                 with Vertical(id="dcom_status_container"):
@@ -425,16 +423,10 @@ class TUIApp(App):
         buy_signal_status = data.get("buy_signal_status", {})
         should_buy = buy_signal_status.get("should_buy", False)
         reason = buy_signal_status.get("reason", "N/A")
-        buy_target = Decimal(buy_signal_status.get("btc_purchase_target", 0))
-        buy_progress = float(buy_signal_status.get("btc_purchase_progress_pct", 0))
 
         buy_signal_text = f"Buy Signal: {'YES' if should_buy else 'NO'} ({reason})"
-        buy_target_text = f"Buy Target: ${buy_target:,.2f}"
-        buy_progress_text = f"Buy Progress: {buy_progress:.1f}%"
         
         self.query_one("#strategy_buy_signal").update(buy_signal_text)
-        self.query_one("#strategy_buy_target").update(buy_target_text)
-        self.query_one("#strategy_buy_progress").update(buy_progress_text)
 
         # Update DCOM status panel
         dcom_data = data.get("dcom_status", {})
