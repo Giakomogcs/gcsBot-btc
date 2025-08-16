@@ -19,5 +19,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Third, now that dependencies are cached, copy the rest of your application code.
 COPY . .
 
+# Create a non-root user for security and create log directory
+RUN groupadd -r jules && useradd --no-log-init -r -g jules jules
+RUN mkdir -p /app/logs && chown -R jules:jules /app
+
+# Switch to the non-root user
+USER jules
+
 # The command to run your application when the container starts
 CMD ["python", "jules_bot/main.py"]
