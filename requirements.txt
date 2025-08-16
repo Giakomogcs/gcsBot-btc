@@ -39,3 +39,7 @@ textual
 # --- Testing ---
 pytest
 aiocsv
+
+# --- API ---
+fastapi
+uvicorn
