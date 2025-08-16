@@ -203,7 +203,9 @@ class StatusService:
 
         # 4. Next Order Size Calculation
         num_open_positions = len(open_positions)
-        next_order_size = initial_order_size * (order_prog_factor ** num_open_positions)
+        # Cap the number of positions for sizing to prevent astronomical order sizes
+        num_positions_for_sizing = min(num_open_positions, 20)
+        next_order_size = initial_order_size * (order_prog_factor ** num_positions_for_sizing)
 
         return {
             "total_equity": total_equity,
