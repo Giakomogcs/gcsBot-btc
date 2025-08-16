@@ -76,7 +76,7 @@ class StatusService:
                 price_to_target = 0
                 if trade.sell_target_price is not None and current_price is not None:
                     price_to_target = trade.sell_target_price - current_price
-                
+
                 # Calculate the USD value of that price difference.
                 usd_to_target = 0
                 if trade.quantity is not None:
@@ -104,7 +104,8 @@ class StatusService:
 
             # 5. Fetch trade history from DB
             trade_history = self.db_manager.get_all_trades_in_range(environment)
-            trade_history_dicts = [trade.to_dict() for trade in trade_history]
+            # trade_history_dicts = [trade.to_dict() for trade in trade_history]
+            trade_history_dicts = []
 
             # 6. Fetch live wallet data
             wallet_balances = exchange_manager.get_account_balance()
@@ -118,12 +119,12 @@ class StatusService:
                     free = float(bal.get('free', 0))
                     locked = float(bal.get('locked', 0))
                     total = free + locked
-                    
+
                     if asset == 'BTC':
                         bal['usd_value'] = total * current_price
                     elif asset == 'USDT':
                         bal['usd_value'] = total
-                    
+
                     processed_balances.append(bal)
 
             # Calculate total wallet value in USD

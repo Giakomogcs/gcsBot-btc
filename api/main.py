@@ -4,6 +4,13 @@ import subprocess
 import json
 import os
 import signal
+import sys
+
+# Add project root to sys.path to allow imports from other directories
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from scripts.get_bot_data import get_bot_data
+
 
 app = FastAPI()
 
@@ -15,27 +22,13 @@ async def get_bot_info(mode: str):
         raise HTTPException(status_code=400, detail="Invalid mode. Use 'test' or 'trade'.")
 
     try:
-        # This command is executed on the host, so we need to use the host path to the script
-        script_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '../scripts/get_bot_data.py'))
-        command = ["python3", script_path, mode]
+        data = get_bot_data(mode)
+        if "error" in data:
+            raise HTTPException(status_code=500, detail=data["error"])
+        return JSONResponse(content=data)
 
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            check=True
-        )
-
-        try:
-            data = json.loads(result.stdout)
-            return JSONResponse(content=data)
-        except json.JSONDecodeError:
-            return {"data": result.stdout}
-
-    except subprocess.CalledProcessError as e:
-        raise HTTPException(status_code=500, detail=f"Error executing script: {e.stderr}")
-    except FileNotFoundError:
-        raise HTTPException(status_code=500, detail=f"Script not found. Make sure '{script_path}' exists.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {e}")
 
 @app.post("/api/start-bot")
 async def start_bot(mode: str):

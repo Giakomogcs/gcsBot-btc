@@ -13,25 +13,13 @@ from jules_bot.services.status_service import StatusService
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
 from jules_bot.utils.logger import logger
 
-def main(
-    mode: str = typer.Argument(
-        "test",
-        help="The environment to get data for ('trade' or 'test')."
-    )
-):
+def get_bot_data(mode: str):
     """
-    Fetches and displays a comprehensive status report for the trading bot.
-
-    This script provides a snapshot of the bot's state, including:
-    - Current BTC price
-    - Detailed status of all open positions (including PnL and sell target progress)
-    - Status of the buy signal strategy
-    - Full trade history for the environment
-    - Live wallet balances from the exchange
+    Fetches and returns a comprehensive status report for the trading bot.
     """
     if mode not in ["trade", "test"]:
         logger.error("Invalid mode specified. Please choose 'trade' or 'test'.")
-        raise typer.Exit(code=1)
+        return {"error": "Invalid mode specified. Please choose 'trade' or 'test'."}
 
     logger.info(f"Gathering bot data for '{mode}' environment...")
 
@@ -48,16 +36,26 @@ def main(
 
         if "error" in status_data:
             logger.error(f"An error occurred while fetching data: {status_data['error']}")
-            raise typer.Exit(code=1)
-
-        # Print the data as a nicely formatted JSON object
-        print(json.dumps(status_data, indent=4, default=str)) # Use default=str to handle non-serializable types like datetime
+            return status_data
 
         logger.info("Successfully retrieved bot data.")
+        return status_data
 
     except Exception as e:
         logger.error(f"A critical error occurred: {e}", exc_info=True)
-        raise typer.Exit(code=1)
+        return {"error": f"A critical error occurred: {e}"}
+
+def main(
+    mode: str = typer.Argument(
+        "test",
+        help="The environment to get data for ('trade' or 'test')."
+    )
+):
+    """
+    Fetches and displays a comprehensive status report for the trading bot.
+    """
+    status_data = get_bot_data(mode)
+    print(json.dumps(status_data, indent=4, default=str)) # Use default=str to handle non-serializable types like datetime
 
 if __name__ == "__main__":
     typer.run(main)
