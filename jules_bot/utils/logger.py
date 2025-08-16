@@ -31,37 +31,21 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(log_object)
 
 # --- CONFIGURAÇÃO DO LOGGER ---
-LOGS_DIR = "logs"
-os.makedirs(LOGS_DIR, exist_ok=True)
-
 logger = logging.getLogger("gcsBot")
 logger.setLevel(logging.DEBUG)
-logger.propagate = False # Impede que os logs sejam passados para o logger root
+logger.propagate = False
 
 if not logger.handlers:
     json_formatter = JsonFormatter()
 
-    # 1. Handler para o ARQUIVO DE LOG ESTRUTURADO (jules_bot.jsonl)
-    log_file_path = os.path.join(LOGS_DIR, 'jules_bot.jsonl')
-    file_handler = TimedRotatingFileHandler(log_file_path, when="midnight", interval=1, backupCount=14, encoding='utf-8')
-    file_handler.setFormatter(json_formatter)
-    file_handler.setLevel(logging.DEBUG) # Captura todos os níveis no arquivo
-    logger.addHandler(file_handler)
-
-    # 2. Handler para o CONSOLE (também estruturado)
-    console_handler = logging.StreamHandler(sys.stderr)
+    # Handler para o CONSOLE (stdout)
+    # Logging para stdout é a prática recomendada para containers
+    console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(json_formatter)
-    console_handler.setLevel(logging.INFO) # Nível INFO para o console para não poluir
+    console_handler.setLevel(logging.DEBUG) # Captura todos os logs no console
     logger.addHandler(console_handler)
 
-    # 3. Handler para o ARQUIVO DE PERFORMANCE (performance.jsonl) - Mantido por consistência
-    perf_log_path = os.path.join(LOGS_DIR, 'performance.jsonl')
-    perf_handler = logging.FileHandler(perf_log_path, mode='a', encoding='utf-8')
-    perf_handler.setFormatter(json_formatter)
-    perf_handler.setLevel(PERFORMANCE_LEVEL_NUM)
-    logger.addHandler(perf_handler)
-
-    logger.info("Logger configurado para output JSON estruturado.")
+    logger.info("Logger configurado para output JSON estruturado no console.")
 
 def log_table(title, data, headers="keys", tablefmt="heavy_grid"):
     try:

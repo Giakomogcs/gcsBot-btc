@@ -113,26 +113,34 @@ class StatusService:
             # 6. Fetch live wallet data
             wallet_balances = exchange_manager.get_account_balance()
             logger.info(f"Raw wallet balances from exchange: {wallet_balances}")
+            
+            if not wallet_balances:
+                logger.warning("Wallet balances could not be fetched or are empty.")
+                # Return a specific status indicating the issue, but don't stop the whole process
+                # This allows the rest of the status to be displayed if possible.
+                dcom_status = self._calculate_dcom_status([], [], market_data, current_price) # Pass empty lists
+                processed_balances = []
+                total_wallet_usd_value = 0
+            else:
+                # Filter for relevant assets and calculate USD value
+                relevant_assets = {'BTC', 'USDT'}
+                processed_balances = []
+                for bal in wallet_balances:
+                    asset = bal.get('asset')
+                    if asset in relevant_assets:
+                        free = float(bal.get('free', 0))
+                        locked = float(bal.get('locked', 0))
+                        total = free + locked
+                        
+                        if asset == 'BTC':
+                            bal['usd_value'] = total * current_price
+                        elif asset == 'USDT':
+                            bal['usd_value'] = total
+                        
+                        processed_balances.append(bal)
 
-            # Filter for relevant assets and calculate USD value
-            relevant_assets = {'BTC', 'USDT'}
-            processed_balances = []
-            for bal in wallet_balances:
-                asset = bal.get('asset')
-                if asset in relevant_assets:
-                    free = float(bal.get('free', 0))
-                    locked = float(bal.get('locked', 0))
-                    total = free + locked
-                    
-                    if asset == 'BTC':
-                        bal['usd_value'] = total * current_price
-                    elif asset == 'USDT':
-                        bal['usd_value'] = total
-                    
-                    processed_balances.append(bal)
-
-            # Calculate total wallet value in USD
-            total_wallet_usd_value = sum(bal.get('usd_value', 0) for bal in processed_balances)
+                # Calculate total wallet value in USD
+                total_wallet_usd_value = sum(bal.get('usd_value', 0) for bal in processed_balances)
 
             # 7. DCOM Status Calculation
             dcom_status = self._calculate_dcom_status(
@@ -203,7 +211,10 @@ class StatusService:
 
         # 4. Next Order Size Calculation
         num_open_positions = len(open_positions)
-        next_order_size = initial_order_size * (order_prog_factor ** num_open_positions)
+        # Cap the number of positions to prevent absurd order sizes, especially in live mode
+        # where all historical positions might be counted.
+        capped_num_positions = min(num_open_positions, 10)
+        next_order_size = initial_order_size * (order_prog_factor ** capped_num_positions)
 
         return {
             "total_equity": total_equity,

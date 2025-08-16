@@ -76,8 +76,7 @@ class ExchangeManager:
         Fetches the current price for a specific symbol.
         """
         if not self.client:
-            logging.error("Binance client not initialized.")
-            return None
+            raise ConnectionError("Binance client not initialized. Check API keys.")
         try:
             ticker = self.client.get_ticker(symbol=symbol)
             return float(ticker['lastPrice'])
@@ -90,8 +89,7 @@ class ExchangeManager:
         Fetches account balance from Binance.
         """
         if not self.client:
-            logging.error("Binance client not initialized.")
-            return []
+            raise ConnectionError("Binance client not initialized. Check API keys.")
         try:
             account_info = self.client.get_account()
             balances = [
