@@ -18,7 +18,8 @@ class TestStatusService(unittest.TestCase):
         self.config_manager.get_section.return_value = {
             'commission_rate': '0.001',
             'target_profit': '0.01',
-            'sell_factor': '0.9'
+            'sell_factor': '0.9',
+            'bbl_buy_tolerance_percent': '0.5'  # 0.5% tolerance
         }
 
         # Instantiate the service with mocked dependencies
@@ -82,6 +83,40 @@ class TestStatusService(unittest.TestCase):
         
         # Assert that the buy signal status is included
         self.assertIn("buy_signal_status", result)
+
+    def test_get_extended_status_buy_target_with_tolerance(self, MockExchangeManager):
+        """
+        Test that the buy target in a downtrend includes the tolerance.
+        """
+        # Arrange
+        mock_exchange_instance = MockExchangeManager.return_value
+        mock_exchange_instance.get_account_balance.return_value = []
+        self.db_manager.get_open_positions.return_value = []
+
+        # Arrange: Mock market data for a downtrend scenario
+        bbl_value = 50000.0
+        mock_market_data = {
+            'close': 50100.0,
+            'ema_100': 51000.0, # Price is below EMA100 -> downtrend
+            'bbl_20_2_0': bbl_value,
+            'high': 50200.0,
+            'ema_20': 50500.0
+        }
+        self.feature_calculator.get_current_candle_with_features.return_value = pd.Series(mock_market_data)
+
+        # Act
+        result = self.status_service.get_extended_status("test", "test_bot")
+
+        # Assert
+        buy_signal_status = result["buy_signal_status"]
+        actual_target = buy_signal_status["btc_purchase_target"]
+
+        # Expected target = bbl * (1 + tolerance_percent / 100)
+        # 50000 * (1 + 0.5 / 100) = 50000 * 1.005 = 50250
+        expected_target = Decimal(str(bbl_value)) * (Decimal('1') + Decimal('0.5') / Decimal('100'))
+
+        self.assertAlmostEqual(actual_target, expected_target, places=4)
+
 
 if __name__ == '__main__':
     unittest.main()

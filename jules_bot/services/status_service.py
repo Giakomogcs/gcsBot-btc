@@ -188,13 +188,16 @@ class StatusService:
         except (InvalidOperation, TypeError):
             return Decimal('0'), Decimal('0')
 
+        # Calculate the adjusted BBL target using the tolerance from StrategyRules
+        bbl_with_tolerance = bbl * (Decimal('1') + self.strategy.bbl_buy_tolerance_percent / Decimal('100'))
+
         if open_positions_count == 0:
             if current_price > ema_100: # Uptrend
                 target_price = ema_20
                 progress = Decimal('100.0') if current_price > target_price else \
                            _calculate_progress_pct(current_price, current_price * Decimal('1.05'), target_price)
             else: # Downtrend
-                target_price = bbl
+                target_price = bbl_with_tolerance
                 progress = _calculate_progress_pct(current_price, high_price, target_price)
             return target_price, progress
 
@@ -202,7 +205,7 @@ class StatusService:
             target_price = ema_20
             progress = _calculate_progress_pct(current_price, high_price, target_price)
         else: # Downtrend breakout
-            target_price = bbl
+            target_price = bbl_with_tolerance
             progress = _calculate_progress_pct(current_price, high_price, target_price)
 
         return target_price, progress
