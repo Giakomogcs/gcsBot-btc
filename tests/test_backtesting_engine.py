@@ -1,6 +1,7 @@
 import pytest
 import pandas as pd
 from unittest.mock import MagicMock, patch
+from decimal import Decimal
 from jules_bot.backtesting.engine import Backtester
 from jules_bot.utils.config_manager import ConfigManager
 from jules_bot.database.postgres_manager import PostgresManager
@@ -76,54 +77,35 @@ def test_backtester_pnl_calculation(mock_add_all_features, mock_config_manager, 
         mock_buy_signal.side_effect = [(True, 'uptrend', 'test_buy_signal')] + [(False, '', '')] * (len(feature_data) - 1)
         
         # Sell if price is >= 110 (the close of the second candle)
-        mock_sell_target.return_value = 110.0
+        mock_sell_target.return_value = Decimal("110.0")
 
         backtester = Backtester(db_manager=mock_db_manager, start_date="2023-01-01", end_date="2023-01-01")
         
-        # We need to access the trade_logger to check the recorded PnL
         trade_logger_mock = backtester.trade_logger = MagicMock()
 
         # Act
         backtester.run()
 
         # Assert
-        # The backtester should have called update_trade on the logger for the sell transaction.
-        # We need to find that call and inspect the `realized_pnl_usd`.
-        
         update_calls = [c for c in trade_logger_mock.method_calls if c[0] == 'update_trade']
         assert len(update_calls) == 1, "Expected one sell trade to be updated"
         
         sell_trade_data = update_calls[0][1][0]
         realized_pnl = sell_trade_data.get('realized_pnl_usd')
 
-        # Manually calculate the expected PnL
-        # From the data, buy price is 101 (close of first candle).
-        # Sell price is 110 (close of second candle).
-        # Commission is 0.1% (0.001)
-        # Buy amount is $100 (base_usd_per_trade)
-        # Quantity bought = 100 / 101 = 0.990099
-        # Commission on buy = 100 * 0.001 = 0.1
-        # Net cost of buy = 100.1
-        # Quantity sold = 0.990099 * 0.9 = 0.891089
+        # Manually calculate the expected PnL using Decimal
+        buy_price = Decimal("101.0")
+        sell_price = Decimal("110.0")
         
-        # Let's use the formula from StrategyRules to be sure
-        # realized_pnl = (sell_price * (1 - commission) - buy_price * (1 + commission)) * quantity_sold
-        buy_price = 101.0  # From mock trader execute_buy
-        sell_price = 110.0 # From mock trader execute_sell
+        buy_amount_usdt = Decimal("100.0")
+        quantity_bought = buy_amount_usdt / buy_price
         
-        # MockTrader logic: buy_amount_usdt / price
-        # buy_amount_usdt is min(10000 * 0.02, 100) = 100
-        # quantity_bought = 100 / 101 = 0.9900990099
-        quantity_bought = 100 / 101
-        
-        # sell_quantity = quantity_bought * sell_factor
-        sell_factor = 0.9
+        sell_factor = Decimal("0.9")
         quantity_sold = quantity_bought * sell_factor
 
-        commission_rate = 0.001
-        expected_pnl = (sell_price * (1 - commission_rate) - buy_price * (1 + commission_rate)) * quantity_sold
-        # expected_pnl = (110 * 0.999 - 101 * 1.001) * (0.990099 * 0.9)
-        # expected_pnl = (109.89 - 101.101) * 0.891089
-        # expected_pnl = 8.789 * 0.891089 = 7.832
+        commission_rate = Decimal("0.001")
+        one = Decimal("1")
+
+        expected_pnl = (sell_price * (one - commission_rate) - buy_price * (one + commission_rate)) * quantity_sold
         
         assert realized_pnl == pytest.approx(expected_pnl)

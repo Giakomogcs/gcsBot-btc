@@ -166,6 +166,12 @@ class TUIApp(App):
                 yield Static("BTC Treasury: N/A", id="portfolio_btc_treasury")
                 yield Static("Accumulated BTC: N/A", id="portfolio_accumulated_btc")
 
+                yield Static("DCOM Status", classes="title")
+                yield Static("Total Equity: N/A", id="dcom_total_equity")
+                yield Static("Working Capital: N/A", id="dcom_working_capital")
+                yield Static("Strategic Reserve: N/A", id="dcom_strategic_reserve")
+                yield Static("Operating Mode: N/A", id="dcom_operating_mode")
+
                 yield Static("Portfolio Value History", classes="title")
                 with Vertical(id="chart_container"):
                     yield Static(id="portfolio_chart")
@@ -481,25 +487,37 @@ class TUIApp(App):
         snapshot = data.get("latest_snapshot")
 
         if snapshot:
-            total_value = Decimal(snapshot.get("total_portfolio_value_usd", 0))
-            realized_pnl = Decimal(snapshot.get("realized_pnl_usd", 0))
-            btc_treasury_amount = Decimal(snapshot.get("btc_treasury_amount", 0))
-            btc_treasury_value = Decimal(snapshot.get("btc_treasury_value_usd", 0))
+            total_value = Decimal(snapshot.get("total_portfolio_value_usd", "0"))
+            realized_pnl = Decimal(snapshot.get("realized_pnl_usd", "0"))
+            btc_treasury_amount = Decimal(snapshot.get("btc_treasury_amount", "0"))
+            btc_treasury_value = Decimal(snapshot.get("btc_treasury_value_usd", "0"))
 
             self.query_one("#portfolio_total_value").update(f"Total Portfolio Value: ${total_value:,.2f} USD")
             self.query_one("#portfolio_realized_pnl").update(f"Realized Profit/Loss: ${realized_pnl:,.2f} USD")
             self.query_one("#portfolio_btc_treasury").update(f"BTC Treasury: ₿{btc_treasury_amount:.8f} (${btc_treasury_value:,.2f} USD)")
 
-        evolution_total = Decimal(data.get("evolution_total", 0))
-        evolution_24h = Decimal(data.get("evolution_24h", 0))
+        evolution_total = Decimal(data.get("evolution_total", "0"))
+        evolution_24h = Decimal(data.get("evolution_24h", "0"))
 
         self.query_one("#portfolio_evolution_total").update(f"Evolution (Total): {evolution_total:+.2f}%")
         self.query_one("#portfolio_evolution_24h").update(f"Evolution (24h): {evolution_24h:+.2f}%")
+        self.query_one("#portfolio_accumulated_btc").update("Accumulated BTC: +0.0%") # Placeholder
 
-        # Note: The 'Accumulated BTC' is not clearly defined yet.
-        # I'll use the evolution of the treasury amount as a placeholder.
-        # This can be refined later.
-        self.query_one("#portfolio_accumulated_btc").update("Accumulated BTC: +0.0%")
+        # --- DCOM Status Panel Update ---
+        dcom_status = data.get("dcom_status", {})
+        if dcom_status:
+            total_equity = Decimal(dcom_status.get("total_equity", "0"))
+            wc_target = Decimal(dcom_status.get("working_capital_target", "0"))
+            wc_in_use = Decimal(dcom_status.get("working_capital_in_use", "0"))
+            wc_remaining = Decimal(dcom_status.get("working_capital_remaining", "0"))
+            reserve = Decimal(dcom_status.get("strategic_reserve", "0"))
+            mode = dcom_status.get("operating_mode", "N/A")
+
+            self.query_one("#dcom_total_equity").update(f"Total Equity: ${total_equity:,.2f}")
+            wc_text = f"Working Capital: ${wc_target:,.2f} | Used: ${wc_in_use:,.2f} | Free: ${wc_remaining:,.2f}"
+            self.query_one("#dcom_working_capital").update(wc_text)
+            self.query_one("#dcom_strategic_reserve").update(f"Strategic Reserve: ${reserve:,.2f}")
+            self.query_one("#dcom_operating_mode").update(f"Operating Mode: {mode}")
 
         # Update the chart
         history = data.get("history", [])

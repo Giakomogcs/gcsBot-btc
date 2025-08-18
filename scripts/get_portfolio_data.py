@@ -2,6 +2,7 @@ import json
 import sys
 import os
 import datetime
+from decimal import Decimal
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -11,74 +12,98 @@ from jules_bot.database.portfolio_manager import PortfolioManager
 
 def get_portfolio_data():
     """
-    Fetches the latest portfolio snapshot and historical data for the TUI.
+    Fetches the latest portfolio snapshot, historical data, and DCOM status for the TUI.
     """
     try:
         db_config = config_manager.get_section('POSTGRES')
         portfolio_manager = PortfolioManager(db_config)
 
+        # --- Fetch Data ---
         latest_snapshot = portfolio_manager.get_latest_snapshot()
-        # Fetch the last 50 snapshots for the chart
         portfolio_history = portfolio_manager.get_portfolio_history(limit=50)
 
-        # Prepare data for JSON serialization
+        # --- DCOM Status Calculation ---
+        dcom_data = {}
+        if latest_snapshot:
+            # Use Decimal for all financial calculations
+            total_equity = Decimal(latest_snapshot.total_portfolio_value_usd)
+            open_positions_value = Decimal(latest_snapshot.open_positions_value_usd)
+
+            wc_percentage = Decimal(config_manager.get('STRATEGY_RULES', 'working_capital_percentage', fallback='0.8'))
+
+            working_capital_target = total_equity * wc_percentage
+            strategic_reserve = total_equity - working_capital_target
+            capital_in_use = open_positions_value
+            working_capital_remaining = working_capital_target - capital_in_use
+
+            # Determine Operating Mode
+            if working_capital_target > 0:
+                usage_percent = (capital_in_use / working_capital_target) * 100
+                operating_mode = "Aggressive" if usage_percent > 50 else "Conservative"
+            else:
+                operating_mode = "N/A"
+
+            dcom_data = {
+                "total_equity": f"{total_equity:.2f}",
+                "working_capital_target": f"{working_capital_target:.2f}",
+                "working_capital_in_use": f"{capital_in_use:.2f}",
+                "working_capital_remaining": f"{working_capital_remaining:.2f}",
+                "strategic_reserve": f"{strategic_reserve:.2f}",
+                "operating_mode": operating_mode
+            }
+
+        # --- Prepare data for JSON serialization ---
         if latest_snapshot:
             latest_snapshot_data = {
                 "id": latest_snapshot.id,
                 "timestamp": latest_snapshot.timestamp.isoformat(),
-                "total_portfolio_value_usd": latest_snapshot.total_portfolio_value_usd,
-                "usd_balance": latest_snapshot.usd_balance,
-                "open_positions_value_usd": latest_snapshot.open_positions_value_usd,
-                "realized_pnl_usd": latest_snapshot.realized_pnl_usd,
-                "btc_treasury_amount": latest_snapshot.btc_treasury_amount,
-                "btc_treasury_value_usd": latest_snapshot.btc_treasury_value_usd,
-                "evolution_percent_vs_previous": latest_snapshot.evolution_percent_vs_previous
+                "total_portfolio_value_usd": f"{Decimal(latest_snapshot.total_portfolio_value_usd):.2f}",
+                "usd_balance": f"{Decimal(latest_snapshot.usd_balance):.2f}",
+                "open_positions_value_usd": f"{Decimal(latest_snapshot.open_positions_value_usd):.2f}",
+                "realized_pnl_usd": f"{Decimal(latest_snapshot.realized_pnl_usd):.2f}",
+                "btc_treasury_amount": f"{Decimal(latest_snapshot.btc_treasury_amount):.8f}",
+                "btc_treasury_value_usd": f"{Decimal(latest_snapshot.btc_treasury_value_usd):.2f}",
+                "evolution_percent_vs_previous": f"{Decimal(latest_snapshot.evolution_percent_vs_previous):.2f}"
             }
         else:
             latest_snapshot_data = None
 
         historical_data = [
-            {
-                "timestamp": s.timestamp.isoformat(),
-                "value": s.total_portfolio_value_usd
-            }
+            {"timestamp": s.timestamp.isoformat(), "value": f"{Decimal(s.total_portfolio_value_usd):.2f}"}
             for s in portfolio_history
         ]
 
-        # Calculate overall and 24h evolution
-        evolution_total = 0
-        evolution_24h = 0
+        # --- Calculate overall and 24h evolution ---
+        evolution_total = Decimal("0")
+        evolution_24h = Decimal("0")
         if len(portfolio_history) > 1:
-            first_snapshot_value = portfolio_history[0].total_portfolio_value_usd
-            latest_snapshot_value = portfolio_history[-1].total_portfolio_value_usd
-            if first_snapshot_value > 0:
-                evolution_total = ((latest_snapshot_value / first_snapshot_value) - 1) * 100
+            first_val = Decimal(portfolio_history[0].total_portfolio_value_usd)
+            latest_val = Decimal(portfolio_history[-1].total_portfolio_value_usd)
+            if first_val > 0:
+                evolution_total = ((latest_val / first_val) - 1) * 100
 
-            # Find snapshot from ~24 hours ago
             one_day_ago = datetime.datetime.utcnow() - datetime.timedelta(days=1)
-            snapshot_24h_ago = None
-            for s in reversed(portfolio_history):
-                if s.timestamp <= one_day_ago:
-                    snapshot_24h_ago = s
-                    break
-
+            snapshot_24h_ago = next((s for s in reversed(portfolio_history) if s.timestamp <= one_day_ago), None)
             if snapshot_24h_ago:
-                if snapshot_24h_ago.total_portfolio_value_usd > 0:
-                    evolution_24h = ((latest_snapshot_value / snapshot_24h_ago.total_portfolio_value_usd) - 1) * 100
-
+                val_24h_ago = Decimal(snapshot_24h_ago.total_portfolio_value_usd)
+                if val_24h_ago > 0:
+                    evolution_24h = ((latest_val / val_24h_ago) - 1) * 100
 
         output = {
             "latest_snapshot": latest_snapshot_data,
+            "dcom_status": dcom_data,
             "history": historical_data,
-            "evolution_total": evolution_total,
-            "evolution_24h": evolution_24h
+            "evolution_total": f"{evolution_total:.2f}",
+            "evolution_24h": f"{evolution_24h:.2f}"
         }
 
-        print(json.dumps(output, indent=4))
+        # Use default=str to handle Decimal serialization
+        print(json.dumps(output, indent=4, default=str))
 
     except Exception as e:
-        print(json.dumps({"error": str(e)}))
+        print(json.dumps({"error": str(e), "traceback": traceback.format_exc()}))
         sys.exit(1)
 
 if __name__ == "__main__":
+    import traceback
     get_portfolio_data()
