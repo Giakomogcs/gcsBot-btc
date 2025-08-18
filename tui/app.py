@@ -20,28 +20,25 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 def get_docker_compose_command():
     """
     Checks for 'docker-compose' (V1) or 'docker compose' (V2) and returns the valid command.
-    Prepends 'sudo' if the user is not root to avoid permission issues.
+    Note: This does not prepend sudo. The user is expected to have correct Docker permissions.
     """
-    base_cmd = []
-    try:
-        if os.geteuid() != 0:
-            base_cmd = ["sudo"]
-    except AttributeError:
-        # os.geteuid() does not exist on Windows.
-        pass
-
     if shutil.which("docker-compose"):
-        return base_cmd + ["docker-compose"]
+        return ["docker-compose"]
     elif shutil.which("docker"):
         try:
-            test_command = base_cmd + ["docker", "compose", "--version"]
-            result = subprocess.run(test_command, capture_output=True, text=True, check=True)
-            if "Docker Compose version" in result.stdout:
-                return base_cmd + ["docker", "compose"]
+            # Test for 'docker compose' (V2)
+            test_command = ["docker", "compose", "--version"]
+            subprocess.run(test_command, capture_output=True, text=True, check=True)
+            return ["docker", "compose"]
         except (subprocess.CalledProcessError, FileNotFoundError):
+            # This can happen if 'docker compose' is not a valid command, so we just pass
+            # and let the final error be raised.
             pass
     
-    raise FileNotFoundError("Could not find a valid 'docker-compose' or 'docker compose' command.")
+    raise FileNotFoundError(
+        "Could not find a valid 'docker-compose' or 'docker compose' command. "
+        "Please ensure Docker is installed and that your user has permissions to run it without sudo."
+    )
 
 def is_running_in_docker() -> bool:
     """Checks if the app is running inside a Docker container."""
