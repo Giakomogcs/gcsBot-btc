@@ -55,10 +55,10 @@ class LivePortfolioManager:
     def _create_db_snapshot(self, usd_balance: Decimal, open_positions_value_usd: Decimal, current_price: Decimal):
         try:
             total_portfolio_value_usd = usd_balance + open_positions_value_usd
-            # Use the correct manager to fetch trades
-            all_trades = self.db_manager.get_all_trades_in_range(mode=self.state_manager.mode, bot_id=self.state_manager.bot_id)
+            # Use the correct manager to fetch trades for the specific bot run
+            all_trades = self.db_manager.get_trades_by_run_id(run_id=self.state_manager.bot_id)
 
-            realized_pnl_usd = sum(Decimal(t.realized_pnl_usd or '0') for t in all_trades)
+            realized_pnl_usd = sum(Decimal(str(t.realized_pnl_usd or '0')) for t in all_trades)
             btc_treasury_amount = sum(Decimal(t.hodl_asset_amount or '0') for t in all_trades)
 
             btc_price_usd = Decimal(self.trader.get_current_price('BTCUSDT') or current_price)

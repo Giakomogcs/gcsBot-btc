@@ -7,10 +7,14 @@ from jules_bot.database.portfolio_models import Base, PortfolioSnapshot, Financi
 from jules_bot.utils.logger import logger
 
 class PortfolioManager:
-    def __init__(self, config: dict):
-        self.db_url = f"postgresql+psycopg2://{config['user']}:{config['password']}@{config['host']}:{config['port']}/{config['dbname']}"
-        self.engine = create_engine(self.db_url)
-        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+    def __init__(self, session_local: sessionmaker):
+        """
+        Initializes the PortfolioManager with an existing sessionmaker
+        to share the same database connection pool.
+        """
+        self.SessionLocal = session_local
+        # Extract the engine from the sessionmaker's configuration
+        self.engine = self.SessionLocal.kw['bind']
         self.create_tables()
 
     def create_tables(self):

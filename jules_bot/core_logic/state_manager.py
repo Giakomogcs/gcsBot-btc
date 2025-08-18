@@ -1,4 +1,5 @@
 import pandas as pd
+from decimal import Decimal
 from jules_bot.utils.logger import logger
 from jules_bot.database.postgres_manager import PostgresManager
 import uuid
@@ -171,11 +172,12 @@ class StateManager:
                 return
 
             # 2. Get the total quantity held by the bot for this symbol
-            bot_total_quantity = sum(p.quantity for p in open_positions)
+            bot_total_quantity = sum(Decimal(str(p.quantity)) for p in open_positions)
 
             # 3. Get the actual balance from the exchange
             asset = symbol.replace('USDT', '')
-            exchange_balance = trader.get_account_balance(asset=asset)
+            # Ensure the balance from the exchange is treated as a Decimal
+            exchange_balance = Decimal(str(trader.get_account_balance(asset=asset)))
             
             logger.info(f"Bot's calculated total quantity for {asset}: {bot_total_quantity:.8f}")
             logger.info(f"Actual exchange balance for {asset}: {exchange_balance:.8f}")

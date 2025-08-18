@@ -155,7 +155,22 @@ class Backtester:
                                 'price': buy_price, 'quantity': buy_result['quantity'],
                                 'usd_value': buy_result['usd_value'], 'sell_target_price': sell_target_price
                             }
-                            # ... (logging remains the same)
+
+                            # Log the new "OPEN" position to the database
+                            decision_context = candle.to_dict()
+                            decision_context.pop('symbol', None)
+
+                            trade_data = {
+                                'run_id': self.run_id, 'strategy_name': strategy_name, 'symbol': symbol,
+                                'trade_id': new_trade_id, 'exchange': "backtest_engine", 'order_type': "buy",
+                                'status': "OPEN", 'price': buy_price, 'quantity': buy_result['quantity'],
+                                'usd_value': buy_result['usd_value'], 'commission': buy_result['commission'],
+                                'commission_asset': "USDT", 'timestamp': current_time,
+                                'decision_context': decision_context, 'sell_target_price': sell_target_price,
+                                'commission_usd': buy_result['commission']
+                            }
+                            self.trade_logger.log_trade(trade_data)
+                            logger.info(f"BUY EXECUTED: TradeID: {new_trade_id} | Price: ${buy_price:,.2f} | Qty: {buy_result['quantity']:.8f}")
 
         self._generate_and_save_summary(open_positions, portfolio_history)
         logger.info(f"--- Backtest {self.run_id} finished ---")

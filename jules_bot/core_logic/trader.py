@@ -1,5 +1,6 @@
 import uuid
 import math
+from decimal import Decimal, getcontext
 from binance.client import Client
 from binance.exceptions import BinanceAPIException, BinanceRequestException
 from jules_bot.utils.config_manager import config_manager
@@ -189,29 +190,36 @@ class Trader:
             return str(quantity)
         
         try:
-            step_size_float = float(self.step_size)
-            # Use floor to comply with LOT_SIZE filter
-            formatted_quantity_float = math.floor(quantity / step_size_float) * step_size_float
+            # Convert step_size to Decimal for precision arithmetic
+            step_size_decimal = Decimal(self.step_size)
+
+            # Ensure quantity is a Decimal for the operation
+            quantity_decimal = Decimal(str(quantity))
+
+            # Use Decimal floor division to truncate the quantity to the step size
+            formatted_quantity = (quantity_decimal // step_size_decimal) * step_size_decimal
             
             # Determine the number of decimal places from the step_size string
             if 'e-' in self.step_size:
                 precision = int(self.step_size.split('e-')[-1])
             elif '.' in self.step_size:
+                # rstrip('0') to handle cases like '0.0100' -> '0.01'
                 trimmed_step_size = self.step_size.rstrip('0')
                 precision = len(trimmed_step_size.split('.')[1]) if '.' in trimmed_step_size else 0
             else:
                 precision = 0
             
             # Format the floored quantity to a string with the correct number of decimal places
-            final_quantity_str = f"{formatted_quantity_float:.{precision}f}"
+            final_quantity_str = f"{formatted_quantity:.{precision}f}"
 
-            if float(final_quantity_str) != quantity:
-                logger.info(f"Formatted quantity from {quantity} to {final_quantity_str} using stepSize {self.step_size}")
+            if formatted_quantity != quantity_decimal:
+                logger.info(f"Formatted quantity from {quantity_decimal} to {final_quantity_str} using stepSize {self.step_size}")
             
             return final_quantity_str
 
         except (ValueError, TypeError) as e:
-            logger.error(f"Error formatting quantity {quantity} with step_size {self.step_size}: {e}")
+            logger.error(f"Error formatting quantity {quantity} with step_size {self.step_size}: {e}", exc_info=True)
+            # Fallback to string conversion to avoid crashing the trade
             return str(quantity)
 
     def _fetch_exchange_info(self):
