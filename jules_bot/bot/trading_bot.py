@@ -20,7 +20,7 @@ class LivePortfolioManager:
     def __init__(self, trader: Trader, state_manager: StateManager, db_manager: PostgresManager, quote_asset: str, recalculation_interval: int):
         self.trader = trader
         self.state_manager = state_manager
-        self.db_portfolio_manager = DbPortfolioManager(db_manager.get_db_session)
+        self.db_portfolio_manager = DbPortfolioManager(db_manager.SessionLocal)
         self.quote_asset = quote_asset
         self.recalculation_interval = recalculation_interval
         self.last_recalculation_time = 0
@@ -193,12 +193,48 @@ class TradingBot:
                 trade_history = state_manager.get_trade_history(mode=self.mode)
                 self._write_state_to_file(open_positions, current_price, wallet_balances, trade_history, total_portfolio_value)
 
-                # --- SELL LOGIC (Needs Decimal Refactor) ---
-                for p in open_positions:
-                    sell_target_price = Decimal(p.sell_target_price or 'inf')
-                    if current_price >= sell_target_price:
-                        # ... sell logic to be refactored for Decimal ...
-                        logger.info(f"Sell signal for {p.trade_id} (implementation pending Decimal refactor).")
+                # --- SELL LOGIC ---
+                positions_to_sell = [p for p in open_positions if current_price >= Decimal(p.sell_target_price or 'inf')]
+                if positions_to_sell:
+                    logger.info(f"Found {len(positions_to_sell)} positions meeting sell criteria.")
+                    total_sell_quantity = sum(Decimal(p.quantity) * strategy_rules.sell_factor for p in positions_to_sell)
+                    available_balance = Decimal(self.trader.get_account_balance(asset=base_asset))
+
+                    if total_sell_quantity > available_balance:
+                        logger.warning(f"INSUFFICIENT BALANCE: Attempting to sell {total_sell_quantity:.8f} {base_asset}, but only {available_balance:.8f} is available.")
+                    else:
+                        for position in positions_to_sell:
+                            trade_id = position.trade_id
+                            original_quantity = Decimal(position.quantity)
+                            sell_quantity = original_quantity * strategy_rules.sell_factor
+                            hodl_asset_amount = original_quantity - sell_quantity
+
+                            sell_position_data = position.to_dict()
+                            sell_position_data['quantity'] = sell_quantity
+
+                            success, sell_result = self.trader.execute_sell(sell_position_data, self.run_id, final_candle.to_dict())
+                            if success:
+                                buy_price = Decimal(position.price)
+                                sell_price = Decimal(sell_result.get('price'))
+                                realized_pnl_usd = strategy_rules.calculate_realized_pnl(buy_price, sell_price, sell_quantity)
+                                hodl_asset_value_at_sell = hodl_asset_amount * current_price
+                                commission_usd = Decimal(sell_result.get('commission', '0'))
+
+                                sell_result.update({
+                                    "commission_usd": commission_usd,
+                                    "realized_pnl_usd": realized_pnl_usd,
+                                    "hodl_asset_amount": hodl_asset_amount,
+                                    "hodl_asset_value_at_sell": hodl_asset_value_at_sell
+                                })
+
+                                state_manager.record_partial_sell(
+                                    original_trade_id=trade_id,
+                                    remaining_quantity=hodl_asset_amount,
+                                    sell_data=sell_result
+                                )
+                                live_portfolio_manager.get_total_portfolio_value(current_price, force_recalculation=True)
+                            else:
+                                logger.error(f"Sell execution failed for position {trade_id}.")
 
                 # --- BUY LOGIC ---
                 buy_check_passed = False
