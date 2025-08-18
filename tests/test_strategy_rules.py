@@ -18,12 +18,66 @@ def mock_config_manager():
                 'commission_rate': '0.001',
                 'sell_factor': '0.9',
                 'target_profit': '0.005',
-                'max_open_positions': '20'
+                'max_open_positions': '20',
+                'bbl_buy_tolerance_percent': '0.5' # 0.5% tolerance
             }
         return {}
 
     mock.get_section.side_effect = get_section_side_effect
     return mock
+
+def test_evaluate_buy_signal_downtrend_with_tolerance(mock_config_manager):
+    """
+    Tests that a buy signal is generated in a downtrend when the price
+    is within the bbl_buy_tolerance_percent.
+    """
+    # Arrange
+    strategy_rules = StrategyRules(mock_config_manager)
+
+    # --- Scenario 1: Price is just inside the tolerance (should trigger buy) ---
+    market_data_inside_tolerance = {
+        'close': 99.6,      # Current price is 0.4% above BBL
+        'high': 100.0,
+        'ema_100': 105.0,   # Price is below EMA100 (downtrend)
+        'ema_20': 102.0,
+        'bbl_20_2_0': 99.20318725 # Lower Bollinger Band
+    }
+
+    # Act
+    should_buy, _, _ = strategy_rules.evaluate_buy_signal(market_data_inside_tolerance, 0)
+
+    # Assert
+    assert should_buy is True
+
+    # --- Scenario 2: Price is just outside the tolerance (should NOT trigger buy) ---
+    market_data_outside_tolerance = {
+        'close': 99.8,      # Current price is 0.6% above BBL
+        'high': 100.0,
+        'ema_100': 105.0,   # Price is below EMA100 (downtrend)
+        'ema_20': 102.0,
+        'bbl_20_2_0': 99.20318725 # Lower Bollinger Band
+    }
+
+    # Act
+    should_buy, _, _ = strategy_rules.evaluate_buy_signal(market_data_outside_tolerance, 0)
+
+    # Assert
+    assert should_buy is False
+
+    # --- Scenario 3: Price is exactly at the BBL (should trigger buy) ---
+    market_data_at_bbl = {
+        'close': 99.20318725,
+        'high': 100.0,
+        'ema_100': 105.0,
+        'ema_20': 102.0,
+        'bbl_20_2_0': 99.20318725
+    }
+
+    # Act
+    should_buy, _, _ = strategy_rules.evaluate_buy_signal(market_data_at_bbl, 0)
+
+    # Assert
+    assert should_buy is True
 
 def test_get_next_buy_amount_when_balance_is_high(mock_config_manager):
     """

@@ -12,6 +12,7 @@ class StrategyRules:
         self.sell_factor = Decimal(self.rules.get('sell_factor', '0.9'))
         self.commission_rate = Decimal(self.rules.get('commission_rate', '0.001'))
         self.target_profit = Decimal(self.rules.get('target_profit', '0.01'))
+        self.bbl_buy_tolerance_percent = Decimal(self.rules.get('bbl_buy_tolerance_percent', '0.0'))
 
     def evaluate_buy_signal(self, market_data: dict, open_positions_count: int) -> tuple[bool, str, str]:
         """
@@ -27,19 +28,22 @@ class StrategyRules:
         if any(v is None for v in [current_price, high_price, ema_100, ema_20, bbl]):
             return False, "unknown", "Not enough indicator data"
 
+        # The tolerance is converted from a percentage to a multiplier
+        bbl_with_tolerance = Decimal(str(bbl)) * (Decimal('1') + self.bbl_buy_tolerance_percent / Decimal('100'))
+
         if open_positions_count == 0:
             if current_price > ema_100:
                 if current_price > ema_20:
                     return True, "uptrend", "Aggressive first entry (price > ema_20)"
             else:
-                if current_price <= bbl:
+                if current_price <= bbl_with_tolerance:
                     return True, "downtrend", "Aggressive first entry (volatility breakout)"
         else:
             if current_price > ema_100:
                 if high_price > ema_20 and current_price < ema_20:
                     return True, "uptrend", "Uptrend pullback"
             else:
-                if current_price <= bbl:
+                if current_price <= bbl_with_tolerance:
                     return True, "downtrend", "Downtrend volatility breakout"
 
         return False, "unknown", "No signal"
