@@ -1,5 +1,6 @@
 from decimal import Decimal, getcontext
 from jules_bot.utils.config_manager import ConfigManager
+from jules_bot.core.market_mode import MarketMode
 
 # Set precision for Decimal calculations
 getcontext().prec = 28
@@ -12,37 +13,34 @@ class StrategyRules:
         self.sell_factor = Decimal(self.rules.get('sell_factor', '0.9'))
         self.commission_rate = Decimal(self.rules.get('commission_rate', '0.001'))
         self.target_profit = Decimal(self.rules.get('target_profit', '0.01'))
+        # Adaptive Strategy Params
+        self.stable_spacing_percent = Decimal(self.rules.get('stable_spacing_percent', '0.005'))
+        self.freefall_spacing_percent = Decimal(self.rules.get('freefall_spacing_percent', '0.02'))
+        self.uptrend_spacing_percent = Decimal(self.rules.get('uptrend_spacing_percent', '0.003'))
 
-    def evaluate_buy_signal(self, market_data: dict, open_positions_count: int) -> tuple[bool, str, str]:
+    def determine_buy_decision(self, market_mode: MarketMode, current_price: Decimal, last_buy_price: Decimal, high_price: Decimal) -> tuple[bool, str]:
         """
-        Evaluates if a buy signal is present. Non-financial logic, so floats are acceptable here
-        for performance with technical indicators.
+        Determines whether to buy based on the current market mode and price.
         """
-        current_price = market_data.get('close')
-        high_price = market_data.get('high')
-        ema_100 = market_data.get('ema_100')
-        ema_20 = market_data.get('ema_20')
-        bbl = market_data.get('bbl_20_2_0')
+        if last_buy_price == Decimal('inf'):
+            return True, "First purchase"
 
-        if any(v is None for v in [current_price, high_price, ema_100, ema_20, bbl]):
-            return False, "unknown", "Not enough indicator data"
+        if market_mode == MarketMode.DEFENSIVE:
+            target_price = last_buy_price * (Decimal('1') - self.freefall_spacing_percent)
+            if current_price <= target_price:
+                return True, f"Defensive buy triggered at {current_price:.2f} (target: {target_price:.2f})"
 
-        if open_positions_count == 0:
-            if current_price > ema_100:
-                if current_price > ema_20:
-                    return True, "uptrend", "Aggressive first entry (price > ema_20)"
-            else:
-                if current_price <= bbl:
-                    return True, "downtrend", "Aggressive first entry (volatility breakout)"
-        else:
-            if current_price > ema_100:
-                if high_price > ema_20 and current_price < ema_20:
-                    return True, "uptrend", "Uptrend pullback"
-            else:
-                if current_price <= bbl:
-                    return True, "downtrend", "Downtrend volatility breakout"
+        elif market_mode == MarketMode.STANDARD:
+            target_price = last_buy_price * (Decimal('1') - self.stable_spacing_percent)
+            if current_price <= target_price:
+                return True, f"Standard buy triggered at {current_price:.2f} (target: {target_price:.2f})"
 
-        return False, "unknown", "No signal"
+        elif market_mode == MarketMode.AGGRESSIVE:
+            target_price = high_price * (Decimal('1') - self.uptrend_spacing_percent)
+            if current_price <= target_price:
+                return True, f"Aggressive buy triggered at {current_price:.2f} (target: {target_price:.2f}, high: {high_price:.2f})"
+
+        return False, "No buy signal"
 
     def get_next_buy_amount(self, available_balance: Decimal) -> Decimal:
         """

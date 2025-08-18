@@ -8,6 +8,7 @@ from jules_bot.utils.config_manager import config_manager
 from jules_bot.bot.account_manager import AccountManager
 from jules_bot.core_logic.state_manager import StateManager
 from jules_bot.core_logic.trader import Trader
+from jules_bot.core.market_mode import MarketMode
 from jules_bot.core_logic.strategy_rules import StrategyRules
 from jules_bot.core.market_data_provider import MarketDataProvider
 from jules_bot.database.postgres_manager import PostgresManager
@@ -256,6 +257,31 @@ class TradingBot:
                             else:
                                 logger.error(f"Sell execution failed for position {trade_id}.")
 
+                # --- DETERMINE MARKET MODE ---
+                downtrend_trigger_percent = Decimal(config_manager.get('STRATEGY_RULES', 'downtrend_trigger_percent'))
+                uptrend_trigger_percent = Decimal(config_manager.get('STRATEGY_RULES', 'uptrend_trigger_percent'))
+                trigger_period_hours = int(config_manager.get('STRATEGY_RULES', 'trigger_period_hours'))
+
+                market_mode = MarketMode.STANDARD
+                price_change_percent = Decimal('0.0')
+
+                # Fetch historical data to determine mode
+                historical_data = self.market_data_provider.get_historical_data(
+                    self.symbol,
+                    start=f"-{trigger_period_hours}h"
+                )
+
+                if historical_data is not None and not historical_data.empty:
+                    start_price = Decimal(historical_data['close'].iloc[0])
+                    price_change_percent = (current_price - start_price) / start_price
+
+                    if price_change_percent <= -downtrend_trigger_percent:
+                        market_mode = MarketMode.DEFENSIVE
+                    elif price_change_percent >= uptrend_trigger_percent:
+                        market_mode = MarketMode.AGGRESSIVE
+
+                logger.info(f"Price change in last {trigger_period_hours}h: {price_change_percent:.2%}. Mode: {market_mode.value}")
+
                 # --- BUY LOGIC ---
                 buy_check_passed = False
                 if use_dynamic_capital:
@@ -278,8 +304,10 @@ class TradingBot:
                         logger.info(f"Maximum open positions ({max_open_positions}) reached.")
 
                 if buy_check_passed:
-                    market_data = final_candle.to_dict()
-                    should_buy, regime, reason = strategy_rules.evaluate_buy_signal(market_data, len(open_positions))
+                    last_buy_price = state_manager.get_last_purchase_price()
+                    high_price = Decimal(final_candle['high'])
+                    should_buy, reason = strategy_rules.determine_buy_decision(market_mode, current_price, last_buy_price, high_price)
+
                     if should_buy:
                         logger.info(f"Buy signal: {reason}. Evaluating capital.")
                         cash_balance = Decimal(self.trader.get_account_balance(asset=quote_asset))
@@ -287,7 +315,7 @@ class TradingBot:
                             buy_amount_usdt = strategy_rules.get_next_buy_amount(cash_balance)
                             if buy_amount_usdt >= min_trade_size:
                                 logger.info(f"Executing buy for ${buy_amount_usdt:.2f} USD.")
-                                decision_context = { "market_regime": regime, "buy_trigger_reason": reason }
+                                decision_context = { "market_mode": market_mode.value, "buy_trigger_reason": reason, "price_change_percent": f"{price_change_percent:.4f}" }
                                 success, buy_result = self.trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
                                 if success:
                                     logger.info("Buy successful. Creating new position.")
