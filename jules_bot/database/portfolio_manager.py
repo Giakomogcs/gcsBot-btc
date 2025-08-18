@@ -2,15 +2,20 @@ from sqlalchemy import create_engine, desc
 from sqlalchemy.orm import sessionmaker, Session
 from contextlib import contextmanager
 from typing import Iterator, Optional
+from decimal import Decimal
 
 from jules_bot.database.portfolio_models import Base, PortfolioSnapshot, FinancialMovement
 from jules_bot.utils.logger import logger
 
 class PortfolioManager:
-    def __init__(self, config: dict):
-        self.db_url = f"postgresql+psycopg2://{config['user']}:{config['password']}@{config['host']}:{config['port']}/{config['dbname']}"
-        self.engine = create_engine(self.db_url)
-        self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+    def __init__(self, session_local: sessionmaker):
+        """
+        Initializes the PortfolioManager with an existing sessionmaker
+        to share the same database connection pool.
+        """
+        self.SessionLocal = session_local
+        # Extract the engine from the sessionmaker's configuration
+        self.engine = self.SessionLocal.kw['bind']
         self.create_tables()
 
     def create_tables(self):
@@ -41,10 +46,11 @@ class PortfolioManager:
                 last_snapshot = self.get_latest_snapshot(db)
                 evolution = None
                 if last_snapshot:
-                    current_value = snapshot_data['total_portfolio_value_usd']
-                    previous_value = last_snapshot.total_portfolio_value_usd
-                    if previous_value > 0:
-                        evolution = ((current_value / previous_value) - 1) * 100
+                    current_value = Decimal(str(snapshot_data['total_portfolio_value_usd']))
+                    # Ensure previous_value is handled correctly, even if it's a float from a stale DB schema
+                    previous_value = Decimal(str(last_snapshot.total_portfolio_value_usd))
+                    if previous_value > Decimal('0'):
+                        evolution = ((current_value / previous_value) - Decimal('1')) * Decimal('100')
 
                 snapshot_data['evolution_percent_vs_previous'] = evolution
 
@@ -59,7 +65,7 @@ class PortfolioManager:
                 logger.error(f"Failed to create portfolio snapshot: {e}", exc_info=True)
                 return None
 
-    def create_financial_movement(self, movement_type: str, amount_usd: float, notes: str, transaction_id: Optional[str] = None) -> Optional[FinancialMovement]:
+    def create_financial_movement(self, movement_type: str, amount_usd: Decimal, notes: str, transaction_id: Optional[str] = None) -> Optional[FinancialMovement]:
         """
         Records a financial movement (deposit or withdrawal) in the database.
         """

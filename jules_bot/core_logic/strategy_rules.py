@@ -1,17 +1,22 @@
+from decimal import Decimal, getcontext
 from jules_bot.utils.config_manager import ConfigManager
+
+# Set precision for Decimal calculations
+getcontext().prec = 28
 
 class StrategyRules:
     def __init__(self, config_manager: ConfigManager):
         self.rules = config_manager.get_section('STRATEGY_RULES')
-        self.max_capital_per_trade_percent = float(self.rules.get('max_capital_per_trade_percent', 0.02))
-        self.base_usd_per_trade = float(self.rules.get('base_usd_per_trade', 20.0))
-        self.sell_factor = float(self.rules.get('sell_factor', 0.9))
+        self.max_capital_per_trade_percent = Decimal(self.rules.get('max_capital_per_trade_percent', '0.02'))
+        self.base_usd_per_trade = Decimal(self.rules.get('base_usd_per_trade', '20.0'))
+        self.sell_factor = Decimal(self.rules.get('sell_factor', '0.9'))
+        self.commission_rate = Decimal(self.rules.get('commission_rate', '0.001'))
+        self.target_profit = Decimal(self.rules.get('target_profit', '0.01'))
 
     def evaluate_buy_signal(self, market_data: dict, open_positions_count: int) -> tuple[bool, str, str]:
         """
-        Evaluates if a buy signal is present based on the market regime.
-        Uses a more aggressive strategy if there are no open positions.
-        Returns a tuple of (should_buy, regime, reason).
+        Evaluates if a buy signal is present. Non-financial logic, so floats are acceptable here
+        for performance with technical indicators.
         """
         current_price = market_data.get('close')
         high_price = market_data.get('high')
@@ -22,114 +27,78 @@ class StrategyRules:
         if any(v is None for v in [current_price, high_price, ema_100, ema_20, bbl]):
             return False, "unknown", "Not enough indicator data"
 
-        # --- Aggressive Strategy for First Entry ---
         if open_positions_count == 0:
             if current_price > ema_100:
-                # Aggressive uptrend entry: Buy if price is simply above the 20 EMA
                 if current_price > ema_20:
                     return True, "uptrend", "Aggressive first entry (price > ema_20)"
             else:
-                # Aggressive downtrend entry: Use existing volatility breakout signal
                 if current_price <= bbl:
                     return True, "downtrend", "Aggressive first entry (volatility breakout)"
-
-        # --- Standard Strategy for Subsequent Entries ---
-        if current_price > ema_100:
-            regime = "uptrend"
-            # Standard Uptrend Logic: Wait for a pullback to the 20 EMA
-            if high_price > ema_20 and current_price < ema_20:
-                return True, regime, "Uptrend pullback"
         else:
-            regime = "downtrend"
-            # Standard Downtrend Logic: Volatility breakout
-            if current_price <= bbl:
-                return True, regime, "Downtrend volatility breakout"
+            if current_price > ema_100:
+                if high_price > ema_20 and current_price < ema_20:
+                    return True, "uptrend", "Uptrend pullback"
+            else:
+                if current_price <= bbl:
+                    return True, "downtrend", "Downtrend volatility breakout"
 
         return False, "unknown", "No signal"
 
-    def get_next_buy_amount(self, available_balance: float) -> float:
+    def get_next_buy_amount(self, available_balance: Decimal) -> Decimal:
         """
-        Calculates the USDT amount for the next purchase.
+        Calculates the USDT amount for the next purchase using Decimal.
         """
-        # Calculate trade size based on percentage of available capital
+        available_balance = Decimal(available_balance)
         capital_based_size = available_balance * self.max_capital_per_trade_percent
-
-        # The trade size is the smaller of the base amount or the capital-based amount
         trade_size = min(self.base_usd_per_trade, capital_based_size)
-
         return trade_size
 
-    def calculate_sell_target_price(self, purchase_price: float) -> float:
+    def calculate_sell_target_price(self, purchase_price: Decimal) -> Decimal:
         """
-        Calculates the target sell price based on the purchase price, commission,
-        and target profit.
+        Calculates the target sell price using Decimal.
         """
-        commission_rate = float(self.rules.get('commission_rate', 0.001))
-        target_profit = float(self.rules.get('target_profit', 0.01))
+        purchase_price = Decimal(purchase_price)
+        one = Decimal('1')
 
-        # Formula to calculate the price needed to break even, accounting for commissions on both buy and sell
-        # P_sell * (1 - commission) = P_buy * (1 + commission)
-        # P_sell_breakeven = P_buy * (1 + commission) / (1 - commission)
-        numerator = purchase_price * (1 + commission_rate)
-        denominator = (1 - commission_rate)
+        numerator = purchase_price * (one + self.commission_rate)
+        denominator = one - self.commission_rate
 
         if denominator == 0:
-            return float('inf') # Avoid division by zero, return infinity
+            return Decimal('inf')
 
         break_even_price = numerator / denominator
-
-        # Apply the target profit to the break-even price
-        sell_target_price = break_even_price * (1 + target_profit)
-
+        sell_target_price = break_even_price * (one + self.target_profit)
         return sell_target_price
 
-    def calculate_realized_pnl(self, buy_price: float, sell_price: float, quantity_sold: float) -> float:
+    def calculate_realized_pnl(self, buy_price: Decimal, sell_price: Decimal, quantity_sold: Decimal) -> Decimal:
         """
-        Calculates the realized profit or loss from a trade, considering commissions.
-
-        Args:
-            buy_price (float): The price at which the asset was purchased.
-            sell_price (float): The price at which the asset was sold.
-            quantity_sold (float): The amount of the asset that was sold.
-
-        Returns:
-            float: The realized profit or loss in USD.
+        Calculates the realized profit or loss from a trade using Decimal.
         """
-        commission_rate = float(self.rules.get('commission_rate', 0.001))
+        buy_price = Decimal(buy_price)
+        sell_price = Decimal(sell_price)
+        quantity_sold = Decimal(quantity_sold)
+        one = Decimal('1')
 
-        # Net Sales Revenue per unit = sell_price * (1 - commission_rate)
-        # Proportional Purchase Cost per unit = buy_price * (1 + commission_rate)
-        
-        net_revenue_per_unit = sell_price * (1 - commission_rate)
-        net_cost_per_unit = buy_price * (1 + commission_rate)
+        net_revenue_per_unit = sell_price * (one - self.commission_rate)
+        net_cost_per_unit = buy_price * (one + self.commission_rate)
         
         profit_per_unit = net_revenue_per_unit - net_cost_per_unit
-        
         realized_pnl = profit_per_unit * quantity_sold
-        
         return realized_pnl
 
-    def calculate_net_unrealized_pnl(self, entry_price: float, current_price: float, total_quantity: float) -> float:
+    def calculate_net_unrealized_pnl(self, entry_price: Decimal, current_price: Decimal, total_quantity: Decimal) -> Decimal:
         """
-        Calculates the net unrealized PnL for an open position, factoring in
-        the partial sale rule (90%) and commissions.
-
-        Args:
-            entry_price (float): The price at which the asset was purchased.
-            current_price (float): The current market price of the asset.
-            total_quantity (float): The total quantity of the asset held.
-
-        Returns:
-            float: The net unrealized profit or loss in USD.
+        Calculates the net unrealized PnL for an open position using Decimal.
         """
-        # Calculate the PnL based on selling 90% of the position at the current price.
+        entry_price = Decimal(entry_price)
+        current_price = Decimal(current_price)
+        total_quantity = Decimal(total_quantity)
+
         quantity_to_sell = total_quantity * self.sell_factor
         
-        # Reuse the realized PnL calculation with the current price as the sell price.
         net_unrealized_pnl = self.calculate_realized_pnl(
             buy_price=entry_price,
             sell_price=current_price,
             quantity_sold=quantity_to_sell
         )
-        
         return net_unrealized_pnl

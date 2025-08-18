@@ -27,7 +27,14 @@ class ConfigManager:
         """
         if isinstance(value, str) and value.startswith('@env/'):
             env_var_name = value[5:]
-            return os.getenv(env_var_name)
+            env_var_value = os.getenv(env_var_name)
+
+            # Special case for POSTGRES_HOST: default to 'localhost' if not set.
+            # This allows scripts to run from the host machine when the DB is in Docker.
+            if env_var_name == 'POSTGRES_HOST' and env_var_value is None:
+                return 'localhost'
+
+            return env_var_value
         return value
 
     def get_section(self, section: str) -> Dict[str, str]:

@@ -2,6 +2,7 @@ import time
 import uuid
 import json
 import os
+from decimal import Decimal, getcontext
 from jules_bot.utils.logger import logger
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.bot.account_manager import AccountManager
@@ -10,172 +11,60 @@ from jules_bot.core_logic.trader import Trader
 from jules_bot.core_logic.strategy_rules import StrategyRules
 from jules_bot.core.market_data_provider import MarketDataProvider
 from jules_bot.database.postgres_manager import PostgresManager
-from jules_bot.database.portfolio_manager import PortfolioManager
+from jules_bot.database.portfolio_manager import PortfolioManager as DbPortfolioManager
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
 
+getcontext().prec = 28
 
-class TradingBot:
-    """
-    The maestro that orchestrates all the components of the bot.
-    """
-
-    def __init__(self, mode: str, bot_id: str, market_data_provider: MarketDataProvider, db_manager: PostgresManager):
-        self.mode = mode
-        self.run_id = bot_id
-        self.is_running = True
-        self.market_data_provider = market_data_provider
-        self.db_manager = db_manager
-        self.trader = Trader(mode=self.mode)
-        self.portfolio_manager = PortfolioManager(config_manager.get_section('POSTGRES'))
+class LivePortfolioManager:
+    def __init__(self, trader: Trader, state_manager: StateManager, db_manager: PostgresManager, quote_asset: str, recalculation_interval: int):
+        self.trader = trader
+        self.state_manager = state_manager
+        self.db_manager = db_manager # Store the PostgresManager instance
+        self.db_portfolio_manager = DbPortfolioManager(db_manager.SessionLocal)
+        self.quote_asset = quote_asset
+        self.recalculation_interval = recalculation_interval
+        self.last_recalculation_time = 0
+        self.cached_portfolio_value = Decimal('0.0')
         self.symbol = config_manager.get('APP', 'symbol')
-        self.state_file_path = "/tmp/bot_state.json"
 
-    def _write_state_to_file(self, open_positions: list, current_price: float, wallet_balances: list, trade_history: list):
-        """Saves the current bot state to a JSON file for the UI to read."""
-        # Convert SQLAlchemy objects to dictionaries for JSON serialization
-        serializable_trade_history = [t.to_dict() for t in trade_history]
-        serializable_open_positions = [p.to_dict() for p in open_positions]
+    def get_total_portfolio_value(self, current_price: Decimal, force_recalculation: bool = False) -> Decimal:
+        current_time = time.time()
+        if force_recalculation or (current_time - self.last_recalculation_time > self.recalculation_interval):
+            logger.info("Recalculating portfolio equity...")
+            try:
+                cash_balance = Decimal(self.trader.get_account_balance(asset=self.quote_asset))
+                open_positions = self.state_manager.get_open_positions()
 
-        state = {
-            "mode": self.mode,
-            "run_id": self.run_id,
-            "symbol": self.symbol,
-            "timestamp": time.time(),
-            "current_price": str(current_price),
-            "open_positions": serializable_open_positions,
-            "wallet_balances": wallet_balances,
-            "trade_history": serializable_trade_history
-        }
+                open_positions_value = sum(
+                    Decimal(p.quantity) * current_price for p in open_positions
+                )
+
+                self.cached_portfolio_value = cash_balance + open_positions_value
+                self.last_recalculation_time = current_time
+                logger.info(f"Portfolio equity recalculated: ${self.cached_portfolio_value:,.2f}")
+
+                self._create_db_snapshot(cash_balance, open_positions_value, current_price)
+
+            except Exception as e:
+                logger.error(f"Error during portfolio value calculation: {e}", exc_info=True)
+                return self.cached_portfolio_value
+
+        return self.cached_portfolio_value
+
+    def _create_db_snapshot(self, usd_balance: Decimal, open_positions_value_usd: Decimal, current_price: Decimal):
         try:
-            # Use atomic write to prevent partial reads from the UI
-            temp_path = self.state_file_path + ".tmp"
-            with open(temp_path, "w") as f:
-                json.dump(state, f, indent=4)
-            os.rename(temp_path, self.state_file_path)
-        except (IOError, OSError) as e:
-            logger.error(f"Could not write to state file {self.state_file_path}: {e}")
-
-    def _handle_ui_commands(self, trader, state_manager, strategy_rules):
-        """Checks for and processes command files from the UI."""
-        command_dir = "commands"
-        if not os.path.exists(command_dir):
-            return
-
-        for filename in os.listdir(command_dir):
-            if filename.endswith(".json"):
-                filepath = os.path.join(command_dir, filename)
-                try:
-                    with open(filepath, "r") as f:
-                        command = json.load(f)
-
-                    cmd_type = command.get("type")
-                    logger.info(f"Processing UI command: {command}")
-
-                    if cmd_type == "force_buy":
-                        amount_usd = command.get("amount_usd")
-                        if amount_usd:
-                            success, buy_result = trader.execute_buy(amount_usd, self.run_id, {"reason": "manual_override"})
-                            if success:
-                                logger.info("Force buy successful. Calculating sell target and creating new position.")
-                                purchase_price = float(buy_result.get('price'))
-                                sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
-                                state_manager.create_new_position(buy_result, sell_target_price)
-                            else:
-                                logger.error(f"Force buy of {amount_usd} USD failed to execute.")
-
-                    elif cmd_type == "force_sell":
-                        trade_id = command.get("trade_id")
-                        percentage = command.get("percentage", 100.0) # Default to 100%
-                        if trade_id:
-                            open_positions = state_manager.get_open_positions()
-                            position_to_sell = next((p for p in open_positions if p.trade_id == trade_id), None)
-                            if position_to_sell:
-                                sell_fraction = float(percentage) / 100.0
-                                original_quantity = float(position_to_sell.quantity or 0)
-                                quantity_to_sell = original_quantity * sell_fraction
-
-                                logger.info(f"Executing force sell for {percentage}% of trade {trade_id} ({quantity_to_sell:.8f} units).")
-
-                                # Convert the Trade object to a dict for selling
-                                sell_position_data = position_to_sell.to_dict()
-                                sell_position_data['quantity'] = quantity_to_sell
-
-                                success, sell_result = trader.execute_sell(sell_position_data, self.run_id, {"reason": f"manual_override_{percentage}%_sell"})
-
-                                if success:
-                                    current_price = trader.get_current_price(self.symbol)
-                                    buy_price = float(position_to_sell.price or 0)
-                                    sell_price = float(sell_result.get('price'))
-                                    hodl_asset_amount = original_quantity - quantity_to_sell
-
-                                    realized_pnl_usd = strategy_rules.calculate_realized_pnl(
-                                        buy_price=buy_price,
-                                        sell_price=sell_price,
-                                        quantity_sold=quantity_to_sell
-                                    )
-
-                                    hodl_asset_value_at_sell = hodl_asset_amount * current_price if current_price else 0
-                                    commission_usd = float(sell_result.get('commission', 0))
-
-                                    sell_result.update({
-                                        "commission_usd": commission_usd,
-                                        "realized_pnl_usd": realized_pnl_usd,
-                                        "hodl_asset_amount": hodl_asset_amount,
-                                        "hodl_asset_value_at_sell": hodl_asset_value_at_sell
-                                    })
-
-                                    logger.info(f"Force sell successful for {trade_id}. Recording partial sell and updating position.")
-                                    state_manager.record_partial_sell(
-                                        original_trade_id=trade_id,
-                                        remaining_quantity=hodl_asset_amount,
-                                        sell_data=sell_result
-                                    )
-
-                                    # Create a portfolio snapshot after the manual sale
-                                    self._create_portfolio_snapshot(trader, state_manager, float(current_price))
-                                else:
-                                    logger.error(f"Force sell execution failed for position {trade_id}.")
-                            else:
-                                logger.warning(f"Could not find open position with trade_id: {trade_id} for force_sell.")
-
-                    os.remove(filepath) # Remove command file after processing
-
-                except Exception as e:
-                    logger.error(f"Error processing command file {filename}: {e}", exc_info=True)
-                    # Optionally, move to an 'error' directory instead of deleting
-                    # os.rename(filepath, os.path.join(command_dir, "error", filename))
-
-    def _create_portfolio_snapshot(self, trader: Trader, state_manager: StateManager, current_price: float):
-        """
-        Gathers all necessary data and creates a new portfolio snapshot.
-        """
-        logger.info("Creating portfolio snapshot...")
-        try:
-            # 1. Get current USD balance
-            usd_balance = trader.get_account_balance(asset='USDT')
-
-            # 2. Get open positions and calculate their total value
-            open_positions = state_manager.get_open_positions()
-            open_positions_value_usd = sum(
-                float(p.quantity) * current_price for p in open_positions
-            )
-
-            # 3. Calculate total portfolio value
             total_portfolio_value_usd = usd_balance + open_positions_value_usd
+            # Use the correct manager to fetch trades for the specific bot run
+            all_trades = self.db_manager.get_trades_by_run_id(run_id=self.state_manager.bot_id)
 
-            # 4. Get cumulative realized PnL from the database
-            all_trades = self.db_manager.get_all_trades_in_range(mode=self.mode)
-            realized_pnl_usd = sum(t.realized_pnl_usd for t in all_trades if t.realized_pnl_usd is not None)
+            realized_pnl_usd = sum(Decimal(str(t.realized_pnl_usd or '0')) for t in all_trades)
+            btc_treasury_amount = sum(Decimal(str(t.hodl_asset_amount or '0')) for t in all_trades)
 
-            # 5. Calculate BTC Treasury
-            # Simple rule: sum of all 'hodl_asset_amount' from closed trades
-            btc_treasury_amount = sum(t.hodl_asset_amount for t in all_trades if t.hodl_asset_amount is not None)
-
-            # 6. Get current BTC price to value the treasury
-            # The 'current_price' is for the trading symbol, which might not be BTC.
-            # I need to fetch the BTC price specifically.
-            btc_price_usd = trader.get_current_price('BTCUSDT')
-            btc_treasury_value_usd = btc_treasury_amount * btc_price_usd if btc_price_usd else 0
+            # Ensure the price is fetched as a string to maintain precision with Decimal
+            btc_price_str = self.trader.get_current_price('BTCUSDT')
+            btc_price_usd = Decimal(btc_price_str) if btc_price_str else current_price
+            btc_treasury_value_usd = btc_treasury_amount * btc_price_usd
 
             snapshot_data = {
                 "total_portfolio_value_usd": total_portfolio_value_usd,
@@ -185,129 +74,171 @@ class TradingBot:
                 "btc_treasury_amount": btc_treasury_amount,
                 "btc_treasury_value_usd": btc_treasury_value_usd,
             }
-
-            self.portfolio_manager.create_portfolio_snapshot(snapshot_data)
-            logger.info("Portfolio snapshot created successfully.")
-
+            self.db_portfolio_manager.create_portfolio_snapshot(snapshot_data)
+            logger.info("DB portfolio snapshot created successfully.")
         except Exception as e:
-            logger.error(f"Failed to create portfolio snapshot: {e}", exc_info=True)
+            logger.error(f"Failed to create DB portfolio snapshot: {e}", exc_info=True)
+
+
+class TradingBot:
+    def __init__(self, mode: str, bot_id: str, market_data_provider: MarketDataProvider, db_manager: PostgresManager):
+        self.mode = mode
+        self.run_id = bot_id
+        self.is_running = True
+        self.market_data_provider = market_data_provider
+        self.db_manager = db_manager
+        self.trader = Trader(mode=self.mode)
+        self.symbol = config_manager.get('APP', 'symbol')
+        self.state_file_path = "/tmp/bot_state.json"
+
+    def _write_state_to_file(self, open_positions: list, current_price: Decimal, wallet_balances: list, trade_history: list, portfolio_value: Decimal):
+        serializable_trade_history = [t.to_dict() for t in trade_history]
+        serializable_open_positions = [p.to_dict() for p in open_positions]
+        state = {
+            "mode": self.mode, "run_id": self.run_id, "symbol": self.symbol,
+            "timestamp": time.time(), "current_price": f"{current_price:.2f}",
+            "portfolio_value": f"${portfolio_value:,.2f}",
+            "open_positions": serializable_open_positions,
+            "wallet_balances": wallet_balances, "trade_history": serializable_trade_history
+        }
+        try:
+            temp_path = self.state_file_path + ".tmp"
+            with open(temp_path, "w") as f:
+                json.dump(state, f, indent=4, default=str)
+            os.rename(temp_path, self.state_file_path)
+        except (IOError, OSError) as e:
+            logger.error(f"Could not write to state file {self.state_file_path}: {e}")
+
+    def _handle_ui_commands(self, trader, state_manager, strategy_rules):
+        # This function deals with external data, which can be kept as strings/floats
+        # and converted to Decimal only when passed to financial calculations.
+        command_dir = "commands"
+        if not os.path.exists(command_dir): return
+
+        for filename in os.listdir(command_dir):
+            if not filename.endswith(".json"): continue
+            filepath = os.path.join(command_dir, filename)
+            try:
+                with open(filepath, "r") as f:
+                    command = json.load(f)
+
+                cmd_type = command.get("type")
+                logger.info(f"Processing UI command: {command}")
+
+                if cmd_type == "force_buy":
+                    amount_usd = Decimal(command.get("amount_usd", "0"))
+                    if amount_usd > 0:
+                        success, buy_result = trader.execute_buy(amount_usd, self.run_id, {"reason": "manual_override"})
+                        if success:
+                            purchase_price = Decimal(buy_result.get('price'))
+                            sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
+                            state_manager.create_new_position(buy_result, sell_target_price)
+
+                elif cmd_type == "force_sell":
+                    trade_id = command.get("trade_id")
+                    percentage = Decimal(command.get("percentage", "100.0"))
+                    if trade_id:
+                        position = next((p for p in state_manager.get_open_positions() if p.trade_id == trade_id), None)
+                        if position:
+                            logger.info(f"Force selling {percentage}% of trade {trade_id}.")
+                            # This is a simplified sell logic for manual override.
+                            # A more robust implementation would check available balance.
+                            quantity_to_sell = Decimal(position.quantity) * (percentage / Decimal("100"))
+
+                            # Create mock sell_position_data
+                            sell_position_data = position.to_dict()
+                            sell_position_data['quantity'] = quantity_to_sell
+
+                            success, sell_result = trader.execute_sell(sell_position_data, self.run_id, {"reason": "manual_force_sell"})
+                            if success:
+                                # After a manual sell, it's crucial to reconcile the state
+                                logger.info("Manual sell executed. Triggering state reconciliation.")
+                                state_manager.reconcile_holdings(self.symbol, trader)
+                            else:
+                                logger.error(f"Manual sell for trade {trade_id} failed.")
+
+                os.remove(filepath)
+            except Exception as e:
+                logger.error(f"Error processing command file {filename}: {e}", exc_info=True)
 
     def run(self):
-        """
-        The main loop for LIVE and PAPER TRADING.
-        """
         if self.mode not in ['trade', 'test']:
             logger.error(f"The 'run' method cannot be called in '{self.mode}' mode.")
             return
 
-        # Instantiate core components
+        quote_asset = "USDT"
+        base_asset = self.symbol.replace(quote_asset, "")
+        use_dynamic_capital = config_manager.getboolean('STRATEGY_RULES', 'use_dynamic_capital', fallback=False)
+        wc_percentage = Decimal(config_manager.get('STRATEGY_RULES', 'working_capital_percentage', fallback='0.8'))
+        max_open_positions = int(config_manager.get('STRATEGY_RULES', 'max_open_positions', fallback=20))
+        min_trade_size = Decimal(config_manager.get('TRADING_STRATEGY', 'min_trade_size_usdt', fallback='10.0'))
+        equity_recalc_interval = int(config_manager.get('APP', 'equity_recalculation_interval', fallback=300))
+
         feature_calculator = LiveFeatureCalculator(self.db_manager, mode=self.mode)
         state_manager = StateManager(mode=self.mode, bot_id=self.run_id, db_manager=self.db_manager)
         account_manager = AccountManager(self.trader.client)
         strategy_rules = StrategyRules(config_manager)
-
-        # --- SYNC TRADES ON STARTUP ---
-        if self.trader.is_ready:
-            logger.info("Performing initial holdings synchronization...")
-            state_manager.sync_holdings_with_binance(account_manager, strategy_rules, self.trader)
+        live_portfolio_manager = LivePortfolioManager(self.trader, state_manager, self.db_manager, quote_asset, equity_recalc_interval)
 
         if not self.trader.is_ready:
             logger.critical("Trader could not be initialized. Shutting down bot.")
             return
 
-        self.is_running = True
+        state_manager.sync_holdings_with_binance(account_manager, strategy_rules, self.trader)
         logger.info(f"🚀 --- TRADING BOT STARTED --- RUN ID: {self.run_id} --- SYMBOL: {self.symbol} --- MODE: {self.mode.upper()} --- 🚀")
-
-        # Determine the base asset once (e.g., BTC from BTCUSDT)
-        quote_asset = "USDT"
-        base_asset = self.symbol.replace(quote_asset, "") if self.symbol.endswith(quote_asset) else self.symbol[:3]
-
 
         while self.is_running:
             try:
                 logger.info("--- Starting new trading cycle ---")
-
-                # 0. Check for and handle any UI commands
                 self._handle_ui_commands(self.trader, state_manager, strategy_rules)
 
-                # 1. Get the latest market data with all features
                 final_candle = feature_calculator.get_current_candle_with_features()
                 if final_candle.empty:
-                    logger.warning("Could not generate final candle with features. Skipping cycle.")
+                    logger.warning("Could not get candle. Skipping cycle.")
                     time.sleep(10)
                     continue
 
-                current_price = final_candle['close']
-                decision_context = final_candle.to_dict()
+                current_price = Decimal(final_candle['close'])
 
-                # 2. Check for potential sales
                 open_positions = state_manager.get_open_positions()
-                logger.info(f"Found {len(open_positions)} open position(s).")
+                total_portfolio_value = live_portfolio_manager.get_total_portfolio_value(current_price)
 
-                # Fetch all wallet balances
+                # --- UI STATE UPDATE ---
                 all_prices = self.trader.get_all_prices()
                 wallet_balances = account_manager.get_all_account_balances(all_prices)
                 trade_history = state_manager.get_trade_history(mode=self.mode)
+                self._write_state_to_file(open_positions, current_price, wallet_balances, trade_history, total_portfolio_value)
 
-                # Update UI state file
-                self._write_state_to_file(open_positions, float(current_price), wallet_balances, trade_history)
-
-                # --- Refactored Sell Logic ---
-
-                # 1. Identify all positions that meet the sell criteria
-                positions_to_sell = [
-                    p for p in open_positions
-                    if float(current_price) >= (p.sell_target_price or float('inf'))
-                ]
-
+                # --- SELL LOGIC ---
+                positions_to_sell = [p for p in open_positions if current_price >= Decimal(str(p.sell_target_price or 'inf'))]
                 if positions_to_sell:
                     logger.info(f"Found {len(positions_to_sell)} positions meeting sell criteria.")
+                    total_sell_quantity = sum(Decimal(str(p.quantity)) * strategy_rules.sell_factor for p in positions_to_sell)
+                    available_balance = Decimal(self.trader.get_account_balance(asset=base_asset))
 
-                    # 2. Calculate the total quantity required for all sales
-                    total_sell_quantity = sum(
-                        float(p.quantity or 0) * strategy_rules.sell_factor for p in positions_to_sell
-                    )
-
-                    # 3. Fetch available balance ONCE
-                    available_balance = self.trader.get_account_balance(asset=base_asset)
-
-                    # 4. Perform a single, consolidated balance check
                     if total_sell_quantity > available_balance:
-                        logger.warning(
-                            f"INSUFFICIENT BALANCE: Attempting to sell a total of {total_sell_quantity:.8f} {base_asset}, "
-                            f"but only {available_balance:.8f} is available. "
-                            f"Skipping all sales for this cycle."
-                        )
+                        logger.warning(f"INSUFFICIENT BALANCE: Bot state is out of sync. Attempting to sell {total_sell_quantity:.8f} {base_asset}, but only {available_balance:.8f} is available.")
+                        logger.info("Triggering state reconciliation with exchange balance.")
+                        state_manager.reconcile_holdings(self.symbol, self.trader)
+                        # After reconciliation, the bot will wait for the next trading cycle
+                        # to re-evaluate sell conditions with the corrected state.
                     else:
-                        logger.info(
-                            f"Balance check passed. Available: {available_balance:.8f} {base_asset}, "
-                            f"Required: {total_sell_quantity:.8f} {base_asset}. Proceeding with sales."
-                        )
-                        # 5. Execute sales if balance is sufficient
                         for position in positions_to_sell:
                             trade_id = position.trade_id
-                            original_quantity = float(position.quantity or 0)
+                            original_quantity = Decimal(str(position.quantity))
                             sell_quantity = original_quantity * strategy_rules.sell_factor
                             hodl_asset_amount = original_quantity - sell_quantity
 
                             sell_position_data = position.to_dict()
                             sell_position_data['quantity'] = sell_quantity
 
-                            success, sell_result = self.trader.execute_sell(sell_position_data, self.run_id, decision_context)
-
+                            success, sell_result = self.trader.execute_sell(sell_position_data, self.run_id, final_candle.to_dict())
                             if success:
-                                buy_price = float(position.price or 0)
-                                sell_price = float(sell_result.get('price'))
-
-                                # Refactored PnL calculation
-                                realized_pnl_usd = strategy_rules.calculate_realized_pnl(
-                                    buy_price=buy_price,
-                                    sell_price=sell_price,
-                                    quantity_sold=sell_quantity
-                                )
-                                
+                                buy_price = Decimal(str(position.price))
+                                sell_price = Decimal(str(sell_result.get('price')))
+                                realized_pnl_usd = strategy_rules.calculate_realized_pnl(buy_price, sell_price, sell_quantity)
                                 hodl_asset_value_at_sell = hodl_asset_amount * current_price
-                                commission_usd = float(sell_result.get('commission', 0))
+                                commission_usd = Decimal(str(sell_result.get('commission', '0')))
 
                                 sell_result.update({
                                     "commission_usd": commission_usd,
@@ -316,75 +247,69 @@ class TradingBot:
                                     "hodl_asset_value_at_sell": hodl_asset_value_at_sell
                                 })
 
-                                logger.info(f"Sell successful for {trade_id}. Recording partial sell and updating position.")
                                 state_manager.record_partial_sell(
                                     original_trade_id=trade_id,
                                     remaining_quantity=hodl_asset_amount,
                                     sell_data=sell_result
                                 )
-
-                                # Create a portfolio snapshot after every successful sale
-                                self._create_portfolio_snapshot(self.trader, state_manager, float(current_price))
+                                live_portfolio_manager.get_total_portfolio_value(current_price, force_recalculation=True)
                             else:
                                 logger.error(f"Sell execution failed for position {trade_id}.")
 
-                # 3. Check for a potential buy (New "Adaptive Momentum Grid" Strategy)
-                open_positions_count = state_manager.get_open_positions_count()
-                max_open_positions = int(config_manager.get('STRATEGY_RULES', 'max_open_positions', fallback=20))
+                # --- BUY LOGIC ---
+                buy_check_passed = False
+                if use_dynamic_capital:
+                    working_capital = total_portfolio_value * wc_percentage
+                    capital_in_use = sum(Decimal(p.quantity) * Decimal(p.price) for p in open_positions)
+                    available_buying_power = working_capital - capital_in_use
 
-                if open_positions_count < max_open_positions:
+                    cash_balance = Decimal(self.trader.get_account_balance(asset=quote_asset))
+                    buy_amount_usdt = strategy_rules.get_next_buy_amount(cash_balance)
+
+                    if buy_amount_usdt <= available_buying_power:
+                        buy_check_passed = True
+                        logger.info(f"Dynamic Capital check PASSED. Available: ${available_buying_power:,.2f}, Needed: ${buy_amount_usdt:,.2f}")
+                    else:
+                        logger.info(f"Dynamic Capital check FAILED. Available: ${available_buying_power:,.2f}, Needed: ${buy_amount_usdt:,.2f}")
+                else:
+                    if len(open_positions) < max_open_positions:
+                        buy_check_passed = True
+                    else:
+                        logger.info(f"Maximum open positions ({max_open_positions}) reached.")
+
+                if buy_check_passed:
                     market_data = final_candle.to_dict()
-                    should_buy, regime, reason = strategy_rules.evaluate_buy_signal(
-                        market_data,
-                        open_positions_count=open_positions_count
-                    )
-
+                    should_buy, regime, reason = strategy_rules.evaluate_buy_signal(market_data, len(open_positions))
                     if should_buy:
-                        logger.info(f"Buy signal triggered. Reason: {reason}. Evaluating capital.")
-                        available_balance = self.trader.get_account_balance()
-
-                        if available_balance <= 0:
-                            logger.warning("Available balance is zero or less. Cannot execute buy.")
-                        else:
-                            buy_amount_usdt = strategy_rules.get_next_buy_amount(available_balance)
-                            min_trade_size = float(config_manager.get('TRADING_STRATEGY', 'min_trade_size_usdt', fallback=10.0))
-
-                            if buy_amount_usdt > min_trade_size:
+                        logger.info(f"Buy signal: {reason}. Evaluating capital.")
+                        cash_balance = Decimal(self.trader.get_account_balance(asset=quote_asset))
+                        if cash_balance >= min_trade_size:
+                            buy_amount_usdt = strategy_rules.get_next_buy_amount(cash_balance)
+                            if buy_amount_usdt >= min_trade_size:
                                 logger.info(f"Executing buy for ${buy_amount_usdt:.2f} USD.")
-
-                                # Enhanced data logging
-                                decision_context = {
-                                    "market_regime": regime,
-                                    "buy_trigger_reason": reason,
-                                    "ema_100_value": market_data.get('ema_100'),
-                                    "ema_20_value": market_data.get('ema_20'),
-                                    "lower_bollinger_band": market_data.get('bbl_20_2_0'),
-                                    "regime_strength": None # Placeholder
-                                }
-
+                                decision_context = { "market_regime": regime, "buy_trigger_reason": reason }
                                 success, buy_result = self.trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
                                 if success:
-                                    logger.info("Buy successful. Calculating sell target and creating new position.")
-                                    purchase_price = float(buy_result.get('price'))
+                                    logger.info("Buy successful. Creating new position.")
+                                    purchase_price = Decimal(buy_result.get('price'))
                                     sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
                                     state_manager.create_new_position(buy_result, sell_target_price)
+                                    live_portfolio_manager.get_total_portfolio_value(purchase_price, force_recalculation=True)
                             else:
-                                logger.warning(f"Calculated buy amount (${buy_amount_usdt:.2f}) is below the minimum threshold of ${min_trade_size}. Skipping buy.")
-                else:
-                    logger.info(f"Maximum open positions ({max_open_positions}) reached. No new buys will be considered.")
+                                logger.warning(f"Calculated buy amount ${buy_amount_usdt:.2f} < min size. Skipping.")
+                        else:
+                            logger.warning(f"Cash balance ${cash_balance:.2f} < min trade size. Cannot buy.")
 
                 logger.info("--- Cycle complete. Waiting 60 seconds... ---")
                 time.sleep(60)
 
             except KeyboardInterrupt:
-                logger.info("\n[SHUTDOWN] Ctrl+C detected. Stopping main loop...")
                 self.is_running = False
+                logger.info("\n[SHUTDOWN] Ctrl+C detected.")
             except Exception as e:
-                logger.critical(f"❌ A critical error occurred in the main loop: {e}", exc_info=True)
+                logger.critical(f"❌ Critical error in main loop: {e}", exc_info=True)
                 time.sleep(300)
 
     def shutdown(self):
-        """Handles all cleanup operations to ensure a clean exit."""
-        logger.info("[SHUTDOWN] Initiating graceful shutdown procedure...")
-        # In a real application, you would close connections and other resources here
+        logger.info("[SHUTDOWN] Initiating graceful shutdown...")
         logger.info("[SHUTDOWN] Cleanup complete. Goodbye!")
