@@ -162,16 +162,80 @@ class Backtester:
 
     def _generate_and_save_summary(self, open_positions: dict, portfolio_history: list[Decimal]):
         logger.info("--- Generating and saving backtest summary ---")
-        # ... (summary generation needs to handle Decimal)
+
+        all_trades_for_run = self.db_manager.get_trades_by_run_id(self.run_id)
+
+        # Convert to DataFrame for easier analysis
+        if not all_trades_for_run:
+            logger.warning("No trades were executed in this backtest run.")
+            all_trades_df = pd.DataFrame()
+        else:
+            all_trades_df = pd.DataFrame([t.to_dict() for t in all_trades_for_run])
+            # Convert numeric columns to Decimal for precision
+            for col in ['price', 'quantity', 'usd_value', 'commission', 'commission_usd', 'realized_pnl_usd', 'hodl_asset_amount', 'hodl_asset_value_at_sell']:
+                if col in all_trades_df.columns:
+                    all_trades_df[col] = all_trades_df[col].apply(lambda x: Decimal(str(x)) if x is not None else Decimal(0))
+
+        # --- METRIC CALCULATIONS ---
         initial_balance = self.mock_trader.initial_balance
         final_balance = self.mock_trader.get_total_portfolio_value()
-        total_pnl_balance = final_balance - initial_balance
+        net_pnl = final_balance - initial_balance
+        net_pnl_percent = (net_pnl / initial_balance) * 100 if initial_balance > 0 else Decimal(0)
 
-        logger.info("========== BACKTEST RESULTS ==========")
+        buy_trades = all_trades_df[all_trades_df['order_type'] == 'buy']
+        sell_trades = all_trades_df[all_trades_df['status'] == 'CLOSED']
+
+        total_realized_pnl = sell_trades['realized_pnl_usd'].sum()
+        total_fees_usd = all_trades_df['commission_usd'].sum()
+
+        winning_trades = sell_trades[sell_trades['realized_pnl_usd'] > 0]
+        losing_trades = sell_trades[sell_trades['realized_pnl_usd'] <= 0]
+
+        win_rate = (len(winning_trades) / len(sell_trades)) * 100 if len(sell_trades) > 0 else Decimal(0)
+
+        avg_gain = winning_trades['realized_pnl_usd'].mean() if len(winning_trades) > 0 else Decimal(0)
+        avg_loss = abs(losing_trades['realized_pnl_usd'].mean()) if len(losing_trades) > 0 else Decimal(0)
+        payoff_ratio = avg_gain / avg_loss if avg_loss > 0 else Decimal('inf')
+
+        unrealized_pnl = sum((pos['quantity'] * self.mock_trader.get_current_price()) - pos['usd_value'] for pos in open_positions.values())
+
+        # Max Drawdown Calculation
+        max_drawdown = Decimal(0)
+        peak = -Decimal('inf')
+        if portfolio_history:
+            peak = portfolio_history[0]
+            for value in portfolio_history:
+                if value > peak:
+                    peak = value
+                drawdown = (peak - value) / peak if peak > 0 else Decimal(0)
+                if drawdown > max_drawdown:
+                    max_drawdown = drawdown
+
+        # Treasury Calculation
+        treasury_df = all_trades_df[all_trades_df['status'] == 'TREASURY']
+        btc_treasury_amount = treasury_df['quantity'].sum()
+        btc_treasury_value = btc_treasury_amount * self.mock_trader.get_current_price()
+
+        # --- LOGGING ---
+        logger.info("="*30 + " BACKTEST RESULTS " + "="*30)
+        logger.info(f" Backtest Run ID: {self.run_id}")
+        if not self.feature_data.empty:
+            start_time = self.feature_data.index[0].date()
+            end_time = self.feature_data.index[-1].date()
+            logger.info(f" Period: {start_time} to {end_time}")
         logger.info(f" Initial Balance: ${initial_balance:,.2f}")
         logger.info(f" Final Balance:   ${final_balance:,.2f}")
-        logger.info(f" Net P&L:         ${total_pnl_balance:,.2f} ({ (total_pnl_balance/initial_balance) * 100 if initial_balance > 0 else 0 :.2f}%)")
-        # ... (rest of summary logging)
+        logger.info(f" Net P&L:         ${net_pnl:,.2f} ({net_pnl_percent:.2f}%)")
+        logger.info(f"   - Realized PnL:   ${total_realized_pnl:,.2f}")
+        logger.info(f"   - Unrealized PnL: ${unrealized_pnl:,.2f}")
+        logger.info(f" Total Buy Trades:    {len(buy_trades)}")
+        logger.info(f" Total Sell Trades:   {len(sell_trades)} (Completed Trades)")
+        logger.info(f" Success Rate:        {win_rate:.2f}%")
+        logger.info(f" Payoff Ratio:        {payoff_ratio:.2f}")
+        logger.info(f" Maximum Drawdown:    {max_drawdown:.2%}")
+        logger.info(f" Total Fees Paid:     ${total_fees_usd:,.2f}")
+        logger.info(f" BTC Treasury:        {btc_treasury_amount:.8f} BTC (${btc_treasury_value:,.2f})")
+        logger.info("="*80)
 
 # Add a to_dict method to TradePoint if it doesn't exist, for easy conversion
 def trade_point_to_dict(self):

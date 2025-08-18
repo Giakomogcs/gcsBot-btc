@@ -55,8 +55,9 @@ def mock_db_manager():
     mock.get_trades_by_run_id.return_value = []
     return mock
 
+@patch('jules_bot.backtesting.engine.Backtester._generate_and_save_summary')
 @patch('jules_bot.backtesting.engine.add_all_features')
-def test_backtester_pnl_calculation(mock_add_all_features, mock_config_manager, mock_db_manager):
+def test_backtester_pnl_calculation(mock_add_all_features, mock_summary, mock_config_manager, mock_db_manager):
     """
     Tests that the backtester correctly calculates P&L using the StrategyRules method.
     """
