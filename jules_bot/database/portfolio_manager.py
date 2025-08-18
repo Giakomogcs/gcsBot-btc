@@ -2,6 +2,7 @@ from sqlalchemy import create_engine, desc
 from sqlalchemy.orm import sessionmaker, Session
 from contextlib import contextmanager
 from typing import Iterator, Optional
+from decimal import Decimal
 
 from jules_bot.database.portfolio_models import Base, PortfolioSnapshot, FinancialMovement
 from jules_bot.utils.logger import logger
@@ -45,10 +46,10 @@ class PortfolioManager:
                 last_snapshot = self.get_latest_snapshot(db)
                 evolution = None
                 if last_snapshot:
-                    current_value = snapshot_data['total_portfolio_value_usd']
-                    previous_value = last_snapshot.total_portfolio_value_usd
-                    if previous_value > 0:
-                        evolution = ((current_value / previous_value) - 1) * 100
+                    current_value = Decimal(snapshot_data['total_portfolio_value_usd'])
+                    previous_value = Decimal(last_snapshot.total_portfolio_value_usd)
+                    if previous_value > Decimal('0'):
+                        evolution = ((current_value / previous_value) - Decimal('1')) * Decimal('100')
 
                 snapshot_data['evolution_percent_vs_previous'] = evolution
 
@@ -63,7 +64,7 @@ class PortfolioManager:
                 logger.error(f"Failed to create portfolio snapshot: {e}", exc_info=True)
                 return None
 
-    def create_financial_movement(self, movement_type: str, amount_usd: float, notes: str, transaction_id: Optional[str] = None) -> Optional[FinancialMovement]:
+    def create_financial_movement(self, movement_type: str, amount_usd: Decimal, notes: str, transaction_id: Optional[str] = None) -> Optional[FinancialMovement]:
         """
         Records a financial movement (deposit or withdrawal) in the database.
         """
