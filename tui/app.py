@@ -1,4 +1,5 @@
 import json
+import shutil
 import subprocess
 import sys
 import os
@@ -15,6 +16,37 @@ from textual.message import Message # NOVO
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+def get_docker_compose_command():
+    """
+    Checks for 'docker-compose' (V1) or 'docker compose' (V2) and returns the valid command.
+    Prepends 'sudo' if the user is not root to avoid permission issues.
+    """
+    base_cmd = []
+    try:
+        if os.geteuid() != 0:
+            base_cmd = ["sudo"]
+    except AttributeError:
+        # os.geteuid() does not exist on Windows.
+        pass
+
+    if shutil.which("docker-compose"):
+        return base_cmd + ["docker-compose"]
+    elif shutil.which("docker"):
+        try:
+            test_command = base_cmd + ["docker", "compose", "--version"]
+            result = subprocess.run(test_command, capture_output=True, text=True, check=True)
+            if "Docker Compose version" in result.stdout:
+                return base_cmd + ["docker", "compose"]
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass
+    
+    raise FileNotFoundError("Could not find a valid 'docker-compose' or 'docker compose' command.")
+
+def is_running_in_docker() -> bool:
+    """Checks if the app is running inside a Docker container."""
+    return os.path.exists('/.dockerenv') or os.environ.get('container') == 'true'
+
 
 class NumberValidator(Validator):
     def validate(self, value: str) -> ValidationResult:
@@ -90,7 +122,7 @@ class TUIApp(App):
     }
     #positions_table {
         margin-top: 1;
-        height: 20;
+        height: 100%;
     }
     #log_display {
         height: 1fr;
@@ -255,18 +287,25 @@ class TUIApp(App):
     @work(thread=True)
     def run_script_worker(self, command: list[str], message_type: type[Message]) -> None:
         """
-        Executa um script de longa duração em um 'worker' para não bloquear a UI.
-        Isso é crucial para a responsividade do dashboard. O worker executa a tarefa
-        em um thread separado e, quando concluído, posta uma 'Message' com o resultado.
-        A UI principal então lida com essa mensagem em seu próprio thread.
+        Executes a script in a worker thread, handling whether it needs to be run
+        inside Docker via 'docker-compose exec' or directly.
         """
-        self.log_display.write(f"Executing: [yellow]{' '.join(command)}[/]")
+        base_command = []
+        if not is_running_in_docker():
+            try:
+                # If running on host, prepend the command to execute script inside the container
+                base_command = get_docker_compose_command() + ["exec", "app"]
+            except FileNotFoundError as e:
+                self.post_message(message_type(str(e), success=False))
+                self.call_from_thread(self.log_display.write, f"[bold red]Docker Error:[/bold red] {e}")
+                return
+        
+        full_command = base_command + command
+        
+        self.log_display.write(f"Executing: [yellow]{' '.join(full_command)}[/]")
         try:
-            # Executa o subprocesso de forma robusta e compatível com Windows/Linux.
-            # - `encoding='utf-8'`: Garante que o output seja lido como UTF-8.
-            # - `errors='replace'`: Previne falhas se o script gerar caracteres inválidos.
             process = subprocess.run(
-                command,
+                full_command,
                 capture_output=True,
                 text=True,
                 check=False,
@@ -275,15 +314,13 @@ class TUIApp(App):
             )
 
             if process.returncode != 0:
-                output = process.stderr.strip()
+                output = process.stderr.strip() if process.stderr else "No stderr output."
                 success = False
-                # `call_from_thread` é necessário para atualizar widgets de um worker.
                 self.call_from_thread(self.log_display.write, f"[bold red]Script Error:[/bold red] {output}")
             else:
                 output = process.stdout.strip()
                 success = True
             
-            # Tenta decodificar o JSON, se falhar, envia como texto bruto.
             try:
                 data = json.loads(output)
                 self.post_message(message_type(data, success))
@@ -291,8 +328,14 @@ class TUIApp(App):
                 self.post_message(message_type(output, success))
 
         except FileNotFoundError:
-            self.post_message(message_type("Script not found", False))
-            self.call_from_thread(self.log_display.write, f"[bold red]Error: Script not found.[/bold red]")
+            # This would typically catch the 'docker-compose' or 'docker' command not being found
+            error_message = f"Command not found: '{full_command[0]}'. Please ensure it is installed and in your PATH."
+            self.post_message(message_type(error_message, success=False))
+            self.call_from_thread(self.log_display.write, f"[bold red]Error:[/bold red] {error_message}")
+        except Exception as e:
+            # Catch other potential exceptions during subprocess execution
+            self.post_message(message_type(str(e), success=False))
+            self.call_from_thread(self.log_display.write, f"[bold red]Execution Error:[/bold red] {e}")
 
     # MODIFICADO: on_button_pressed agora chama um worker em vez de executar o script diretamente
     def on_button_pressed(self, event: Button.Pressed) -> None:
