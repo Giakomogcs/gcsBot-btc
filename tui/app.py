@@ -17,27 +17,48 @@ from textual.message import Message # NOVO
 # Add project root to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+def can_sudo_passwordless() -> bool:
+    """Checks if sudo can be run without a password prompt."""
+    if not shutil.which('sudo'):
+        return False
+    try:
+        # The -n flag makes sudo non-interactive; it will fail if a password is required.
+        subprocess.run(
+            ['sudo', '-n', 'true'], 
+            check=True, 
+            capture_output=True
+        )
+        return True
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return False
+
 def get_docker_compose_command():
     """
     Checks for 'docker-compose' (V1) or 'docker compose' (V2) and returns the valid command.
-    Note: This does not prepend sudo. The user is expected to have correct Docker permissions.
+    Prepends 'sudo' only if the user is not root and can run sudo without a password.
     """
+    base_cmd = []
+    try:
+        # Use sudo only if not root AND sudo is passwordless, to avoid hangs.
+        if os.geteuid() != 0 and can_sudo_passwordless():
+            base_cmd = ["sudo"]
+    except AttributeError:
+        # os.geteuid() does not exist on Windows, so no sudo.
+        pass
+
     if shutil.which("docker-compose"):
-        return ["docker-compose"]
+        return base_cmd + ["docker-compose"]
     elif shutil.which("docker"):
         try:
-            # Test for 'docker compose' (V2)
-            test_command = ["docker", "compose", "--version"]
+            test_command = base_cmd + ["docker", "compose", "--version"]
             subprocess.run(test_command, capture_output=True, text=True, check=True)
-            return ["docker", "compose"]
+            return base_cmd + ["docker", "compose"]
         except (subprocess.CalledProcessError, FileNotFoundError):
-            # This can happen if 'docker compose' is not a valid command, so we just pass
-            # and let the final error be raised.
             pass
     
     raise FileNotFoundError(
-        "Could not find a valid 'docker-compose' or 'docker compose' command. "
-        "Please ensure Docker is installed and that your user has permissions to run it without sudo."
+        "Could not find 'docker-compose' or 'docker compose'. "
+        "Please ensure Docker is installed and you have permissions to run it (you may need to configure passwordless sudo)."
     )
 
 def is_running_in_docker() -> bool:
