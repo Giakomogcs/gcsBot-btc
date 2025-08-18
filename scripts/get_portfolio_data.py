@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.database.portfolio_manager import PortfolioManager
+from jules_bot.database.postgres_manager import PostgresManager
 
 def get_portfolio_data():
     """
@@ -16,7 +17,8 @@ def get_portfolio_data():
     """
     try:
         db_config = config_manager.get_section('POSTGRES')
-        portfolio_manager = PortfolioManager(db_config)
+        db_manager = PostgresManager(config=db_config)
+        portfolio_manager = PortfolioManager(db_manager.SessionLocal)
 
         # --- Fetch Data ---
         latest_snapshot = portfolio_manager.get_latest_snapshot()
