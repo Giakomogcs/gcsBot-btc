@@ -5,6 +5,7 @@ from jules_bot.core_logic.strategy_rules import StrategyRules
 from jules_bot.core.exchange_connector import ExchangeManager
 from jules_bot.utils.config_manager import ConfigManager
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
+from sqlalchemy.exc import OperationalError
 
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,9 @@ class StatusService:
 
             market_data = market_data_series.to_dict()
             current_price = Decimal(str(market_data.get('close', '0')))
+        except OperationalError as e:
+            logger.error(f"Database connection error in StatusService: {e}", exc_info=True)
+            return {"error": "Database connection failed.", "details": str(e)}
 
             # 2. Fetch open positions from local DB
             # CORRECTED LOGIC: Only filter by bot_id in 'backtest' mode.

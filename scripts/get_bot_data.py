@@ -54,8 +54,11 @@ def main(
             logger.error(f"An error occurred while fetching data: {status_data['error']}")
             raise typer.Exit(code=1)
 
+        # Return only open positions
+        open_positions = status_data.get("open_positions_status", [])
+
         # Print the data as a nicely formatted JSON object
-        print(json.dumps(status_data, indent=4, default=str)) # Use default=str to handle non-serializable types like datetime
+        print(json.dumps(open_positions, indent=4, default=str))
 
         logger.info("Successfully retrieved bot data.")
 

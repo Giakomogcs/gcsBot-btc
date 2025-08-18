@@ -51,6 +51,15 @@ def get_portfolio_data():
                 "strategic_reserve": f"{strategic_reserve:.2f}",
                 "operating_mode": operating_mode
             }
+        else:
+            dcom_data = {
+                "total_equity": "0.00",
+                "working_capital_target": "0.00",
+                "working_capital_in_use": "0.00",
+                "working_capital_remaining": "0.00",
+                "strategic_reserve": "0.00",
+                "operating_mode": "N/A"
+            }
 
         # --- Prepare data for JSON serialization ---
         if latest_snapshot:
@@ -63,10 +72,20 @@ def get_portfolio_data():
                 "realized_pnl_usd": f"{Decimal(latest_snapshot.realized_pnl_usd):.2f}",
                 "btc_treasury_amount": f"{Decimal(latest_snapshot.btc_treasury_amount):.8f}",
                 "btc_treasury_value_usd": f"{Decimal(latest_snapshot.btc_treasury_value_usd):.2f}",
-                "evolution_percent_vs_previous": f"{Decimal(latest_snapshot.evolution_percent_vs_previous):.2f}"
+                "evolution_percent_vs_previous": f"{Decimal(latest_snapshot.evolution_percent_vs_previous or 0):.2f}"
             }
         else:
-            latest_snapshot_data = None
+            latest_snapshot_data = {
+                "id": 0,
+                "timestamp": datetime.datetime.utcnow().isoformat(),
+                "total_portfolio_value_usd": "0.00",
+                "usd_balance": "0.00",
+                "open_positions_value_usd": "0.00",
+                "realized_pnl_usd": "0.00",
+                "btc_treasury_amount": "0.00000000",
+                "btc_treasury_value_usd": "0.00",
+                "evolution_percent_vs_previous": "0.00"
+            }
 
         historical_data = [
             {"timestamp": s.timestamp.isoformat(), "value": f"{Decimal(s.total_portfolio_value_usd):.2f}"}
