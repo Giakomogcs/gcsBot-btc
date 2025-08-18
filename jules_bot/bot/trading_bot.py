@@ -2,6 +2,8 @@ import time
 import uuid
 import json
 import os
+import datetime
+import pandas as pd
 from decimal import Decimal, getcontext
 from jules_bot.utils.logger import logger
 from jules_bot.utils.config_manager import config_manager
@@ -265,24 +267,38 @@ class TradingBot:
                 market_mode = MarketMode.STANDARD
                 price_change_percent = Decimal('0.0')
 
-                # Fetch historical data to determine mode
-                historical_data = self.market_data_provider.get_historical_data(
-                    self.symbol,
-                    start=f"-{trigger_period_hours}h"
-                )
+                # Fetch historical data directly from Binance API
+                try:
+                    end_time = datetime.datetime.now(datetime.timezone.utc)
+                    start_time = end_time - datetime.timedelta(hours=trigger_period_hours)
 
-                if historical_data is not None and not historical_data.empty:
-                    logger.debug(f"Historical data for mode calculation has {len(historical_data)} rows.")
-                    start_price = Decimal(historical_data['close'].iloc[0])
-                    price_change_percent = (current_price - start_price) / start_price
-                    logger.debug(f"Start price: {start_price}, Current price: {current_price}, Change: {price_change_percent:.4%}")
+                    klines = self.trader.client.get_historical_klines(
+                        self.symbol,
+                        "1m",
+                        start_time.strftime("%d %b, %Y %H:%M:%S"),
+                        end_time.strftime("%d %b, %Y %H:%M:%S")
+                    )
 
-                    if price_change_percent <= -downtrend_trigger_percent:
-                        market_mode = MarketMode.DEFENSIVE
-                    elif price_change_percent >= uptrend_trigger_percent:
-                        market_mode = MarketMode.AGGRESSIVE
-                else:
-                    logger.warning("No historical data found for mode calculation. Defaulting to STANDARD mode.")
+                    if klines:
+                        historical_data = pd.DataFrame(klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'qav', 'nt', 'tbbav', 'tbqav', 'ignore'])
+                        historical_data['close'] = historical_data['close'].astype(float)
+
+                        logger.debug(f"Fetched {len(historical_data)} klines from Binance for mode calculation.")
+
+                        start_price = Decimal(historical_data['close'].iloc[0])
+                        price_change_percent = (current_price - start_price) / start_price
+                        logger.debug(f"Start price: {start_price}, Current price: {current_price}, Change: {price_change_percent:.4%}")
+
+                        if price_change_percent <= -downtrend_trigger_percent:
+                            market_mode = MarketMode.DEFENSIVE
+                        elif price_change_percent >= uptrend_trigger_percent:
+                            market_mode = MarketMode.AGGRESSIVE
+                    else:
+                        logger.warning("No historical klines returned from Binance for mode calculation. Defaulting to STANDARD mode.")
+
+                except Exception as e:
+                    logger.error(f"Error fetching historical klines from Binance: {e}", exc_info=True)
+                    logger.warning("Defaulting to STANDARD mode due to API error.")
 
                 logger.info(f"Price change in last {trigger_period_hours}h: {price_change_percent:.2%}. Mode: {market_mode.value}")
 
