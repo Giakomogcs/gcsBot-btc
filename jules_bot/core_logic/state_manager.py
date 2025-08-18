@@ -12,6 +12,7 @@ class StateManager:
         self.mode = mode
         self.bot_id = bot_id
         self.db_manager = db_manager
+        self.SessionLocal = db_manager.SessionLocal # Add this line
 
         # The TradeLogger is now responsible for ALL WRITE operations.
         self.trade_logger = TradeLogger(mode=self.mode, db_manager=self.db_manager)
