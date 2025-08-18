@@ -18,7 +18,13 @@ def mock_config_manager():
                 'commission_rate': '0.001',
                 'sell_factor': '0.9',
                 'target_profit': '0.05',
-                'max_open_positions': '20'
+                'max_open_positions': '20',
+                'stable_spacing_percent': '0.005',
+                'freefall_spacing_percent': '0.02',
+                'uptrend_spacing_percent': '0.003',
+                'downtrend_trigger_percent': '0.03',
+                'uptrend_trigger_percent': '0.03',
+                'trigger_period_hours': '1'
             }
         if section_name == 'BACKTEST':
             return {
@@ -71,11 +77,11 @@ def test_backtester_pnl_calculation(mock_add_all_features, mock_summary, mock_co
 
     # We need to patch the global config_manager used by the Backtester
     with patch('jules_bot.backtesting.engine.config_manager', mock_config_manager), \
-         patch('jules_bot.core_logic.strategy_rules.StrategyRules.evaluate_buy_signal') as mock_buy_signal, \
+         patch('jules_bot.core_logic.strategy_rules.StrategyRules.determine_buy_decision') as mock_buy_decision, \
          patch('jules_bot.core_logic.strategy_rules.StrategyRules.calculate_sell_target_price') as mock_sell_target:
 
         # Mock to buy only on the first call
-        mock_buy_signal.side_effect = [(True, 'uptrend', 'test_buy_signal')] + [(False, '', '')] * (len(feature_data) - 1)
+        mock_buy_decision.side_effect = [(True, 'test_buy_signal')] + [(False, '')] * (len(feature_data) - 1)
         
         # Sell if price is >= 110 (the close of the second candle)
         mock_sell_target.return_value = Decimal("110.0")

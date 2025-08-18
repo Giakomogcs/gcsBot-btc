@@ -8,6 +8,7 @@ from jules_bot.utils.config_manager import config_manager
 from jules_bot.core_logic.strategy_rules import StrategyRules
 from jules_bot.utils.logger import logger
 from jules_bot.core.schemas import TradePoint
+from jules_bot.core.market_mode import MarketMode
 from jules_bot.research.feature_engineering import add_all_features
 from jules_bot.services.trade_logger import TradeLogger
 
@@ -140,8 +141,41 @@ class Backtester:
                     buy_check_passed = True
 
             if buy_check_passed:
-                market_data = candle.to_dict()
-                should_buy, regime, reason = strategy_rules.evaluate_buy_signal(market_data, len(open_positions))
+                # Determine Market Mode for backtesting
+                downtrend_trigger_percent = Decimal(config_manager.get('STRATEGY_RULES', 'downtrend_trigger_percent'))
+                uptrend_trigger_percent = Decimal(config_manager.get('STRATEGY_RULES', 'uptrend_trigger_percent'))
+                trigger_period_hours = int(config_manager.get('STRATEGY_RULES', 'trigger_period_hours'))
+
+                market_mode = MarketMode.STANDARD
+                price_change_percent = Decimal('0.0')
+
+                # Get historical data for mode calculation
+                start_period = current_time - pd.Timedelta(hours=trigger_period_hours)
+                historical_data = self.feature_data.loc[start_period:current_time]
+
+                if not historical_data.empty:
+                    logger.debug(f"Historical data for mode calculation has {len(historical_data)} rows.")
+                    start_price = Decimal(str(historical_data['close'].iloc[0]))
+                    price_change_percent = (current_price - start_price) / start_price if start_price > 0 else Decimal('0.0')
+                    logger.debug(f"Start price: {start_price}, Current price: {current_price}, Change: {price_change_percent:.4%}")
+
+                    if price_change_percent <= -downtrend_trigger_percent:
+                        market_mode = MarketMode.DEFENSIVE
+                    elif price_change_percent >= uptrend_trigger_percent:
+                        market_mode = MarketMode.AGGRESSIVE
+                else:
+                    logger.warning(f"No historical data at timestamp {current_time} for mode calculation. Defaulting to STANDARD mode.")
+
+                # Get last buy price from open_positions
+                if open_positions:
+                    last_buy_time = max(pos['timestamp'] for pos in open_positions.values())
+                    last_buy_price = open_positions[next(k for k, v in open_positions.items() if v['timestamp'] == last_buy_time)]['price']
+                else:
+                    last_buy_price = Decimal('inf')
+
+                high_price = Decimal(str(candle['high']))
+                should_buy, reason = strategy_rules.determine_buy_decision(market_mode, current_price, last_buy_price, high_price)
+
                 if should_buy:
                     buy_amount_usdt = strategy_rules.get_next_buy_amount(cash_balance)
                     if cash_balance >= min_trade_size and buy_amount_usdt >= min_trade_size:
@@ -153,12 +187,18 @@ class Backtester:
 
                             open_positions[new_trade_id] = {
                                 'price': buy_price, 'quantity': buy_result['quantity'],
-                                'usd_value': buy_result['usd_value'], 'sell_target_price': sell_target_price
+                                'usd_value': buy_result['usd_value'], 'sell_target_price': sell_target_price,
+                                'timestamp': current_time # Store timestamp for last_buy_price logic
                             }
 
                             # Log the new "OPEN" position to the database
                             decision_context = candle.to_dict()
                             decision_context.pop('symbol', None)
+                            decision_context.update({
+                                "market_mode": market_mode.value,
+                                "buy_trigger_reason": reason,
+                                "price_change_percent": f"{price_change_percent:.4f}"
+                            })
 
                             trade_data = {
                                 'run_id': self.run_id, 'strategy_name': strategy_name, 'symbol': symbol,
@@ -170,7 +210,7 @@ class Backtester:
                                 'commission_usd': buy_result['commission']
                             }
                             self.trade_logger.log_trade(trade_data)
-                            logger.info(f"BUY EXECUTED: TradeID: {new_trade_id} | Price: ${buy_price:,.2f} | Qty: {buy_result['quantity']:.8f}")
+                            logger.info(f"BUY EXECUTED: TradeID: {new_trade_id} | Price: ${buy_price:,.2f} | Qty: {buy_result['quantity']:.8f} | Mode: {market_mode.value}")
 
         self._generate_and_save_summary(open_positions, portfolio_history)
         logger.info(f"--- Backtest {self.run_id} finished ---")

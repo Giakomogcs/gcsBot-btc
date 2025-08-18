@@ -272,13 +272,17 @@ class TradingBot:
                 )
 
                 if historical_data is not None and not historical_data.empty:
+                    logger.debug(f"Historical data for mode calculation has {len(historical_data)} rows.")
                     start_price = Decimal(historical_data['close'].iloc[0])
                     price_change_percent = (current_price - start_price) / start_price
+                    logger.debug(f"Start price: {start_price}, Current price: {current_price}, Change: {price_change_percent:.4%}")
 
                     if price_change_percent <= -downtrend_trigger_percent:
                         market_mode = MarketMode.DEFENSIVE
                     elif price_change_percent >= uptrend_trigger_percent:
                         market_mode = MarketMode.AGGRESSIVE
+                else:
+                    logger.warning("No historical data found for mode calculation. Defaulting to STANDARD mode.")
 
                 logger.info(f"Price change in last {trigger_period_hours}h: {price_change_percent:.2%}. Mode: {market_mode.value}")
 
