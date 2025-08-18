@@ -63,7 +63,7 @@ class StatusService:
             # CORRECTED LOGIC: Only filter by bot_id in 'backtest' mode.
             # For 'trade' and 'test' modes, we want to see all open positions for the environment.
             bot_id_to_filter = bot_id if environment == 'backtest' else None
-            open_positions_db = self.db_manager.get_open_positions(environment, bot_id_to_filter)
+            open_positions_db = self.db_manager.get_open_positions(environment, bot_id_to_filter) or []
 
             # 3. Process open positions
             positions_status = []
@@ -115,11 +115,11 @@ class StatusService:
             )
 
             # 5. Fetch trade history from DB
-            trade_history = self.db_manager.get_all_trades_in_range(environment)
+            trade_history = self.db_manager.get_all_trades_in_range(environment) or []
             trade_history_dicts = [trade.to_dict() for trade in trade_history]
 
             # 6. Fetch live wallet data and ensure BTC/USDT are always present
-            wallet_balances = exchange_manager.get_account_balance()
+            wallet_balances = exchange_manager.get_account_balance() or []
             
             # Create a default structure for balances to ensure BTC and USDT are always present
             processed_balances_dict = {
