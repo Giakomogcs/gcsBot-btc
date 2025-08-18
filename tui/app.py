@@ -15,7 +15,8 @@ from textual import work
 from textual.message import Message # NOVO
 
 # Add project root to path for imports
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, PROJECT_ROOT)
 
 def can_sudo_passwordless() -> bool:
     """Checks if sudo can be run without a password prompt."""
@@ -140,7 +141,7 @@ class TUIApp(App):
     }
     #positions_table {
         margin-top: 1;
-        height: 20;
+        height: 100%;
     }
     #log_display {
         height: 1fr;
@@ -305,22 +306,20 @@ class TUIApp(App):
     @work(thread=True)
     def run_script_worker(self, command: list[str], message_type: type[Message]) -> None:
         """
-        Executes a script in a worker thread, handling whether it needs to be run
-        inside Docker via 'docker-compose exec' or directly.
+        Executes a script in a worker thread, with improved error handling and reporting
+        to diagnose issues with script execution or output.
         """
         base_command = []
         if not is_running_in_docker():
             try:
-                # If running on host, prepend the command to execute script inside the container
                 base_command = get_docker_compose_command() + ["exec", "app"]
             except FileNotFoundError as e:
-                self.post_message(message_type(str(e), success=False))
-                self.call_from_thread(self.log_display.write, f"[bold red]Docker Error:[/bold red] {e}")
+                self.post_message(message_type(f"Docker command error: {e}", success=False))
                 return
         
         full_command = base_command + command
-        
         self.log_display.write(f"Executing: [yellow]{' '.join(full_command)}[/]")
+
         try:
             process = subprocess.run(
                 full_command,
@@ -328,32 +327,44 @@ class TUIApp(App):
                 text=True,
                 check=False,
                 encoding='utf-8',
-                errors='replace'
+                errors='replace',
+                cwd=PROJECT_ROOT # Ensure docker-compose finds its .env file
             )
 
+            # Case 1: Script failed with a non-zero exit code.
             if process.returncode != 0:
-                output = process.stderr.strip() if process.stderr else "No stderr output."
-                success = False
-                self.call_from_thread(self.log_display.write, f"[bold red]Script Error:[/bold red] {output}")
-            else:
-                output = process.stdout.strip()
-                success = True
-            
+                error_message = (
+                    f"Script failed with exit code {process.returncode}.\n"
+                    f"Stderr: {process.stderr.strip() if process.stderr else 'N/A'}"
+                )
+                self.post_message(message_type(error_message, success=False))
+                return
+
+            # Case 2: Script succeeded but returned no output.
+            if not process.stdout.strip():
+                error_message = "Script executed successfully but returned no output."
+                if process.stderr:
+                    error_message += f"\nStderr: {process.stderr.strip()}"
+                self.post_message(message_type(error_message, success=False))
+                return
+
+            # Case 3: Script succeeded, try to parse its JSON output.
             try:
-                data = json.loads(output)
-                self.post_message(message_type(data, success))
-            except (json.JSONDecodeError, TypeError):
-                self.post_message(message_type(output, success))
+                data = json.loads(process.stdout)
+                self.post_message(message_type(data, success=True))
+            except json.JSONDecodeError:
+                error_message = (
+                    "Failed to decode JSON from script output.\n"
+                    f"----- Stdout -----\n{process.stdout.strip()}\n"
+                    f"----- Stderr -----\n{process.stderr.strip() if process.stderr else 'N/A'}"
+                )
+                self.post_message(message_type(error_message, success=False))
 
         except FileNotFoundError:
-            # This would typically catch the 'docker-compose' or 'docker' command not being found
             error_message = f"Command not found: '{full_command[0]}'. Please ensure it is installed and in your PATH."
             self.post_message(message_type(error_message, success=False))
-            self.call_from_thread(self.log_display.write, f"[bold red]Error:[/bold red] {error_message}")
         except Exception as e:
-            # Catch other potential exceptions during subprocess execution
-            self.post_message(message_type(str(e), success=False))
-            self.call_from_thread(self.log_display.write, f"[bold red]Execution Error:[/bold red] {e}")
+            self.post_message(message_type(f"An unexpected error occurred during script execution: {e}", success=False))
 
     # MODIFICADO: on_button_pressed agora chama um worker em vez de executar o script diretamente
     def on_button_pressed(self, event: Button.Pressed) -> None:

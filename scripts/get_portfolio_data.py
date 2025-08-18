@@ -2,10 +2,18 @@ import json
 import sys
 import os
 import datetime
+import logging
 from decimal import Decimal
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# --- Logger Reconfiguration ---
+# Force logger to output to stderr to keep stdout clean for JSON data
+for handler in logging.root.handlers[:]:
+    logging.root.removeHandler(handler)
+logging.basicConfig(level=logging.INFO, stream=sys.stderr, format='%(asctime)s - %(levelname)s - %(message)s')
+
 
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.database.portfolio_manager import PortfolioManager
@@ -79,7 +87,7 @@ def get_portfolio_data():
         else:
             latest_snapshot_data = {
                 "id": 0,
-                "timestamp": datetime.datetime.utcnow().isoformat(),
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "total_portfolio_value_usd": "0.00",
                 "usd_balance": "0.00",
                 "open_positions_value_usd": "0.00",
@@ -103,7 +111,7 @@ def get_portfolio_data():
             if first_val > 0:
                 evolution_total = ((latest_val / first_val) - 1) * 100
 
-            one_day_ago = datetime.datetime.utcnow() - datetime.timedelta(days=1)
+            one_day_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1)
             snapshot_24h_ago = next((s for s in reversed(portfolio_history) if s.timestamp <= one_day_ago), None)
             if snapshot_24h_ago:
                 val_24h_ago = Decimal(snapshot_24h_ago.total_portfolio_value_usd)
@@ -122,7 +130,8 @@ def get_portfolio_data():
         print(json.dumps(output, indent=4, default=str))
 
     except Exception as e:
-        print(json.dumps({"error": str(e), "traceback": traceback.format_exc()}))
+        # Print errors to stderr to avoid polluting the stdout stream
+        print(json.dumps({"error": str(e), "traceback": traceback.format_exc()}), file=sys.stderr)
         sys.exit(1)
 
 if __name__ == "__main__":
