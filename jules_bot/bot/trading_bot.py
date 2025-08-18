@@ -59,9 +59,11 @@ class LivePortfolioManager:
             all_trades = self.db_manager.get_trades_by_run_id(run_id=self.state_manager.bot_id)
 
             realized_pnl_usd = sum(Decimal(str(t.realized_pnl_usd or '0')) for t in all_trades)
-            btc_treasury_amount = sum(Decimal(t.hodl_asset_amount or '0') for t in all_trades)
+            btc_treasury_amount = sum(Decimal(str(t.hodl_asset_amount or '0')) for t in all_trades)
 
-            btc_price_usd = Decimal(self.trader.get_current_price('BTCUSDT') or current_price)
+            # Ensure the price is fetched as a string to maintain precision with Decimal
+            btc_price_str = self.trader.get_current_price('BTCUSDT')
+            btc_price_usd = Decimal(btc_price_str) if btc_price_str else current_price
             btc_treasury_value_usd = btc_treasury_amount * btc_price_usd
 
             snapshot_data = {
@@ -138,8 +140,22 @@ class TradingBot:
                     if trade_id:
                         position = next((p for p in state_manager.get_open_positions() if p.trade_id == trade_id), None)
                         if position:
+                            logger.info(f"Force selling {percentage}% of trade {trade_id}.")
+                            # This is a simplified sell logic for manual override.
+                            # A more robust implementation would check available balance.
                             quantity_to_sell = Decimal(position.quantity) * (percentage / Decimal("100"))
-                            # ... rest of sell logic requires careful Decimal conversion ...
+
+                            # Create mock sell_position_data
+                            sell_position_data = position.to_dict()
+                            sell_position_data['quantity'] = quantity_to_sell
+
+                            success, sell_result = trader.execute_sell(sell_position_data, self.run_id, {"reason": "manual_force_sell"})
+                            if success:
+                                # After a manual sell, it's crucial to reconcile the state
+                                logger.info("Manual sell executed. Triggering state reconciliation.")
+                                state_manager.reconcile_holdings(self.symbol, trader)
+                            else:
+                                logger.error(f"Manual sell for trade {trade_id} failed.")
 
                 os.remove(filepath)
             except Exception as e:
@@ -194,18 +210,22 @@ class TradingBot:
                 self._write_state_to_file(open_positions, current_price, wallet_balances, trade_history, total_portfolio_value)
 
                 # --- SELL LOGIC ---
-                positions_to_sell = [p for p in open_positions if current_price >= Decimal(p.sell_target_price or 'inf')]
+                positions_to_sell = [p for p in open_positions if current_price >= Decimal(str(p.sell_target_price or 'inf'))]
                 if positions_to_sell:
                     logger.info(f"Found {len(positions_to_sell)} positions meeting sell criteria.")
-                    total_sell_quantity = sum(Decimal(p.quantity) * strategy_rules.sell_factor for p in positions_to_sell)
+                    total_sell_quantity = sum(Decimal(str(p.quantity)) * strategy_rules.sell_factor for p in positions_to_sell)
                     available_balance = Decimal(self.trader.get_account_balance(asset=base_asset))
 
                     if total_sell_quantity > available_balance:
-                        logger.warning(f"INSUFFICIENT BALANCE: Attempting to sell {total_sell_quantity:.8f} {base_asset}, but only {available_balance:.8f} is available.")
+                        logger.warning(f"INSUFFICIENT BALANCE: Bot state is out of sync. Attempting to sell {total_sell_quantity:.8f} {base_asset}, but only {available_balance:.8f} is available.")
+                        logger.info("Triggering state reconciliation with exchange balance.")
+                        state_manager.reconcile_holdings(self.symbol, self.trader)
+                        # After reconciliation, the bot will wait for the next trading cycle
+                        # to re-evaluate sell conditions with the corrected state.
                     else:
                         for position in positions_to_sell:
                             trade_id = position.trade_id
-                            original_quantity = Decimal(position.quantity)
+                            original_quantity = Decimal(str(position.quantity))
                             sell_quantity = original_quantity * strategy_rules.sell_factor
                             hodl_asset_amount = original_quantity - sell_quantity
 
@@ -214,11 +234,11 @@ class TradingBot:
 
                             success, sell_result = self.trader.execute_sell(sell_position_data, self.run_id, final_candle.to_dict())
                             if success:
-                                buy_price = Decimal(position.price)
-                                sell_price = Decimal(sell_result.get('price'))
+                                buy_price = Decimal(str(position.price))
+                                sell_price = Decimal(str(sell_result.get('price')))
                                 realized_pnl_usd = strategy_rules.calculate_realized_pnl(buy_price, sell_price, sell_quantity)
                                 hodl_asset_value_at_sell = hodl_asset_amount * current_price
-                                commission_usd = Decimal(sell_result.get('commission', '0'))
+                                commission_usd = Decimal(str(sell_result.get('commission', '0')))
 
                                 sell_result.update({
                                     "commission_usd": commission_usd,
