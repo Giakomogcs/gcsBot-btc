@@ -8,14 +8,7 @@ from decimal import Decimal
 # Add project root to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# --- Logger Reconfiguration ---
-# Get the specific logger used by the application and redirect its output to stderr
-# to keep stdout clean for the TUI's JSON parsing.
-gcs_logger = logging.getLogger("gcsBot")
-for handler in gcs_logger.handlers[:]:
-    gcs_logger.removeHandler(handler)
-gcs_logger.addHandler(logging.StreamHandler(sys.stderr))
-gcs_logger.setLevel(logging.INFO)
+# No longer needed, as the global logger configuration now handles the script mode.
 
 
 from jules_bot.utils.config_manager import config_manager

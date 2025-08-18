@@ -321,6 +321,11 @@ class TUIApp(App):
         self.log_display.write(f"Executing: [yellow]{' '.join(full_command)}[/]")
 
         try:
+            # Set an environment variable to signal to the script that it's in "script mode".
+            # This is used by the logger to avoid printing to the console.
+            env = os.environ.copy()
+            env["JULES_BOT_SCRIPT_MODE"] = "1"
+
             process = subprocess.run(
                 full_command,
                 capture_output=True,
@@ -328,7 +333,8 @@ class TUIApp(App):
                 check=False,
                 encoding='utf-8',
                 errors='replace',
-                cwd=PROJECT_ROOT # Ensure docker-compose finds its .env file
+                cwd=PROJECT_ROOT, # Ensure docker-compose finds its .env file
+                env=env
             )
 
             # Case 1: Script failed with a non-zero exit code.
