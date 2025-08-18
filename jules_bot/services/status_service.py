@@ -55,9 +55,6 @@ class StatusService:
 
             market_data = market_data_series.to_dict()
             current_price = Decimal(str(market_data.get('close', '0')))
-        except OperationalError as e:
-            logger.error(f"Database connection error in StatusService: {e}", exc_info=True)
-            return {"error": "Database connection failed.", "details": str(e)}
 
             # 2. Fetch open positions from local DB
             # CORRECTED LOGIC: Only filter by bot_id in 'backtest' mode.
@@ -171,7 +168,9 @@ class StatusService:
             }
 
             return extended_status
-
+        except OperationalError as e:
+            logger.error(f"Database connection error in StatusService: {e}", exc_info=True)
+            return {"error": "Database connection failed.", "details": str(e)}
         except Exception as e:
             logger.error(f"Error getting extended status: {e}", exc_info=True)
             return {"error": str(e)}
