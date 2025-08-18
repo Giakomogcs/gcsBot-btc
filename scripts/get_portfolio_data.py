@@ -112,7 +112,7 @@ def get_portfolio_data():
                 evolution_total = ((latest_val / first_val) - 1) * 100
 
             one_day_ago = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1)
-            snapshot_24h_ago = next((s for s in reversed(portfolio_history) if s.timestamp <= one_day_ago), None)
+            snapshot_24h_ago = next((s for s in reversed(portfolio_history) if s.timestamp.replace(tzinfo=datetime.timezone.utc) <= one_day_ago), None)
             if snapshot_24h_ago:
                 val_24h_ago = Decimal(snapshot_24h_ago.total_portfolio_value_usd)
                 if val_24h_ago > 0:
