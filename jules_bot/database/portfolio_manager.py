@@ -46,8 +46,9 @@ class PortfolioManager:
                 last_snapshot = self.get_latest_snapshot(db)
                 evolution = None
                 if last_snapshot:
-                    current_value = Decimal(snapshot_data['total_portfolio_value_usd'])
-                    previous_value = Decimal(last_snapshot.total_portfolio_value_usd)
+                    current_value = Decimal(str(snapshot_data['total_portfolio_value_usd']))
+                    # Ensure previous_value is handled correctly, even if it's a float from a stale DB schema
+                    previous_value = Decimal(str(last_snapshot.total_portfolio_value_usd))
                     if previous_value > Decimal('0'):
                         evolution = ((current_value / previous_value) - Decimal('1')) * Decimal('100')
 
