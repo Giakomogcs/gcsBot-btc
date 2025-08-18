@@ -1,62 +1,81 @@
-# GCS Trading Bot
+# GCS Trading Bot: Comprehensive Documentation
 
-A sophisticated, data-driven automated trading bot for the BTC/USDT market.
+This document provides a complete guide to the GCS Trading Bot, a sophisticated, data-driven automated trading system for the BTC/USDT market.
 
 ## Table of Contents
 
-- [Overview](#1-overview)
-- [Features](#2-features)
-- [Architecture](#3-architecture)
-- [Project Structure](#4-project-structure)
-- [Setup and Installation](#5-setup-and-installation)
-- [CLI Commands](#6-cli-commands)
-- [Database Schema](#7-database-schema)
-- [Key Calculations](#8-key-calculations)
+1.  [**Overview**](#1-overview)
+    - What is the GCS Trading Bot?
+    - Key Principles
+2.  [**Core Features**](#2-core-features)
+3.  [**System Architecture**](#3-system-architecture)
+    - Architectural Diagram
+    - Component Breakdown
+    - The Docker-Centric Workflow
+4.  [**Setup and Installation**](#4-setup-and-installation)
+    - Prerequisites
+    - Step 1: Clone and Configure
+    - Step 2: Start the Environment
+5.  [**User Guide: A Typical Workflow**](#5-user-guide-a-typical-workflow)
+    - Step 1: Start the Services
+    - Step 2: Run the Bot
+    - Step 3: Monitor with the Dashboard
+    - Step 4: Stop Everything
+6.  [**Complete Command Reference**](#6-complete-command-reference)
+    - `run.py`: The Main Control Script
+    - `scripts/`: Directory for Direct Interaction
+7.  [**Execution Environment Clarification**](#7-execution-environment-clarification)
+    - Why Docker?
+    - Can I Run it Without Docker?
+8.  [**Data and Database**](#8-data-and-database)
+    - Database Schema
+    - Log File Management
+9.  [**Troubleshooting**](#9-troubleshooting)
+
+---
 
 ## 1. Overview
 
-GCS Trading Bot is a sophisticated, data-driven automated trading bot designed for the BTC/USDT market on the Binance exchange. It leverages a robust data pipeline, machine learning for market regime detection, and a flexible architecture to support live trading, paper trading (testnet), and comprehensive backtesting.
+### What is the GCS Trading Bot?
 
-The system is fully containerized using Docker, ensuring a consistent and reproducible environment for both development and production. It is controlled via a simple yet powerful command-line interface (`run.py`) that manages everything from starting services to running data pipelines and executing trades.
+The GCS Trading Bot is a powerful, fully automated trading bot designed for the BTC/USDT spot market on the Binance exchange. It is not a simple, rule-based bot; instead, it leverages a robust data pipeline, machine learning for market regime detection, and a flexible, containerized architecture. This design supports live trading, paper trading (on the Binance testnet), and comprehensive backtesting capabilities.
 
-## 2. Features
+### Key Principles
+
+- **Data-Driven:** Decisions are based on a rich dataset, including price action, technical indicators, order flow, market sentiment, and macroeconomic data.
+- **Reproducibility:** The entire application stack is containerized using Docker. This guarantees that the environment is consistent and eliminates "it works on my machine" problems.
+- **Script-Based Control:** All interactions are handled through a command-line interface (`run.py`) and a collection of powerful scripts. This is a deliberate design choice for reliability, speed, and ease of automation.
+- **Modularity:** The codebase is organized into decoupled components, making it easier to maintain, test, and extend.
+
+## 2. Core Features
 
 - **Multiple Execution Modes**:
-  - **Live Trading**: Execute trades with real capital on the Binance spot market.
+  - **Live Trading**: Execute trades with real capital.
   - **Paper Trading**: Trade on the Binance testnet without risking real funds.
-  - **Backtesting**: Simulate trading strategies on historical data to evaluate performance.
-- **Data-Driven Strategy**: Decisions are not based on simple rules but on a rich dataset including:
-  - OHLCV price data
-  - Technical indicators (RSI, MACD, Bollinger Bands, etc.)
-  - Order flow data (Taker Buy/Sell Volume)
-  - Market sentiment (Fear & Greed Index)
-  - Macroeconomic data (DXY, VIX, Gold, etc.)
-- **Automated Setup & Data Pipeline**:
-  - A `postgres_setup/init.sql` script initializes the entire PostgreSQL environment, creating the necessary schemas and roles.
-  - A lean price collector (`collectors/core_price_collector.py`) automatically ingests and stores all required price data in a PostgreSQL time-series database.
-- **Situational Awareness Model**: Utilizes a K-Means clustering model to classify the market into one of several "regimes" (e.g., Bull Volatile, Bear Quiet), allowing the strategy to adapt to changing conditions. The code for this is in the `research` directory.
-- **Dockerized Environment**: The entire application stack, including the Python application and the PostgreSQL database, is managed by Docker and Docker Compose for easy setup and deployment.
-- **Command-Line Interface**: A central script `run.py` provides a simple interface for managing the entire lifecycle of the bot and its environment.
-- **Interactive Terminal UI (TUI)**: A new, high-performance dashboard built with Textual that provides a real-time view of the bot's status, open positions, wallet balances, and live logs.
-- **Script-Based Control**: The bot is controlled by a set of powerful, fast, and reliable command-line scripts, giving you direct control without needing a web server.
-- **Resilient and Modular Architecture**: The code is organized into decoupled components (bot logic, database management, exchange connection), making it easier to maintain and extend.
+  - **Backtesting**: Simulate strategies on historical data to evaluate performance.
+- **Situational Awareness Model**: Utilizes a K-Means clustering model to classify the market into "regimes" (e.g., _Bull Volatile_, _Bear Quiet_), allowing the strategy to adapt to changing conditions.
+- **Interactive Terminal UI (TUI)**: A high-performance dashboard (`run.py dashboard`) provides a real-time view of the bot's status, open positions, wallet balances, and live logs.
+- **Automated Data Pipeline**: A built-in collector (`collectors/core_price_collector.py`) automatically ingests and stores all required price data in a PostgreSQL time-series database.
 
-## 3. Architecture
+## 3. System Architecture
 
-The bot's architecture is now centered around a main bot process that can be monitored and controlled via local scripts and a terminal dashboard, removing the need for a web API.
+### Architectural Diagram
+
+The system is centered around a main bot process running inside a Docker container. It is controlled and monitored via local scripts that interact with the container.
 
 ```
-+-------------------+      +----------------------+      +--------------------+
-|      run.py       |----->| docker-compose.yml   |----->|  jules_bot/main.py   |
-| (Control Script)  |      | (Service Definition) |      |  (Bot Entry Point) |
-+-------------------+      +----------------------+      +--------------------+
-        ^                                                       |
-        |                                                       V
-+-------------------+      +--------------------+      +----------------------+
-|  scripts/*.py     |<---->|     commands/      |<---->|  TradingBot          |
-| (Manual Commands) |      |   (File-based      |      |  (Orchestrator)      |
-+-------------------+      |      Queue)        |      +----------------------+
-        ^                  +--------------------+
+   HOST MACHINE                                  DOCKER CONTAINER
++-------------------+      +------------------+      +---------------------+
+|      run.py       |----->| docker-compose   |----->|  jules_bot/main.py  |
+| (Control Script)  |      | (Service Mgmt)   |      |  (Bot Entry Point)  |
++-------------------+      +------------------+      +---------------------+
+        ^                                                    |
+        |                                                    V
++-------------------+      +----------------+      +-----------------------+
+|  scripts/*.py     |<---->|   commands/    |<---->|  TradingBot           |
+| (Manual Commands) |      | (File-based    |      |  (Orchestrator)       |
++-------------------+      |    Queue)      |      +-----------------------+
+        ^                  +----------------+
         |
 +-------------------+
 |  tui/app.py       |
@@ -64,210 +83,186 @@ The bot's architecture is now centered around a main bot process that can be mon
 +-------------------+
 ```
 
-- **`run.py` (CLI)**: The main entry point for managing the bot's lifecycle (starting, stopping, running).
-- **`jules_bot/main.py`**: The entry point inside the container; it instantiates and starts the `TradingBot`.
-- **`TradingBot`**: The central orchestrator. It runs the main trading loop and continuously checks the `commands/` directory for manual instructions.
-- **`scripts/`**: A folder containing standalone Python scripts for direct interaction:
-  - `get_bot_data.py`: Fetches a complete status snapshot of the bot.
-  - `force_buy.py` & `force_sell.py`: Create command files in the `commands/` directory to manually trigger trades.
-- **`tui/app.py`**: A Textual application that provides a dashboard view. It calls the scripts to get data and issue commands.
+### Component Breakdown
 
-## 4. Project Structure
+- **`run.py` (CLI)**: The main entry point for managing the bot's lifecycle (starting, stopping, running commands). This script runs on your **host machine**.
+- **`docker-compose.yml`**: Defines the services that make up the application stack: the Python application (`app`), the PostgreSQL database (`postgres`), and a database admin tool (`pgadmin`).
+- **`jules_bot/main.py`**: The entry point for the application _inside_ the Docker container. It instantiates and starts the main `TradingBot` orchestrator.
+- **`TradingBot`**: The central orchestrator. It runs the main trading loop and continuously checks the `commands/` directory for manual instructions (e.g., a `force_buy.json` file).
+- **`scripts/`**: A folder of standalone Python scripts that run on your **host machine**. They provide direct control by creating command files or fetching data from the bot.
+- **`tui/app.py`**: The Textual-based dashboard. It runs on your **host machine** and uses the `scripts/` to get data and issue commands.
 
-The repository is organized into several key directories:
+### The Docker-Centric Workflow
 
-```
-gcsbot-btc/
-├── jules_bot/              # Main Python source code for the bot application
-│   ├── bot/                # Core trading logic and position management
-│   ├── core/               # Core components (connectors, schemas)
-│   ├── database/           # Database interaction
-│   └── utils/              # Utility modules like logging and configuration
-├── logs/                   # Structured JSON log files
-├── scripts/                # Standalone Python scripts for automation and control
-├── tui/                    # Source for the new Terminal User Interface
-├── ... (other config folders)
-└── run.py                  # Main command-line interface
-```
+The bot application itself **always runs inside the `app` Docker container**. The `run.py` script on your host machine is a convenience wrapper that executes commands _inside_ that container using `docker-compose exec`. This is a crucial concept to understand.
 
-## 5. Setup and Installation
-
-This guide provides the step-by-step instructions to set up the environment and run the bot.
+## 4. Setup and Installation
 
 ### Prerequisites
 
-- **Docker and Docker Compose**: Ensure Docker is installed and running.
-- **Python 3.10+**: Required for running the control script `run.py`.
+- **Docker and Docker Compose**: Ensure Docker is installed and running. This is non-negotiable.
+- **Python 3.10+**: Required for running the `run.py` control script on your host machine.
 - **Git**: For cloning the repository.
+- **(Windows Users)**: It is highly recommended to use **Windows Terminal** for the best experience, especially for the TUI dashboard. The legacy `cmd.exe` may have rendering issues.
 
 ### Step 1: Clone and Configure
 
-First, clone the repository and create your `.env` file from the example.
+1.  Clone the repository and navigate into the directory.
+    ```bash
+    git clone <YOUR_REPOSITORY_URL>
+    cd gcsbot-btc
+    ```
+2.  Create your environment configuration file from the example.
+    ```bash
+    cp .env.example .env
+    ```
+3.  Edit the `.env` file with your Binance API keys (and any other custom settings).
 
-```bash
-git clone <YOUR_REPOSITORY_URL>
-cd gcsbot-btc
-cp .env.example .env
-```
-
-Next, edit the `.env` file with your details. You will need to provide your Binance API keys. The PostgreSQL credentials are set in `docker-compose.yml` and `config/postgres.conf`.
-
-> **Important**: If you change the `.env` file after the application has been started, you must restart the Docker services for the changes to take effect. You can do this by running `python run.py stop` followed by `python run.py start`.
+> **Important**: If you change the `.env` file after starting the services, you must restart them for the changes to take effect: `python run.py stop` followed by `python run.py start`.
 
 ### Step 2: Start the Environment
 
-The `start` command builds the Docker images and launches the `app`, `postgres`, and `pgadmin` services in the background. The `app` container will start in an idle state, waiting for your commands.
+The `start` command will build the Docker images (if they don't exist) and launch the `app`, `postgres`, and `pgadmin` services in the background.
 
 ```bash
 python run.py start
 ```
 
-## 6. CLI Commands
+The `app` container will start and remain in an idle state, waiting for you to issue a command.
 
-All interaction with the bot and its environment is handled through `run.py`.
+## 5. User Guide: A Typical Workflow
 
-### Environment Management
+Here is how you would typically run and interact with the bot.
 
-These commands control the Docker environment.
+### Step 1: Start the Services
 
-| Command          | Description                                                                                          |
-| ---------------- | ---------------------------------------------------------------------------------------------------- |
-| `start`          | Builds and starts all services (`app`, `postgres`, `pgadmin`) in detached mode.                      |
-| `stop`           | Stops and removes all services and associated volumes.                                               |
-| `status`         | Shows the current status of all running services.                                                    |
-| `build`          | Forces a rebuild of the Docker images without starting them. Useful after changing the `Dockerfile`. |
-| `logs [service]` | Tails the logs of a specific service (e.g., `app`, `db`) or all services if none is specified.       |
+In your terminal, start all Docker services:
 
-### Application Control
-
-The application is controlled via a combination of the main `run.py` script, a new interactive dashboard, and standalone scripts for direct manual control.
-
-#### Running the Bot
-
-To start the bot, use the `trade` or `test` commands. This will run the main bot loop in the container. You should run this in one terminal window.
-
-- **Live Trading**: `python run.py trade`
-- **Paper Trading (Testnet)**: `python run.py test`
-
-#### Monitoring with the Dashboard
-
-To monitor a running bot, open a **second terminal window** and use the `dashboard` command.
-
-- **To monitor the Testnet bot**: `python run.py dashboard --mode test`
-- **To monitor the Live bot**: `python run.py dashboard --mode trade`
-
-#### Direct Script-Based Control
-
-For automation or direct manual intervention, you can use the scripts in the `scripts/` folder from your host machine's terminal. These provide granular control over the bot's data and actions.
-
-| Command                                      | Description                                                                 | Arguments                                                                                       |
-| -------------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `python scripts/analyze_results.py`          | Analyzes trade performance against model confidence.                        | `--env` (optional, default: `trade`): The environment to analyze (`trade`, `test`, `backtest`). |
-| `python scripts/get_bot_data.py`             | Dumps a JSON report of the bot's current status.                            | `mode` (optional, default: `test`): The environment to get data for (`trade` or `test`).        |
-| `python scripts/force_buy.py`                | Issues a manual buy command to a running bot.                               | `amount_usd` (required): The amount in USD to buy.                                              |
-| `python scripts/force_sell.py`               | Issues a manual sell command to a running bot.                              | `trade_id` (required), `percentage` (required): The ID of the trade and the percentage to sell. |
-| `python scripts/prepare_backtest_data.py`    | Fetches and prepares historical data for backtesting.                       | `days` (required): The number of days of historical data to prepare.                            |
-| `python scripts/run_backtest.py`             | Runs a backtesting simulation.                                              | `days` or (`--start-date`, `--end-date`), `--clear-backtest-trades` (optional).                 |
-| `python scripts/verify_data.py`              | Checks data integrity for a hardcoded date range in InfluxDB.               | None.                                                                                           |
-| `python scripts/clear_testnet_trades.py`     | Clears all `test` environment trades from PostgreSQL.                       | None.                                                                                           |
-| `python scripts/clear_trades_measurement.py` | **DESTRUCTIVE:** Clears all data from the `trades` measurement in InfluxDB. | `--env` (required): The environment to clear (`trade`, `test`, `backtest`).                     |
-| `python scripts/wipe_database.py`            | **DESTRUCTIVE:** Wipes all tables in the PostgreSQL database.               | None (requires interactive confirmation).                                                       |
-
-#### Summary of `run.py` Application Commands
-
-| Command                 | Description                                                                                           |
-| ----------------------- | ----------------------------------------------------------------------------------------------------- |
-| `trade`                 | Starts the bot in **live trading mode**.                                                              |
-| `test`                  | Starts the bot in **paper trading mode**.                                                             |
-| `dashboard`             | Starts the new interactive TUI for monitoring and control. Use `--mode` to specify `trade` or `test`. |
-| `backtest`              | Prepares historical data and runs a full backtest.                                                    |
-| `clear-backtest-trades` | Deletes all `backtest` trades from the database.                                                      |
-| `clear-testnet-trades`  | Deletes all `test` trades from the database.                                                          |
-
-## 7. Database Schema
-
-The application uses a PostgreSQL database to store all persistent data. The schema is defined in `jules_bot/database/models.py` and consists of three main tables.
-
-### `price_history`
-
-Stores historical OHLCV (Open, High, Low, Close, Volume) price data for assets.
-
-| Column      | Type     | Description                                               |
-| ----------- | -------- | --------------------------------------------------------- |
-| `id`        | Integer  | Primary key.                                              |
-| `timestamp` | DateTime | The timestamp for the start of the candle (e.g., minute). |
-| `open`      | Float    | The opening price for the period.                         |
-| `high`      | Float    | The highest price for the period.                         |
-| `low`       | Float    | The lowest price for the period.                          |
-| `close`     | Float    | The closing price for the period.                         |
-| `volume`    | Float    | The trading volume for the period.                        |
-| `symbol`    | String   | The trading symbol (e.g., 'BTCUSDT').                     |
-
-### `trades`
-
-The central table for recording all trading activity. A single row represents the entire lifecycle of a trade, from buy to sell.
-
-| Column                     | Type     | Description                                                                                                         |
-| -------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------- |
-| `id`                       | Integer  | Primary key.                                                                                                        |
-| `run_id`                   | String   | The unique ID for the bot session that initiated the trade.                                                         |
-| `environment`              | String   | The environment the trade was made in ('trade', 'test', or 'backtest').                                             |
-| `strategy_name`            | String   | The name of the strategy that triggered the trade.                                                                  |
-| `symbol`                   | String   | The trading symbol (e.g., 'BTCUSDT').                                                                               |
-| `trade_id`                 | String   | A unique identifier for the trade lifecycle.                                                                        |
-| `exchange`                 | String   | The exchange where the trade occurred (e.g., 'binance').                                                            |
-| `status`                   | String   | The current status of the trade: 'OPEN' or 'CLOSED'.                                                                |
-| `order_type`               | String   | The type of order that opened the position. Always 'buy'.                                                           |
-| `price`                    | Float    | The price of the transaction. For an open trade, this is the buy price. For a closed trade, this is the sell price. |
-| `quantity`                 | Float    | The amount of the asset traded.                                                                                     |
-| `usd_value`                | Float    | The total value of the transaction in USD.                                                                          |
-| `commission`               | Float    | The commission paid for the transaction.                                                                            |
-| `commission_asset`         | String   | The asset the commission was paid in (e.g., 'USDT').                                                                |
-| `timestamp`                | DateTime | The timestamp of the transaction. Updated to the sell time when a trade is closed.                                  |
-| `exchange_order_id`        | String   | The order ID provided by the exchange.                                                                              |
-| `decision_context`         | JSON     | A JSON object containing the market data and indicators at the time the decision was made.                          |
-| `sell_target_price`        | Float    | The target price at which to sell, calculated at buy time.                                                          |
-| `commission_usd`           | Float    | The total commission for the sell part of the trade, in USD.                                                        |
-| `realized_pnl_usd`         | Float    | The realized profit or loss from the trade in USD, calculated upon selling.                                         |
-| `hodl_asset_amount`        | Float    | The amount of the asset held back from the sell (if not selling 100%).                                              |
-| `hodl_asset_value_at_sell` | Float    | The USD value of the `hodl_asset_amount` at the time of the sell.                                                   |
-
-### `bot_status`
-
-A simple table for storing the last known state of a running bot instance, used primarily by the UI.
-
-| Column                | Type     | Description                                                  |
-| --------------------- | -------- | ------------------------------------------------------------ |
-| `id`                  | Integer  | Primary key.                                                 |
-| `bot_id`              | String   | The unique ID of the bot session.                            |
-| `mode`                | String   | The mode the bot is running in ('trade' or 'test').          |
-| `is_running`          | Boolean  | Whether the bot is currently running.                        |
-| `session_pnl_usd`     | Float    | The profit or loss for the current session.                  |
-| `session_pnl_percent` | Float    | The profit or loss for the current session, as a percentage. |
-| `open_positions`      | Integer  | The number of currently open positions.                      |
-| `portfolio_value_usd` | Float    | The total current value of the portfolio.                    |
-| `timestamp`           | DateTime | The last time the status was updated.                        |
-
-## 8. Key Calculations
-
-### Realized Profit & Loss (PnL)
-
-The realized PnL for a trade is calculated when a position is sold. The formula, found in `jules_bot/backtesting/engine.py`, accounts for commission fees on both the buy and sell transactions to provide an accurate reflection of the net profit.
-
-**Formula:**
-
-```
-realized_pnl_usd = ((sell_price * (1 - commission_rate)) - (buy_price * (1 + commission_rate))) * quantity_sold
+```bash
+python run.py start
 ```
 
-- `sell_price`: The price at which the asset was sold.
-- `buy_price`: The price at which the asset was originally purchased.
-- `commission_rate`: The percentage fee charged by the exchange (e.g., 0.001 for 0.1%).
-- `quantity_sold`: The amount of the asset that was sold.
+### Step 2: Run the Bot
 
-This formula ensures that the profit is only calculated on the capital that was returned after fees were deducted on both ends of the trade lifecycle.
+Open a **new terminal window** (or a new tab). Choose whether you want to run in live or paper trading mode. This command will occupy the terminal window with live logs from the bot.
 
-## 9. Terminal User Interface (TUI)
+- **For Live Trading:**
+  ```bash
+  python run.py trade
+  ```
+- **For Paper Trading (Testnet):**
+  ```bash
+  python run.py test
+  ```
+
+### Step 3: Monitor with the Dashboard
+
+Open a **third terminal window**. Launch the TUI dashboard, making sure to specify the correct mode to monitor.
+
+- **To monitor the Testnet bot:**
+  ```bash
+  python run.py dashboard --mode test
+  ```
+- **To monitor the Live bot:**
+  ```bash
+  python run.py dashboard --mode trade
+  ```
+
+### Step 4: Stop Everything
+
+When you are finished, you can stop all services and remove the containers and volumes with a single command from any terminal window:
+
+```bash
+python run.py stop
+```
+
+## 6. Complete Command Reference
+
+### `run.py`: The Main Control Script
+
+These commands are your primary way of managing the bot's environment and application.
+
+| Command                 | Description                                                                                       |
+| ----------------------- | ------------------------------------------------------------------------------------------------- |
+| `start`                 | Builds and starts all services (`app`, `postgres`, `pgadmin`) in detached mode.                   |
+| `stop`                  | Stops and removes all running services and associated volumes.                                    |
+| `status`                | Shows the current status of all running Docker services.                                          |
+| `build`                 | Forces a rebuild of the Docker images without starting them. Use after changing the `Dockerfile`. |
+| `logs [service]`        | Tails the logs of a specific service (e.g., `app`, `db`) or all services if none is specified.    |
+| `trade`                 | Starts the bot in **live trading mode**. Runs the main loop in the container.                     |
+| `test`                  | Starts the bot in **paper trading (testnet) mode**.                                               |
+| `dashboard --mode <m>`  | Starts the interactive TUI. Use `--mode trade` or `--mode test`.                                  |
+| `backtest --days <d>`   | Prepares historical data and runs a full backtest for the specified number of days.               |
+| `clear-testnet-trades`  | **DESTRUCTIVE:** Deletes all `test` environment trades from the PostgreSQL database.              |
+| `clear-backtest-trades` | **DESTRUCTIVE:** Deletes all `backtest` environment trades from the PostgreSQL database.          |
+| `wipe-db`               | **EXTREMELY DESTRUCTIVE:** Wipes all data from the primary tables after a confirmation prompt.    |
+
+### `scripts/`: Directory for Direct Interaction
+
+These scripts can be run from your host machine's terminal for automation or direct manual intervention. They work by executing code inside the running `app` container.
+
+| Script                        | Description                                                                                    | Arguments                                |
+| ----------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `analyze_results.py`          | Analyzes trade performance against model confidence.                                           | `--env <name>` (Default: `trade`)        |
+| `get_bot_data.py`             | Dumps a JSON report of the bot's current status (used by the TUI).                             | `mode` (Default: `test`)                 |
+| `force_buy.py`                | Issues a manual buy command to a running bot.                                                  | `amount_usd` (Required)                  |
+| `force_sell.py`               | Issues a manual sell command to a running bot.                                                 | `trade_id`, `percentage` (Required)      |
+| `prepare_backtest_data.py`    | Fetches and prepares historical data for backtesting.                                          | `days` (Required)                        |
+| `run_backtest.py`             | Runs a backtesting simulation on already-prepared data.                                        | `days` or (`--start-date`, `--end-date`) |
+| `verify_data.py`              | Checks data integrity in the database.                                                         | None                                     |
+| `clear_testnet_trades.py`     | **DESTRUCTIVE:** Clears all `test` environment trades from PostgreSQL.                         | None                                     |
+| `clear_trades_measurement.py` | **DESTRUCTIVE:** Clears all data from the `trades` measurement for a given environment.        | `--env <name>` (Required)                |
+| `wipe_database.py`            | **EXTREMELY DESTRUCTIVE:** Wipes all tables in the PostgreSQL database. Requires confirmation. | None                                     |
+
+## 7. Execution Environment Clarification
+
+### Why Docker?
+
+The bot is designed to run within a Docker container for several critical reasons:
+
+1.  **Consistency:** It ensures that the bot runs in the exact same environment every time, with the same dependencies and configuration, regardless of your host operating system.
+2.  **Dependency Management:** All Python and system-level dependencies are managed within the `Dockerfile`, preventing conflicts with other projects on your machine.
+3.  **Portability:** The entire application can be easily moved and run on any machine that has Docker installed.
+
+### Can I Run it Without Docker?
+
+**No.** The intended and only supported method of running the bot application is through the provided Docker setup managed by `run.py`.
+
+While you may see a `.venv` directory if you are developing on the code, this virtual environment is for your IDE to provide features like code completion and linting. It is **not** for running the bot itself. The `run.py` script and the `scripts/` are the only components designed to be executed directly on your host machine, and their purpose is to control the bot running inside Docker.
+
+## 8. Data and Database
+
+### Database Schema
+
+The application uses a PostgreSQL database with three main tables: `price_history`, `trades`, and `bot_status`. For a detailed breakdown of each table's columns, refer to the `jules_bot/database/models.py` file.
+
+### Log File Management
+
+The bot generates structured JSON logs in the `logs/` directory. This directory is created automatically.
+
+- `jules_bot.jsonl`: The main application log.
+- `performance.jsonl`: A log specifically for performance metrics.
+
+To prevent excessive disk usage, the log files are automatically rotated. **Only the most recent 2 days of logs are kept.** Older log files are automatically deleted.
+
+## 9. Troubleshooting
+
+**"Docker Compose not found" error:**
+
+- Ensure Docker Desktop (or Docker Engine) is installed correctly and that the Docker daemon is running.
+- On Linux, you may need to install `docker-compose` separately or use `docker compose` (with a space). The `run.py` script tries to detect this automatically. You might also need to run commands with `sudo`.
+
+**TUI Dashboard is not rendering correctly:**
+
+- If you are on Windows, ensure you are using Windows Terminal.
+- If you are on macOS or Linux, ensure your terminal supports standard color and character rendering (most modern terminals do).
+- Make sure your terminal window is large enough to draw the UI components.
+
+**Changes to `.env` file not working:**
+
+- You must restart the Docker services for changes in the `.env` file to be loaded. Run `python run.py stop` and then `python run.py start`.
+
+## 10. Terminal User Interface (TUI)
 
 The bot includes a new, high-performance Terminal User Interface (TUI) for monitoring and manual control, launched with the `run.py dashboard` command. This TUI is built on the new script-based architecture, ensuring it is fast and reliable.
 
