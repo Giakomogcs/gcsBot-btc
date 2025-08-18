@@ -1,8 +1,30 @@
-from decimal import Decimal, getcontext
+from decimal import Decimal, getcontext, InvalidOperation
 from jules_bot.utils.config_manager import ConfigManager
 
 # Set precision for Decimal calculations
 getcontext().prec = 28
+
+def _calculate_progress_pct(current_price: Decimal, start_price: Decimal, target_price: Decimal) -> Decimal:
+    """
+    Calculates the percentage progress of a value from a starting point to a target.
+    Clamps the result between 0 and 100.
+    """
+    if current_price is None or start_price is None or target_price is None:
+        return Decimal('0.0')
+
+    # Avoid division by zero if start and target prices are the same.
+    if target_price == start_price:
+        return Decimal('100.0') if current_price >= target_price else Decimal('0.0')
+
+    try:
+        # Calculate progress as a percentage. This works for both long and short scenarios.
+        progress = (current_price - start_price) / (target_price - start_price) * Decimal('100')
+
+        # Clamp the result between 0% and 100%.
+        return max(Decimal('0'), min(progress, Decimal('100')))
+    except (InvalidOperation, ZeroDivisionError):
+        return Decimal('0.0')
+
 
 class StrategyRules:
     def __init__(self, config_manager: ConfigManager):
@@ -43,6 +65,48 @@ class StrategyRules:
                     return True, "downtrend", "Downtrend volatility breakout"
 
         return False, "unknown", "No signal"
+
+    def get_buy_target_info(self, market_data: dict, open_positions_count: int) -> tuple[Decimal, Decimal]:
+        """
+        Calculates the target price for the next buy and the progress towards it.
+        This is the single source of truth for the buy target displayed in the TUI.
+        """
+        try:
+            current_price = Decimal(str(market_data.get('close')))
+            ema_20 = Decimal(str(market_data.get('ema_20')))
+            bbl = Decimal(str(market_data.get('bbl_20_2_0')))
+            ema_100 = Decimal(str(market_data.get('ema_100')))
+            high_price = Decimal(str(market_data.get('high', current_price)))
+        except (InvalidOperation, TypeError):
+            return Decimal('0'), Decimal('0')
+
+        # This logic should mirror `evaluate_buy_signal` to determine the *next* target.
+
+        # Case 1: No open positions, looking for the first entry.
+        if open_positions_count == 0:
+            if current_price > ema_100:  # In an uptrend
+                # The strategy buys aggressively if price > ema_20.
+                # The "target" is ema_20, but for a pullback.
+                # If we are already above, the next logical target is a pullback to ema_20.
+                target_price = ema_20
+                # Progress is how close we are to pulling back to ema_20 from the high.
+                progress = _calculate_progress_pct(current_price, high_price, target_price)
+            else:  # In a downtrend
+                # The strategy buys on a volatility breakout at the lower Bollinger Band.
+                target_price = bbl
+                # Progress is how close the current price is to hitting the bbl from the high.
+                progress = _calculate_progress_pct(current_price, high_price, target_price)
+            return target_price, progress
+
+        # Case 2: Already have open positions, looking for pullbacks or breakouts.
+        if current_price > ema_100:  # In an uptrend, waiting for a pullback.
+            target_price = ema_20
+            progress = _calculate_progress_pct(current_price, high_price, target_price)
+        else:  # In a downtrend, waiting for a breakout.
+            target_price = bbl
+            progress = _calculate_progress_pct(current_price, high_price, target_price)
+
+        return target_price, progress
 
     def get_next_buy_amount(self, available_balance: Decimal) -> Decimal:
         """

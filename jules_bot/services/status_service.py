@@ -1,7 +1,7 @@
 import logging
 from decimal import Decimal, InvalidOperation
 from jules_bot.database.postgres_manager import PostgresManager
-from jules_bot.core_logic.strategy_rules import StrategyRules
+from jules_bot.core_logic.strategy_rules import StrategyRules, _calculate_progress_pct
 from jules_bot.core.exchange_connector import ExchangeManager
 from jules_bot.utils.config_manager import ConfigManager
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
@@ -9,27 +9,6 @@ from sqlalchemy.exc import OperationalError
 
 
 logger = logging.getLogger(__name__)
-
-def _calculate_progress_pct(current_price: Decimal, start_price: Decimal, target_price: Decimal) -> Decimal:
-    """
-    Calculates the percentage progress of a value from a starting point to a target.
-    Clamps the result between 0 and 100.
-    """
-    if current_price is None or start_price is None or target_price is None:
-        return Decimal('0.0')
-
-    # Avoid division by zero if start and target prices are the same.
-    if target_price == start_price:
-        return Decimal('100.0') if current_price >= target_price else Decimal('0.0')
-
-    try:
-        # Calculate progress as a percentage. This works for both long and short scenarios.
-        progress = (current_price - start_price) / (target_price - start_price) * Decimal('100')
-
-        # Clamp the result between 0% and 100%.
-        return max(Decimal('0'), min(progress, Decimal('100')))
-    except (InvalidOperation, ZeroDivisionError):
-        return Decimal('0.0')
 
 class StatusService:
     def __init__(self, db_manager: PostgresManager, config_manager: ConfigManager, feature_calculator: LiveFeatureCalculator):
@@ -107,7 +86,7 @@ class StatusService:
             should_buy, _, reason = self.strategy.evaluate_buy_signal(
                 market_data, len(positions_status) # Use the count of reconciled open positions
             )
-            btc_purchase_target, btc_purchase_progress_pct = self._calculate_buy_progress(
+            btc_purchase_target, btc_purchase_progress_pct = self.strategy.get_buy_target_info(
                 market_data, len(positions_status)
             )
 
@@ -174,35 +153,3 @@ class StatusService:
         except Exception as e:
             logger.error(f"Error getting extended status: {e}", exc_info=True)
             return {"error": str(e)}
-
-    def _calculate_buy_progress(self, market_data: dict, open_positions_count: int) -> tuple[Decimal, Decimal]:
-        """
-        Calculates the target price for the next buy and the progress towards it.
-        """
-        try:
-            current_price = Decimal(str(market_data.get('close')))
-            ema_20 = Decimal(str(market_data.get('ema_20')))
-            bbl = Decimal(str(market_data.get('bbl_20_2_0')))
-            ema_100 = Decimal(str(market_data.get('ema_100')))
-            high_price = Decimal(str(market_data.get('high', current_price)))
-        except (InvalidOperation, TypeError):
-            return Decimal('0'), Decimal('0')
-
-        if open_positions_count == 0:
-            if current_price > ema_100: # Uptrend
-                target_price = ema_20
-                progress = Decimal('100.0') if current_price > target_price else \
-                           _calculate_progress_pct(current_price, current_price * Decimal('1.05'), target_price)
-            else: # Downtrend
-                target_price = bbl
-                progress = _calculate_progress_pct(current_price, high_price, target_price)
-            return target_price, progress
-
-        if current_price > ema_100: # Uptrend pullback
-            target_price = ema_20
-            progress = _calculate_progress_pct(current_price, high_price, target_price)
-        else: # Downtrend breakout
-            target_price = bbl
-            progress = _calculate_progress_pct(current_price, high_price, target_price)
-
-        return target_price, progress
