@@ -43,16 +43,19 @@ if not logger.handlers:
 
     # 1. Handler para o ARQUIVO DE LOG ESTRUTURADO (jules_bot.jsonl)
     log_file_path = os.path.join(LOGS_DIR, 'jules_bot.jsonl')
-    file_handler = TimedRotatingFileHandler(log_file_path, when="midnight", interval=1, backupCount=14, encoding='utf-8')
+    file_handler = TimedRotatingFileHandler(log_file_path, when="midnight", interval=1, backupCount=2, encoding='utf-8')
     file_handler.setFormatter(json_formatter)
     file_handler.setLevel(logging.DEBUG) # Captura todos os níveis no arquivo
     logger.addHandler(file_handler)
 
-    # 2. Handler para o CONSOLE (também estruturado)
-    console_handler = logging.StreamHandler(sys.stderr)
-    console_handler.setFormatter(json_formatter)
-    console_handler.setLevel(logging.INFO) # Nível INFO para o console para não poluir
-    logger.addHandler(console_handler)
+    # 2. Handler para o CONSOLE (condicional)
+    # Só adiciona o handler do console se não estivermos em 'modo script',
+    # para evitar poluir o stdout que pode ser usado para comunicação entre processos (ex: TUI).
+    if os.getenv("JULES_BOT_SCRIPT_MODE") != "1":
+        console_handler = logging.StreamHandler(sys.stderr)
+        console_handler.setFormatter(json_formatter)
+        console_handler.setLevel(logging.INFO)
+        logger.addHandler(console_handler)
 
     # 3. Handler para o ARQUIVO DE PERFORMANCE (performance.jsonl) - Mantido por consistência
     perf_log_path = os.path.join(LOGS_DIR, 'performance.jsonl')

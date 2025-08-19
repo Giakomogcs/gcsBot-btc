@@ -1,4 +1,5 @@
 import pandas as pd
+from decimal import Decimal
 from jules_bot.utils.logger import logger
 from jules_bot.database.postgres_manager import PostgresManager
 import uuid
@@ -12,6 +13,7 @@ class StateManager:
         self.mode = mode
         self.bot_id = bot_id
         self.db_manager = db_manager
+        self.SessionLocal = db_manager.SessionLocal # Add this line
 
         # The TradeLogger is now responsible for ALL WRITE operations.
         self.trade_logger = TradeLogger(mode=self.mode, db_manager=self.db_manager)
@@ -39,27 +41,25 @@ class StateManager:
         # effectively fetching all trades for the given mode.
         return self.db_manager.get_all_trades_in_range(mode=mode)
 
-    def get_last_purchase_price(self) -> float:
+    def get_last_purchase_price(self) -> Decimal:
         """
         Retrieves the purchase price of the most recent 'buy' trade.
-        Returns float('inf') if no open positions are found.
+        Returns Decimal('inf') if no open positions are found.
         """
         open_positions = self.get_open_positions()
         if not open_positions:
-            return float('inf')
+            return Decimal('inf')
 
         # Sort by time to find the most recent position.
-        # The returned objects are SQLAlchemy models, so we use attribute access.
         latest_position = sorted(open_positions, key=lambda p: p.timestamp, reverse=True)[0]
         
-        # The field for price is 'price'.
-        return latest_position.price
+        return Decimal(str(latest_position.price))
 
-    def create_new_position(self, buy_result: dict, sell_target_price: float):
+    def create_new_position(self, buy_result: dict, sell_target_price: Decimal):
         """
         Records a new open position in the database via the TradeLogger service.
         """
-        logger.info(f"Creating new position for trade_id: {buy_result.get('trade_id')} with target sell price: {sell_target_price}")
+        logger.info(f"Creating new position for trade_id: {buy_result.get('trade_id')} with target sell price: {sell_target_price:.8f}")
 
         # This dictionary flattens all the necessary data for the TradeLogger.
         # The TradeLogger is responsible for creating the TradePoint and ensuring type safety.
@@ -125,8 +125,8 @@ class StateManager:
     def _create_position_from_trade(self, binance_trade: dict, strategy_rules: StrategyRules):
         """Helper to create a new DB position from a single Binance trade record."""
         try:
-            purchase_price = float(binance_trade['price'])
-            quantity = float(binance_trade['qty'])
+            purchase_price = Decimal(str(binance_trade['price']))
+            quantity = Decimal(str(binance_trade['qty']))
             
             # Create a new, unique internal trade_id
             internal_trade_id = str(uuid.uuid4())
@@ -138,7 +138,7 @@ class StateManager:
                 "price": purchase_price,
                 "quantity": quantity,
                 "usd_value": purchase_price * quantity,
-                "commission": float(binance_trade['commission']),
+                "commission": Decimal(str(binance_trade['commission'])),
                 "commission_asset": binance_trade['commissionAsset'],
                 "exchange_order_id": str(binance_trade['orderId']),
                 "binance_trade_id": int(binance_trade['id']),
@@ -153,12 +153,13 @@ class StateManager:
         except Exception as e:
             logger.error(f"Failed to create position from trade {binance_trade.get('id')}: {e}", exc_info=True)
 
-    def _reconcile_synced_positions_with_balance(self, symbol: str, trader):
+    def reconcile_holdings(self, symbol: str, trader):
         """
-        Adjusts the quantities of synced positions to match the actual exchange balance.
-        This accounts for sell trades by reducing the quantity of the oldest buy positions first (FIFO).
+        Adjusts the quantities of open positions to match the actual exchange balance.
+        This is the primary mechanism for self-correcting state drift. It accounts
+        for sells by reducing the quantity of the oldest buy positions first (FIFO).
         """
-        logger.info(f"Reconciling synced position quantities for {symbol} with actual balance...")
+        logger.info(f"Reconciling position quantities for {symbol} with actual exchange balance...")
         try:
             # 1. Get all open positions for the symbol from the DB, sorted oldest first
             open_positions = sorted(
@@ -170,37 +171,42 @@ class StateManager:
                 return
 
             # 2. Get the total quantity held by the bot for this symbol
-            bot_total_quantity = sum(p.quantity for p in open_positions)
+            bot_total_quantity = sum(Decimal(str(p.quantity)) for p in open_positions)
 
             # 3. Get the actual balance from the exchange
             asset = symbol.replace('USDT', '')
-            exchange_balance = trader.get_account_balance(asset=asset)
+            # Ensure the balance from the exchange is treated as a Decimal
+            exchange_balance = Decimal(str(trader.get_account_balance(asset=asset)))
             
             logger.info(f"Bot's calculated total quantity for {asset}: {bot_total_quantity:.8f}")
             logger.info(f"Actual exchange balance for {asset}: {exchange_balance:.8f}")
 
             # 4. Calculate the discrepancy
             discrepancy = bot_total_quantity - exchange_balance
-            if discrepancy <= 0.00000001: # Use a small tolerance for float comparison
+            # Use a Decimal for tolerance comparison
+            if discrepancy <= Decimal('0.00000001'):
                 logger.info("Bot's position quantities are already in sync with the exchange balance.")
                 return
             
-            logger.warning(f"Discrepancy of {discrepancy:.8f} {asset} found. Reconciling by closing oldest positions...")
+            logger.warning(f"Discrepancy of {discrepancy:.8f} {asset} found. Reconciling by closing/reducing oldest positions...")
 
             # 5. Reconcile by reducing quantity from oldest positions first (FIFO)
             for position in open_positions:
-                if discrepancy <= 0:
+                if discrepancy <= Decimal('0'):
                     break
 
-                quantity_to_reduce = min(position.quantity, discrepancy)
+                # Ensure all quantities are Decimal for comparison
+                position_quantity = Decimal(str(position.quantity))
+                quantity_to_reduce = min(position_quantity, discrepancy)
                 
-                new_quantity = position.quantity - quantity_to_reduce
+                new_quantity = position_quantity - quantity_to_reduce
                 
-                if new_quantity <= 0.00000001: # If position is fully "spent"
+                # Use a Decimal for tolerance comparison
+                if new_quantity <= Decimal('0.00000001'):
                     logger.info(f"Closing position {position.trade_id} as it has been fully sold (reconciled).")
                     self.db_manager.update_trade_status(position.trade_id, 'CLOSED')
                 else:
-                    logger.info(f"Reducing quantity of position {position.trade_id} by {quantity_to_reduce:.8f}.")
+                    logger.info(f"Reducing quantity of position {position.trade_id} by {quantity_to_reduce:.8f} to new quantity {new_quantity:.8f}.")
                     self.db_manager.update_trade_quantity(position.trade_id, new_quantity)
                 
                 discrepancy -= quantity_to_reduce
@@ -211,7 +217,7 @@ class StateManager:
             logger.error(f"An error occurred during balance reconciliation for {symbol}: {e}", exc_info=True)
 
 
-    def record_partial_sell(self, original_trade_id: str, remaining_quantity: float, sell_data: dict):
+    def record_partial_sell(self, original_trade_id: str, remaining_quantity: Decimal, sell_data: dict):
         """
         Records a partial sell and moves the remaining assets to a treasury.
         1. Logs the sell transaction as a new 'CLOSED' trade.
@@ -235,7 +241,7 @@ class StateManager:
         self.trade_logger.log_trade(sell_trade_data)
 
         # Step 2: If there's a remainder, create a new 'TREASURY' position for it.
-        if remaining_quantity > 0:
+        if remaining_quantity > Decimal('0'):
             original_trade = self.db_manager.get_trade_by_trade_id(original_trade_id)
             if not original_trade:
                 logger.error(f"Could not find original trade {original_trade_id} to create treasury position. Aborting treasury creation.")
@@ -244,9 +250,9 @@ class StateManager:
                 return
 
             treasury_trade_id = str(uuid.uuid4())
-            logger.info(f"Creating new TREASURY position {treasury_trade_id} with remaining quantity: {remaining_quantity}")
+            logger.info(f"Creating new TREASURY position {treasury_trade_id} with remaining quantity: {remaining_quantity:.8f}")
 
-            buy_price = original_trade.price
+            buy_price = Decimal(str(original_trade.price))
             treasury_usd_value = remaining_quantity * buy_price
 
             treasury_data = {

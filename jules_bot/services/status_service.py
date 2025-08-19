@@ -1,30 +1,35 @@
 import logging
+from decimal import Decimal, InvalidOperation
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.core_logic.strategy_rules import StrategyRules
 from jules_bot.core.exchange_connector import ExchangeManager
 from jules_bot.utils.config_manager import ConfigManager
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
+from sqlalchemy.exc import OperationalError
 
 
 logger = logging.getLogger(__name__)
 
-def _calculate_progress_pct(current_price: float, start_price: float, target_price: float) -> float:
+def _calculate_progress_pct(current_price: Decimal, start_price: Decimal, target_price: Decimal) -> Decimal:
     """
     Calculates the percentage progress of a value from a starting point to a target.
     Clamps the result between 0 and 100.
     """
     if current_price is None or start_price is None or target_price is None:
-        return 0.0
+        return Decimal('0.0')
 
     # Avoid division by zero if start and target prices are the same.
     if target_price == start_price:
-        return 100.0 if current_price >= target_price else 0.0
+        return Decimal('100.0') if current_price >= target_price else Decimal('0.0')
 
-    # Calculate progress as a percentage. This works for both long and short scenarios.
-    progress = (current_price - start_price) / (target_price - start_price) * 100
+    try:
+        # Calculate progress as a percentage. This works for both long and short scenarios.
+        progress = (current_price - start_price) / (target_price - start_price) * Decimal('100')
 
-    # Clamp the result between 0% and 100%.
-    return max(0, min(progress, 100))
+        # Clamp the result between 0% and 100%.
+        return max(Decimal('0'), min(progress, Decimal('100')))
+    except (InvalidOperation, ZeroDivisionError):
+        return Decimal('0.0')
 
 class StatusService:
     def __init__(self, db_manager: PostgresManager, config_manager: ConfigManager, feature_calculator: LiveFeatureCalculator):
@@ -49,38 +54,42 @@ class StatusService:
                 return {"error": "Could not fetch current market data."}
 
             market_data = market_data_series.to_dict()
-            current_price = market_data.get('close', 0)
+            current_price = Decimal(str(market_data.get('close', '0')))
 
             # 2. Fetch open positions from local DB
             # CORRECTED LOGIC: Only filter by bot_id in 'backtest' mode.
             # For 'trade' and 'test' modes, we want to see all open positions for the environment.
             bot_id_to_filter = bot_id if environment == 'backtest' else None
-            open_positions_db = self.db_manager.get_open_positions(environment, bot_id_to_filter)
+            open_positions_db = self.db_manager.get_open_positions(environment, bot_id_to_filter) or []
 
             # 3. Process open positions
             positions_status = []
             for trade in open_positions_db:
+                entry_price = Decimal(trade.price) if trade.price is not None else None
+                quantity = Decimal(trade.quantity) if trade.quantity is not None else None
+                sell_target_price = Decimal(trade.sell_target_price) if trade.sell_target_price is not None else None
+
                 unrealized_pnl = self.strategy.calculate_net_unrealized_pnl(
-                    entry_price=trade.price,
+                    entry_price=entry_price,
                     current_price=current_price,
-                    total_quantity=trade.quantity
-                ) if trade.price and trade.quantity else 0
+                    total_quantity=quantity
+                ) if entry_price and quantity else Decimal('0')
 
                 progress_to_sell_target_pct = _calculate_progress_pct(
                     current_price,
-                    start_price=trade.price,
-                    target_price=trade.sell_target_price
+                    start_price=entry_price,
+                    target_price=sell_target_price
                 )
 
                 # Calculate how far the current price is from the sell target.
-                price_to_target = 0
-                if trade.sell_target_price is not None and current_price is not None:
-                    price_to_target = trade.sell_target_price - current_price
+                price_to_target = Decimal('0')
+                if sell_target_price is not None and current_price is not None:
+                    price_to_target = sell_target_price - current_price
                 
                 # Calculate the USD value of that price difference.
-                usd_to_target = 0
-                if trade.quantity is not None:
-                    usd_to_target = price_to_target * trade.quantity
+                usd_to_target = Decimal('0')
+                if quantity is not None:
+                    usd_to_target = price_to_target * quantity
 
                 positions_status.append({
                     "trade_id": trade.trade_id,
@@ -103,30 +112,42 @@ class StatusService:
             )
 
             # 5. Fetch trade history from DB
-            trade_history = self.db_manager.get_all_trades_in_range(environment)
+            trade_history = self.db_manager.get_all_trades_in_range(environment) or []
             trade_history_dicts = [trade.to_dict() for trade in trade_history]
 
-            # 6. Fetch live wallet data
-            wallet_balances = exchange_manager.get_account_balance()
+            # 6. Fetch live wallet data and ensure BTC/USDT are always present
+            wallet_balances = exchange_manager.get_account_balance() or []
+            
+            # Create a default structure for balances to ensure BTC and USDT are always present
+            processed_balances_dict = {
+                'BTC': {'asset': 'BTC', 'free': '0.0', 'locked': '0.0', 'usd_value': 0.0},
+                'USDT': {'asset': 'USDT', 'free': '0.0', 'locked': '0.0', 'usd_value': 0.0}
+            }
 
-            # Filter for relevant assets and calculate USD value
-            relevant_assets = {'BTC', 'USDT'}
-            processed_balances = []
+            # Update the default structure with actual balances from the exchange
             for bal in wallet_balances:
                 asset = bal.get('asset')
-                if asset in relevant_assets:
-                    free = float(bal.get('free', 0))
-                    locked = float(bal.get('locked', 0))
-                    total = free + locked
-                    
-                    if asset == 'BTC':
-                        bal['usd_value'] = total * current_price
-                    elif asset == 'USDT':
-                        bal['usd_value'] = total
-                    
-                    processed_balances.append(bal)
+                if asset in processed_balances_dict:
+                    processed_balances_dict[asset] = bal # Replace default with actual
+            
+            # Calculate USD value based on FREE balance (available for trading)
+            # and ensure the list for the JSON output is created
+            processed_balances = []
+            for asset, bal in processed_balances_dict.items():
+                try:
+                    free = Decimal(bal.get('free', '0'))
+                except InvalidOperation:
+                    free = Decimal('0')
 
-            # Calculate total wallet value in USD
+                # Calculate USD value based on the FREE (available) balance
+                if asset == 'BTC':
+                    bal['usd_value'] = free * current_price
+                elif asset == 'USDT':
+                    bal['usd_value'] = free
+                
+                processed_balances.append(bal)
+
+            # Calculate total wallet value in USD from the FREE balances
             total_wallet_usd_value = sum(bal.get('usd_value', 0) for bal in processed_balances)
 
             # 7. Assemble the final status object
@@ -147,38 +168,41 @@ class StatusService:
             }
 
             return extended_status
-
+        except OperationalError as e:
+            logger.error(f"Database connection error in StatusService: {e}", exc_info=True)
+            return {"error": "Database connection failed.", "details": str(e)}
         except Exception as e:
             logger.error(f"Error getting extended status: {e}", exc_info=True)
             return {"error": str(e)}
 
-    def _calculate_buy_progress(self, market_data: dict, open_positions_count: int) -> tuple[float, float]:
+    def _calculate_buy_progress(self, market_data: dict, open_positions_count: int) -> tuple[Decimal, Decimal]:
         """
         Calculates the target price for the next buy and the progress towards it.
         """
-        current_price = market_data.get('close')
-        ema_20 = market_data.get('ema_20')
-        bbl = market_data.get('bbl_20_2_0')
-        ema_100 = market_data.get('ema_100')
-
-        if any(v is None for v in [current_price, ema_20, bbl, ema_100]):
-            return 0, 0
+        try:
+            current_price = Decimal(str(market_data.get('close')))
+            ema_20 = Decimal(str(market_data.get('ema_20')))
+            bbl = Decimal(str(market_data.get('bbl_20_2_0')))
+            ema_100 = Decimal(str(market_data.get('ema_100')))
+            high_price = Decimal(str(market_data.get('high', current_price)))
+        except (InvalidOperation, TypeError):
+            return Decimal('0'), Decimal('0')
 
         if open_positions_count == 0:
             if current_price > ema_100: # Uptrend
                 target_price = ema_20
-                progress = 100.0 if current_price > target_price else \
-                           _calculate_progress_pct(current_price, current_price * 1.05, target_price)
+                progress = Decimal('100.0') if current_price > target_price else \
+                           _calculate_progress_pct(current_price, current_price * Decimal('1.05'), target_price)
             else: # Downtrend
                 target_price = bbl
-                progress = _calculate_progress_pct(current_price, market_data.get('high', current_price), target_price)
+                progress = _calculate_progress_pct(current_price, high_price, target_price)
             return target_price, progress
 
         if current_price > ema_100: # Uptrend pullback
             target_price = ema_20
-            progress = _calculate_progress_pct(current_price, market_data.get('high', current_price), target_price)
+            progress = _calculate_progress_pct(current_price, high_price, target_price)
         else: # Downtrend breakout
             target_price = bbl
-            progress = _calculate_progress_pct(current_price, market_data.get('high', current_price), target_price)
+            progress = _calculate_progress_pct(current_price, high_price, target_price)
 
         return target_price, progress

@@ -143,7 +143,7 @@ class PostgresManager:
         """
         Fetches open positions for a given environment.
         Can optionally filter by bot_id (for backtesting) and symbol.
-        Returns a list of Trade model instances.
+        Returns a list of Trade model instances, sorted by most recent.
         """
         with self.get_db() as db:
             try:
@@ -156,7 +156,8 @@ class PostgresManager:
                 if symbol:
                     filters.append(Trade.symbol == symbol)
                 
-                query = db.query(Trade).filter(and_(*filters))
+                # MODIFIED: Added order_by clause to sort by timestamp descending
+                query = db.query(Trade).filter(and_(*filters)).order_by(desc(Trade.timestamp))              
                 
                 trades = query.all()
                 return trades
