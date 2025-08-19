@@ -48,6 +48,13 @@ class PortfolioData(Message):
         self.success = success
         super().__init__()
 
+class PerformanceSummaryData(Message):
+    """A message to transport performance summary data."""
+    def __init__(self, data: dict | str, success: bool) -> None:
+        self.data = data
+        self.success = success
+        super().__init__()
+
 class TUIApp(App):
     """A Textual app to display and control the trading bot's status via command-line scripts."""
 
@@ -99,6 +106,12 @@ class TUIApp(App):
         height: 12;
         border: round $primary;
         padding: 0 1;
+    }
+    #performance_summary_container {
+        padding: 0 1;
+        margin-bottom: 1;
+        border: round $primary;
+        height: auto;
     }
     #action_bar, #log_filter_bar {
         margin-top: 1;
@@ -158,6 +171,12 @@ class TUIApp(App):
                 yield DataTable(id="positions_table")
 
             with VerticalScroll(id="right_pane"):
+                yield Static("Performance Summary", classes="title")
+                with Static(id="performance_summary_container"):
+                    yield Label("Total Realized PnL (USD): N/A", id="perf_pnl_usd")
+                    yield Label("Total Realized PnL (BTC): N/A", id="perf_pnl_btc")
+                    yield Label("Total Treasury (BTC): N/A", id="perf_treasury_btc")
+
                 yield Static("Portfolio Evolution", classes="title")
                 yield Static("Total Portfolio Value: N/A", id="portfolio_total_value")
                 yield Static("Evolution (Total): N/A", id="portfolio_evolution_total")
@@ -193,6 +212,9 @@ class TUIApp(App):
 
         self.update_portfolio_dashboard()
         self.set_interval(60.0, self.update_portfolio_dashboard) # Update portfolio every 60 seconds
+
+        self.update_performance_summary()
+        self.set_interval(120.0, self.update_performance_summary) # Update every 2 minutes
 
         self.query_one("#manual_buy_input").focus()
 
@@ -537,6 +559,30 @@ class TUIApp(App):
             self.log_display.write(f"[bold red]Command failed:[/bold red] {message.output}")
         # Aciona uma atualização do dashboard para vermos o resultado da ação
         self.update_dashboard()
+
+    def update_performance_summary(self) -> None:
+        """Initiates the performance summary update in a worker."""
+        command = ["python", "scripts/get_tui_performance_data.py"]
+        self.run_script_worker(command, PerformanceSummaryData)
+
+    def on_performance_summary_data(self, message: PerformanceSummaryData) -> None:
+        """Updates the TUI with performance summary data."""
+        if not message.success or not isinstance(message.data, dict):
+            self.log_display.write(f"[bold red]Failed to get performance summary data: {message.data}[/]")
+            return
+
+        data = message.data
+        pnl_usd = data.get("total_usd_pnl", "0.0")
+        pnl_btc = data.get("total_btc_pnl", "0.0")
+        treasury_btc = data.get("total_treasury_btc", "0.0")
+
+        # Add color based on profit
+        usd_color = "green" if not pnl_usd.startswith('-') and pnl_usd != "0.0000" else "red"
+        btc_color = "green" if not pnl_btc.startswith('-') and pnl_btc != "0.00000000" else "red"
+
+        self.query_one("#perf_pnl_usd").update(f"Total Realized PnL (USD):  [{usd_color}]$ {pnl_usd}[/]")
+        self.query_one("#perf_pnl_btc").update(f"Total Realized PnL (BTC):    [{btc_color}]{pnl_btc} BTC[/]")
+        self.query_one("#perf_treasury_btc").update(f"Total Treasury (BTC):          {treasury_btc} BTC")
 
 def run_tui():
     """Ponto de entrada da linha de comando para a TUI."""
