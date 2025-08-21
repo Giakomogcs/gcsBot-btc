@@ -217,16 +217,16 @@ class StateManager:
             logger.error(f"An error occurred during balance reconciliation for {symbol}: {e}", exc_info=True)
 
 
-    def record_partial_sell(self, original_trade_id: str, remaining_quantity: Decimal, sell_data: dict):
+    def close_full_position(self, original_trade_id: str, sell_data: dict):
         """
-        Records a partial sell and moves the remaining assets to a treasury.
-        1. Logs the sell transaction as a new 'CLOSED' trade.
-        2. Creates a new 'TREASURY' trade for the remaining assets.
-        3. Closes the original 'OPEN' trade.
+        Registra o fechamento total de uma posição.
+        1. Registra a transação de venda como uma nova operação 'CLOSED'.
+        2. Fecha a operação de compra original, marcando-a como 'CLOSED'.
         """
-        # Step 1: Log the sell transaction as a new record.
+        # Etapa 1: Registrar a transação de venda como um novo registro.
         sell_trade_id = str(uuid.uuid4())
-        logger.info(f"Logging partial sell transaction with new trade_id: {sell_trade_id} for original trade: {original_trade_id}")
+        logger.info(f"Logging full sell transaction with new trade_id: {sell_trade_id} for original trade: {original_trade_id}")
+
         sell_trade_data = {
             **sell_data,
             'run_id': self.bot_id,
@@ -235,74 +235,11 @@ class StateManager:
             'order_type': 'sell',
             'decision_context': {
                 **sell_data.get('decision_context', {}),
-                'closing_partial_trade_id': original_trade_id
+                'closing_trade_id': original_trade_id
             }
         }
         self.trade_logger.log_trade(sell_trade_data)
 
-        # Step 2: If there's a remainder, create a new 'TREASURY' position for it.
-        if remaining_quantity > Decimal('0'):
-            original_trade = self.db_manager.get_trade_by_trade_id(original_trade_id)
-            if not original_trade:
-                logger.error(f"Could not find original trade {original_trade_id} to create treasury position. Aborting treasury creation.")
-                # We should still close the original position to avoid inconsistent state
-                self.db_manager.update_trade_status(original_trade_id, 'CLOSED')
-                return
-
-            treasury_trade_id = str(uuid.uuid4())
-            logger.info(f"Creating new TREASURY position {treasury_trade_id} with remaining quantity: {remaining_quantity:.8f}")
-
-            buy_price = Decimal(str(original_trade.price))
-            treasury_usd_value = remaining_quantity * buy_price
-
-            treasury_data = {
-                'run_id': self.bot_id,
-                'environment': self.mode,
-                'strategy_name': original_trade.strategy_name,
-                'symbol': original_trade.symbol,
-                'trade_id': treasury_trade_id,
-                'exchange': original_trade.exchange,
-                'status': 'TREASURY',
-                'order_type': 'buy',
-                'price': buy_price,
-                'quantity': remaining_quantity,
-                'usd_value': treasury_usd_value,
-                'timestamp': original_trade.timestamp,
-                'decision_context': {'source': 'treasury', 'original_trade_id': original_trade_id}
-            }
-            self.trade_logger.log_trade(treasury_data)
-
-        # Step 3: Close the original position, as it's now fully accounted for.
-        logger.info(f"Closing original position {original_trade_id} after partial sell and treasury creation.")
+        # Etapa 2: Fechar a posição original, pois ela foi totalmente liquidada.
+        logger.info(f"Closing original position {original_trade_id} after full sell.")
         self.db_manager.update_trade_status(original_trade_id, 'CLOSED')
-
-
-    def close_position(self, trade_id: str, exit_data: dict, is_partial_close: bool = True):
-        """
-        Logs the closing of a trade.
-        If this is the final closing of a position (not a partial sell), it updates the original record.
-        If it's a partial sell, this function is now a legacy path and the new record_partial_sell should be used.
-        """
-        logger.info(f"Closing position for trade_id: {trade_id}")
-
-        # The original implementation of this function was flawed because it overwrote the buy record
-        # with sell information. The new `record_partial_sell` is the correct path for partial sells.
-        # This function will now only handle the final closing of a position.
-
-        if is_partial_close:
-             # This indicates a logic error - close_position should not be called for partials anymore.
-             logger.warning("close_position was called for a partial sell. This is a deprecated path. Please use record_partial_sell.")
-             # Fallback to old logic to avoid crashing, but this is not ideal.
-             pass
-
-        trade_data = {
-            **exit_data,
-            'run_id': self.bot_id,
-            'trade_id': trade_id,
-            'status': 'CLOSED',
-            'order_type': 'sell',
-            'strategy_name': exit_data.get('strategy_name', 'default'),
-            'exchange': exit_data.get('exchange', 'binance')
-        }
-
-        self.trade_logger.log_trade(trade_data)

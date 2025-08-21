@@ -76,54 +76,45 @@ class Backtester:
             for trade_id, position in list(open_positions.items()):
                 target_price = position.get('sell_target_price', Decimal('inf'))
                 if current_price >= target_price:
-                    original_quantity = position['quantity']
-                    sell_quantity = original_quantity * strategy_rules.sell_factor
+                    # A quantidade de venda agora é a quantidade total da posição.
+                    sell_quantity = position['quantity']
 
                     success, sell_result = self.mock_trader.execute_sell({'quantity': sell_quantity})
                     if success:
                         buy_price = position['price']
                         sell_price = sell_result['price']
                         
+                        # O PnL é calculado sobre a venda total.
                         realized_pnl_usd = strategy_rules.calculate_realized_pnl(
                             buy_price=buy_price,
                             sell_price=sell_price,
                             quantity_sold=sell_result['quantity']
                         )
                         commission_usd = sell_result['commission']
-                        hodl_asset_amount = original_quantity - sell_quantity
-                        hodl_asset_value_at_sell = hodl_asset_amount * sell_result['price']
 
                         decision_context = candle.to_dict()
                         decision_context.pop('symbol', None)
 
-                        trade_data = {
+                        # Registra a transação de venda como uma nova operação.
+                        sell_trade_id = str(uuid.uuid4())
+                        sell_trade_data = {
                             'run_id': self.run_id, 'strategy_name': strategy_name, 'symbol': symbol,
-                            'trade_id': trade_id, 'exchange': "backtest_engine", 'order_type': "sell",
+                            'trade_id': sell_trade_id, 'exchange': "backtest_engine", 'order_type': "sell",
                             'status': "CLOSED", 'price': sell_result['price'], 'quantity': sell_result['quantity'],
                             'usd_value': sell_result['usd_value'], 'commission': commission_usd,
                             'commission_asset': "USDT", 'timestamp': current_time,
-                            'decision_context': decision_context, 'commission_usd': commission_usd,
-                            'realized_pnl_usd': realized_pnl_usd, 'hodl_asset_amount': hodl_asset_amount,
-                            'hodl_asset_value_at_sell': hodl_asset_value_at_sell
+                            'decision_context': {**decision_context, 'closing_trade_id': trade_id},
+                            'commission_usd': commission_usd,
+                            'realized_pnl_usd': realized_pnl_usd,
+                            'hodl_asset_amount': Decimal('0'),
+                            'hodl_asset_value_at_sell': Decimal('0')
                         }
-                        self.trade_logger.update_trade(trade_data)
+                        self.trade_logger.log_trade(sell_trade_data)
 
-                        logger.info(f"SELL EXECUTED: TradeID: {trade_id} | Buy Price: ${position['price']:,.2f} | Sell Price: ${sell_result['price']:,.2f} | Realized PnL: ${realized_pnl_usd:,.2f} | HODL Amount: {hodl_asset_amount:.8f} BTC")
+                        # Atualiza a operação de compra original para 'CLOSED'.
+                        self.db_manager.update_trade_status(trade_id, 'CLOSED')
 
-                        if hodl_asset_amount > Decimal('1e-8'):
-                            treasury_trade_id = str(uuid.uuid4())
-                            buy_price = position['price']
-                            treasury_usd_value = hodl_asset_amount * buy_price
-                            treasury_data = {
-                                'run_id': self.run_id, 'environment': 'backtest', 'strategy_name': strategy_name,
-                                'symbol': symbol, 'trade_id': treasury_trade_id, 'exchange': "backtest_engine",
-                                'status': 'TREASURY', 'order_type': 'buy', 'price': buy_price,
-                                'quantity': hodl_asset_amount, 'usd_value': treasury_usd_value,
-                                'timestamp': current_time,
-                                'decision_context': {'source': 'treasury', 'original_trade_id': trade_id}
-                            }
-                            self.trade_logger.log_trade(treasury_data)
-                            logger.info(f"TREASURY CREATED: TradeID: {treasury_trade_id} | Quantity: {hodl_asset_amount:.8f} BTC | Value at cost: ${treasury_usd_value:,.2f}")
+                        logger.info(f"SELL EXECUTED: TradeID: {trade_id} | Buy Price: ${position['price']:,.2f} | Sell Price: ${sell_result['price']:,.2f} | Realized PnL: ${realized_pnl_usd:,.2f}")
 
                         del open_positions[trade_id]
 

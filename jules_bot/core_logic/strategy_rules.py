@@ -9,7 +9,6 @@ class StrategyRules:
         self.rules = config_manager.get_section('STRATEGY_RULES')
         self.max_capital_per_trade_percent = Decimal(self.rules.get('max_capital_per_trade_percent', '0.02'))
         self.base_usd_per_trade = Decimal(self.rules.get('base_usd_per_trade', '20.0'))
-        self.sell_factor = Decimal(self.rules.get('sell_factor', '0.9'))
         self.commission_rate = Decimal(self.rules.get('commission_rate', '0.001'))
         self.target_profit = Decimal(self.rules.get('target_profit', '0.01'))
 
@@ -94,11 +93,10 @@ class StrategyRules:
         current_price = Decimal(current_price)
         total_quantity = Decimal(total_quantity)
 
-        quantity_to_sell = total_quantity * self.sell_factor
-        
+        # O PnL não realizado agora é calculado com base na quantidade total da posição.
         net_unrealized_pnl = self.calculate_realized_pnl(
             buy_price=entry_price,
             sell_price=current_price,
-            quantity_sold=quantity_to_sell
+            quantity_sold=total_quantity
         )
         return net_unrealized_pnl

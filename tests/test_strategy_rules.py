@@ -16,7 +16,6 @@ def mock_config_manager():
                 'max_capital_per_trade_percent': '0.02', # 2%
                 'base_usd_per_trade': '100.0', # This was missing
                 'commission_rate': '0.001',
-                'sell_factor': '0.9',
                 'target_profit': '0.005',
                 'max_open_positions': '20'
             }
@@ -41,6 +40,27 @@ def test_get_next_buy_amount_when_balance_is_high(mock_config_manager):
 
     # Assert
     assert buy_amount == 100.0
+
+def test_calculate_net_unrealized_pnl(mock_config_manager):
+    """
+    Tests the unrealized PnL calculation. It should be based on the full quantity.
+    """
+    # Arrange
+    strategy_rules = StrategyRules(mock_config_manager)
+    entry_price = Decimal("100.0")
+    current_price = Decimal("120.0")
+    total_quantity = Decimal("2.0")
+
+    # Act
+    # This should internally call calculate_realized_pnl with the full quantity.
+    # Expected PNL = ( (120 * (1 - 0.001)) - (100 * (1 + 0.001)) ) * 2
+    # Expected PNL = ( (120 * 0.999) - (100 * 1.001) ) * 2
+    # Expected PNL = ( 119.88 - 100.1 ) * 2
+    # Expected PNL = 19.78 * 2 = 39.56
+    unrealized_pnl = strategy_rules.calculate_net_unrealized_pnl(entry_price, current_price, total_quantity)
+
+    # Assert
+    assert float(unrealized_pnl) == pytest.approx(39.56)
 
 def test_calculate_realized_pnl(mock_config_manager):
     """

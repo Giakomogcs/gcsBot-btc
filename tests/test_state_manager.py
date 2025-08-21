@@ -79,35 +79,39 @@ def test_create_new_position_logs_trade(state_manager, mock_db_manager):
     assert logged_data['order_type'] == 'buy'
 
 
-def test_close_position_logs_trade(state_manager, mock_db_manager):
+def test_close_full_position_logs_and_updates_trade(state_manager, mock_db_manager):
     """
-    Verify that `close_position` calls `log_trade` with a TradePoint object.
+    Verify that `close_full_position` logs the sell trade and updates the original trade status.
     """
     # Arrange
-    trade_id = "test-trade-123"
-    exit_data = {
+    original_trade_id = "original-buy-trade-123"
+    sell_data = {
         'price': 110.0,
         'quantity': 1.0,
         'usd_value': 110.0,
         'symbol': 'BTCUSDT',
-        'order_type': 'sell',
-        'realized_pnl': 10.0
+        'realized_pnl_usd': 10.0
     }
 
     # Act
-    state_manager.close_position(trade_id, exit_data)
+    state_manager.close_full_position(original_trade_id, sell_data)
 
     # Assert
-    mock_db_manager.log_trade.assert_called_once()
-    call_args = mock_db_manager.log_trade.call_args[0]
+    # 1. Assert that a new sell trade was logged
+    state_manager.trade_logger.log_trade.assert_called_once()
+    call_args = state_manager.trade_logger.log_trade.call_args[0]
     assert len(call_args) == 1
     logged_data = call_args[0]
 
     assert isinstance(logged_data, dict)
-    assert logged_data['trade_id'] == trade_id
-    assert logged_data['price'] == 110.0
+    assert logged_data['status'] == 'CLOSED'
     assert logged_data['order_type'] == 'sell'
-    assert logged_data['realized_pnl'] == 10.0
+    assert logged_data['price'] == 110.0
+    assert logged_data['realized_pnl_usd'] == 10.0
+    assert logged_data['decision_context']['closing_trade_id'] == original_trade_id
+
+    # 2. Assert that the original trade was closed
+    mock_db_manager.update_trade_status.assert_called_once_with(original_trade_id, 'CLOSED')
 
 def test_get_last_purchase_price_with_open_positions(state_manager):
     """
