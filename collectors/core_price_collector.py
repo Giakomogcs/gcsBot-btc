@@ -157,6 +157,9 @@ class CorePriceCollector:
         for col in ['open', 'high', 'low', 'close', 'volume']:
             df[col] = df[col].apply(Decimal)
 
+        # Select only the columns that exist in the price_history table
+        df = df[['open', 'high', 'low', 'close', 'volume']]
+
         df = df.loc[start_dt:end_dt]
         logger.info(f"\nFetched a total of {len(df)} candles from Binance.")
         return df
