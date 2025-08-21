@@ -15,29 +15,17 @@ app = typer.Typer()
 def get_docker_compose_command():
     """
     Verifica se 'docker-compose' (V1) ou 'docker compose' (V2) está disponível.
-    Adiciona 'sudo' se o usuário não for root para evitar problemas de permissão.
     """
-    # Lista de comandos base. Adiciona 'sudo' se não formos o usuário root.
-    base_cmd = []
-    try:
-        # os.geteuid() não existe no Windows, então tratamos o erro.
-        # No Windows, o gerenciamento de permissões do Docker é diferente e geralmente não requer sudo.
-        if os.geteuid() != 0:
-            base_cmd = ["sudo"]
-    except AttributeError:
-        # Se geteuid não existe, estamos provavelmente no Windows. Não fazemos nada.
-        pass
-
     # Tenta encontrar um comando docker-compose válido
     if shutil.which("docker-compose"):
-        return base_cmd + ["docker-compose"]
+        return ["docker-compose"]
     elif shutil.which("docker"):
         try:
-            # Constrói o comando de teste completo (ex: ['sudo', 'docker', 'compose', '--version'])
-            test_command = base_cmd + ["docker", "compose", "--version"]
+            # Constrói o comando de teste completo (ex: ['docker', 'compose', '--version'])
+            test_command = ["docker", "compose", "--version"]
             result = subprocess.run(test_command, capture_output=True, text=True, check=True)
             if "Docker Compose version" in result.stdout:
-                return base_cmd + ["docker", "compose"]
+                return ["docker", "compose"]
         except (subprocess.CalledProcessError, FileNotFoundError):
             # Se o teste falhar, continuamos para o erro final
             pass
@@ -205,9 +193,22 @@ def trade():
 
 @app.command()
 def test():
-    """Inicia o bot em modo de teste (testnet)."""
+    """Inicia o bot em modo de teste (testnet), limpando o estado anterior."""
     mode = "test"
-    print(f"🚀 Iniciando o bot em modo '{mode.upper()}'...")
+
+    print("🗑️  Limpando o estado de teste anterior para garantir uma sessão limpa...")
+    # Executa o script de limpeza de forma não-interativa.
+    # A função `_run_in_container` retorna True em caso de sucesso (código de saída 0).
+    success = _run_in_container(
+        command=["scripts/clear_testnet_trades.py"]
+    )
+
+    if not success:
+        print("❌ Falha ao limpar o estado de teste. Abortando o início do bot.")
+        # Usamos typer.Exit para terminar o script com um código de erro.
+        raise typer.Exit(code=1)
+
+    print(f"✅ Estado anterior limpo. Iniciando o bot em modo '{mode.upper()}'...")
     _run_in_container(
         command=["jules_bot/main.py"],
         env_vars={"BOT_MODE": mode}
