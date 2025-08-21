@@ -110,12 +110,16 @@ class CorePriceCollector:
                 logger.error(f"Error querying last timestamp from PostgreSQL: {e}", exc_info=True)
                 return None
 
-    def _get_historical_klines(self, start_dt: datetime.datetime, end_dt: datetime.datetime) -> pd.DataFrame:
+    def _get_historical_klines(self, start_dt: datetime.datetime, end_dt: datetime.datetime, client: Optional[Client] = None) -> pd.DataFrame:
         """
         Fetches historical OHLCV data from Binance, handling pagination automatically.
         """
         logger.info(f"Fetching OHLCV data for {self.symbol} from {start_dt} to {end_dt}...")
-        if not self.binance_client:
+        
+        # If no specific client is provided, use the instance's default client.
+        active_client = client if client else self.binance_client
+
+        if not active_client:
             logger.warning("Binance client not initialized. Cannot fetch historical klines.")
             return pd.DataFrame()
 
@@ -127,7 +131,7 @@ class CorePriceCollector:
             while True:
                 current_start_ms = int(current_start_dt.timestamp() * 1000)
                 try:
-                    klines = self.binance_client.get_historical_klines(
+                    klines = active_client.get_historical_klines(
                         self.symbol, Client.KLINE_INTERVAL_1MINUTE, start_str=current_start_ms, end_str=end_ms, limit=1000
                     )
                     if not klines:
@@ -191,17 +195,31 @@ def prepare_backtest_data(days: int):
     Acts as a smart guardian for the historical database. It ensures the database
     contains the required range of data, downloading only missing data from Binance
     without ever deleting existing records.
+    This function will always use the LIVE Binance API for data to ensure quality,
+    regardless of the testnet setting in the config.
     """
     logger.info("--- Starting Intelligent and Safe Data Preparation ---")
     
     collector = CorePriceCollector()
     symbol = collector.symbol
-    online_mode = collector.connect_binance_client()
+    
+    # For reliable backtesting, always use the live Binance client for historical data.
+    # This client does not require API keys for public data endpoints.
+    try:
+        logger.info("Initializing temporary live Binance client for accurate historical data...")
+        historical_client = Client(api_key="", api_secret="")
+        historical_client.ping()
+        online_mode = True
+        logger.info("Live Binance client connected successfully.")
+    except (BinanceAPIException, BinanceRequestException) as e:
+        logger.error(f"Could not connect to live Binance API for historical data: {e}", exc_info=True)
+        online_mode = False
+    except Exception as e:
+        logger.error(f"An unexpected error occurred while connecting to live Binance API: {e}", exc_info=True)
+        online_mode = False
 
     if not online_mode:
-        logger.warning("Binance client is offline. Data preparation will rely solely on existing database content.")
-        # Even in offline mode, we can proceed with whatever data is available.
-        # The backtester will later fail if the data is insufficient.
+        logger.warning("Could not connect to live API. Data preparation will rely solely on existing database content.")
 
     # 1. Define the required data range
     required_end_date = datetime.datetime.now(datetime.timezone.utc)
@@ -215,29 +233,26 @@ def prepare_backtest_data(days: int):
     # 3. Download historical data if needed (older than what we have)
     if online_mode:
         if db_first_ts is None or db_first_ts > required_start_date:
-            # If DB is empty, download the full range.
-            # If DB has data, but it doesn't go back far enough, download the missing historical part.
             download_start = required_start_date
             download_end = (db_first_ts - timedelta(minutes=1)) if db_first_ts else required_end_date
             
-            logger.info(f"Downloading historical data from {download_start} to {download_end}.")
-            df_hist = collector._get_historical_klines(download_start, download_end)
+            logger.info(f"Downloading historical data from {download_start} to {download_end} using LIVE client.")
+            df_hist = collector._get_historical_klines(download_start, download_end, client=historical_client)
             if not df_hist.empty:
                 collector._write_dataframe_to_postgres(df_hist)
         else:
             logger.info("Sufficient historical data already exists. No historical download needed.")
 
         # 4. Download recent data if needed (newer than what we have)
-        # Re-query last timestamp in case the historical download just ran
-        db_last_ts = collector._query_last_timestamp(symbol)
-        if db_last_ts is None: # Should not happen if historical download worked, but as a safeguard
+        db_last_ts = collector._query_last_timestamp(symbol) # Re-query in case of historical download
+        if db_last_ts is None:
              db_last_ts = required_start_date - timedelta(minutes=1)
 
         if required_end_date > db_last_ts:
             download_start = db_last_ts + timedelta(minutes=1)
             download_end = required_end_date
-            logger.info(f"Downloading recent data from {download_start} to {download_end}.")
-            df_recent = collector._get_historical_klines(download_start, download_end)
+            logger.info(f"Downloading recent data from {download_start} to {download_end} using LIVE client.")
+            df_recent = collector._get_historical_klines(download_start, download_end, client=historical_client)
             if not df_recent.empty:
                 collector._write_dataframe_to_postgres(df_recent)
         else:
