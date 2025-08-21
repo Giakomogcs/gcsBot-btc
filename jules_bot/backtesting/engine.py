@@ -189,7 +189,8 @@ class Backtester:
         net_pnl_percent = (net_pnl / initial_balance) * 100 if initial_balance > 0 else Decimal(0)
 
         buy_trades = all_trades_df[all_trades_df['order_type'] == 'buy']
-        sell_trades = all_trades_df[all_trades_df['status'] == 'CLOSED']
+        # Corrigido: As vendas são contadas pelo 'order_type', não pelo 'status'.
+        sell_trades = all_trades_df[all_trades_df['order_type'] == 'sell']
 
         total_realized_pnl = sell_trades['realized_pnl_usd'].sum()
         total_fees_usd = all_trades_df['commission_usd'].sum()
