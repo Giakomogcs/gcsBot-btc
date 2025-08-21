@@ -74,7 +74,7 @@ class TestStatusService(unittest.TestCase):
 
         # Assert PnL and progress calculations are correct for the first trade
         pos1_status = result["open_positions_status"][0]
-        self.assertAlmostEqual(float(pos1_status["unrealized_pnl"]), 170.82, places=2)
+        self.assertAlmostEqual(float(pos1_status["unrealized_pnl"]), 189.80, places=2)
         # Progress: (52000 - 50000) / (55000 - 50000) * 100 = 40%
         self.assertAlmostEqual(float(pos1_status["progress_to_sell_target_pct"]), 40.0, places=2)
         self.assertAlmostEqual(float(pos1_status["price_to_target"]), 3000, places=2)

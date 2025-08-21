@@ -53,60 +53,78 @@ def mock_db_manager():
     
     mock.get_price_data.return_value = df
     mock.get_trades_by_run_id.return_value = []
+    # Add SessionLocal attribute to the mock to prevent AttributeError in StateManager
+    mock.SessionLocal = MagicMock()
     return mock
 
-@patch('jules_bot.backtesting.engine.Backtester._generate_and_save_summary')
+@patch('jules_bot.core_logic.state_manager.StateManager.record_partial_sell')
 @patch('jules_bot.backtesting.engine.add_all_features')
-def test_backtester_pnl_calculation(mock_add_all_features, mock_summary, mock_config_manager, mock_db_manager):
+def test_backtester_pnl_calculation(mock_add_all_features, mock_record_partial_sell, mock_config_manager, mock_db_manager):
     """
-    Tests that the backtester correctly calculates P&L using the StrategyRules method.
+    Tests that the backtester correctly calculates P&L and passes it to the StateManager.
     """
     # Arrange
-    # The mock feature data needs all columns the backtester expects
     feature_data = mock_db_manager.get_price_data.return_value.copy()
     feature_data['ema_100'] = 100
     feature_data['ema_20'] = 100
     feature_data['bbl_20_2_0'] = 98
     mock_add_all_features.return_value = feature_data
 
-    # We need to patch the global config_manager used by the Backtester
+    # This mock position will be "returned" by the db_manager after the first (buy) loop
+    mock_position = MagicMock()
+    mock_position.trade_id = "test-trade-id"
+    mock_position.price = Decimal("101.0")
+    mock_position.quantity = (Decimal("100.0") - (Decimal("100.0") * Decimal("0.001"))) / Decimal("101.0")
+    mock_position.sell_target_price = Decimal("110.0")
+
+    # The db_manager will return no positions at first, then the new position
+    mock_db_manager.get_open_positions.side_effect = [
+        [],  # First call in loop 1
+        [],  # Second call in loop 1 (for dynamic capital check)
+        [mock_position], # First call in loop 2
+        [mock_position], # Second call in loop 2
+        [mock_position], # First call in loop 3
+        [mock_position], # Second call in loop 3
+    ]
+
+    # Patch the global config_manager and other methods
     with patch('jules_bot.backtesting.engine.config_manager', mock_config_manager), \
          patch('jules_bot.core_logic.strategy_rules.StrategyRules.evaluate_buy_signal') as mock_buy_signal, \
-         patch('jules_bot.core_logic.strategy_rules.StrategyRules.calculate_sell_target_price') as mock_sell_target:
+         patch('jules_bot.core_logic.strategy_rules.StrategyRules.calculate_sell_target_price') as mock_sell_target, \
+         patch('jules_bot.backtesting.engine.Backtester._generate_and_save_summary'): # Patch summary to avoid db calls
 
-        # Mock to buy only on the first call
-        mock_buy_signal.side_effect = [(True, 'uptrend', 'test_buy_signal')] + [(False, '', '')] * (len(feature_data) - 1)
-        
-        # Sell if price is >= 110 (the close of the second candle)
-        mock_sell_target.return_value = Decimal("110.0")
-
-        backtester = Backtester(db_manager=mock_db_manager, start_date="2023-01-01", end_date="2023-01-01")
-        
-        trade_logger_mock = backtester.trade_logger = MagicMock()
+        # Mock buy signal to fire once, then no more signals
+        mock_buy_signal.side_effect = [(True, 'uptrend', 'test_buy')] + [(False, '', '')] * (len(feature_data) - 1)
+        mock_sell_target.return_value = Decimal("110.0") # Sell at the second candle
 
         # Act
+        backtester = Backtester(db_manager=mock_db_manager, start_date="2023-01-01", end_date="2023-01-01")
         backtester.run()
 
         # Assert
-        update_calls = [c for c in trade_logger_mock.method_calls if c[0] == 'update_trade']
-        assert len(update_calls) == 1, "Expected one sell trade to be updated"
+        mock_record_partial_sell.assert_called_once()
         
-        sell_trade_data = update_calls[0][1][0]
-        realized_pnl = sell_trade_data.get('realized_pnl_usd')
+        # Extract the sell_data from the mock call
+        call_args = mock_record_partial_sell.call_args[1]
+        sell_data = call_args['sell_data']
+        realized_pnl = sell_data.get('realized_pnl_usd')
 
-        # Manually calculate the expected PnL using Decimal
+        # Manually calculate the expected PnL
         buy_price = Decimal("101.0")
         sell_price = Decimal("110.0")
         
+        # From the mocked config
         buy_amount_usdt = Decimal("100.0")
-        quantity_bought = buy_amount_usdt / buy_price
+        commission_rate = Decimal("0.001")
+
+        # This is the quantity that would have been bought, as calculated by MockTrader
+        quantity_bought = (buy_amount_usdt - (buy_amount_usdt * commission_rate)) / buy_price
         
         sell_factor = Decimal("0.9")
         quantity_sold = quantity_bought * sell_factor
 
-        commission_rate = Decimal("0.001")
         one = Decimal("1")
-
+        # PnL calculation is based on the sell quantity
         expected_pnl = (sell_price * (one - commission_rate) - buy_price * (one + commission_rate)) * quantity_sold
-        
+
         assert realized_pnl == pytest.approx(expected_pnl)

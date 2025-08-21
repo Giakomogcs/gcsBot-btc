@@ -29,27 +29,35 @@ class MockTrader(Trader):
     def get_current_timestamp(self) -> pd.Timestamp:
         return self._current_timestamp
 
-    def execute_buy(self, amount_usdt: Decimal) -> tuple[bool, dict]:
+    def execute_buy(self, amount_usdt: Decimal, decision_context: dict = None) -> tuple[bool, dict]:
         price = self.get_current_price()
         if price <= 0:
             return False, {"error": "Invalid price."}
 
         amount_usdt = Decimal(amount_usdt)
-        quantity_bought = amount_usdt / price
+        # In a real scenario, commission is often part of the quote quantity.
+        # Here we simulate it being an additional cost for simplicity.
         commission = amount_usdt * self.commission_rate
-        total_cost = amount_usdt + commission
+        net_amount_usdt = amount_usdt - commission
+        quantity_bought = net_amount_usdt / price
 
-        if self.usd_balance < total_cost:
-            logging.warning(f"Insufficient funds. Required: ${total_cost:,.2f}, Available: ${self.usd_balance:,.2f}.")
+        if self.usd_balance < amount_usdt:
+            logging.warning(f"Insufficient funds. Required: ${amount_usdt:,.2f}, Available: ${self.usd_balance:,.2f}.")
             return False, {"error": "Insufficient USD balance."}
 
-        self.usd_balance -= total_cost
+        self.usd_balance -= amount_usdt
         self.btc_balance += quantity_bought
 
         trade_data = {
-            "trade_id": str(uuid.uuid4()), "symbol": self.symbol, "price": price,
-            "quantity": quantity_bought, "usd_value": amount_usdt,
-            "commission": commission, "timestamp": self.get_current_timestamp()
+            "trade_id": str(uuid.uuid4()),
+            "symbol": self.symbol,
+            "price": price,
+            "quantity": quantity_bought,
+            "usd_value": amount_usdt, # Gross value including commission
+            "commission": commission,
+            "commission_asset": "USDT",
+            "timestamp": self.get_current_timestamp(),
+            "decision_context": decision_context or {}
         }
         return True, trade_data
 
@@ -68,6 +76,7 @@ class MockTrader(Trader):
         self.usd_balance += net_usd_value
 
         exit_data = {
+            "symbol": self.symbol,
             "price": price, "quantity": quantity_to_sell,
             "usd_value": net_usd_value, "commission": commission,
             "timestamp": self.get_current_timestamp()

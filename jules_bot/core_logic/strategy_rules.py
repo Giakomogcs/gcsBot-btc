@@ -56,12 +56,20 @@ class StrategyRules:
     def calculate_sell_target_price(self, purchase_price: Decimal) -> Decimal:
         """
         Calculates the target sell price using Decimal.
+        The price is calculated so that selling a `sell_factor` portion of the
+        position covers the cost of the entire position plus the target profit.
         """
         purchase_price = Decimal(purchase_price)
         one = Decimal('1')
 
+        # To find the break-even price for a partial sale, we set the revenue
+        # from the partial sale equal to the total cost of the original position.
+        # Revenue = sell_price * (quantity * sell_factor) * (1 - commission_rate)
+        # Total Cost = purchase_price * quantity * (1 + commission_rate)
+        # sell_price * sell_factor * (1 - commission_rate) = purchase_price * (1 + commission_rate)
+        # break_even_price = (purchase_price * (1 + commission_rate)) / (self.sell_factor * (1 - commission_rate))
         numerator = purchase_price * (one + self.commission_rate)
-        denominator = one - self.commission_rate
+        denominator = self.sell_factor * (one - self.commission_rate)
 
         if denominator == 0:
             return Decimal('inf')
@@ -94,11 +102,9 @@ class StrategyRules:
         current_price = Decimal(current_price)
         total_quantity = Decimal(total_quantity)
 
-        quantity_to_sell = total_quantity * self.sell_factor
-        
         net_unrealized_pnl = self.calculate_realized_pnl(
             buy_price=entry_price,
             sell_price=current_price,
-            quantity_sold=quantity_to_sell
+            quantity_sold=total_quantity
         )
         return net_unrealized_pnl
