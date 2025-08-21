@@ -6,8 +6,9 @@
 # Isso inclui os CSVs, os modelos .pkl e os arquivos de estado .json
 /data/
 
-# Ignora a pasta de logs e TUDO dentro dela.
-/logs/
+# Ignora o conteúdo da pasta de logs, mas mantém a pasta e o .gitkeep
+/logs/*
+!/logs/.gitkeep
 
 
 # ===================================================
