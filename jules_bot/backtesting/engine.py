@@ -197,7 +197,8 @@ class Backtester:
         net_pnl = final_balance - initial_balance
         net_pnl_percent = (net_pnl / initial_balance) * 100 if initial_balance > 0 else Decimal(0)
 
-        buy_trades = all_trades_df[all_trades_df['order_type'] == 'buy']
+        # Filter for trades that are not treasury to count as actual buy trades
+        buy_trades = all_trades_df[all_trades_df['status'] != 'TREASURY']
         sell_trades = all_trades_df[all_trades_df['status'] == 'CLOSED']
 
         total_realized_pnl = sell_trades['realized_pnl_usd'].sum()

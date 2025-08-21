@@ -1,4 +1,3 @@
-import pandas as pd
 import sys
 import os
 import argparse
@@ -10,56 +9,46 @@ if project_root not in sys.path:
 
 from jules_bot.utils.logger import logger
 from jules_bot.utils.config_manager import config_manager
-from jules_bot.database.database_manager import DatabaseManager
+from jules_bot.database.postgres_manager import PostgresManager
+from jules_bot.database.models import Trade
 
 def main(environment: str):
+    """
+    Limpa todos os registros da tabela 'trades' para um ambiente específico no PostgreSQL.
+    """
     try:
-        logger.info(f"--- LIMPANDO A MEDIÇÃO 'TRADES' DO AMBIENTE '{environment}' ---")
+        logger.info(f"--- LIMPANDO A TABELA 'TRADES' DO AMBIENTE '{environment}' NO POSTGRESQL ---")
 
-        # Get the base DB config (URL, token, org)
-        db_config = config_manager.get_db_config()
+        # Get the PostgreSQL config
+        db_config = config_manager.get_db_config('POSTGRES')
+        db_manager = PostgresManager(config=db_config)
 
-        # Determine the correct bucket name based on the environment and add it to the config
-        if environment == 'trade':
-            bucket_key = 'bucket_live'
-        elif environment == 'test':
-            bucket_key = 'bucket_testnet'
-        elif environment == 'backtest':
-            bucket_key = 'bucket_backtest'
-        
-        bucket_name = config_manager.get('INFLUXDB', bucket_key)
-        db_config['bucket'] = bucket_name
-        
-        db_manager = DatabaseManager(config=db_config)
+        with db_manager.get_db() as session:
+            logger.info(f"Conectado ao banco de dados. Deletando trades do ambiente '{environment}'...")
 
+            # Executa a exclusão
+            num_deleted = session.query(Trade).filter(Trade.environment == environment).delete(synchronize_session=False)
+            session.commit()
 
-        start = "1970-01-01T00:00:00Z"
-        stop = pd.Timestamp.now(tz='UTC').isoformat()
-
-        # PREDICADO DE EXCLUSÃO: Remove todos os pontos da medição 'trades' do bucket alvo.
-        # A segurança é garantida pela seleção do bucket com base no argumento --env.
-        # Isto corrige um bug onde dados antigos eram marcados com o ambiente errado.
-        predicate = f'_measurement="trades"'
-
-        logger.info(f"Limpando TODOS os dados da medição 'trades' do bucket '{db_config['bucket']}'...")
-        db_manager._client.delete_api().delete(start, stop, predicate, bucket=db_config['bucket'], org=db_config['org'])
-        logger.info(f"✅ Medição 'trades' do ambiente '{environment}' limpa com sucesso.")
+            logger.info(f"✅ Sucesso! {num_deleted} registros de trade foram deletados do ambiente '{environment}'.")
 
     except Exception as e:
-        logger.error("--- ❌ ERRO CRÍTICO DURANTE A LIMPEZA DA MEDIÇÃO 'TRADES' ❌ ---")
+        logger.error("--- ❌ ERRO CRÍTICO DURANTE A LIMPEZA DA TABELA 'TRADES' ❌ ---")
         logger.error(f"Ocorreu um erro inesperado: {e}", exc_info=True)
+        # No caso de erro, a transação é revertida pelo context manager do get_db
 
 if __name__ == "__main__":
+    # A lógica de parsing de argumentos é mantida, mas o nome do script e a descrição são atualizados
     parser = argparse.ArgumentParser(
-        description="Limpa a medição 'trades' de um ambiente específico no InfluxDB."
+        description="Limpa a tabela 'trades' de um ambiente específico no banco de dados PostgreSQL."
     )
+    # O argumento agora é posicional para corresponder à chamada em run.py
     parser.add_argument(
-        '--env',
+        'environment',
         type=str,
-        required=True,
         choices=['trade', 'test', 'backtest'],
-        help='O ambiente de execução para limpar (trade, test, backtest). Este argumento é obrigatório por segurança.'
+        help='O ambiente de execução para limpar (trade, test, backtest).'
     )
     args = parser.parse_args()
 
-    main(environment=args.env)
+    main(environment=args.environment)
