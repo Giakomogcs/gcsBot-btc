@@ -13,10 +13,9 @@ class StrategyRules:
         self.commission_rate = Decimal(self.rules.get('commission_rate', '0.001'))
         self.target_profit = Decimal(self.rules.get('target_profit', '0.01'))
 
-    def evaluate_buy_signal(self, market_data: dict, open_positions_count: int) -> tuple[bool, str, str]:
+    def evaluate_buy_signal(self, market_data: dict, open_positions_count: int, difficulty_factor: int = 0) -> tuple[bool, str, str]:
         """
-        Evaluates if a buy signal is present. Non-financial logic, so floats are acceptable here
-        for performance with technical indicators.
+        Evaluates if a buy signal is present, considering a difficulty factor.
         """
         current_price = market_data.get('close')
         high_price = market_data.get('high')
@@ -27,20 +26,24 @@ class StrategyRules:
         if any(v is None for v in [current_price, high_price, ema_100, ema_20, bbl]):
             return False, "unknown", "Not enough indicator data"
 
+        # Adjust the Bollinger Band buy threshold based on the difficulty factor
+        difficulty_multiplier = Decimal(1) - (Decimal(difficulty_factor) * Decimal('0.01'))
+        adjusted_bbl = Decimal(str(bbl)) * difficulty_multiplier
+
         if open_positions_count == 0:
             if current_price > ema_100:
                 if current_price > ema_20:
                     return True, "uptrend", "Aggressive first entry (price > ema_20)"
             else:
-                if current_price <= bbl:
-                    return True, "downtrend", "Aggressive first entry (volatility breakout)"
+                if current_price <= adjusted_bbl:
+                    return True, "downtrend", f"Aggressive first entry (volatility breakout at difficulty {difficulty_factor})"
         else:
             if current_price > ema_100:
                 if high_price > ema_20 and current_price < ema_20:
                     return True, "uptrend", "Uptrend pullback"
             else:
-                if current_price <= bbl:
-                    return True, "downtrend", "Downtrend volatility breakout"
+                if current_price <= adjusted_bbl:
+                    return True, "downtrend", f"Downtrend volatility breakout (difficulty {difficulty_factor})"
 
         return False, "unknown", "No signal"
 

@@ -37,7 +37,18 @@ class CapitalManager:
             - str: A human-readable reason for the decision.
         """
         num_open_positions = len(open_positions)
-        should_buy, regime, reason = self.strategy_rules.evaluate_buy_signal(market_data, num_open_positions)
+
+        # Determine the difficulty factor based on the number of open positions
+        if num_open_positions >= 10:
+            difficulty_factor = 2
+        elif num_open_positions >= 5:
+            difficulty_factor = 1
+        else:
+            difficulty_factor = 0
+
+        should_buy, regime, reason = self.strategy_rules.evaluate_buy_signal(
+            market_data, num_open_positions, difficulty_factor
+        )
 
         # 1. Determine the Operating Mode
         if num_open_positions >= self.max_open_positions:

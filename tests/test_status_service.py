@@ -65,11 +65,15 @@ class TestStatusService(unittest.TestCase):
         # The feature calculator returns a pandas Series
         self.feature_calculator.get_current_candle_with_features.return_value = pd.Series(mock_market_data)
 
-        # Arrange: Mock strategy evaluation
-        self.status_service.strategy.evaluate_buy_signal = MagicMock(return_value=(False, 'uptrend', 'Price > EMA20'))
+        # Arrange: Mock strategy evaluation and other helper methods
+        self.status_service.capital_manager.get_buy_order_details = MagicMock(return_value=(Decimal('0'), 'HOLD', 'test reason'))
+        with patch.object(self.status_service, '_calculate_buy_progress', return_value=(Decimal('51000'), Decimal('50.0'))) as mock_buy_progress:
 
-        # 2. Act: Call the method under test
-        result = self.status_service.get_extended_status("test", "test_bot")
+            # 2. Act: Call the method under test
+            result = self.status_service.get_extended_status("test", "test_bot")
+
+            # Assert that the mocked method was called
+            mock_buy_progress.assert_called_once()
 
         # 3. Assert: Verify results
         # Assert that ExchangeManager was called correctly
