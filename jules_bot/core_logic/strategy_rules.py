@@ -7,11 +7,15 @@ getcontext().prec = 28
 class StrategyRules:
     def __init__(self, config_manager: ConfigManager):
         self.rules = config_manager.get_section('STRATEGY_RULES')
-        self.max_capital_per_trade_percent = Decimal(self.rules.get('max_capital_per_trade_percent', '0.02'))
-        self.base_usd_per_trade = Decimal(self.rules.get('base_usd_per_trade', '20.0'))
         self.sell_factor = Decimal(self.rules.get('sell_factor', '0.9'))
         self.commission_rate = Decimal(self.rules.get('commission_rate', '0.001'))
         self.target_profit = Decimal(self.rules.get('target_profit', '0.01'))
+
+        # New trade size parameters
+        self.trade_size_mode = self.rules.get('trade_size_mode', 'STATIC').upper()
+        self.static_trade_size_usd = Decimal(self.rules.get('static_trade_size_usd', '20.0'))
+        self.dynamic_trade_size_percentage = Decimal(self.rules.get('dynamic_trade_size_percentage', '0.02'))
+        self.max_trade_size_usd = Decimal(self.rules.get('max_trade_size_usd', '100.0'))
 
     def evaluate_buy_signal(self, market_data: dict, open_positions_count: int) -> tuple[bool, str, str]:
         """
@@ -46,12 +50,20 @@ class StrategyRules:
 
     def get_next_buy_amount(self, available_balance: Decimal) -> Decimal:
         """
-        Calculates the USDT amount for the next purchase using Decimal.
+        Calculates the USDT amount for the next purchase based on the configured mode.
         """
         available_balance = Decimal(available_balance)
-        capital_based_size = available_balance * self.max_capital_per_trade_percent
-        trade_size = min(self.base_usd_per_trade, capital_based_size)
-        return trade_size
+
+        if self.trade_size_mode == 'STATIC':
+            return self.static_trade_size_usd
+
+        elif self.trade_size_mode == 'DYNAMIC':
+            capital_based_size = available_balance * self.dynamic_trade_size_percentage
+            trade_size = min(capital_based_size, self.max_trade_size_usd)
+            return trade_size
+
+        else: # Fallback to a safe default
+            return self.static_trade_size_usd
 
     def calculate_sell_target_price(self, purchase_price: Decimal) -> Decimal:
         """

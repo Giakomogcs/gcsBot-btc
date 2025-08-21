@@ -2,7 +2,6 @@ import asyncio
 import json
 import os
 import sys
-import typer
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -17,12 +16,7 @@ from jules_bot.services.status_service import StatusService
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
 from jules_bot.utils.logger import logger
 
-def main(
-    mode: str = typer.Argument(
-        "test",
-        help="The environment to get data for ('trade' or 'test')."
-    )
-):
+def main():
     """
     Fetches and displays a comprehensive status report for the trading bot.
 
@@ -33,11 +27,17 @@ def main(
     - Full trade history for the environment
     - Live wallet balances from the exchange
     """
+    if len(sys.argv) < 2:
+        logger.error("Usage: python scripts/get_bot_data.py <mode>")
+        sys.exit(1)
+
+    mode = sys.argv[1]
+
     if mode not in ["trade", "test"]:
         logger.error("Invalid mode specified. Please choose 'trade' or 'test'.")
-        raise typer.Exit(code=1)
+        sys.exit(1)
 
-    logger.info(f"Gathering bot data for '{mode}' environment...")
+    # logger.info(f"Gathering bot data for '{mode}' environment...")
 
     try:
         config_manager = ConfigManager()
@@ -52,16 +52,16 @@ def main(
 
         if "error" in status_data:
             logger.error(f"An error occurred while fetching data: {status_data['error']}")
-            raise typer.Exit(code=1)
+            sys.exit(1)
 
         # Print the data as a nicely formatted JSON object
         print(json.dumps(status_data, indent=4, default=str)) # Use default=str to handle non-serializable types like datetime
 
-        logger.info("Successfully retrieved bot data.")
+        # logger.info("Successfully retrieved bot data.")
 
     except Exception as e:
         logger.error(f"A critical error occurred: {e}", exc_info=True)
-        raise typer.Exit(code=1)
+        sys.exit(1)
 
 if __name__ == "__main__":
-    typer.run(main)
+    main()

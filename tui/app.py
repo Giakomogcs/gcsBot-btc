@@ -206,9 +206,9 @@ class TUIApp(App):
         positions_table.add_columns("ID", "Entry", "Value", "PnL", "Sell Target", "Target Status")
 
 
-        # MODIFICADO: Chama o update_dashboard uma vez e depois define o intervalo de 30s
+        # MODIFICADO: Chama o update_dashboard uma vez e depois define o intervalo de 15s
         self.update_dashboard()
-        self.set_interval(30.0, self.update_dashboard) # Atualiza a cada 30 segundos
+        self.set_interval(15.0, self.update_dashboard)
 
         self.update_portfolio_dashboard()
         self.set_interval(60.0, self.update_portfolio_dashboard) # Update portfolio every 60 seconds

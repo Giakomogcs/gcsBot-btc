@@ -13,8 +13,8 @@ def mock_config_manager():
     def get_section_side_effect(section_name):
         if section_name == 'STRATEGY_RULES':
             return {
-                'max_capital_per_trade_percent': '0.02',
-                'base_usd_per_trade': '100.0',
+                'trade_size_mode': 'STATIC',
+                'static_trade_size_usd': '100.0',
                 'commission_rate': '0.001',
                 'sell_factor': '0.9',
                 'target_profit': '0.05',

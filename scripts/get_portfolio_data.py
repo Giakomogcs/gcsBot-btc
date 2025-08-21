@@ -40,7 +40,7 @@ def get_portfolio_data():
             working_capital_target = total_equity * wc_percentage
             strategic_reserve = total_equity - working_capital_target
             capital_in_use = open_positions_value
-            working_capital_remaining = working_capital_target - capital_in_use
+            working_capital_remaining = max(Decimal('0'), working_capital_target - capital_in_use)
 
             # Determine Operating Mode
             if working_capital_target > 0:

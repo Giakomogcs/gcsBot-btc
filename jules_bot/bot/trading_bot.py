@@ -189,7 +189,7 @@ class TradingBot:
 
         while self.is_running:
             try:
-                logger.info("--- Starting new trading cycle ---")
+                # logger.info("--- Starting new trading cycle ---")
                 self._handle_ui_commands(self.trader, state_manager, strategy_rules)
 
                 final_candle = feature_calculator.get_current_candle_with_features()
@@ -268,9 +268,10 @@ class TradingBot:
 
                     if buy_amount_usdt <= available_buying_power:
                         buy_check_passed = True
-                        logger.info(f"Dynamic Capital check PASSED. Available: ${available_buying_power:,.2f}, Needed: ${buy_amount_usdt:,.2f}")
+                        # logger.info(f"Dynamic Capital check PASSED. Available: ${available_buying_power:,.2f}, Needed: ${buy_amount_usdt:,.2f}")
                     else:
-                        logger.info(f"Dynamic Capital check FAILED. Available: ${available_buying_power:,.2f}, Needed: ${buy_amount_usdt:,.2f}")
+                        buy_check_passed = False
+                        # logger.info(f"Dynamic Capital check FAILED. Available: ${available_buying_power:,.2f}, Needed: ${buy_amount_usdt:,.2f}")
                 else:
                     if len(open_positions) < max_open_positions:
                         buy_check_passed = True
@@ -300,8 +301,8 @@ class TradingBot:
                         else:
                             logger.warning(f"Cash balance ${cash_balance:.2f} < min trade size. Cannot buy.")
 
-                logger.info("--- Cycle complete. Waiting 60 seconds... ---")
-                time.sleep(60)
+                logger.info("--- Cycle complete. Waiting 30 seconds... ---")
+                time.sleep(30)
 
             except KeyboardInterrupt:
                 self.is_running = False

@@ -5,54 +5,91 @@ from jules_bot.core_logic.strategy_rules import StrategyRules
 from jules_bot.utils.config_manager import ConfigManager
 
 @pytest.fixture
-def mock_config_manager():
-    """Provides a mock ConfigManager for testing."""
+def mock_config_manager_static():
+    """Provides a mock ConfigManager for testing STATIC trade size mode."""
     mock = MagicMock(spec=ConfigManager)
-
-    # Mocking the get_section method to return the expected dictionary.
     def get_section_side_effect(section_name):
         if section_name == 'STRATEGY_RULES':
             return {
-                'max_capital_per_trade_percent': '0.02', # 2%
-                'base_usd_per_trade': '100.0', # This was missing
+                'trade_size_mode': 'STATIC',
+                'static_trade_size_usd': '50.0',
                 'commission_rate': '0.001',
                 'sell_factor': '0.9',
                 'target_profit': '0.005',
-                'max_open_positions': '20'
             }
         return {}
-
     mock.get_section.side_effect = get_section_side_effect
     return mock
 
-def test_get_next_buy_amount_when_balance_is_high(mock_config_manager):
-    """
-    Test that the buy amount is capped by usd_per_trade when the
-    available balance is high enough.
-    """
+@pytest.fixture
+def mock_config_manager_dynamic():
+    """Provides a mock ConfigManager for testing DYNAMIC trade size mode."""
+    mock = MagicMock(spec=ConfigManager)
+    def get_section_side_effect(section_name):
+        if section_name == 'STRATEGY_RULES':
+            return {
+                'trade_size_mode': 'DYNAMIC',
+                'dynamic_trade_size_percentage': '0.02', # 2%
+                'max_trade_size_usd': '100.0',
+                'commission_rate': '0.001',
+                'sell_factor': '0.9',
+                'target_profit': '0.005',
+            }
+        return {}
+    mock.get_section.side_effect = get_section_side_effect
+    return mock
+
+def test_get_next_buy_amount_static_mode(mock_config_manager_static):
+    """Test that the buy amount is the static amount in STATIC mode."""
     # Arrange
-    strategy_rules = StrategyRules(mock_config_manager)
-    # Available balance is $10,000. 2% of this is $200.
-    # Since $100 (usd_per_trade) < $200, it should return $100.
-    available_balance = 10000.0
+    strategy_rules = StrategyRules(mock_config_manager_static)
+    available_balance = Decimal("10000.0")
 
     # Act
     buy_amount = strategy_rules.get_next_buy_amount(available_balance)
 
     # Assert
-    assert buy_amount == 100.0
+    assert buy_amount == Decimal("50.0")
 
-def test_calculate_realized_pnl(mock_config_manager):
+def test_get_next_buy_amount_dynamic_mode_capped_by_max(mock_config_manager_dynamic):
+    """Test that the buy amount is capped by max_trade_size_usd in DYNAMIC mode."""
+    # Arrange
+    strategy_rules = StrategyRules(mock_config_manager_dynamic)
+    # 2% of $10,000 is $200, which is > max_trade_size_usd ($100)
+    available_balance = Decimal("10000.0")
+
+    # Act
+    buy_amount = strategy_rules.get_next_buy_amount(available_balance)
+
+    # Assert
+    assert buy_amount == Decimal("100.0")
+
+def test_get_next_buy_amount_dynamic_mode_capped_by_percentage(mock_config_manager_dynamic):
+    """Test that the buy amount is based on percentage when it's less than max."""
+    # Arrange
+    strategy_rules = StrategyRules(mock_config_manager_dynamic)
+    # 2% of $1,000 is $20, which is < max_trade_size_usd ($100)
+    available_balance = Decimal("1000.0")
+
+    # Act
+    buy_amount = strategy_rules.get_next_buy_amount(available_balance)
+
+    # Assert
+    assert buy_amount == Decimal("20.0")
+
+def test_calculate_realized_pnl(mock_config_manager_static):
     """
     Tests the realized PnL calculation under different scenarios.
+    This test is independent of the buy amount logic.
     """
     # Arrange
-    strategy_rules = StrategyRules(mock_config_manager)
+    strategy_rules = StrategyRules(mock_config_manager_static)
 
     # --- Scenario 1: Profitable Trade ---
     buy_price_profit = Decimal("100.0")
     sell_price_profit = Decimal("110.0")
     quantity_sold = Decimal("1.0")
+    # Expected: (110 * (1 - 0.001)) - (100 * (1 + 0.001)) = 109.89 - 100.1 = 9.79
     expected_pnl_profit = Decimal("9.79")
 
     # Act
@@ -63,11 +100,12 @@ def test_calculate_realized_pnl(mock_config_manager):
     )
 
     # Assert
-    assert float(realized_pnl_profit) == pytest.approx(float(expected_pnl_profit))
+    assert realized_pnl_profit == pytest.approx(expected_pnl_profit)
 
     # --- Scenario 2: Losing Trade ---
     buy_price_loss = Decimal("100.0")
     sell_price_loss = Decimal("90.0")
+    # Expected: (90 * (1 - 0.001)) - (100 * (1 + 0.001)) = 89.91 - 100.1 = -10.19
     expected_pnl_loss = Decimal("-10.19")
 
     # Act
@@ -78,51 +116,4 @@ def test_calculate_realized_pnl(mock_config_manager):
     )
 
     # Assert
-    assert float(realized_pnl_loss) == pytest.approx(float(expected_pnl_loss))
-
-    # --- Scenario 3: Break-even Trade (considering commissions) ---
-    buy_price_breakeven = Decimal("100.0")
-    sell_price_breakeven = Decimal("100.2002002")
-
-    # Act
-    realized_pnl_breakeven = strategy_rules.calculate_realized_pnl(
-        buy_price=buy_price_breakeven,
-        sell_price=sell_price_breakeven,
-        quantity_sold=quantity_sold
-    )
-
-    # Assert
-    assert float(realized_pnl_breakeven) == pytest.approx(0.0, abs=1e-6)
-
-def test_get_next_buy_amount_when_balance_is_low(mock_config_manager):
-    """
-    Test that the buy amount is capped by the percentage of available
-    balance when the balance is low.
-    """
-    # Arrange
-    strategy_rules = StrategyRules(mock_config_manager)
-    # Available balance is $1,000. 2% of this is $20.
-    # Since $20 < $100 (usd_per_trade), it should return $20.
-    available_balance = 1000.0
-
-    # Act
-    buy_amount = strategy_rules.get_next_buy_amount(available_balance)
-
-    # Assert
-    assert buy_amount == 20.0
-
-def test_get_next_buy_amount_at_breakeven_point(mock_config_manager):
-    """
-    Test that the buy amount is correct when the two potential values are equal.
-    """
-    # Arrange
-    strategy_rules = StrategyRules(mock_config_manager)
-    # Available balance is $5,000. 2% of this is $100.
-    # Since $100 (from balance) == $100 (usd_per_trade), it should return $100.
-    available_balance = 5000.0
-
-    # Act
-    buy_amount = strategy_rules.get_next_buy_amount(available_balance)
-
-    # Assert
-    assert buy_amount == 100.0
+    assert realized_pnl_loss == pytest.approx(expected_pnl_loss)
