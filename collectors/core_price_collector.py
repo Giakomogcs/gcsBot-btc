@@ -151,7 +151,12 @@ class CorePriceCollector:
         df = pd.DataFrame(all_klines, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'qav', 'nt', 'tbbav', 'tbqav', 'ignore'])
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms', utc=True)
         df.set_index('timestamp', inplace=True)
-        df = df[['open', 'high', 'low', 'close', 'volume']].astype(float)
+
+        # Convert to Decimal for precision, matching the database schema
+        from decimal import Decimal
+        for col in ['open', 'high', 'low', 'close', 'volume']:
+            df[col] = df[col].apply(Decimal)
+
         df = df.loc[start_dt:end_dt]
         logger.info(f"\nFetched a total of {len(df)} candles from Binance.")
         return df
