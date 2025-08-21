@@ -69,14 +69,16 @@ def test_backtester_pnl_calculation(mock_add_all_features, mock_summary, mock_co
     feature_data['bbl_20_2_0'] = 98
     mock_add_all_features.return_value = feature_data
 
-    # We need to patch the global config_manager used by the Backtester
+    # We need to patch the global config_manager and the CapitalManager used by the Backtester
     with patch('jules_bot.backtesting.engine.config_manager', mock_config_manager), \
-         patch('jules_bot.core_logic.strategy_rules.StrategyRules.evaluate_buy_signal') as mock_buy_signal, \
+         patch('jules_bot.backtesting.engine.CapitalManager') as mock_capital_manager, \
          patch('jules_bot.core_logic.strategy_rules.StrategyRules.calculate_sell_target_price') as mock_sell_target:
 
-        # Mock to buy only on the first call
-        mock_buy_signal.side_effect = [(True, 'uptrend', 'test_buy_signal')] + [(False, '', '')] * (len(feature_data) - 1)
-        
+        # Configure the mock CapitalManager to return a buy decision only on the first cycle
+        mock_capital_manager.return_value.get_buy_order_details.side_effect = [
+            (Decimal('100.0'), 'TEST_MODE', 'test buy reason')
+        ] + [(Decimal('0'), 'HOLD', 'no signal')] * (len(feature_data) - 1)
+
         # Sell if price is >= 110 (the close of the second candle)
         mock_sell_target.return_value = Decimal("110.0")
 

@@ -44,15 +44,6 @@ class StrategyRules:
 
         return False, "unknown", "No signal"
 
-    def get_next_buy_amount(self, available_balance: Decimal) -> Decimal:
-        """
-        Calculates the USDT amount for the next purchase using Decimal.
-        """
-        available_balance = Decimal(available_balance)
-        capital_based_size = available_balance * self.max_capital_per_trade_percent
-        trade_size = min(self.base_usd_per_trade, capital_based_size)
-        return trade_size
-
     def calculate_sell_target_price(self, purchase_price: Decimal) -> Decimal:
         """
         Calculates the target sell price using Decimal.

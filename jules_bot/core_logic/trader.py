@@ -238,7 +238,8 @@ class Trader:
 
     def execute_buy(self, amount_usdt: float, run_id: str, decision_context: Optional[Dict[str, Any]]) -> Tuple[bool, Optional[dict]]:
         """
-        Submits a market buy order and returns a standardized trade result dictionary.
+        Submits a market buy order after a final balance check.
+        Returns a standardized trade result dictionary.
         """
         if not self.client:
             logger.error("Binance client not initialized. Buy order cannot be submitted.")
@@ -246,8 +247,19 @@ class Trader:
 
         trade_id = str(uuid.uuid4())
         try:
+            # --- Capital Safeguard ---
+            # Perform a final, last-second check of the available balance.
+            free_balance_usdt = self.get_account_balance(asset='USDT')
+            if amount_usdt > free_balance_usdt:
+                logger.critical(
+                    f"INSUFFICIENT FUNDS: Attempted to buy ${amount_usdt:,.2f} but only "
+                    f"${free_balance_usdt:,.2f} is available. Aborting trade {trade_id}."
+                )
+                return False, None
+
             logger.info(f"EXECUTING BUY: {amount_usdt} USDT of {self.symbol} | Trade ID: {trade_id}")
-            order = self.client.order_market_buy(symbol=self.symbol, quoteOrderQty=amount_usdt)
+            # Ensure amount_usdt is a float for the API call, not a Decimal
+            order = self.client.order_market_buy(symbol=self.symbol, quoteOrderQty=float(amount_usdt))
             logger.info(f"✅ BUY ORDER EXECUTED: {order}")
 
             # Parse the response to get accurate, standardized data
@@ -255,8 +267,12 @@ class Trader:
 
             return True, trade_result
 
+        except BinanceAPIException as e:
+            # Catch specific API errors, e.g., for insufficient funds if the balance changed mid-flight.
+            logger.error(f"ERROR EXECUTING BUY (API - Trade ID: {trade_id}): {e}", exc_info=True)
+            return False, None
         except Exception as e:
-            logger.error(f"ERROR EXECUTING BUY (Trade ID: {trade_id}): {e}", exc_info=True)
+            logger.error(f"ERROR EXECUTING BUY (UNKNOWN - Trade ID: {trade_id}): {e}", exc_info=True)
             return False, None
 
     def execute_sell(self, position_data: dict, run_id: str, decision_context: Optional[Dict[str, Any]]) -> Tuple[bool, Optional[dict]]:

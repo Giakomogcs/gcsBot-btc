@@ -20,6 +20,21 @@ class TestStatusService(unittest.TestCase):
             'target_profit': '0.01',
             'sell_factor': '0.9'
         }
+        # Add side effects for individual 'get' calls needed by CapitalManager
+        def get_side_effect(section, key, fallback=None):
+            if section == 'TRADING_STRATEGY' and key == 'min_trade_size_usdt':
+                return '10.0'
+            if section == 'STRATEGY_RULES' and key == 'base_usd_per_trade':
+                return '20.0'
+            if section == 'STRATEGY_RULES' and key == 'aggressive_buy_multiplier':
+                return '2.0'
+            if section == 'STRATEGY_RULES' and key == 'correction_entry_multiplier':
+                return '2.5'
+            if section == 'STRATEGY_RULES' and key == 'max_open_positions':
+                return '10'
+            return fallback
+
+        self.config_manager.get.side_effect = get_side_effect
 
         # Instantiate the service with mocked dependencies
         self.status_service = StatusService(

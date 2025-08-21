@@ -9,6 +9,7 @@ from jules_bot.bot.account_manager import AccountManager
 from jules_bot.core_logic.state_manager import StateManager
 from jules_bot.core_logic.trader import Trader
 from jules_bot.core_logic.strategy_rules import StrategyRules
+from jules_bot.core_logic.capital_manager import CapitalManager
 from jules_bot.core.market_data_provider import MarketDataProvider
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.database.portfolio_manager import PortfolioManager as DbPortfolioManager
@@ -178,6 +179,7 @@ class TradingBot:
         state_manager = StateManager(mode=self.mode, bot_id=self.run_id, db_manager=self.db_manager)
         account_manager = AccountManager(self.trader.client)
         strategy_rules = StrategyRules(config_manager)
+        capital_manager = CapitalManager(config_manager, strategy_rules)
         live_portfolio_manager = LivePortfolioManager(self.trader, state_manager, self.db_manager, quote_asset, equity_recalc_interval)
 
         if not self.trader.is_ready:
@@ -257,48 +259,34 @@ class TradingBot:
                                 logger.error(f"Sell execution failed for position {trade_id}.")
 
                 # --- BUY LOGIC ---
-                buy_check_passed = False
-                if use_dynamic_capital:
-                    working_capital = total_portfolio_value * wc_percentage
-                    capital_in_use = sum(Decimal(p.quantity) * Decimal(p.price) for p in open_positions)
-                    available_buying_power = working_capital - capital_in_use
+                market_data = final_candle.to_dict()
+                cash_balance = Decimal(self.trader.get_account_balance(asset=quote_asset))
 
-                    cash_balance = Decimal(self.trader.get_account_balance(asset=quote_asset))
-                    buy_amount_usdt = strategy_rules.get_next_buy_amount(cash_balance)
+                buy_amount_usdt, operating_mode, reason = capital_manager.get_buy_order_details(
+                    market_data=market_data,
+                    open_positions=open_positions,
+                    portfolio_value=total_portfolio_value,
+                    free_cash=cash_balance
+                )
 
-                    if buy_amount_usdt <= available_buying_power:
-                        buy_check_passed = True
-                        logger.info(f"Dynamic Capital check PASSED. Available: ${available_buying_power:,.2f}, Needed: ${buy_amount_usdt:,.2f}")
+                if buy_amount_usdt > 0:
+                    logger.info(f"[{operating_mode}] Buy signal triggered: {reason}. Preparing to buy ${buy_amount_usdt:,.2f} USD.")
+
+                    # Final check to ensure we don't breach the minimum trade size
+                    if buy_amount_usdt < min_trade_size:
+                        logger.warning(f"Proposed buy amount ${buy_amount_usdt:,.2f} is less than minimum trade size ${min_trade_size:,.2f}. Aborting.")
                     else:
-                        logger.info(f"Dynamic Capital check FAILED. Available: ${available_buying_power:,.2f}, Needed: ${buy_amount_usdt:,.2f}")
+                        decision_context = { "operating_mode": operating_mode, "buy_trigger_reason": reason }
+                        success, buy_result = self.trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
+
+                        if success:
+                            logger.info("Buy successful. Creating new position.")
+                            purchase_price = Decimal(buy_result.get('price'))
+                            sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
+                            state_manager.create_new_position(buy_result, sell_target_price)
+                            live_portfolio_manager.get_total_portfolio_value(purchase_price, force_recalculation=True)
                 else:
-                    if len(open_positions) < max_open_positions:
-                        buy_check_passed = True
-                    else:
-                        logger.info(f"Maximum open positions ({max_open_positions}) reached.")
-
-                if buy_check_passed:
-                    market_data = final_candle.to_dict()
-                    should_buy, regime, reason = strategy_rules.evaluate_buy_signal(market_data, len(open_positions))
-                    if should_buy:
-                        logger.info(f"Buy signal: {reason}. Evaluating capital.")
-                        cash_balance = Decimal(self.trader.get_account_balance(asset=quote_asset))
-                        if cash_balance >= min_trade_size:
-                            buy_amount_usdt = strategy_rules.get_next_buy_amount(cash_balance)
-                            if buy_amount_usdt >= min_trade_size:
-                                logger.info(f"Executing buy for ${buy_amount_usdt:.2f} USD.")
-                                decision_context = { "market_regime": regime, "buy_trigger_reason": reason }
-                                success, buy_result = self.trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
-                                if success:
-                                    logger.info("Buy successful. Creating new position.")
-                                    purchase_price = Decimal(buy_result.get('price'))
-                                    sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
-                                    state_manager.create_new_position(buy_result, sell_target_price)
-                                    live_portfolio_manager.get_total_portfolio_value(purchase_price, force_recalculation=True)
-                            else:
-                                logger.warning(f"Calculated buy amount ${buy_amount_usdt:.2f} < min size. Skipping.")
-                        else:
-                            logger.warning(f"Cash balance ${cash_balance:.2f} < min trade size. Cannot buy.")
+                    logger.info(f"[{operating_mode}] No buy signal: {reason}")
 
                 logger.info("--- Cycle complete. Waiting 30 seconds... ---")
                 time.sleep(30)
