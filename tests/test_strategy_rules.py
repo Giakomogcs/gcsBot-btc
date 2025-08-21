@@ -16,6 +16,7 @@ def mock_config_manager():
                 'max_capital_per_trade_percent': '0.02', # 2%
                 'base_usd_per_trade': '100.0', # This was missing
                 'commission_rate': '0.001',
+                'sell_factor': '0.9',
                 'target_profit': '0.005',
                 'max_open_positions': '20'
             }
@@ -41,26 +42,24 @@ def test_get_next_buy_amount_when_balance_is_high(mock_config_manager):
     # Assert
     assert buy_amount == 100.0
 
-def test_calculate_net_unrealized_pnl(mock_config_manager):
+def test_calculate_sell_target_price_with_sell_factor(mock_config_manager):
     """
-    Tests the unrealized PnL calculation. It should be based on the full quantity.
+    Tests that the sell target price is adjusted correctly by the sell_factor.
     """
     # Arrange
     strategy_rules = StrategyRules(mock_config_manager)
-    entry_price = Decimal("100.0")
-    current_price = Decimal("120.0")
-    total_quantity = Decimal("2.0")
+    purchase_price = Decimal("100.0")
+
+    # Expected break_even_price = (100 * 1.001) / 0.999 = 100.2002002
+    # Expected price_for_full_sale_profit = 100.2002002 * 1.005 = 100.7012012
+    # Expected adjusted_target_price = 100.7012012 / 0.9 = 111.89022355
+    expected_target_price = Decimal("111.8902235555555555555555556")
 
     # Act
-    # This should internally call calculate_realized_pnl with the full quantity.
-    # Expected PNL = ( (120 * (1 - 0.001)) - (100 * (1 + 0.001)) ) * 2
-    # Expected PNL = ( (120 * 0.999) - (100 * 1.001) ) * 2
-    # Expected PNL = ( 119.88 - 100.1 ) * 2
-    # Expected PNL = 19.78 * 2 = 39.56
-    unrealized_pnl = strategy_rules.calculate_net_unrealized_pnl(entry_price, current_price, total_quantity)
+    sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
 
     # Assert
-    assert float(unrealized_pnl) == pytest.approx(39.56)
+    assert sell_target_price == pytest.approx(expected_target_price)
 
 def test_calculate_realized_pnl(mock_config_manager):
     """

@@ -62,6 +62,7 @@ def test_backtester_pnl_calculation(mock_add_all_features, mock_summary, mock_co
     Tests that the backtester correctly calculates P&L using the StrategyRules method.
     """
     # Arrange
+    # The mock feature data needs all columns the backtester expects
     feature_data = mock_db_manager.get_price_data.return_value.copy()
     feature_data['ema_100'] = 100
     feature_data['ema_20'] = 100
@@ -73,40 +74,39 @@ def test_backtester_pnl_calculation(mock_add_all_features, mock_summary, mock_co
          patch('jules_bot.core_logic.strategy_rules.StrategyRules.evaluate_buy_signal') as mock_buy_signal, \
          patch('jules_bot.core_logic.strategy_rules.StrategyRules.calculate_sell_target_price') as mock_sell_target:
 
+        # Mock to buy only on the first call
         mock_buy_signal.side_effect = [(True, 'uptrend', 'test_buy_signal')] + [(False, '', '')] * (len(feature_data) - 1)
+
+        # Sell if price is >= 110 (the close of the second candle)
         mock_sell_target.return_value = Decimal("110.0")
 
         backtester = Backtester(db_manager=mock_db_manager, start_date="2023-01-01", end_date="2023-01-01")
+
         trade_logger_mock = backtester.trade_logger = MagicMock()
 
         # Act
         backtester.run()
 
         # Assert
-        # 1. Check that a new BUY trade was logged
-        log_calls = [c for c in trade_logger_mock.method_calls if c[0] == 'log_trade']
-        assert len(log_calls) == 2, "Expected one buy and one sell trade to be logged"
+        update_calls = [c for c in trade_logger_mock.method_calls if c[0] == 'update_trade']
+        assert len(update_calls) == 1, "Expected one sell trade to be updated"
         
-        buy_trade_data = log_calls[0][1][0]
-        original_trade_id = buy_trade_data['trade_id']
-
-        # 2. Check that a new SELL trade was logged
-        sell_trade_data = log_calls[1][1][0]
-        assert sell_trade_data['status'] == 'CLOSED'
-        assert sell_trade_data['order_type'] == 'sell'
-        assert sell_trade_data['decision_context']['closing_trade_id'] == original_trade_id
-
-        # 3. Check that the original BUY trade was updated to 'CLOSED'
-        mock_db_manager.update_trade_status.assert_called_once_with(original_trade_id, 'CLOSED')
-
-        # 4. Verify PnL calculation for the full sale
+        sell_trade_data = update_calls[0][1][0]
         realized_pnl = sell_trade_data.get('realized_pnl_usd')
+
+        # Manually calculate the expected PnL using Decimal
         buy_price = Decimal("101.0")
         sell_price = Decimal("110.0")
+
         buy_amount_usdt = Decimal("100.0")
-        quantity_sold = buy_amount_usdt / buy_price # Full quantity
+        quantity_bought = buy_amount_usdt / buy_price
+
+        sell_factor = Decimal("0.9")
+        quantity_sold = quantity_bought * sell_factor
+
         commission_rate = Decimal("0.001")
         one = Decimal("1")
+
         expected_pnl = (sell_price * (one - commission_rate) - buy_price * (one + commission_rate)) * quantity_sold
         
         assert realized_pnl == pytest.approx(expected_pnl)

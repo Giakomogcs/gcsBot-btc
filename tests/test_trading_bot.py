@@ -39,7 +39,8 @@ def test_insufficient_balance_triggers_reconciliation(mock_config, mock_db_manag
 
     # Mock StrategyRules via the config mock
     mock_strategy_rules_config = {
-        # 'sell_factor' is no longer used
+        'sell_factor': '1.0', # Sell 100%
+        # Add other keys needed by StrategyRules constructor
         'max_capital_per_trade_percent': '0.02',
         'base_usd_per_trade': '20.0',
         'commission_rate': '0.001',
@@ -56,7 +57,7 @@ def test_insufficient_balance_triggers_reconciliation(mock_config, mock_db_manag
     # This is the isolated logic block from TradingBot.run()
     positions_to_sell = [p for p in open_positions if current_price >= Decimal(str(p.sell_target_price or 'inf'))]
     if positions_to_sell:
-        total_sell_quantity = sum(Decimal(str(p.quantity)) for p in positions_to_sell)
+        total_sell_quantity = sum(Decimal(str(p.quantity)) * strategy_rules.sell_factor for p in positions_to_sell)
         available_balance = Decimal(mock_trader.get_account_balance(asset=base_asset))
 
         if total_sell_quantity > available_balance:

@@ -213,9 +213,8 @@ class TradingBot:
                 positions_to_sell = [p for p in open_positions if current_price >= Decimal(str(p.sell_target_price or 'inf'))]
                 if positions_to_sell:
                     logger.info(f"Found {len(positions_to_sell)} positions meeting sell criteria.")
-                    total_sell_quantity = sum(Decimal(str(p.quantity)) for p in positions_to_sell)
-                    available_balance_str = self.trader.get_account_balance(asset=base_asset)
-                    available_balance = Decimal(available_balance_str) if available_balance_str is not None else Decimal('0')
+                    total_sell_quantity = sum(Decimal(str(p.quantity)) * strategy_rules.sell_factor for p in positions_to_sell)
+                    available_balance = Decimal(self.trader.get_account_balance(asset=base_asset))
 
                     if total_sell_quantity > available_balance:
                         logger.warning(f"INSUFFICIENT BALANCE: Bot state is out of sync. Attempting to sell {total_sell_quantity:.8f} {base_asset}, but only {available_balance:.8f} is available.")
@@ -226,10 +225,10 @@ class TradingBot:
                     else:
                         for position in positions_to_sell:
                             trade_id = position.trade_id
-                            # A quantidade a ser vendida é a quantidade total da posição.
-                            sell_quantity = Decimal(str(position.quantity))
+                            original_quantity = Decimal(str(position.quantity))
+                            sell_quantity = original_quantity * strategy_rules.sell_factor
+                            hodl_asset_amount = original_quantity - sell_quantity
 
-                            # Prepara os dados para a execução da venda.
                             sell_position_data = position.to_dict()
                             sell_position_data['quantity'] = sell_quantity
 
@@ -237,22 +236,20 @@ class TradingBot:
                             if success:
                                 buy_price = Decimal(str(position.price))
                                 sell_price = Decimal(str(sell_result.get('price')))
-
-                                # O PnL realizado é calculado sobre a quantidade total vendida.
                                 realized_pnl_usd = strategy_rules.calculate_realized_pnl(buy_price, sell_price, sell_quantity)
+                                hodl_asset_value_at_sell = hodl_asset_amount * current_price
                                 commission_usd = Decimal(str(sell_result.get('commission', '0')))
 
                                 sell_result.update({
                                     "commission_usd": commission_usd,
                                     "realized_pnl_usd": realized_pnl_usd,
-                                    # Os campos HODL não são mais usados.
-                                    "hodl_asset_amount": Decimal('0'),
-                                    "hodl_asset_value_at_sell": Decimal('0')
+                                    "hodl_asset_amount": hodl_asset_amount,
+                                    "hodl_asset_value_at_sell": hodl_asset_value_at_sell
                                 })
 
-                                # A posição inteira é fechada, não há mais venda parcial.
-                                state_manager.close_full_position(
+                                state_manager.record_partial_sell(
                                     original_trade_id=trade_id,
+                                    remaining_quantity=hodl_asset_amount,
                                     sell_data=sell_result
                                 )
                                 live_portfolio_manager.get_total_portfolio_value(current_price, force_recalculation=True)
