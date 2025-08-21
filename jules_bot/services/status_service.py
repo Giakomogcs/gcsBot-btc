@@ -67,7 +67,7 @@ class StatusService:
             for trade in open_positions_db:
                 entry_price = Decimal(trade.price) if trade.price is not None else None
                 quantity = Decimal(trade.quantity) if trade.quantity is not None else None
-                sell_target_price = Decimal(trade.sell_target_price) if trade.sell_target_price is not None else None
+                trigger_price = Decimal(trade.trigger_price) if trade.trigger_price is not None else None
 
                 unrealized_pnl = self.strategy.calculate_net_unrealized_pnl(
                     entry_price=entry_price,
@@ -78,13 +78,13 @@ class StatusService:
                 progress_to_sell_target_pct = _calculate_progress_pct(
                     current_price,
                     start_price=entry_price,
-                    target_price=sell_target_price
+                    target_price=trigger_price
                 )
 
                 # Calculate how far the current price is from the sell target.
                 price_to_target = Decimal('0')
-                if sell_target_price is not None and current_price is not None:
-                    price_to_target = sell_target_price - current_price
+                if trigger_price is not None and current_price is not None:
+                    price_to_target = trigger_price - current_price
                 
                 # Calculate the USD value of that price difference.
                 usd_to_target = Decimal('0')
@@ -97,7 +97,9 @@ class StatusService:
                     "current_price": current_price,
                     "quantity": trade.quantity,
                     "unrealized_pnl": unrealized_pnl,
-                    "sell_target_price": trade.sell_target_price,
+                    "trigger_price": trade.trigger_price,
+                    "sell_quantity": trade.sell_quantity,
+                    "treasury_quantity": trade.treasury_quantity,
                     "progress_to_sell_target_pct": progress_to_sell_target_pct,
                     "price_to_target": price_to_target,
                     "usd_to_target": usd_to_target,

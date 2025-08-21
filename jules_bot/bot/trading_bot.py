@@ -130,9 +130,14 @@ class TradingBot:
                     if amount_usd > 0:
                         success, buy_result = trader.execute_buy(amount_usd, self.run_id, {"reason": "manual_override"})
                         if success:
-                            purchase_price = Decimal(buy_result.get('price'))
-                            sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
-                            state_manager.create_new_position(buy_result, sell_target_price)
+                            total_cost_invested = Decimal(str(buy_result.get('usd_value')))
+                            total_quantity_bought = Decimal(str(buy_result.get('quantity')))
+
+                            take_profit_details = strategy_rules.calculate_take_profit_details(
+                                total_cost_invested=total_cost_invested,
+                                total_quantity_bought=total_quantity_bought
+                            )
+                            state_manager.create_new_position(buy_result, take_profit_details)
 
                 elif cmd_type == "force_sell":
                     trade_id = command.get("trade_id")
@@ -210,10 +215,11 @@ class TradingBot:
                 self._write_state_to_file(open_positions, current_price, wallet_balances, trade_history, total_portfolio_value)
 
                 # --- SELL LOGIC ---
-                positions_to_sell = [p for p in open_positions if current_price >= Decimal(str(p.sell_target_price or 'inf'))]
+                positions_to_sell = [p for p in open_positions if p.trigger_price is not None and current_price >= Decimal(str(p.trigger_price))]
                 if positions_to_sell:
                     logger.info(f"Found {len(positions_to_sell)} positions meeting sell criteria.")
-                    total_sell_quantity = sum(Decimal(str(p.quantity)) * strategy_rules.sell_factor for p in positions_to_sell)
+                    # Use the pre-calculated sell_quantity from the position object
+                    total_sell_quantity = sum(Decimal(str(p.sell_quantity)) for p in positions_to_sell)
                     available_balance = Decimal(self.trader.get_account_balance(asset=base_asset))
 
                     if total_sell_quantity > available_balance:
@@ -225,12 +231,17 @@ class TradingBot:
                     else:
                         for position in positions_to_sell:
                             trade_id = position.trade_id
-                            original_quantity = Decimal(str(position.quantity))
-                            sell_quantity = original_quantity * strategy_rules.sell_factor
-                            hodl_asset_amount = original_quantity - sell_quantity
+                            # Use pre-calculated quantities from the position object
+                            sell_quantity = Decimal(str(position.sell_quantity))
+                            hodl_asset_amount = Decimal(str(position.treasury_quantity))
 
-                            sell_position_data = position.to_dict()
-                            sell_position_data['quantity'] = sell_quantity
+                            # Create a dictionary for the sell operation. Note: position is a DB model object.
+                            # We must convert it to a dict that `execute_sell` can use.
+                            sell_position_data = {
+                                'trade_id': position.trade_id,
+                                'symbol': position.symbol,
+                                'quantity': sell_quantity,
+                            }
 
                             success, sell_result = self.trader.execute_sell(sell_position_data, self.run_id, final_candle.to_dict())
                             if success:
@@ -291,10 +302,15 @@ class TradingBot:
                                 success, buy_result = self.trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
                                 if success:
                                     logger.info("Buy successful. Creating new position.")
-                                    purchase_price = Decimal(buy_result.get('price'))
-                                    sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
-                                    state_manager.create_new_position(buy_result, sell_target_price)
-                                    live_portfolio_manager.get_total_portfolio_value(purchase_price, force_recalculation=True)
+                                    total_cost_invested = Decimal(str(buy_result.get('usd_value')))
+                                    total_quantity_bought = Decimal(str(buy_result.get('quantity')))
+
+                                    take_profit_details = strategy_rules.calculate_take_profit_details(
+                                        total_cost_invested=total_cost_invested,
+                                        total_quantity_bought=total_quantity_bought
+                                    )
+                                    state_manager.create_new_position(buy_result, take_profit_details)
+                                    live_portfolio_manager.get_total_portfolio_value(Decimal(str(buy_result.get('price'))), force_recalculation=True)
                             else:
                                 logger.warning(f"Calculated buy amount ${buy_amount_usdt:.2f} < min size. Skipping.")
                         else:

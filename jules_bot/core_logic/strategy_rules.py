@@ -53,22 +53,51 @@ class StrategyRules:
         trade_size = min(self.base_usd_per_trade, capital_based_size)
         return trade_size
 
-    def calculate_sell_target_price(self, purchase_price: Decimal) -> Decimal:
+    def calculate_take_profit_details(self, total_cost_invested: Decimal, total_quantity_bought: Decimal) -> dict:
         """
-        Calculates the target sell price using Decimal.
+        Calculates take-profit details based on a target monetary profit.
+
+        Args:
+            total_cost_invested: The total amount in quote currency (e.g., USDT) used to open the position.
+            total_quantity_bought: The total amount of the base asset (e.g., BTC) acquired.
+
+        Returns:
+            A dictionary containing:
+            - trigger_price: The calculated sell price to hit the profit target.
+            - sell_quantity: The amount of base asset to sell.
+            - treasury_quantity: The amount of base asset remaining after the sell.
         """
-        purchase_price = Decimal(purchase_price)
+        # Ensure inputs are Decimal for precision
+        total_cost_invested = Decimal(total_cost_invested)
+        total_quantity_bought = Decimal(total_quantity_bought)
         one = Decimal('1')
 
-        numerator = purchase_price * (one + self.commission_rate)
-        denominator = one - self.commission_rate
+        # Step 1: Calculate the desired net value (money in pocket)
+        # This is the total amount we want back after selling, including profit.
+        desired_net_value = total_cost_invested * (one + self.target_profit)
 
+        # Step 2: Calculate the quantity of the asset to be sold
+        # This is a fraction of the total position, defined by sell_factor.
+        quantity_to_sell = total_quantity_bought * self.sell_factor
+
+        # Step 3: Calculate the trigger sell price
+        # This is the price that, when executed for `quantity_to_sell`, gives us the `desired_net_value` after fees.
+        # The formula is derived from: trigger_price * quantity_to_sell * (1 - commission_rate) = desired_net_value
+        denominator = quantity_to_sell * (one - self.commission_rate)
         if denominator == 0:
-            return Decimal('inf')
+            # Avoid division by zero; this would only happen if quantity_to_sell is zero.
+            trigger_price = Decimal('inf')
+        else:
+            trigger_price = desired_net_value / denominator
 
-        break_even_price = numerator / denominator
-        sell_target_price = break_even_price * (one + self.target_profit)
-        return sell_target_price
+        # Calculate the quantity that will remain as treasury
+        treasury_quantity = total_quantity_bought - quantity_to_sell
+
+        return {
+            "trigger_price": trigger_price,
+            "sell_quantity": quantity_to_sell,
+            "treasury_quantity": treasury_quantity,
+        }
 
     def calculate_realized_pnl(self, buy_price: Decimal, sell_price: Decimal, quantity_sold: Decimal) -> Decimal:
         """

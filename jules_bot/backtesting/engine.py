@@ -74,10 +74,10 @@ class Backtester:
             portfolio_history.append(total_portfolio_value)
 
             for trade_id, position in list(open_positions.items()):
-                target_price = position.get('sell_target_price', Decimal('inf'))
-                if current_price >= target_price:
-                    original_quantity = position['quantity']
-                    sell_quantity = original_quantity * strategy_rules.sell_factor
+                trigger_price = position.get('trigger_price', Decimal('inf'))
+                if current_price >= trigger_price:
+                    sell_quantity = position['sell_quantity']
+                    hodl_asset_amount = position['treasury_quantity']
 
                     success, sell_result = self.mock_trader.execute_sell({'quantity': sell_quantity})
                     if success:
@@ -90,7 +90,6 @@ class Backtester:
                             quantity_sold=sell_result['quantity']
                         )
                         commission_usd = sell_result['commission']
-                        hodl_asset_amount = original_quantity - sell_quantity
                         hodl_asset_value_at_sell = hodl_asset_amount * sell_result['price']
 
                         decision_context = candle.to_dict()
@@ -149,11 +148,21 @@ class Backtester:
                         if success:
                             new_trade_id = str(uuid.uuid4())
                             buy_price = buy_result['price']
-                            sell_target_price = strategy_rules.calculate_sell_target_price(buy_price)
+                            total_cost_invested = buy_result['usd_value']
+                            total_quantity_bought = buy_result['quantity']
+
+                            take_profit_details = strategy_rules.calculate_take_profit_details(
+                                total_cost_invested=total_cost_invested,
+                                total_quantity_bought=total_quantity_bought
+                            )
 
                             open_positions[new_trade_id] = {
-                                'price': buy_price, 'quantity': buy_result['quantity'],
-                                'usd_value': buy_result['usd_value'], 'sell_target_price': sell_target_price
+                                'price': buy_price,
+                                'quantity': total_quantity_bought,
+                                'usd_value': total_cost_invested,
+                                'trigger_price': take_profit_details['trigger_price'],
+                                'sell_quantity': take_profit_details['sell_quantity'],
+                                'treasury_quantity': take_profit_details['treasury_quantity']
                             }
 
                             # Log the new "OPEN" position to the database
@@ -163,14 +172,17 @@ class Backtester:
                             trade_data = {
                                 'run_id': self.run_id, 'strategy_name': strategy_name, 'symbol': symbol,
                                 'trade_id': new_trade_id, 'exchange': "backtest_engine", 'order_type': "buy",
-                                'status': "OPEN", 'price': buy_price, 'quantity': buy_result['quantity'],
-                                'usd_value': buy_result['usd_value'], 'commission': buy_result['commission'],
+                                'status': "OPEN", 'price': buy_price, 'quantity': total_quantity_bought,
+                                'usd_value': total_cost_invested, 'commission': buy_result['commission'],
                                 'commission_asset': "USDT", 'timestamp': current_time,
-                                'decision_context': decision_context, 'sell_target_price': sell_target_price,
+                                'decision_context': decision_context,
+                                'trigger_price': float(take_profit_details['trigger_price']),
+                                'sell_quantity': float(take_profit_details['sell_quantity']),
+                                'treasury_quantity': float(take_profit_details['treasury_quantity']),
                                 'commission_usd': buy_result['commission']
                             }
                             self.trade_logger.log_trade(trade_data)
-                            logger.info(f"BUY EXECUTED: TradeID: {new_trade_id} | Price: ${buy_price:,.2f} | Qty: {buy_result['quantity']:.8f}")
+                            logger.info(f"BUY EXECUTED: TradeID: {new_trade_id} | Price: ${buy_price:,.2f} | Qty: {total_quantity_bought:.8f}")
 
         self._generate_and_save_summary(open_positions, portfolio_history)
         logger.info(f"--- Backtest {self.run_id} finished ---")

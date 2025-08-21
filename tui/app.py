@@ -203,7 +203,7 @@ class TUIApp(App):
 
         positions_table = self.query_one("#positions_table", DataTable)
         positions_table.cursor_type = "row"
-        positions_table.add_columns("ID", "Entry", "Value", "PnL", "Sell Target", "Target Status")
+        positions_table.add_columns("ID", "Entry", "Value", "PnL", "Trigger Price", "Target Status")
 
 
         # MODIFICADO: Chama o update_dashboard uma vez e depois define o intervalo de 30s
@@ -397,7 +397,7 @@ class TUIApp(App):
                 entry_price = Decimal(pos.get("entry_price", 0))
                 current_value = Decimal(pos.get("quantity", 0)) * price
                 pnl = Decimal(pos.get("unrealized_pnl", 0))
-                sell_target = Decimal(pos.get("sell_target_price", 0))
+                sell_target = Decimal(pos.get("trigger_price", 0))
                 
                 progress_pct = float(pos.get("progress_to_sell_target_pct", 0))
                 # price_to_target = Decimal(pos.get("price_to_target", 0))

@@ -55,11 +55,12 @@ class StateManager:
         
         return Decimal(str(latest_position.price))
 
-    def create_new_position(self, buy_result: dict, sell_target_price: Decimal):
+    def create_new_position(self, buy_result: dict, take_profit_details: dict):
         """
         Records a new open position in the database via the TradeLogger service.
         """
-        logger.info(f"Creating new position for trade_id: {buy_result.get('trade_id')} with target sell price: {sell_target_price:.8f}")
+        trigger_price = take_profit_details['trigger_price']
+        logger.info(f"Creating new position for trade_id: {buy_result.get('trade_id')} with trigger price: {trigger_price:.8f}")
 
         # This dictionary flattens all the necessary data for the TradeLogger.
         # The TradeLogger is responsible for creating the TradePoint and ensuring type safety.
@@ -68,7 +69,9 @@ class StateManager:
             'run_id': self.bot_id,
             'status': 'OPEN',
             'order_type': 'buy',
-            'sell_target_price': sell_target_price,
+            'trigger_price': float(trigger_price),
+            'sell_quantity': float(take_profit_details['sell_quantity']),
+            'treasury_quantity': float(take_profit_details['treasury_quantity']),
             'strategy_name': buy_result.get('strategy_name', 'default'),
             'exchange': buy_result.get('exchange', 'binance')
         }
@@ -127,17 +130,23 @@ class StateManager:
         try:
             purchase_price = Decimal(str(binance_trade['price']))
             quantity = Decimal(str(binance_trade['qty']))
-            
+            total_cost = Decimal(str(binance_trade['quoteQty']))
+
             # Create a new, unique internal trade_id
             internal_trade_id = str(uuid.uuid4())
-            sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
+
+            # Calculate take-profit details using the new method
+            take_profit_details = strategy_rules.calculate_take_profit_details(
+                total_cost_invested=total_cost,
+                total_quantity_bought=quantity
+            )
 
             buy_result = {
                 "trade_id": internal_trade_id,
                 "symbol": binance_trade['symbol'],
                 "price": purchase_price,
                 "quantity": quantity,
-                "usd_value": purchase_price * quantity,
+                "usd_value": total_cost,
                 "commission": Decimal(str(binance_trade['commission'])),
                 "commission_asset": binance_trade['commissionAsset'],
                 "exchange_order_id": str(binance_trade['orderId']),
@@ -147,7 +156,7 @@ class StateManager:
                 "environment": self.mode,
             }
             
-            self.create_new_position(buy_result, sell_target_price)
+            self.create_new_position(buy_result, take_profit_details)
             logger.info(f"Successfully created new position for Binance trade ID: {binance_trade['id']}")
 
         except Exception as e:

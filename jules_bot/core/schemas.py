@@ -48,7 +48,9 @@ class TradePoint:
     decision_context: Optional[Dict[str, Any]] = None  # Stores RSI, MACD, etc.
 
     # --- Fields for BUY trades ---
-    sell_target_price: Optional[float] = None
+    trigger_price: Optional[float] = None
+    sell_quantity: Optional[float] = None
+    treasury_quantity: Optional[float] = None
 
     # --- Fields for SELL trades ---
     commission_usd: Optional[float] = None
