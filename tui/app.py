@@ -208,13 +208,13 @@ class TUIApp(App):
 
         # MODIFICADO: Chama o update_dashboard uma vez e depois define o intervalo de 30s
         self.update_dashboard()
-        self.set_interval(30.0, self.update_dashboard) # Atualiza a cada 30 segundos
+        self.set_interval(20.0, self.update_dashboard) # Atualiza a cada 30 segundos
 
         self.update_portfolio_dashboard()
-        self.set_interval(60.0, self.update_portfolio_dashboard) # Update portfolio every 60 seconds
+        self.set_interval(30.0, self.update_portfolio_dashboard) # Update portfolio every 60 seconds
 
         self.update_performance_summary()
-        self.set_interval(120.0, self.update_performance_summary) # Update every 2 minutes
+        self.set_interval(60.0, self.update_performance_summary) # Update every 2 minutes
 
         self.query_one("#manual_buy_input").focus()
 
