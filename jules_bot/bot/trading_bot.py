@@ -10,10 +10,12 @@ from jules_bot.core_logic.state_manager import StateManager
 from jules_bot.core_logic.trader import Trader
 from jules_bot.core_logic.strategy_rules import StrategyRules
 from jules_bot.core_logic.capital_manager import CapitalManager
+from jules_bot.core_logic.regime_manager import RegimeManager, MarketRegime
 from jules_bot.core.market_data_provider import MarketDataProvider
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.database.portfolio_manager import PortfolioManager as DbPortfolioManager
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
+from jules_bot.services.status_service import StatusService
 
 getcontext().prec = 28
 
@@ -176,23 +178,27 @@ class TradingBot:
         equity_recalc_interval = int(config_manager.get('APP', 'equity_recalculation_interval', fallback=300))
 
         feature_calculator = LiveFeatureCalculator(self.db_manager, mode=self.mode)
+        status_service = StatusService(self.db_manager, config_manager, feature_calculator)
         state_manager = StateManager(mode=self.mode, bot_id=self.run_id, db_manager=self.db_manager)
         account_manager = AccountManager(self.trader.client)
-        strategy_rules = StrategyRules(config_manager)
-        capital_manager = CapitalManager(config_manager, strategy_rules)
+        regime_manager = RegimeManager(config_manager)
+
+        # The portfolio manager is stateful and can be initialized once
         live_portfolio_manager = LivePortfolioManager(self.trader, state_manager, self.db_manager, quote_asset, equity_recalc_interval)
 
         if not self.trader.is_ready:
             logger.critical("Trader could not be initialized. Shutting down bot.")
             return
 
-        state_manager.sync_holdings_with_binance(account_manager, strategy_rules, self.trader)
+        # Initial sync needs a default strategy
+        default_params = config_manager.get_section('STRATEGY_DEFAULT')
+        initial_strategy_rules = StrategyRules(default_params)
+        state_manager.sync_holdings_with_binance(account_manager, initial_strategy_rules, self.trader)
         logger.info(f"🚀 --- TRADING BOT STARTED --- RUN ID: {self.run_id} --- SYMBOL: {self.symbol} --- MODE: {self.mode.upper()} --- 🚀")
 
         while self.is_running:
             try:
                 logger.info("--- Starting new trading cycle ---")
-                self._handle_ui_commands(self.trader, state_manager, strategy_rules)
 
                 final_candle = feature_calculator.get_current_candle_with_features()
                 if final_candle.empty:
@@ -201,6 +207,23 @@ class TradingBot:
                     continue
 
                 current_price = Decimal(final_candle['close'])
+
+                # --- DYNAMIC STRATEGY LOADING ---
+                regime = regime_manager.get_regime(final_candle)
+                strategy_section = f'STRATEGY_{regime.name}'
+                strategy_params = config_manager.get_section(strategy_section)
+                logger.info(f"Market Regime Detected: {regime.name}. Loading strategy: [{strategy_section}]")
+
+                # Combine with default for missing keys
+                default_params = config_manager.get_section('STRATEGY_DEFAULT')
+                final_strategy_params = {**default_params, **strategy_params}
+
+                strategy_rules = StrategyRules(final_strategy_params)
+                capital_manager = CapitalManager(config_manager, strategy_rules, final_strategy_params)
+
+                # --- UI COMMANDS ---
+                # Must be handled after strategy for the cycle is defined
+                self._handle_ui_commands(self.trader, state_manager, strategy_rules)
 
                 open_positions = state_manager.get_open_positions()
                 total_portfolio_value = live_portfolio_manager.get_total_portfolio_value(current_price)
@@ -212,6 +235,7 @@ class TradingBot:
                 self._write_state_to_file(open_positions, current_price, wallet_balances, trade_history, total_portfolio_value)
 
                 # --- SELL LOGIC ---
+                # Sell logic uses the dynamically loaded strategy_rules (for sell_factor and target_profit)
                 positions_to_sell = [p for p in open_positions if current_price >= Decimal(str(p.sell_target_price or 'inf'))]
                 if positions_to_sell:
                     logger.info(f"Found {len(positions_to_sell)} positions meeting sell criteria.")
@@ -287,6 +311,15 @@ class TradingBot:
                             live_portfolio_manager.get_total_portfolio_value(purchase_price, force_recalculation=True)
                 else:
                     logger.info(f"[{operating_mode}] No buy signal: {reason}")
+
+                # Persist the latest status to the database for the TUI
+                status_service.update_bot_status(
+                    bot_id=self.run_id,
+                    mode=self.mode,
+                    reason=reason,
+                    open_positions=len(open_positions),
+                    portfolio_value=total_portfolio_value
+                )
 
                 logger.info("--- Cycle complete. Waiting 30 seconds... ---")
                 time.sleep(30)
