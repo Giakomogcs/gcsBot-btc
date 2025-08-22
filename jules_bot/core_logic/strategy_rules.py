@@ -12,6 +12,7 @@ class StrategyRules:
         self.base_usd_per_trade = Decimal(self.rules.get('base_usd_per_trade', '20.0'))
         self.sell_factor = Decimal(self.rules.get('sell_factor', '0.9'))
         self.commission_rate = Decimal(self.rules.get('commission_rate', '0.001'))
+        self.use_reversal_buy_strategy = self.rules.get('use_reversal_buy_strategy', 'true').lower() == 'true'
 
     def evaluate_buy_signal(self, market_data: dict, open_positions_count: int, difficulty_factor: int = 0, params: Dict[str, Decimal] = None) -> tuple[bool, str, str]:
         """
@@ -45,7 +46,10 @@ class StrategyRules:
                 if current_price > ema_20:
                     return True, "uptrend", "Aggressive first entry (price > ema_20)"
                 elif current_price <= price_dip_target:
-                    return True, "uptrend", f"Dip buy signal triggered at {buy_dip_percentage:.2%}"
+                    if self.use_reversal_buy_strategy:
+                        return True, "START_MONITORING", f"Dip target hit at {buy_dip_percentage:.2%}. Starting reversal monitoring."
+                    else:
+                        return True, "uptrend", f"Dip buy signal triggered at {buy_dip_percentage:.2%}"
                 else:
                     reason = f"Price ${current_price:,.2f} is above EMA100 but below EMA20 ${ema_20:,.2f}"
             else:
@@ -59,7 +63,10 @@ class StrategyRules:
                 if high_price > ema_20 and current_price < ema_20:
                     return True, "uptrend", "Uptrend pullback"
                 elif current_price <= price_dip_target:
-                    return True, "uptrend", f"Dip buy signal on existing position at {buy_dip_percentage:.2%}"
+                    if self.use_reversal_buy_strategy:
+                        return True, "START_MONITORING", f"Dip target hit on existing position at {buy_dip_percentage:.2%}. Starting reversal monitoring."
+                    else:
+                        return True, "uptrend", f"Dip buy signal on existing position at {buy_dip_percentage:.2%}"
                 else:
                     reason = f"In uptrend (price > EMA100), but no pullback signal found"
             else:
@@ -71,11 +78,17 @@ class StrategyRules:
         
         return False, "unknown", reason or "No signal"
 
-    def calculate_sell_target_price(self, purchase_price: Decimal, params: Dict[str, Decimal]) -> Decimal:
+    def calculate_sell_target_price(self, purchase_price: Decimal, params: Dict[str, Decimal] = None) -> Decimal:
         """
         Calculates the target sell price using dynamic target_profit.
+        Handles cases where params might be None.
         """
         purchase_price = Decimal(purchase_price)
+
+        # If params is None (e.g., during historical sync), use default values.
+        if params is None:
+            params = {}
+
         target_profit = params.get('target_profit', Decimal('0.01'))
         one = Decimal('1')
 

@@ -13,6 +13,7 @@ class OperatingMode(Enum):
     ACCUMULATION = auto()
     AGGRESSIVE = auto()
     CORRECTION_ENTRY = auto()
+    MONITORING = auto()
 
 class CapitalManager:
     """
@@ -30,24 +31,31 @@ class CapitalManager:
         self.order_size_percentage = Decimal(config.get('STRATEGY_RULES', 'order_size_free_cash_percentage', '0.1'))
 
 
-    def get_buy_order_details(self, market_data: dict, open_positions: list, portfolio_value: Decimal, free_cash: Decimal, params: Dict[str, Decimal]) -> tuple[Decimal, str, str]:
+    def get_buy_order_details(self, market_data: dict, open_positions: list, portfolio_value: Decimal, free_cash: Decimal, params: Dict[str, Decimal], force_buy_signal: bool = False, forced_reason: str = None) -> tuple[Decimal, str, str, str]:
         """
-        Determines the operating mode and calculates the appropriate buy amount based on that mode,
-        using dynamic parameters.
+        Determines the operating mode and calculates the appropriate buy amount based on that mode.
+        Can be forced to assume a buy signal is present.
+        Returns the buy amount, operating mode, reason, and the raw signal regime.
         """
         num_open_positions = len(open_positions)
         difficulty_factor = 0
 
         if not self.use_dynamic_capital and num_open_positions >= self.max_open_positions:
-            return Decimal('0'), OperatingMode.PRESERVATION.name, f"Max open positions ({self.max_open_positions}) reached."
+            return Decimal('0'), OperatingMode.PRESERVATION.name, f"Max open positions ({self.max_open_positions}) reached.", "PRESERVATION"
 
         difficulty_factor = 0
         if self.use_dynamic_capital:
             difficulty_factor = num_open_positions // 5
 
-        should_buy, regime, reason = self.strategy_rules.evaluate_buy_signal(
-            market_data, num_open_positions, difficulty_factor, params=params
-        )
+        if force_buy_signal:
+            should_buy, regime, reason = True, "uptrend", forced_reason or "Buy signal forced by reversal."
+        else:
+            should_buy, regime, reason = self.strategy_rules.evaluate_buy_signal(
+                market_data, num_open_positions, difficulty_factor, params=params
+            )
+
+        if regime == "START_MONITORING":
+            return Decimal('0'), OperatingMode.MONITORING.name, reason, regime
 
         if not should_buy:
             mode = OperatingMode.PRESERVATION
@@ -59,24 +67,21 @@ class CapitalManager:
             mode = OperatingMode.ACCUMULATION
 
         buy_amount = Decimal('0')
-        # Determine the base buy amount
-        if self.use_percentage_sizing:
-            base_buy_amount = free_cash * self.order_size_percentage
-            reason = f"Sizing based on {self.order_size_percentage:.2%} of free cash"
-        else:
-            base_buy_amount = params.get('order_size_usd', Decimal('20.0'))
-            reason = "Using fixed order size from params"
+        if should_buy:
+            if self.use_percentage_sizing:
+                base_buy_amount = free_cash * self.order_size_percentage
+                reason = f"Sizing based on {self.order_size_percentage:.2%} of free cash"
+            else:
+                base_buy_amount = params.get('order_size_usd', Decimal('20.0'))
+                reason = "Using fixed order size from params"
 
+            if mode == OperatingMode.ACCUMULATION:
+                buy_amount = base_buy_amount
+            elif mode == OperatingMode.AGGRESSIVE:
+                buy_amount = base_buy_amount * self.aggressive_buy_multiplier
+            elif mode == OperatingMode.CORRECTION_ENTRY:
+                buy_amount = base_buy_amount * self.correction_entry_multiplier
 
-        if mode == OperatingMode.ACCUMULATION:
-            buy_amount = base_buy_amount
-        elif mode == OperatingMode.AGGRESSIVE:
-            buy_amount = base_buy_amount * self.aggressive_buy_multiplier
-        elif mode == OperatingMode.CORRECTION_ENTRY:
-            buy_amount = base_buy_amount * self.correction_entry_multiplier
-
-        # 3. Validate the calculated buy amount
-        if buy_amount > 0:
             if buy_amount > free_cash:
                 reason = f"Insufficient funds for {mode.name} buy. Needed ${buy_amount:,.2f}, have ${free_cash:,.2f}."
                 buy_amount = Decimal('0')
@@ -84,11 +89,9 @@ class CapitalManager:
                 reason = f"{mode.name} buy amount ${buy_amount:,.2f} is below min size."
                 buy_amount = Decimal('0')
 
-        # Return final decision
         if buy_amount > 0:
             final_amount = buy_amount.quantize(Decimal("0.01"))
-            return final_amount, mode.name, reason
+            return final_amount, mode.name, reason, regime
         else:
-            # If buy_amount is 0, the mode should reflect that we are not acting.
             final_mode = OperatingMode.PRESERVATION.name
-            return Decimal('0'), final_mode, reason
+            return Decimal('0'), final_mode, reason, regime

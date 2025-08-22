@@ -113,7 +113,7 @@ class StateManager:
             if new_trades_synced > 0:
                 logger.info(f"Successfully synced {new_trades_synced} new buy trades from Binance.")
                 # After syncing, reconcile the total position with the actual balance
-                self._reconcile_synced_positions_with_balance(symbol, trader)
+                self.reconcile_holdings(symbol, trader)
             else:
                 logger.info("Database is already in sync with Binance. No new trades to add.")
 
@@ -130,7 +130,10 @@ class StateManager:
             
             # Create a new, unique internal trade_id
             internal_trade_id = str(uuid.uuid4())
-            sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
+
+            # We pass `params=None` because, during a sync, we don't know what the dynamic
+            # parameters were at the time of the historical trade. The function will use a default.
+            sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price, params=None)
 
             buy_result = {
                 "trade_id": internal_trade_id,

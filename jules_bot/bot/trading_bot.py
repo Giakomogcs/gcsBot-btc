@@ -3,7 +3,7 @@ import uuid
 import json
 import os
 import joblib
-from decimal import Decimal, getcontext
+from decimal import Decimal, getcontext, InvalidOperation
 from jules_bot.utils.logger import logger
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.bot.account_manager import AccountManager
@@ -96,6 +96,11 @@ class TradingBot:
         self.trader = Trader(mode=self.mode)
         self.symbol = config_manager.get('APP', 'symbol')
         self.state_file_path = "/tmp/bot_state.json"
+
+        # -- State for Reversal Buy Strategy --
+        self.is_monitoring_for_reversal = False
+        self.lowest_price_since_monitoring_started = None
+        self.monitoring_started_at = None
 
     def _write_state_to_file(self, open_positions: list, current_price: Decimal, wallet_balances: list, trade_history: list, portfolio_value: Decimal):
         serializable_trade_history = [t.to_dict() for t in trade_history]
@@ -194,11 +199,15 @@ class TradingBot:
 
         quote_asset = "USDT"
         base_asset = self.symbol.replace(quote_asset, "")
-        use_dynamic_capital = config_manager.getboolean('STRATEGY_RULES', 'use_dynamic_capital', fallback=False)
-        wc_percentage = Decimal(config_manager.get('STRATEGY_RULES', 'working_capital_percentage', fallback='0.8'))
-        max_open_positions = int(config_manager.get('STRATEGY_RULES', 'max_open_positions', fallback=20))
+
+        # --- Load Strategy Configuration ---
+        strategy_config = config_manager.get_section('STRATEGY_RULES')
         min_trade_size = Decimal(config_manager.get('TRADING_STRATEGY', 'min_trade_size_usdt', fallback='10.0'))
         equity_recalc_interval = int(config_manager.get('APP', 'equity_recalculation_interval', fallback=300))
+
+        # Reversal strategy specific configs
+        self.reversal_buy_threshold_percent = Decimal(strategy_config.get('reversal_buy_threshold_percent', '0.005'))
+        self.reversal_monitoring_timeout_seconds = int(strategy_config.get('reversal_monitoring_timeout_seconds', '300'))
 
         feature_calculator = LiveFeatureCalculator(self.db_manager, mode=self.mode)
         status_service = StatusService(self.db_manager, config_manager, feature_calculator)
@@ -309,27 +318,68 @@ class TradingBot:
                 # --- BUY LOGIC ---
                 market_data = final_candle.to_dict()
                 cash_balance = Decimal(self.trader.get_account_balance(asset=quote_asset))
+                buy_from_reversal = False
 
-                buy_amount_usdt, operating_mode, reason = capital_manager.get_buy_order_details(
+                if self.is_monitoring_for_reversal:
+                    # Check for timeout
+                    if time.time() - self.monitoring_started_at > self.reversal_monitoring_timeout_seconds:
+                        logger.info("Reversal monitoring timed out. Resetting state.")
+                        self.is_monitoring_for_reversal = False
+                        self.lowest_price_since_monitoring_started = None
+                        self.monitoring_started_at = None
+                        continue
+
+                    # Check for new low
+                    if current_price < self.lowest_price_since_monitoring_started:
+                        logger.info(f"New low detected during reversal monitoring: {current_price:.2f}")
+                        self.lowest_price_since_monitoring_started = current_price
+                        self.monitoring_started_at = time.time()  # Reset timeout
+
+                    # Check for reversal
+                    reversal_target_price = self.lowest_price_since_monitoring_started * (1 + self.reversal_buy_threshold_percent)
+                    if current_price >= reversal_target_price:
+                        logger.info(f"Reversal detected! Price {current_price:.2f} crossed target {reversal_target_price:.2f}.")
+                        buy_from_reversal = True
+                        self.is_monitoring_for_reversal = False
+                    else:
+                        logger.info(f"Monitoring for reversal. Low: {self.lowest_price_since_monitoring_started:.2f}, Target: {reversal_target_price:.2f}")
+                        # Skip normal buy/sell evaluation this cycle
+                        time.sleep(30)
+                        continue
+
+                # Determine buy amount and operating mode
+                buy_amount_usdt, operating_mode, reason, regime = capital_manager.get_buy_order_details(
                     market_data=market_data,
                     open_positions=open_positions,
                     portfolio_value=total_portfolio_value,
                     free_cash=cash_balance,
-                    params=current_params
+                    params=current_params,
+                    force_buy_signal=buy_from_reversal,
+                    forced_reason="Buy triggered by price reversal."
                 )
 
-                if buy_amount_usdt > 0:
+                # If the signal is to start monitoring, update state and skip buying this cycle
+                if regime == "START_MONITORING" and not self.is_monitoring_for_reversal:
+                    self.is_monitoring_for_reversal = True
+                    self.lowest_price_since_monitoring_started = current_price
+                    self.monitoring_started_at = time.time()
+                    logger.info(f"Starting to monitor for buy reversal. Reason: {reason}")
+
+                elif buy_amount_usdt > 0:
                     logger.info(f"[{operating_mode}] Buy signal triggered: {reason}. Preparing to buy ${buy_amount_usdt:,.2f} USD.")
                     if buy_amount_usdt < min_trade_size:
                         logger.warning(f"Proposed buy amount ${buy_amount_usdt:,.2f} is less than minimum trade size ${min_trade_size:,.2f}. Aborting.")
                     else:
-                        decision_context = { "operating_mode": operating_mode, "buy_trigger_reason": reason, "market_regime": current_regime }
+                        decision_context = {
+                            "operating_mode": operating_mode,
+                            "buy_trigger_reason": reason,
+                            "market_regime": int(current_regime)  # Cast to int to ensure JSON serialization
+                        }
                         success, buy_result = self.trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
 
                         if success:
                             logger.info("Buy successful. Creating new position.")
                             purchase_price = Decimal(buy_result.get('price'))
-                            # Use dynamic params to calculate sell target
                             sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price, params=current_params)
                             state_manager.create_new_position(buy_result, sell_target_price)
                             live_portfolio_manager.get_total_portfolio_value(purchase_price, force_recalculation=True)

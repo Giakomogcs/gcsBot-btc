@@ -40,9 +40,9 @@ class StatusService:
                     session.add(status)
                 
                 status.last_buy_condition = reason
-                status.open_positions = open_positions
+                status.open_positions = int(open_positions)
                 status.portfolio_value_usd = portfolio_value
-                status.market_regime = market_regime
+                status.market_regime = int(market_regime)
                 status.operating_mode = operating_mode
                 status.buy_target = buy_target
                 status.buy_progress = buy_progress
@@ -102,7 +102,8 @@ class StatusService:
             # 3. Evaluate Buy Condition
             cash_balance = next((bal['free'] for bal in wallet_balances if bal['asset'] == 'USDT'), Decimal('0'))
 
-            buy_amount_usdt, operating_mode, reason = self.capital_manager.get_buy_order_details(
+            # The regime is returned but not used in the TUI status, so we can ignore it with `_`
+            buy_amount_usdt, operating_mode, reason, _ = self.capital_manager.get_buy_order_details(
                 market_data=market_data,
                 open_positions=open_positions_db,
                 portfolio_value=total_wallet_usd_value, # Using wallet value as proxy
