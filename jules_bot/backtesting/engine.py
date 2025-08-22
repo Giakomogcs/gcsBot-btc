@@ -58,15 +58,13 @@ class Backtester:
         # --- Dynamic Strategy Components ---
         self.dynamic_params = DynamicParameters(config_manager)
         
-        logger.info("Initializing and fitting the Situational Awareness model...")
+        logger.info("Initializing the Situational Awareness model...")
         self.sa_model = SituationalAwareness()
-        self.sa_model.fit(self.feature_data)
         
-        if not self.sa_model.is_fitted:
-            logger.warning("Situational Awareness model could not be fitted. Backtest will run with default parameters.")
-            self.sa_model = None
-        else:
-            logger.info("Situational Awareness model fitted successfully for backtest.")
+        # A SA agora calcula os regimes para todo o conjunto de dados de uma vez, usando uma janela rolante
+        # para evitar o lookahead bias. A coluna 'market_regime' é adicionada ao feature_data.
+        self.feature_data = self.sa_model.transform(self.feature_data)
+        logger.info("Market regimes calculated for the entire backtest period.")
 
     def run(self):
         logger.info(f"--- Starting backtest run {self.run_id} ---")
@@ -79,20 +77,14 @@ class Backtester:
         open_positions = {}
         portfolio_history = []
 
+        # Itera sobre os dados que agora já contêm os regimes de mercado pré-calculados
         for current_time, candle in self.feature_data.iterrows():
             current_price = Decimal(str(candle['close']))
             self.mock_trader.set_current_time_and_price(current_time, current_price)
 
             # --- DYNAMIC STRATEGY LOGIC ---
-            current_regime = -1 # Default to fallback
-            if self.sa_model and self.sa_model.is_fitted:
-                try:
-                    # The model expects a DataFrame, so we convert the candle (Series) to a frame
-                    regime_df = self.sa_model.transform(candle.to_frame().T)
-                    if not regime_df.empty:
-                        current_regime = regime_df['market_regime'].iloc[-1]
-                except Exception as e:
-                    logger.error(f"Error getting market regime during backtest: {e}", exc_info=True)
+            # O regime de mercado é obtido diretamente da vela (candle), pois foi pré-calculado
+            current_regime = candle.get('market_regime', -1)
             
             self.dynamic_params.update_parameters(current_regime)
             current_params = self.dynamic_params.parameters
