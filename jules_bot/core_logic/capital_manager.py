@@ -2,16 +2,17 @@ from decimal import Decimal, getcontext
 from jules_bot.utils.config_manager import ConfigManager
 from jules_bot.core_logic.strategy_rules import StrategyRules
 from enum import Enum, auto
+from typing import Dict
 
 # Set precision for Decimal calculations
 getcontext().prec = 28
 
 class OperatingMode(Enum):
     """Defines the strategic operating modes for the bot."""
-    PRESERVATION = auto()      # Halts buying to preserve capital
-    ACCUMULATION = auto()      # Standard, small-sized buys
-    AGGRESSIVE = auto()        # Larger buys during confirmed uptrends
-    CORRECTION_ENTRY = auto()  # A larger initial buy during a market dip
+    PRESERVATION = auto()
+    ACCUMULATION = auto()
+    AGGRESSIVE = auto()
+    CORRECTION_ENTRY = auto()
 
 class CapitalManager:
     """
@@ -21,34 +22,30 @@ class CapitalManager:
         self.config = config
         self.strategy_rules = strategy_rules
         self.min_trade_size = Decimal(config.get('TRADING_STRATEGY', 'min_trade_size_usdt', fallback='10.0'))
-        self.base_usd_per_trade = Decimal(config.get('STRATEGY_RULES', 'base_usd_per_trade', fallback='20.0'))
         self.aggressive_buy_multiplier = Decimal(config.get('STRATEGY_RULES', 'aggressive_buy_multiplier', '2.0'))
         self.correction_entry_multiplier = Decimal(config.get('STRATEGY_RULES', 'correction_entry_multiplier', '2.5'))
         self.max_open_positions = int(config.get('STRATEGY_RULES', 'max_open_positions', '20'))
         self.use_dynamic_capital = config.getboolean('STRATEGY_RULES', 'use_dynamic_capital', fallback=False)
 
-
-    def get_buy_order_details(self, market_data: dict, open_positions: list, portfolio_value: Decimal, free_cash: Decimal) -> (Decimal, str, str):
+    def get_buy_order_details(self, market_data: dict, open_positions: list, portfolio_value: Decimal, free_cash: Decimal, params: Dict[str, Decimal]) -> (Decimal, str, str):
         """
-        Determines the operating mode and calculates the appropriate buy amount based on that mode.
+        Determines the operating mode and calculates the appropriate buy amount based on that mode,
+        using dynamic parameters.
         """
         num_open_positions = len(open_positions)
         difficulty_factor = 0
 
-        # If dynamic capital is not enabled, check for the hard cap on positions.
         if not self.use_dynamic_capital and num_open_positions >= self.max_open_positions:
             return Decimal('0'), OperatingMode.PRESERVATION.name, f"Max open positions ({self.max_open_positions}) reached."
 
-        # If dynamic capital is enabled, calculate a scaling factor.
         difficulty_factor = 0
         if self.use_dynamic_capital:
-            difficulty_factor = num_open_positions // 5  # Increases by 1 for every 5 open positions
+            difficulty_factor = num_open_positions // 5
 
         should_buy, regime, reason = self.strategy_rules.evaluate_buy_signal(
-            market_data, num_open_positions, difficulty_factor
+            market_data, num_open_positions, difficulty_factor, params=params
         )
 
-        # 1. Determine the Operating Mode
         if not should_buy:
             mode = OperatingMode.PRESERVATION
         elif regime == "uptrend" and num_open_positions < (self.max_open_positions / 4):
@@ -58,14 +55,15 @@ class CapitalManager:
         else:
             mode = OperatingMode.ACCUMULATION
 
-        # 2. Calculate Buy Amount Based on Mode
         buy_amount = Decimal('0')
+        base_usd_per_trade = params.get('order_size_usd', Decimal('20.0'))
+
         if mode == OperatingMode.ACCUMULATION:
-            buy_amount = self.base_usd_per_trade
+            buy_amount = base_usd_per_trade
         elif mode == OperatingMode.AGGRESSIVE:
-            buy_amount = self.base_usd_per_trade * self.aggressive_buy_multiplier
+            buy_amount = base_usd_per_trade * self.aggressive_buy_multiplier
         elif mode == OperatingMode.CORRECTION_ENTRY:
-            buy_amount = self.base_usd_per_trade * self.correction_entry_multiplier
+            buy_amount = base_usd_per_trade * self.correction_entry_multiplier
 
         # 3. Validate the calculated buy amount
         if buy_amount > 0:
