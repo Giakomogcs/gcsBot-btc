@@ -77,25 +77,34 @@ class PostgresManager:
             db.close()
 
     def write_bot_status(self, bot_id: str, mode: str, status_data: dict):
+        logger.info(f"DB: Attempting to write status for bot_id='{bot_id}'")
         with self.get_db() as db:
             try:
                 bot_status = db.query(BotStatus).filter(BotStatus.bot_id == bot_id).first()
                 if bot_status:
+                    logger.info(f"DB: Found existing status for '{bot_id}'. Updating.")
                     for key, value in status_data.items():
                         setattr(bot_status, key, value)
                 else:
+                    logger.info(f"DB: No existing status for '{bot_id}'. Creating new entry.")
                     bot_status = BotStatus(bot_id=bot_id, mode=mode, **status_data)
                     db.add(bot_status)
                 db.commit()
+                logger.info(f"DB: Successfully committed status for bot_id='{bot_id}'.")
             except Exception as e:
                 db.rollback()
-                logger.error(f"Failed to write bot status to PostgreSQL: {e}")
+                logger.error(f"Failed to write bot status to PostgreSQL for bot_id='{bot_id}': {e}")
 
     def get_bot_status(self, bot_id: str) -> Optional[BotStatus]:
         """Fetches the status of a bot from the database."""
+        logger.info(f"DB: Attempting to read status for bot_id='{bot_id}'")
         with self.get_db() as db:
             try:
                 status = db.query(BotStatus).filter(BotStatus.bot_id == bot_id).first()
+                if status:
+                    logger.info(f"DB: Found status for bot_id='{bot_id}'.")
+                else:
+                    logger.warning(f"DB: No status found for bot_id='{bot_id}'.")
                 return status
             except Exception as e:
                 logger.error(f"Failed to get bot status for {bot_id}: {e}", exc_info=True)
