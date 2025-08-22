@@ -2,6 +2,7 @@ import time
 import uuid
 import json
 import os
+import joblib
 from decimal import Decimal, getcontext
 from jules_bot.utils.logger import logger
 from jules_bot.utils.config_manager import config_manager
@@ -9,10 +10,14 @@ from jules_bot.bot.account_manager import AccountManager
 from jules_bot.core_logic.state_manager import StateManager
 from jules_bot.core_logic.trader import Trader
 from jules_bot.core_logic.strategy_rules import StrategyRules
+from jules_bot.core_logic.capital_manager import CapitalManager
+from jules_bot.core_logic.dynamic_parameters import DynamicParameters
+from jules_bot.bot.situational_awareness import SituationalAwareness
 from jules_bot.core.market_data_provider import MarketDataProvider
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.database.portfolio_manager import PortfolioManager as DbPortfolioManager
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
+from jules_bot.services.status_service import StatusService
 
 getcontext().prec = 28
 
@@ -175,10 +180,26 @@ class TradingBot:
         equity_recalc_interval = int(config_manager.get('APP', 'equity_recalculation_interval', fallback=300))
 
         feature_calculator = LiveFeatureCalculator(self.db_manager, mode=self.mode)
+        status_service = StatusService(self.db_manager, config_manager, feature_calculator)
         state_manager = StateManager(mode=self.mode, bot_id=self.run_id, db_manager=self.db_manager)
         account_manager = AccountManager(self.trader.client)
         strategy_rules = StrategyRules(config_manager)
+        capital_manager = CapitalManager(config_manager, strategy_rules)
         live_portfolio_manager = LivePortfolioManager(self.trader, state_manager, self.db_manager, quote_asset, equity_recalc_interval)
+
+        # --- Dynamic Strategy Components ---
+        dynamic_params = DynamicParameters(config_manager)
+        models_dir = config_manager.get('DATA_PATHS', 'models_dir', fallback='data/models')
+        sa_model_path = os.path.join(models_dir, 'sa_model.pkl')
+
+        sa_model = None
+        if os.path.exists(sa_model_path):
+            sa_model = SituationalAwareness.load_model(sa_model_path)
+            logger.info("Situational Awareness model loaded successfully.")
+        else:
+            logger.error(f"Situational Awareness model not found at {sa_model_path}. Dynamic strategy will not work.")
+            # Decide if the bot should stop or run with default parameters
+            # For now, it will run with defaults from DynamicParameters class
 
         if not self.trader.is_ready:
             logger.critical("Trader could not be initialized. Shutting down bot.")
@@ -198,12 +219,27 @@ class TradingBot:
                     time.sleep(10)
                     continue
 
-                current_price = Decimal(final_candle['close'])
+                # --- DYNAMIC STRATEGY LOGIC ---
+                current_regime = -1 # Default to fallback
+                if sa_model and sa_model.is_fitted:
+                    try:
+                        regime_df = sa_model.transform(final_candle.to_frame().T)
+                        if not regime_df.empty:
+                            current_regime = regime_df['market_regime'].iloc[-1]
+                            logger.info(f"Current market regime detected: {current_regime}")
+                        else:
+                            logger.warning("Could not determine market regime from candle.")
+                    except Exception as e:
+                        logger.error(f"Error getting market regime: {e}", exc_info=True)
 
+                dynamic_params.update_parameters(current_regime)
+                current_params = dynamic_params.parameters
+                logger.info(f"Using strategy parameters for Regime {current_regime}: {current_params}")
+
+                current_price = Decimal(final_candle['close'])
                 open_positions = state_manager.get_open_positions()
                 total_portfolio_value = live_portfolio_manager.get_total_portfolio_value(current_price)
 
-                # --- UI STATE UPDATE ---
                 all_prices = self.trader.get_all_prices()
                 wallet_balances = account_manager.get_all_account_balances(all_prices)
                 trade_history = state_manager.get_trade_history(mode=self.mode)
@@ -213,6 +249,7 @@ class TradingBot:
                 positions_to_sell = [p for p in open_positions if current_price >= Decimal(str(p.sell_target_price or 'inf'))]
                 if positions_to_sell:
                     logger.info(f"Found {len(positions_to_sell)} positions meeting sell criteria.")
+                    # ... (rest of sell logic is unchanged)
                     total_sell_quantity = sum(Decimal(str(p.quantity)) * strategy_rules.sell_factor for p in positions_to_sell)
                     available_balance = Decimal(self.trader.get_account_balance(asset=base_asset))
 
@@ -220,8 +257,6 @@ class TradingBot:
                         logger.warning(f"INSUFFICIENT BALANCE: Bot state is out of sync. Attempting to sell {total_sell_quantity:.8f} {base_asset}, but only {available_balance:.8f} is available.")
                         logger.info("Triggering state reconciliation with exchange balance.")
                         state_manager.reconcile_holdings(self.symbol, self.trader)
-                        # After reconciliation, the bot will wait for the next trading cycle
-                        # to re-evaluate sell conditions with the corrected state.
                     else:
                         for position in positions_to_sell:
                             trade_id = position.trade_id
@@ -239,66 +274,55 @@ class TradingBot:
                                 realized_pnl_usd = strategy_rules.calculate_realized_pnl(buy_price, sell_price, sell_quantity)
                                 hodl_asset_value_at_sell = hodl_asset_amount * current_price
                                 commission_usd = Decimal(str(sell_result.get('commission', '0')))
-
                                 sell_result.update({
-                                    "commission_usd": commission_usd,
-                                    "realized_pnl_usd": realized_pnl_usd,
-                                    "hodl_asset_amount": hodl_asset_amount,
-                                    "hodl_asset_value_at_sell": hodl_asset_value_at_sell
+                                    "commission_usd": commission_usd, "realized_pnl_usd": realized_pnl_usd,
+                                    "hodl_asset_amount": hodl_asset_amount, "hodl_asset_value_at_sell": hodl_asset_value_at_sell
                                 })
-
                                 state_manager.record_partial_sell(
-                                    original_trade_id=trade_id,
-                                    remaining_quantity=hodl_asset_amount,
-                                    sell_data=sell_result
+                                    original_trade_id=trade_id, remaining_quantity=hodl_asset_amount, sell_data=sell_result
                                 )
                                 live_portfolio_manager.get_total_portfolio_value(current_price, force_recalculation=True)
                             else:
                                 logger.error(f"Sell execution failed for position {trade_id}.")
 
                 # --- BUY LOGIC ---
-                buy_check_passed = False
-                if use_dynamic_capital:
-                    working_capital = total_portfolio_value * wc_percentage
-                    capital_in_use = sum(Decimal(p.quantity) * Decimal(p.price) for p in open_positions)
-                    available_buying_power = working_capital - capital_in_use
+                market_data = final_candle.to_dict()
+                cash_balance = Decimal(self.trader.get_account_balance(asset=quote_asset))
 
-                    cash_balance = Decimal(self.trader.get_account_balance(asset=quote_asset))
-                    buy_amount_usdt = strategy_rules.get_next_buy_amount(cash_balance)
+                buy_amount_usdt, operating_mode, reason = capital_manager.get_buy_order_details(
+                    market_data=market_data,
+                    open_positions=open_positions,
+                    portfolio_value=total_portfolio_value,
+                    free_cash=cash_balance,
+                    params=current_params
+                )
 
-                    if buy_amount_usdt <= available_buying_power:
-                        buy_check_passed = True
-                        logger.info(f"Dynamic Capital check PASSED. Available: ${available_buying_power:,.2f}, Needed: ${buy_amount_usdt:,.2f}")
+                if buy_amount_usdt > 0:
+                    logger.info(f"[{operating_mode}] Buy signal triggered: {reason}. Preparing to buy ${buy_amount_usdt:,.2f} USD.")
+                    if buy_amount_usdt < min_trade_size:
+                        logger.warning(f"Proposed buy amount ${buy_amount_usdt:,.2f} is less than minimum trade size ${min_trade_size:,.2f}. Aborting.")
                     else:
-                        logger.info(f"Dynamic Capital check FAILED. Available: ${available_buying_power:,.2f}, Needed: ${buy_amount_usdt:,.2f}")
+                        decision_context = { "operating_mode": operating_mode, "buy_trigger_reason": reason, "market_regime": current_regime }
+                        success, buy_result = self.trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
+
+                        if success:
+                            logger.info("Buy successful. Creating new position.")
+                            purchase_price = Decimal(buy_result.get('price'))
+                            # Use dynamic params to calculate sell target
+                            sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price, params=current_params)
+                            state_manager.create_new_position(buy_result, sell_target_price)
+                            live_portfolio_manager.get_total_portfolio_value(purchase_price, force_recalculation=True)
                 else:
-                    if len(open_positions) < max_open_positions:
-                        buy_check_passed = True
-                    else:
-                        logger.info(f"Maximum open positions ({max_open_positions}) reached.")
+                    logger.info(f"[{operating_mode}] No buy signal: {reason}")
 
-                if buy_check_passed:
-                    market_data = final_candle.to_dict()
-                    should_buy, regime, reason = strategy_rules.evaluate_buy_signal(market_data, len(open_positions))
-                    if should_buy:
-                        logger.info(f"Buy signal: {reason}. Evaluating capital.")
-                        cash_balance = Decimal(self.trader.get_account_balance(asset=quote_asset))
-                        if cash_balance >= min_trade_size:
-                            buy_amount_usdt = strategy_rules.get_next_buy_amount(cash_balance)
-                            if buy_amount_usdt >= min_trade_size:
-                                logger.info(f"Executing buy for ${buy_amount_usdt:.2f} USD.")
-                                decision_context = { "market_regime": regime, "buy_trigger_reason": reason }
-                                success, buy_result = self.trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
-                                if success:
-                                    logger.info("Buy successful. Creating new position.")
-                                    purchase_price = Decimal(buy_result.get('price'))
-                                    sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
-                                    state_manager.create_new_position(buy_result, sell_target_price)
-                                    live_portfolio_manager.get_total_portfolio_value(purchase_price, force_recalculation=True)
-                            else:
-                                logger.warning(f"Calculated buy amount ${buy_amount_usdt:.2f} < min size. Skipping.")
-                        else:
-                            logger.warning(f"Cash balance ${cash_balance:.2f} < min trade size. Cannot buy.")
+                # Persist the latest status to the database for the TUI
+                status_service.update_bot_status(
+                    bot_id=self.run_id,
+                    mode=self.mode,
+                    reason=reason,
+                    open_positions=len(open_positions),
+                    portfolio_value=total_portfolio_value
+                )
 
                 logger.info("--- Cycle complete. Waiting 30 seconds... ---")
                 time.sleep(30)

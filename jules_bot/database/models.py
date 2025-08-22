@@ -66,4 +66,5 @@ class BotStatus(Base):
     session_pnl_percent = Column(Numeric(20, 8), default=0.0)
     open_positions = Column(Integer, default=0)
     portfolio_value_usd = Column(Numeric(20, 8), default=0.0)
+    last_buy_condition = Column(String) # To store detailed feedback
     timestamp = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)

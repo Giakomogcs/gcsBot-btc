@@ -6,6 +6,7 @@ from jules_bot.core.mock_exchange import MockTrader
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.core_logic.strategy_rules import StrategyRules
+from jules_bot.core_logic.capital_manager import CapitalManager
 from jules_bot.utils.logger import logger
 from jules_bot.core.schemas import TradePoint
 from jules_bot.research.feature_engineering import add_all_features
@@ -49,6 +50,7 @@ class Backtester:
             symbol=symbol
         )
         self.strategy_rules = StrategyRules(config_manager)
+        self.capital_manager = CapitalManager(config_manager, self.strategy_rules)
 
     def run(self):
         logger.info(f"--- Starting backtest run {self.run_id} ---")
@@ -56,9 +58,6 @@ class Backtester:
         strategy_rules = self.strategy_rules
         symbol = config_manager.get('APP', 'symbol')
         strategy_name = config_manager.get('APP', 'strategy_name', fallback='default_strategy')
-        use_dynamic_capital = config_manager.getboolean('STRATEGY_RULES', 'use_dynamic_capital', fallback=False)
-        wc_percentage = Decimal(config_manager.get('STRATEGY_RULES', 'working_capital_percentage', fallback='0.8'))
-        max_open_positions = int(config_manager.get('STRATEGY_RULES', 'max_open_positions', fallback=20))
         min_trade_size = Decimal(config_manager.get('TRADING_STRATEGY', 'min_trade_size_usdt', fallback='10.0'))
 
         open_positions = {}
@@ -127,50 +126,42 @@ class Backtester:
 
                         del open_positions[trade_id]
 
-            buy_check_passed = False
-            if use_dynamic_capital:
-                working_capital = total_portfolio_value * wc_percentage
-                capital_in_use = sum(pos['usd_value'] for pos in open_positions.values())
-                available_buying_power = working_capital - capital_in_use
-                buy_amount_usdt = strategy_rules.get_next_buy_amount(cash_balance)
-                if buy_amount_usdt <= available_buying_power:
-                    buy_check_passed = True
-            else:
-                if len(open_positions) < max_open_positions:
-                    buy_check_passed = True
+            market_data = candle.to_dict()
+            buy_amount_usdt, operating_mode, reason = self.capital_manager.get_buy_order_details(
+                market_data=market_data,
+                open_positions=list(open_positions.values()),
+                portfolio_value=total_portfolio_value,
+                free_cash=cash_balance
+            )
 
-            if buy_check_passed:
-                market_data = candle.to_dict()
-                should_buy, regime, reason = strategy_rules.evaluate_buy_signal(market_data, len(open_positions))
-                if should_buy:
-                    buy_amount_usdt = strategy_rules.get_next_buy_amount(cash_balance)
-                    if cash_balance >= min_trade_size and buy_amount_usdt >= min_trade_size:
-                        success, buy_result = self.mock_trader.execute_buy(buy_amount_usdt)
-                        if success:
-                            new_trade_id = str(uuid.uuid4())
-                            buy_price = buy_result['price']
-                            sell_target_price = strategy_rules.calculate_sell_target_price(buy_price)
+            if buy_amount_usdt > 0 and cash_balance >= min_trade_size:
+                success, buy_result = self.mock_trader.execute_buy(buy_amount_usdt)
+                if success:
+                    new_trade_id = str(uuid.uuid4())
+                    buy_price = buy_result['price']
+                    sell_target_price = strategy_rules.calculate_sell_target_price(buy_price)
 
-                            open_positions[new_trade_id] = {
-                                'price': buy_price, 'quantity': buy_result['quantity'],
-                                'usd_value': buy_result['usd_value'], 'sell_target_price': sell_target_price
-                            }
+                    open_positions[new_trade_id] = {
+                        'price': buy_price, 'quantity': buy_result['quantity'],
+                        'usd_value': buy_result['usd_value'], 'sell_target_price': sell_target_price
+                    }
 
-                            # Log the new "OPEN" position to the database
-                            decision_context = candle.to_dict()
-                            decision_context.pop('symbol', None)
+                    decision_context = candle.to_dict()
+                    decision_context.pop('symbol', None)
+                    decision_context['operating_mode'] = operating_mode
+                    decision_context['buy_trigger_reason'] = reason
 
-                            trade_data = {
-                                'run_id': self.run_id, 'strategy_name': strategy_name, 'symbol': symbol,
-                                'trade_id': new_trade_id, 'exchange': "backtest_engine", 'order_type': "buy",
-                                'status': "OPEN", 'price': buy_price, 'quantity': buy_result['quantity'],
-                                'usd_value': buy_result['usd_value'], 'commission': buy_result['commission'],
-                                'commission_asset': "USDT", 'timestamp': current_time,
-                                'decision_context': decision_context, 'sell_target_price': sell_target_price,
-                                'commission_usd': buy_result['commission']
-                            }
-                            self.trade_logger.log_trade(trade_data)
-                            logger.info(f"BUY EXECUTED: TradeID: {new_trade_id} | Price: ${buy_price:,.2f} | Qty: {buy_result['quantity']:.8f}")
+                    trade_data = {
+                        'run_id': self.run_id, 'strategy_name': strategy_name, 'symbol': symbol,
+                        'trade_id': new_trade_id, 'exchange': "backtest_engine", 'order_type': "buy",
+                        'status': "OPEN", 'price': buy_price, 'quantity': buy_result['quantity'],
+                        'usd_value': buy_result['usd_value'], 'commission': buy_result['commission'],
+                        'commission_asset': "USDT", 'timestamp': current_time,
+                        'decision_context': decision_context, 'sell_target_price': sell_target_price,
+                        'commission_usd': buy_result['commission']
+                    }
+                    self.trade_logger.log_trade(trade_data)
+                    logger.info(f"BUY EXECUTED: TradeID: {new_trade_id} | Price: ${buy_price:,.2f} | Qty: {buy_result['quantity']:.8f}")
 
         self._generate_and_save_summary(open_positions, portfolio_history)
         logger.info(f"--- Backtest {self.run_id} finished ---")
@@ -180,24 +171,20 @@ class Backtester:
 
         all_trades_for_run = self.db_manager.get_trades_by_run_id(self.run_id)
 
-        # Convert to DataFrame for easier analysis
         if not all_trades_for_run:
             logger.warning("No trades were executed in this backtest run.")
             all_trades_df = pd.DataFrame()
         else:
             all_trades_df = pd.DataFrame([t.to_dict() for t in all_trades_for_run])
-            # Convert numeric columns to Decimal for precision
             for col in ['price', 'quantity', 'usd_value', 'commission', 'commission_usd', 'realized_pnl_usd', 'hodl_asset_amount', 'hodl_asset_value_at_sell']:
                 if col in all_trades_df.columns:
                     all_trades_df[col] = all_trades_df[col].apply(lambda x: Decimal(str(x)) if x is not None else Decimal(0))
 
-        # --- METRIC CALCULATIONS ---
         initial_balance = self.mock_trader.initial_balance
         final_balance = self.mock_trader.get_total_portfolio_value()
         net_pnl = final_balance - initial_balance
         net_pnl_percent = (net_pnl / initial_balance) * 100 if initial_balance > 0 else Decimal(0)
 
-        # Filter for trades that are not treasury to count as actual buy trades
         buy_trades = all_trades_df[all_trades_df['status'] != 'TREASURY']
         sell_trades = all_trades_df[all_trades_df['status'] == 'CLOSED']
 
@@ -215,7 +202,6 @@ class Backtester:
 
         unrealized_pnl = sum((pos['quantity'] * self.mock_trader.get_current_price()) - pos['usd_value'] for pos in open_positions.values())
 
-        # Max Drawdown Calculation
         max_drawdown = Decimal(0)
         peak = -Decimal('inf')
         if portfolio_history:
@@ -227,12 +213,10 @@ class Backtester:
                 if drawdown > max_drawdown:
                     max_drawdown = drawdown
 
-        # Treasury Calculation
         treasury_df = all_trades_df[all_trades_df['status'] == 'TREASURY']
         btc_treasury_amount = treasury_df['quantity'].sum()
         btc_treasury_value = btc_treasury_amount * self.mock_trader.get_current_price()
 
-        # --- LOGGING ---
         logger.info("="*30 + " BACKTEST RESULTS " + "="*30)
         logger.info(f" Backtest Run ID: {self.run_id}")
         if not self.feature_data.empty:
@@ -253,7 +237,6 @@ class Backtester:
         logger.info(f" BTC Treasury:        {btc_treasury_amount:.8f} BTC (${btc_treasury_value:,.2f})")
         logger.info("="*80)
 
-# Add a to_dict method to TradePoint if it doesn't exist, for easy conversion
 def trade_point_to_dict(self):
     from dataclasses import asdict
     return asdict(self)

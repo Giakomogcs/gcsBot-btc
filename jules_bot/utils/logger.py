@@ -2,7 +2,6 @@
 
 import logging
 import json
-from logging.handlers import TimedRotatingFileHandler
 import sys
 import os
 from tabulate import tabulate
@@ -43,7 +42,8 @@ if not logger.handlers:
 
     # 1. Handler para o ARQUIVO DE LOG ESTRUTURADO (jules_bot.jsonl)
     log_file_path = os.path.join(LOGS_DIR, 'jules_bot.jsonl')
-    file_handler = TimedRotatingFileHandler(log_file_path, when="midnight", interval=1, backupCount=2, encoding='utf-8')
+    # Use a simple FileHandler to avoid rotation issues due to permissions in Docker.
+    file_handler = logging.FileHandler(log_file_path, mode='a', encoding='utf-8')
     file_handler.setFormatter(json_formatter)
     file_handler.setLevel(logging.DEBUG) # Captura todos os níveis no arquivo
     logger.addHandler(file_handler)

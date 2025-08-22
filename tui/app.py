@@ -156,16 +156,18 @@ class TUIApp(App):
                     yield Static(f"Mode: {self.mode.upper()}", id="status_mode")
                     yield Static("Symbol: N/A", id="status_symbol")
                     yield Static("BTC Price: N/A", id="status_price")
-                    yield Static("BTC: N/A", id="status_btc")
-                    yield Static("USD: N/A", id="status_usdt")
-                    yield Static("Wallet: N/A", id="status_wallet_usd")
+                    yield Static("Open Positions: N/A", id="status_open_positions")
+                    yield Static("Wallet Value: N/A", id="status_wallet_usd")
 
                 yield Static("Strategy Status", classes="title")
                 with Static(id="strategy_container"):
-                    yield Static("Current Price: N/A", id="strategy_current_price")
-                    yield Static("Buy Signal: N/A", id="strategy_buy_signal")
+                    yield Static("Operating Mode: N/A", id="strategy_operating_mode")
+                    yield Static("Buy Condition: N/A", id="strategy_buy_condition")
                     yield Static("Buy Target: N/A", id="strategy_buy_target")
                     yield Static("Buy Progress: N/A", id="strategy_buy_progress")
+
+                yield Static("Wallet Balances", classes="title")
+                yield DataTable(id="wallet_table")
 
                 yield Static("Open Positions", classes="title")
                 yield DataTable(id="positions_table")
@@ -205,6 +207,8 @@ class TUIApp(App):
         positions_table.cursor_type = "row"
         positions_table.add_columns("ID", "Entry", "Value", "PnL", "Sell Target", "Target Status")
 
+        wallet_table = self.query_one("#wallet_table", DataTable)
+        wallet_table.add_columns("Asset", "Free", "Locked", "Total", "USD Value")
 
         # MODIFICADO: Chama o update_dashboard uma vez e depois define o intervalo de 30s
         self.update_dashboard()
@@ -383,9 +387,44 @@ class TUIApp(App):
         
         # Update status bar
         price = Decimal(data.get("current_btc_price", 0))
+        open_positions_count = data.get("open_positions_count", 0)
+        total_wallet_usd = Decimal(data.get("total_wallet_usd_value", 0))
         self.query_one("#status_symbol").update(f"Symbol: {data.get('symbol', 'N/A')}")
         self.query_one("#status_price").update(f"Price: ${price:,.2f}")
-        self.query_one("#strategy_current_price").update(f"Current Price: ${price:,.2f}")
+        self.query_one("#status_open_positions").update(f"Open Positions: {open_positions_count}")
+        self.query_one("#status_wallet_usd").update(f"Wallet Value: ${total_wallet_usd:,.2f}")
+
+        # Update strategy status
+        buy_signal_status = data.get("buy_signal_status", {})
+        operating_mode = buy_signal_status.get("operating_mode", "N/A")
+        reason = buy_signal_status.get("reason", "N/A")
+        buy_target = Decimal(buy_signal_status.get("btc_purchase_target", 0))
+        buy_progress = float(buy_signal_status.get("btc_purchase_progress_pct", 0))
+
+        self.query_one("#strategy_operating_mode").update(f"Operating Mode: {operating_mode}")
+        self.query_one("#strategy_buy_condition").update(f"Buy Condition: {reason}")
+        self.query_one("#strategy_buy_target").update(f"Buy Target: ${buy_target:,.2f}")
+        self.query_one("#strategy_buy_progress").update(f"Buy Progress: {buy_progress:.1f}%")
+
+        # Update wallet balances table
+        wallet_table = self.query_one("#wallet_table", DataTable)
+        wallet_table.clear()
+        balances = data.get("wallet_balances", [])
+        if balances:
+            for bal in balances:
+                asset = bal.get('asset')
+                free = Decimal(bal.get('free', '0'))
+                locked = Decimal(bal.get('locked', '0'))
+                total = Decimal(bal.get('total', '0'))
+                usd_value = Decimal(bal.get('usd_value', '0'))
+
+                # Format based on asset type
+                if asset == 'BTC':
+                    wallet_table.add_row(asset, f"{free:.8f}", f"{locked:.8f}", f"{total:.8f}", f"${usd_value:,.2f}")
+                else: # USDT
+                    wallet_table.add_row(asset, f"${free:,.2f}", f"${locked:,.2f}", f"${total:,.2f}", f"${usd_value:,.2f}")
+        else:
+            wallet_table.add_row("No balance data.")
 
         # Update positions table
         pos_table = self.query_one("#positions_table", DataTable)
@@ -400,61 +439,17 @@ class TUIApp(App):
                 sell_target = Decimal(pos.get("sell_target_price", 0))
                 
                 progress_pct = float(pos.get("progress_to_sell_target_pct", 0))
-                # price_to_target = Decimal(pos.get("price_to_target", 0))
                 usd_to_target = Decimal(pos.get("usd_to_target", 0))
                 
                 pnl_color = "green" if pnl >= 0 else "red"
-                
-                # Format the progress to be more informative
                 progress_text = f"{progress_pct:.1f}% (${usd_to_target:,.2f})"
 
                 pos_table.add_row(
-                    pos_id.split('-')[0],
-                    f"${entry_price:,.2f}",
-                    f"${current_value:,.2f}",
-                    f"[{pnl_color}]${pnl:,.2f}[/]",
-                    f"${sell_target:,.2f}",
-                    progress_text,
-                    key=pos_id,
+                    pos_id.split('-')[0], f"${entry_price:,.2f}", f"${current_value:,.2f}",
+                    f"[{pnl_color}]${pnl:,.2f}[/]", f"${sell_target:,.2f}", progress_text, key=pos_id
                 )
         else:
             pos_table.add_row("No open positions.")
-
-        # Update wallet balances in status bar
-        balances = data.get("wallet_balances", [])
-        btc_balance = next((bal for bal in balances if bal.get("asset") == "BTC"), None)
-        usdt_balance = next((bal for bal in balances if bal.get("asset") == "USDT"), None)
-        total_wallet_usd = Decimal(data.get("total_wallet_usd_value", 0))
-
-        if btc_balance:
-            free_btc = Decimal(btc_balance.get("free", 0))
-            usd_value_btc = Decimal(btc_balance.get("usd_value", 0))
-            self.query_one("#status_btc").update(f"BTC: {free_btc:.8f} (${usd_value_btc:,.2f})")
-        else:
-            self.query_one("#status_btc").update("BTC: N/A")
-
-        if usdt_balance:
-            free_usdt = Decimal(usdt_balance.get("free", 0))
-            self.query_one("#status_usdt").update(f"USD: ${free_usdt:,.2f}")
-        else:
-            self.query_one("#status_usdt").update("USD: N/A")
-            
-        self.query_one("#status_wallet_usd").update(f"Wallet: ${total_wallet_usd:,.2f}")
-
-        # Update strategy status
-        buy_signal_status = data.get("buy_signal_status", {})
-        should_buy = buy_signal_status.get("should_buy", False)
-        reason = buy_signal_status.get("reason", "N/A")
-        buy_target = Decimal(buy_signal_status.get("btc_purchase_target", 0))
-        buy_progress = float(buy_signal_status.get("btc_purchase_progress_pct", 0))
-
-        buy_signal_text = f"Buy Signal: {'YES' if should_buy else 'NO'} ({reason})"
-        buy_target_text = f"Buy Target: ${buy_target:,.2f}"
-        buy_progress_text = f"Buy Progress: {buy_progress:.1f}%"
-        
-        self.query_one("#strategy_buy_signal").update(buy_signal_text)
-        self.query_one("#strategy_buy_target").update(buy_target_text)
-        self.query_one("#strategy_buy_progress").update(buy_progress_text)
 
     def _render_text_chart(self, history: list[dict], width: int = 50, height: int = 10) -> str:
         """Renders a simple text-based bar chart from portfolio history."""
