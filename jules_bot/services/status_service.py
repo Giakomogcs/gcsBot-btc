@@ -1,5 +1,6 @@
 import logging
 from decimal import Decimal, InvalidOperation
+from sqlalchemy import select
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.database.models import BotStatus
 from jules_bot.core_logic.strategy_rules import StrategyRules
@@ -88,8 +89,8 @@ class StatusService:
             
             # Fetch the persisted bot status reason
             with self.db_manager.get_db() as session:
-                bot_status = session.query(BotStatus).filter(BotStatus.bot_id == bot_id).first()
-                reason = bot_status.last_buy_condition if bot_status else "N/A"
+                stmt = select(BotStatus.last_buy_condition).where(BotStatus.bot_id == bot_id)
+                reason = session.execute(stmt).scalar_one_or_none() or "N/A"
                 operating_mode = "N/A" # This could also be persisted if needed
 
             # This part is for the TUI display, not for the bot's actual decision making

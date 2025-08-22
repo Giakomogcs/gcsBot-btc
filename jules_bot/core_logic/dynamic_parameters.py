@@ -11,8 +11,9 @@ class DynamicParameters:
         Loads the strategy parameters for a given market regime.
         """
         section_name = f'REGIME_{regime}'
-        if self.config_manager.has_section(section_name):
-            regime_config = self.config_manager.get_section(section_name)
+        regime_config = self.config_manager.get_section(section_name)
+
+        if regime_config:
             self.parameters = {
                 'target_profit': Decimal(regime_config.get('target_profit', '0.01')),
                 'buy_dip_percentage': Decimal(regime_config.get('buy_dip_percentage', '0.02')),
