@@ -17,6 +17,40 @@ from jules_bot.services.status_service import StatusService
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
 from jules_bot.utils.logger import logger
 
+def _check_environment(mode: str, db_manager: PostgresManager):
+    """Verifica se as dependências do ambiente (chaves de API, DB) estão configuradas."""
+    # 1. Verificar chaves de API da Binance
+    if mode == 'test':
+        api_key = os.getenv('BINANCE_TESTNET_API_KEY')
+        api_secret = os.getenv('BINANCE_TESTNET_API_SECRET')
+        if not api_key or not api_secret:
+            logger.error("ERRO DE CONFIGURAÇÃO: As chaves da API de Testnet da Binance não foram encontradas.")
+            logger.error("Por favor, copie '.env.example' para '.env' e verifique se as variáveis BINANCE_TESTNET_API_KEY e BINANCE_TESTNET_API_SECRET estão definidas.")
+            logger.error("Lembre-se de que este script deve ser executado através do 'run.py' para carregar o ambiente corretamente.")
+            raise typer.Exit(code=1)
+    elif mode == 'trade':
+        api_key = os.getenv('BINANCE_API_KEY')
+        api_secret = os.getenv('BINANCE_API_SECRET')
+        if not api_key or not api_secret:
+            logger.error("ERRO DE CONFIGURAÇÃO: As chaves da API de Produção da Binance não foram encontradas.")
+            logger.error("Por favor, verifique se as variáveis BINANCE_API_KEY e BINANCE_API_SECRET estão definidas no seu arquivo .env.")
+            raise typer.Exit(code=1)
+
+    # 2. Verificar conexão com o banco de dados
+    is_connected, error_msg = db_manager.check_connection()
+    if not is_connected:
+        db_config = db_manager.engine.url
+        logger.error("ERRO DE CONEXÃO COM O BANCO DE DADOS: Não foi possível conectar ao PostgreSQL.")
+        logger.error(f"   Host: {db_config.host}:{db_config.port}")
+        logger.error(f"   Database: {db_config.database}")
+        logger.error(f"   Usuário: {db_config.username}")
+        logger.error(f"   Erro original: {error_msg}")
+        logger.error("\n   Possíveis Soluções:")
+        logger.error("   1. Verifique se os serviços Docker estão em execução com 'python run.py status'.")
+        logger.error("   2. Se não estiverem, inicie-os com 'python run.py start'.")
+        logger.error("   3. Certifique-se de que você está executando este comando através do 'run.py' (ex: 'python run.py dashboard').")
+        raise typer.Exit(code=1)
+
 def main(
     mode: str = typer.Argument(
         "test",
@@ -43,6 +77,10 @@ def main(
         config_manager = ConfigManager()
         db_config = config_manager.get_db_config('POSTGRES')
         db_manager = PostgresManager(config=db_config)
+
+        # Verifica o ambiente antes de prosseguir
+        _check_environment(mode, db_manager)
+
         feature_calculator = LiveFeatureCalculator(db_manager, mode=mode)
         status_service = StatusService(db_manager, config_manager, feature_calculator)
 
