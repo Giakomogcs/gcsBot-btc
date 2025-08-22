@@ -171,9 +171,6 @@ class TradingBot:
 
         quote_asset = "USDT"
         base_asset = self.symbol.replace(quote_asset, "")
-        use_dynamic_capital = config_manager.getboolean('STRATEGY_RULES', 'use_dynamic_capital', fallback=False)
-        wc_percentage = Decimal(config_manager.get('STRATEGY_RULES', 'working_capital_percentage', fallback='0.8'))
-        max_open_positions = int(config_manager.get('STRATEGY_RULES', 'max_open_positions', fallback=20))
         min_trade_size = Decimal(config_manager.get('TRADING_STRATEGY', 'min_trade_size_usdt', fallback='10.0'))
         equity_recalc_interval = int(config_manager.get('APP', 'equity_recalculation_interval', fallback=300))
 
