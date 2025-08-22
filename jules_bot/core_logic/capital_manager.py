@@ -25,36 +25,29 @@ class CapitalManager:
         self.aggressive_buy_multiplier = Decimal(config.get('STRATEGY_RULES', 'aggressive_buy_multiplier', '2.0'))
         self.correction_entry_multiplier = Decimal(config.get('STRATEGY_RULES', 'correction_entry_multiplier', '2.5'))
         self.max_open_positions = int(config.get('STRATEGY_RULES', 'max_open_positions', '20'))
+        self.use_dynamic_difficulty = config.getboolean('STRATEGY_RULES', 'use_dynamic_difficulty', fallback=False)
 
 
     def get_buy_order_details(self, market_data: dict, open_positions: list, portfolio_value: Decimal, free_cash: Decimal) -> (Decimal, str, str):
         """
         Determines the operating mode and calculates the appropriate buy amount based on that mode.
-
-        Returns:
-            - Decimal: The amount in USDT to buy. 0 if no buy should be made.
-            - str: The name of the operating mode for the decision.
-            - str: A human-readable reason for the decision.
         """
         num_open_positions = len(open_positions)
+        difficulty_factor = 0
 
-        # Determine the difficulty factor based on the number of open positions
-        if num_open_positions >= 10:
-            difficulty_factor = 2
-        elif num_open_positions >= 5:
-            difficulty_factor = 1
-        else:
-            difficulty_factor = 0
+        # If dynamic difficulty is enabled, calculate a scaling factor.
+        # Otherwise, check for the hard cap on positions.
+        if self.use_dynamic_difficulty:
+            difficulty_factor = num_open_positions // 5  # Increases by 1 for every 5 open positions
+        elif num_open_positions >= self.max_open_positions:
+            return Decimal('0'), OperatingMode.PRESERVATION.name, f"Max open positions ({self.max_open_positions}) reached."
 
         should_buy, regime, reason = self.strategy_rules.evaluate_buy_signal(
             market_data, num_open_positions, difficulty_factor
         )
 
         # 1. Determine the Operating Mode
-        if num_open_positions >= self.max_open_positions:
-            mode = OperatingMode.PRESERVATION
-            reason = f"Max open positions ({self.max_open_positions}) reached."
-        elif not should_buy:
+        if not should_buy:
             mode = OperatingMode.PRESERVATION
         elif regime == "uptrend" and num_open_positions < (self.max_open_positions / 4):
             mode = OperatingMode.AGGRESSIVE
