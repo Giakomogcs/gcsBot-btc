@@ -20,10 +20,11 @@ def state_manager(mock_db_manager):
     Provides a StateManager instance with a mocked PostgresManager.
     This fixture ensures that the real PostgresManager is not used during tests.
     """
+    mock_feature_calculator = Mock()
     # We use patch to mock the TradeLogger that StateManager instantiates.
     with patch('jules_bot.core_logic.state_manager.TradeLogger') as MockTradeLogger:
         # Provide the mocked db_manager directly to the constructor.
-        sm = StateManager(mode="test", bot_id="test_bot", db_manager=mock_db_manager)
+        sm = StateManager(mode="test", bot_id="test_bot", db_manager=mock_db_manager, feature_calculator=mock_feature_calculator)
         
         # For tests that assert log_trade, we need to ensure the mock is correctly configured.
         # The StateManager passes its db_manager to TradeLogger, so the mock setup is simpler.
