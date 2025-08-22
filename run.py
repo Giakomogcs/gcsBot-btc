@@ -240,7 +240,7 @@ def backtest(
     """Prepara os dados e executa um backtest completo dentro do container."""
     mode = "backtest"
     _confirm_and_clear_data(mode)
-    
+
     print(f"🚀 Iniciando execução de backtest para {days} dias...")
 
     print("\n--- Etapa 1 de 2: Preparando dados ---")
