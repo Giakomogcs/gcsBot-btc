@@ -14,6 +14,7 @@ from jules_bot.core.market_data_provider import MarketDataProvider
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.database.portfolio_manager import PortfolioManager as DbPortfolioManager
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
+from jules_bot.services.status_service import StatusService
 
 getcontext().prec = 28
 
@@ -176,6 +177,7 @@ class TradingBot:
         equity_recalc_interval = int(config_manager.get('APP', 'equity_recalculation_interval', fallback=300))
 
         feature_calculator = LiveFeatureCalculator(self.db_manager, mode=self.mode)
+        status_service = StatusService(self.db_manager, config_manager, feature_calculator)
         state_manager = StateManager(mode=self.mode, bot_id=self.run_id, db_manager=self.db_manager)
         account_manager = AccountManager(self.trader.client)
         strategy_rules = StrategyRules(config_manager)
@@ -287,6 +289,15 @@ class TradingBot:
                             live_portfolio_manager.get_total_portfolio_value(purchase_price, force_recalculation=True)
                 else:
                     logger.info(f"[{operating_mode}] No buy signal: {reason}")
+
+                # Persist the latest status to the database for the TUI
+                status_service.update_bot_status(
+                    bot_id=self.run_id,
+                    mode=self.mode,
+                    reason=reason,
+                    open_positions=len(open_positions),
+                    portfolio_value=total_portfolio_value
+                )
 
                 logger.info("--- Cycle complete. Waiting 30 seconds... ---")
                 time.sleep(30)

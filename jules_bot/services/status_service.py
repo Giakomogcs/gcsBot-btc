@@ -1,6 +1,7 @@
 import logging
 from decimal import Decimal, InvalidOperation
 from jules_bot.database.postgres_manager import PostgresManager
+from jules_bot.database.models import BotStatus
 from jules_bot.core_logic.strategy_rules import StrategyRules
 from jules_bot.core_logic.capital_manager import CapitalManager
 from jules_bot.core.exchange_connector import ExchangeManager
@@ -41,6 +42,27 @@ class StatusService:
         self.capital_manager = CapitalManager(self.config_manager, self.strategy)
 
 
+    def update_bot_status(self, bot_id: str, mode: str, reason: str, open_positions: int, portfolio_value: Decimal):
+        """
+        Creates or updates the status of a bot in the database.
+        """
+        with self.db_manager.get_db() as session:
+            try:
+                status = session.query(BotStatus).filter(BotStatus.bot_id == bot_id).first()
+                if not status:
+                    status = BotStatus(bot_id=bot_id, mode=mode, is_running=True)
+                    session.add(status)
+                
+                status.last_buy_condition = reason
+                status.open_positions = open_positions
+                status.portfolio_value_usd = portfolio_value
+                status.is_running = True # Mark as running on update
+                
+                session.commit()
+            except Exception as e:
+                session.rollback()
+                logger.error(f"Failed to update bot status for {bot_id}: {e}", exc_info=True)
+
     def get_extended_status(self, environment: str, bot_id: str):
         """
         Gathers and calculates extended status information, including
@@ -63,15 +85,14 @@ class StatusService:
             positions_status = self._process_open_positions(open_positions_db, current_price)
 
             wallet_balances, total_wallet_usd_value = self._process_wallet_balances(exchange_manager, current_price)
-            free_cash = next((bal['free'] for bal in wallet_balances if bal['asset'] == 'USDT'), Decimal('0'))
+            
+            # Fetch the persisted bot status reason
+            with self.db_manager.get_db() as session:
+                bot_status = session.query(BotStatus).filter(BotStatus.bot_id == bot_id).first()
+                reason = bot_status.last_buy_condition if bot_status else "N/A"
+                operating_mode = "N/A" # This could also be persisted if needed
 
-            _, operating_mode, reason = self.capital_manager.get_buy_order_details(
-                market_data=market_data,
-                open_positions=open_positions_db,
-                portfolio_value=total_wallet_usd_value,
-                free_cash=free_cash
-            )
-
+            # This part is for the TUI display, not for the bot's actual decision making
             should_buy, _, _ = self.strategy.evaluate_buy_signal(market_data, open_positions_count)
             btc_purchase_target, btc_purchase_progress_pct = self._calculate_buy_progress(market_data, open_positions_count)
 
@@ -87,7 +108,7 @@ class StatusService:
                 "open_positions_status": positions_status,
                 "buy_signal_status": {
                     "should_buy": should_buy,
-                    "reason": reason,
+                    "reason": reason, # Use the persisted reason
                     "operating_mode": operating_mode,
                     "btc_purchase_target": btc_purchase_target,
                     "btc_purchase_progress_pct": btc_purchase_progress_pct

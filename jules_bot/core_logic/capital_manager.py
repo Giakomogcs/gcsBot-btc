@@ -25,7 +25,7 @@ class CapitalManager:
         self.aggressive_buy_multiplier = Decimal(config.get('STRATEGY_RULES', 'aggressive_buy_multiplier', '2.0'))
         self.correction_entry_multiplier = Decimal(config.get('STRATEGY_RULES', 'correction_entry_multiplier', '2.5'))
         self.max_open_positions = int(config.get('STRATEGY_RULES', 'max_open_positions', '20'))
-        self.use_dynamic_difficulty = config.getboolean('STRATEGY_RULES', 'use_dynamic_difficulty', fallback=False)
+        self.use_dynamic_capital = config.getboolean('STRATEGY_RULES', 'use_dynamic_capital', fallback=False)
 
 
     def get_buy_order_details(self, market_data: dict, open_positions: list, portfolio_value: Decimal, free_cash: Decimal) -> (Decimal, str, str):
@@ -35,12 +35,14 @@ class CapitalManager:
         num_open_positions = len(open_positions)
         difficulty_factor = 0
 
-        # If dynamic difficulty is enabled, calculate a scaling factor.
-        # Otherwise, check for the hard cap on positions.
-        if self.use_dynamic_difficulty:
-            difficulty_factor = num_open_positions // 5  # Increases by 1 for every 5 open positions
-        elif num_open_positions >= self.max_open_positions:
+        # If dynamic capital is not enabled, check for the hard cap on positions.
+        if not self.use_dynamic_capital and num_open_positions >= self.max_open_positions:
             return Decimal('0'), OperatingMode.PRESERVATION.name, f"Max open positions ({self.max_open_positions}) reached."
+
+        # If dynamic capital is enabled, calculate a scaling factor.
+        difficulty_factor = 0
+        if self.use_dynamic_capital:
+            difficulty_factor = num_open_positions // 5  # Increases by 1 for every 5 open positions
 
         should_buy, regime, reason = self.strategy_rules.evaluate_buy_signal(
             market_data, num_open_positions, difficulty_factor

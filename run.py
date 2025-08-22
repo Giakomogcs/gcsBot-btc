@@ -181,10 +181,39 @@ def _run_in_container(command: list, env_vars: dict = {}, interactive: bool = Fa
         return False
 
 
+def _confirm_and_clear_data(mode: str):
+    """
+    Asks the user for confirmation to clear data for a specific mode.
+    If confirmed, runs the appropriate data clearing script.
+    """
+    prompt_message = f"Você deseja limpar todos os dados existentes do modo '{mode}' antes de continuar?"
+    if mode == 'trade':
+        prompt_message = f"⚠️ ATENÇÃO: Você está em modo 'trade' (live). Deseja limpar TODOS os dados do banco de dados (trades, status, histórico) antes de continuar?"
+
+    if typer.confirm(prompt_message):
+        print(f"🗑️  Limpando dados do modo '{mode}'...")
+        script_command = []
+        if mode == 'test':
+            script_command = ["scripts/clear_testnet_trades.py"]
+        elif mode == 'trade':
+            # Using wipe_database with --force because confirmation was already given.
+            script_command = ["scripts/wipe_database.py", "--force"]
+        elif mode == 'backtest':
+            script_command = ["scripts/clear_trades_measurement.py", "backtest"]
+
+        if not _run_in_container(command=script_command):
+            print(f"❌ Falha ao limpar os dados do modo '{mode}'. Abortando.")
+            raise typer.Exit(code=1)
+        print(f"✅ Dados do modo '{mode}' limpos com sucesso.")
+    else:
+        print(f"👍 Ok, os dados do modo '{mode}' não foram alterados.")
+
+
 @app.command()
 def trade():
     """Inicia o bot em modo de negociação (live)."""
     mode = "trade"
+    _confirm_and_clear_data(mode)
     print(f"🚀 Iniciando o bot em modo '{mode.upper()}'...")
     _run_in_container(
         command=["jules_bot/main.py"],
@@ -193,22 +222,10 @@ def trade():
 
 @app.command()
 def test():
-    """Inicia o bot em modo de teste (testnet), limpando o estado anterior."""
+    """Inicia o bot em modo de teste (testnet), opcionalmente limpando o estado anterior."""
     mode = "test"
-
-    print("🗑️  Limpando o estado de teste anterior para garantir uma sessão limpa...")
-    # Executa o script de limpeza de forma não-interativa.
-    # A função `_run_in_container` retorna True em caso de sucesso (código de saída 0).
-    success = _run_in_container(
-        command=["scripts/clear_testnet_trades.py"]
-    )
-
-    if not success:
-        print("❌ Falha ao limpar o estado de teste. Abortando o início do bot.")
-        # Usamos typer.Exit para terminar o script com um código de erro.
-        raise typer.Exit(code=1)
-
-    print(f"✅ Estado anterior limpo. Iniciando o bot em modo '{mode.upper()}'...")
+    _confirm_and_clear_data(mode)
+    print(f"🚀 Iniciando o bot em modo '{mode.upper()}'...")
     _run_in_container(
         command=["jules_bot/main.py"],
         env_vars={"BOT_MODE": mode}
@@ -221,6 +238,9 @@ def backtest(
     )
 ):
     """Prepara os dados e executa um backtest completo dentro do container."""
+    mode = "backtest"
+    _confirm_and_clear_data(mode)
+    
     print(f"🚀 Iniciando execução de backtest para {days} dias...")
 
     print("\n--- Etapa 1 de 2: Preparando dados ---")
