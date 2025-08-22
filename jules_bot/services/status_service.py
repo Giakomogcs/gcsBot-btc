@@ -1,18 +1,23 @@
 import logging
+import os
 from decimal import Decimal, InvalidOperation
+
 from sqlalchemy import select
-from jules_bot.database.postgres_manager import PostgresManager
-from jules_bot.database.models import BotStatus
-from jules_bot.core_logic.strategy_rules import StrategyRules
-from jules_bot.core_logic.capital_manager import CapitalManager
-from jules_bot.core.exchange_connector import ExchangeManager
-from jules_bot.utils.config_manager import ConfigManager
-from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
-from jules_bot.utils.helpers import _calculate_progress_pct
 from sqlalchemy.exc import OperationalError
 
+from jules_bot.bot.situational_awareness import SituationalAwareness
+from jules_bot.core.exchange_connector import ExchangeManager
+from jules_bot.core_logic.capital_manager import CapitalManager
+from jules_bot.core_logic.dynamic_parameters import DynamicParameters
+from jules_bot.core_logic.strategy_rules import StrategyRules
+from jules_bot.database.models import BotStatus
+from jules_bot.database.postgres_manager import PostgresManager
+from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
+from jules_bot.utils.config_manager import ConfigManager
+from jules_bot.utils.helpers import _calculate_progress_pct
 
 logger = logging.getLogger(__name__)
+
 
 class StatusService:
     def __init__(self, db_manager: PostgresManager, config_manager: ConfigManager, feature_calculator: LiveFeatureCalculator):
@@ -71,22 +76,46 @@ class StatusService:
 
             wallet_balances, total_wallet_usd_value = self._process_wallet_balances(exchange_manager, current_price)
             
-            # Get the persisted status from the database
-            bot_status = self.db_manager.get_bot_status(bot_id)
-            if bot_status:
-                market_regime = bot_status.market_regime
-                last_buy_condition = bot_status.last_buy_condition
-                operating_mode = bot_status.operating_mode
-                btc_purchase_target = bot_status.buy_target
-                btc_purchase_progress_pct = bot_status.buy_progress
-            else:
-                market_regime = -1
-                last_buy_condition = "N/A"
-                operating_mode = "N/A"
-                btc_purchase_target = Decimal('0')
-                btc_purchase_progress_pct = Decimal('0')
+            # --- LIVE STRATEGY EVALUATION ---
+            # This section replicates the bot's decision-making process for the TUI
+            # to provide a real-time status view, independent of the bot's last saved state.
 
-            should_buy = False # This is for display only, not logic
+            # 1. Determine Market Regime
+            current_regime = -1
+            models_dir = self.config_manager.get('DATA_PATHS', 'models_dir', fallback='data/models')
+            sa_model_path = os.path.join(models_dir, 'sa_model.pkl')
+            if os.path.exists(sa_model_path):
+                sa_model = SituationalAwareness.load_model(sa_model_path)
+                if sa_model and sa_model.is_fitted:
+                    try:
+                        regime_df = sa_model.transform(market_data_series.to_frame().T)
+                        if not regime_df.empty:
+                            current_regime = regime_df['market_regime'].iloc[-1]
+                    except Exception as e:
+                        logger.warning(f"Could not determine market regime for status: {e}")
+
+            # 2. Get Dynamic Parameters
+            dynamic_params = DynamicParameters(self.config_manager)
+            dynamic_params.update_parameters(current_regime)
+            current_params = dynamic_params.parameters
+
+            # 3. Evaluate Buy Condition
+            cash_balance = next((bal['free'] for bal in wallet_balances if bal['asset'] == 'USDT'), Decimal('0'))
+
+            buy_amount_usdt, operating_mode, reason = self.capital_manager.get_buy_order_details(
+                market_data=market_data,
+                open_positions=open_positions_db,
+                portfolio_value=total_wallet_usd_value, # Using wallet value as proxy
+                free_cash=cash_balance,
+                params=current_params
+            )
+
+            # 4. Calculate Buy Progress
+            btc_purchase_target, btc_purchase_progress_pct = self._calculate_buy_progress(
+                market_data, open_positions_count, current_params
+            )
+
+            should_buy = buy_amount_usdt > 0
 
             trade_history = self.db_manager.get_all_trades_in_range(environment) or []
             trade_history_dicts = [trade.to_dict() for trade in trade_history]
@@ -100,8 +129,8 @@ class StatusService:
                 "open_positions_status": positions_status,
                 "buy_signal_status": {
                     "should_buy": should_buy,
-                    "reason": last_buy_condition, # Use the persisted reason
-                    "market_regime": market_regime, # Add the market regime
+                    "reason": reason,
+                    "market_regime": current_regime,
                     "operating_mode": operating_mode,
                     "btc_purchase_target": btc_purchase_target,
                     "btc_purchase_progress_pct": btc_purchase_progress_pct
@@ -115,6 +144,26 @@ class StatusService:
         except Exception as e:
             logger.error(f"Error getting extended status: {e}", exc_info=True)
             return {"error": str(e)}
+
+    def _calculate_buy_progress(self, market_data: dict, open_positions_count: int, current_params: dict) -> tuple[Decimal, Decimal]:
+        """
+        Calculates the target price for the next buy and the progress towards it.
+        """
+        try:
+            current_price = Decimal(str(market_data.get('close')))
+            high_price = Decimal(str(market_data.get('high', current_price)))
+            buy_dip_percentage = current_params.get('buy_dip_percentage', Decimal('0.02'))
+
+            # The buy target is a percentage dip from the recent high
+            target_price = high_price * (Decimal('1') - buy_dip_percentage)
+
+            # The "start price" for measuring progress is the recent high.
+            progress = _calculate_progress_pct(current_price, high_price, target_price)
+
+            return target_price, progress
+
+        except (InvalidOperation, TypeError):
+            return Decimal('0'), Decimal('0')
 
     def _process_open_positions(self, open_positions_db, current_price):
         positions_status = []
