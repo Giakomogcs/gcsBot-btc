@@ -74,9 +74,11 @@ class ConfigManager:
 
         # Evaluate the resolved value
         if isinstance(value, str):
-            if value.lower() in ('true', '1', 't', 'y', 'yes', 'on'):
+            # Strip inline comments and whitespace
+            cleaned_value = value.split('#')[0].strip()
+            if cleaned_value.lower() in ('true', '1', 't', 'y', 'yes', 'on'):
                 return True
-            if value.lower() in ('false', '0', 'f', 'n', 'no', 'off'):
+            if cleaned_value.lower() in ('false', '0', 'f', 'n', 'no', 'off'):
                 return False
 
         # If it's not a known string, it might be an invalid value.
