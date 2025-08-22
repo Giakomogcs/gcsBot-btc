@@ -102,5 +102,37 @@ class TestStatusService(unittest.TestCase):
         # Assert that the buy signal status is included
         self.assertIn("buy_signal_status", result)
 
+    def test_calculate_buy_progress_in_uptrend_dip(self, MockExchangeManager):
+        """
+        Test the buy progress calculation specifically for the scenario where
+        the price is in an uptrend and waiting for a dip to the EMA20.
+        This verifies the fix for the "progress is 100% too early" bug.
+        """
+        # 1. Arrange: Define market data that represents the bug condition
+        # - Uptrend: current_price > ema_100
+        # - Waiting for a dip: current_price > ema_20 (the target)
+        # - A recent high price to act as the start of the dip range
+        market_data = {
+            'close': Decimal('52000'),      # Current price is high
+            'high': Decimal('52500'),       # Recent high is the start of our range
+            'ema_100': Decimal('50000'),    # Price is above this, so it's an uptrend
+            'ema_20': Decimal('51000'),      # This will be the buy target
+            'bbl_20_2_0': Decimal('50500')
+        }
+        open_positions_count = 0
+
+        # 2. Act: Call the private method directly to test its logic
+        target_price, progress = self.status_service._calculate_buy_progress(market_data, open_positions_count)
+
+        # 3. Assert: Verify the results
+        # The target price should be the EMA20
+        self.assertEqual(target_price, Decimal('51000'))
+
+        # The progress should be the percentage of the way from the high to the target
+        # Progress = (current - start) / (target - start)
+        # Progress = (52000 - 52500) / (51000 - 52500) = -500 / -1500 = 33.33%
+        self.assertAlmostEqual(progress, Decimal('33.3'), places=1)
+        self.assertNotEqual(progress, Decimal('100.0'))
+
 if __name__ == '__main__':
     unittest.main()

@@ -73,32 +73,48 @@ def main(
 
     logger.info(f"Gathering bot data for '{mode}' environment...")
 
+    # --- Inicialização e Verificação do Ambiente ---
     try:
         config_manager = ConfigManager()
         db_config = config_manager.get_db_config('POSTGRES')
         db_manager = PostgresManager(config=db_config)
 
-        # Verifica o ambiente antes de prosseguir
+        # A verificação do ambiente é a primeira coisa a ser feita.
+        # Se isso falhar, o restante do script não deve ser executado.
         _check_environment(mode, db_manager)
 
+    except FileNotFoundError as e:
+        logger.error(f"ERRO DE CONFIGURAÇÃO: O arquivo de configuração 'config.ini' não foi encontrado.")
+        logger.error(f"Detalhes: {e}")
+        raise typer.Exit(code=1)
+    except Exception as e:
+        # Captura outras exceções de inicialização que não são tratadas por _check_environment
+        logger.error(f"Ocorreu um erro crítico durante a inicialização: {e}", exc_info=True)
+        raise typer.Exit(code=1)
+
+
+    # --- Lógica Principal da Aplicação ---
+    try:
+        # A inicialização do DB (criação de tabelas) acontece aqui, somente após
+        # a verificação bem-sucedida da conexão.
+        db_manager.initialize_db()
+
+        logger.info("Ambiente verificado. Coletando dados do bot...")
         feature_calculator = LiveFeatureCalculator(db_manager, mode=mode)
         status_service = StatusService(db_manager, config_manager, feature_calculator)
-
         bot_id = f"jules_{mode}_bot"
 
         status_data = status_service.get_extended_status(mode, bot_id)
 
         if "error" in status_data:
-            logger.error(f"An error occurred while fetching data: {status_data['error']}")
+            logger.error(f"O serviço de status retornou um erro: {status_data['error']}")
             raise typer.Exit(code=1)
 
-        # Print the data as a nicely formatted JSON object
-        print(json.dumps(status_data, indent=4, default=str)) # Use default=str to handle non-serializable types like datetime
-
-        logger.info("Successfully retrieved bot data.")
+        print(json.dumps(status_data, indent=4, default=str))
+        logger.info("Dados do bot recuperados com sucesso.")
 
     except Exception as e:
-        logger.error(f"A critical error occurred: {e}", exc_info=True)
+        logger.error(f"Ocorreu um erro crítico ao buscar o status do bot: {e}", exc_info=True)
         raise typer.Exit(code=1)
 
 if __name__ == "__main__":

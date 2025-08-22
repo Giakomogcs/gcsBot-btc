@@ -87,14 +87,19 @@ class StatusService:
 
             wallet_balances, total_wallet_usd_value = self._process_wallet_balances(exchange_manager, current_price)
             
-            # Fetch the persisted bot status reason
-            with self.db_manager.get_db() as session:
-                stmt = select(BotStatus.last_buy_condition).where(BotStatus.bot_id == bot_id)
-                reason = session.execute(stmt).scalar_one_or_none() or "N/A"
-                operating_mode = "N/A" # This could also be persisted if needed
-
             # This part is for the TUI display, not for the bot's actual decision making
-            should_buy, _, _ = self.strategy.evaluate_buy_signal(market_data, open_positions_count)
+            should_buy, regime, reason = self.strategy.evaluate_buy_signal(market_data, open_positions_count)
+
+            # Determine Operating Mode based on the same logic as CapitalManager
+            if not should_buy:
+                operating_mode = "PRESERVATION"
+            elif regime == "uptrend" and open_positions_count < (self.capital_manager.max_open_positions / 4):
+                operating_mode = "AGGRESSIVE"
+            elif regime == "downtrend" and open_positions_count == 0:
+                operating_mode = "CORRECTION_ENTRY"
+            else:
+                operating_mode = "ACCUMULATION"
+
             btc_purchase_target, btc_purchase_progress_pct = self._calculate_buy_progress(market_data, open_positions_count)
 
             trade_history = self.db_manager.get_all_trades_in_range(environment) or []
@@ -190,8 +195,8 @@ class StatusService:
         if open_positions_count == 0:
             if current_price > ema_100: # Uptrend
                 target_price = ema_20
-                progress = Decimal('100.0') if current_price > target_price else \
-                           _calculate_progress_pct(current_price, current_price * Decimal('1.05'), target_price)
+                # The "start price" for a dip is the recent high.
+                progress = _calculate_progress_pct(current_price, high_price, target_price)
             else: # Downtrend
                 target_price = bbl
                 progress = _calculate_progress_pct(current_price, high_price, target_price)
