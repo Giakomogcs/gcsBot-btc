@@ -15,29 +15,17 @@ app = typer.Typer()
 def get_docker_compose_command():
     """
     Verifica se 'docker-compose' (V1) ou 'docker compose' (V2) está disponível.
-    Adiciona 'sudo' se o usuário não for root para evitar problemas de permissão.
     """
-    # Lista de comandos base. Adiciona 'sudo' se não formos o usuário root.
-    base_cmd = []
-    try:
-        # os.geteuid() não existe no Windows, então tratamos o erro.
-        # No Windows, o gerenciamento de permissões do Docker é diferente e geralmente não requer sudo.
-        if os.geteuid() != 0:
-            base_cmd = ["sudo"]
-    except AttributeError:
-        # Se geteuid não existe, estamos provavelmente no Windows. Não fazemos nada.
-        pass
-
     # Tenta encontrar um comando docker-compose válido
     if shutil.which("docker-compose"):
-        return base_cmd + ["docker-compose"]
+        return ["docker-compose"]
     elif shutil.which("docker"):
         try:
-            # Constrói o comando de teste completo (ex: ['sudo', 'docker', 'compose', '--version'])
-            test_command = base_cmd + ["docker", "compose", "--version"]
+            # Constrói o comando de teste completo (ex: ['docker', 'compose', '--version'])
+            test_command = ["docker", "compose", "--version"]
             result = subprocess.run(test_command, capture_output=True, text=True, check=True)
             if "Docker Compose version" in result.stdout:
-                return base_cmd + ["docker", "compose"]
+                return ["docker", "compose"]
         except (subprocess.CalledProcessError, FileNotFoundError):
             # Se o teste falhar, continuamos para o erro final
             pass
@@ -193,10 +181,39 @@ def _run_in_container(command: list, env_vars: dict = {}, interactive: bool = Fa
         return False
 
 
+def _confirm_and_clear_data(mode: str):
+    """
+    Asks the user for confirmation to clear data for a specific mode.
+    If confirmed, runs the appropriate data clearing script.
+    """
+    prompt_message = f"Você deseja limpar todos os dados existentes do modo '{mode}' antes de continuar?"
+    if mode == 'trade':
+        prompt_message = f"⚠️ ATENÇÃO: Você está em modo 'trade' (live). Deseja limpar TODOS os dados do banco de dados (trades, status, histórico) antes de continuar?"
+
+    if typer.confirm(prompt_message):
+        print(f"🗑️  Limpando dados do modo '{mode}'...")
+        script_command = []
+        if mode == 'test':
+            script_command = ["scripts/clear_testnet_trades.py"]
+        elif mode == 'trade':
+            # Using wipe_database with --force because confirmation was already given.
+            script_command = ["scripts/wipe_database.py", "--force"]
+        elif mode == 'backtest':
+            script_command = ["scripts/clear_trades_measurement.py", "backtest"]
+
+        if not _run_in_container(command=script_command):
+            print(f"❌ Falha ao limpar os dados do modo '{mode}'. Abortando.")
+            raise typer.Exit(code=1)
+        print(f"✅ Dados do modo '{mode}' limpos com sucesso.")
+    else:
+        print(f"👍 Ok, os dados do modo '{mode}' não foram alterados.")
+
+
 @app.command()
 def trade():
     """Inicia o bot em modo de negociação (live)."""
     mode = "trade"
+    _confirm_and_clear_data(mode)
     print(f"🚀 Iniciando o bot em modo '{mode.upper()}'...")
     _run_in_container(
         command=["jules_bot/main.py"],
@@ -205,8 +222,9 @@ def trade():
 
 @app.command()
 def test():
-    """Inicia o bot em modo de teste (testnet)."""
+    """Inicia o bot em modo de teste (testnet), opcionalmente limpando o estado anterior."""
     mode = "test"
+    _confirm_and_clear_data(mode)
     print(f"🚀 Iniciando o bot em modo '{mode.upper()}'...")
     _run_in_container(
         command=["jules_bot/main.py"],
@@ -220,6 +238,9 @@ def backtest(
     )
 ):
     """Prepara os dados e executa um backtest completo dentro do container."""
+    mode = "backtest"
+    _confirm_and_clear_data(mode)
+
     print(f"🚀 Iniciando execução de backtest para {days} dias...")
 
     print("\n--- Etapa 1 de 2: Preparando dados ---")

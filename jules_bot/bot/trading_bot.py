@@ -300,8 +300,8 @@ class TradingBot:
                         else:
                             logger.warning(f"Cash balance ${cash_balance:.2f} < min trade size. Cannot buy.")
 
-                logger.info("--- Cycle complete. Waiting 60 seconds... ---")
-                time.sleep(60)
+                logger.info("--- Cycle complete. Waiting 30 seconds... ---")
+                time.sleep(30)
 
             except KeyboardInterrupt:
                 self.is_running = False
