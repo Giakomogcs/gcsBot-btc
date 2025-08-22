@@ -1,12 +1,15 @@
 import logging
 import uuid
 import pandas as pd
+import os
 from decimal import Decimal, getcontext
 from jules_bot.core.mock_exchange import MockTrader
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.core_logic.strategy_rules import StrategyRules
 from jules_bot.core_logic.capital_manager import CapitalManager
+from jules_bot.core_logic.dynamic_parameters import DynamicParameters
+from jules_bot.bot.situational_awareness import SituationalAwareness
 from jules_bot.utils.logger import logger
 from jules_bot.core.schemas import TradePoint
 from jules_bot.research.feature_engineering import add_all_features
@@ -52,6 +55,18 @@ class Backtester:
         self.strategy_rules = StrategyRules(config_manager)
         self.capital_manager = CapitalManager(config_manager, self.strategy_rules)
 
+        # --- Dynamic Strategy Components ---
+        self.dynamic_params = DynamicParameters(config_manager)
+        models_dir = config_manager.get('DATA_PATHS', 'models_dir', fallback='data/models')
+        sa_model_path = os.path.join(models_dir, 'sa_model.pkl')
+
+        if os.path.exists(sa_model_path):
+            self.sa_model = SituationalAwareness.load_model(sa_model_path)
+            logger.info("Situational Awareness model loaded successfully for backtest.")
+        else:
+            logger.warning(f"Situational Awareness model not found at {sa_model_path}. Backtest will run with default parameters.")
+            self.sa_model = None
+
     def run(self):
         logger.info(f"--- Starting backtest run {self.run_id} ---")
 
@@ -66,6 +81,21 @@ class Backtester:
         for current_time, candle in self.feature_data.iterrows():
             current_price = Decimal(str(candle['close']))
             self.mock_trader.set_current_time_and_price(current_time, current_price)
+
+            # --- DYNAMIC STRATEGY LOGIC ---
+            current_regime = -1 # Default to fallback
+            if self.sa_model and self.sa_model.is_fitted:
+                try:
+                    # The model expects a DataFrame, so we convert the candle (Series) to a frame
+                    regime_df = self.sa_model.transform(candle.to_frame().T)
+                    if not regime_df.empty:
+                        current_regime = regime_df['market_regime'].iloc[-1]
+                except Exception as e:
+                    logger.error(f"Error getting market regime during backtest: {e}", exc_info=True)
+            
+            self.dynamic_params.update_parameters(current_regime)
+            current_params = self.dynamic_params.parameters
+            # --- END DYNAMIC STRATEGY LOGIC ---
 
             cash_balance = self.mock_trader.get_account_balance()
             current_open_positions_value = sum(pos['quantity'] * current_price for pos in open_positions.values())
@@ -131,7 +161,8 @@ class Backtester:
                 market_data=market_data,
                 open_positions=list(open_positions.values()),
                 portfolio_value=total_portfolio_value,
-                free_cash=cash_balance
+                free_cash=cash_balance,
+                params=current_params
             )
 
             if buy_amount_usdt > 0 and cash_balance >= min_trade_size:
@@ -139,7 +170,7 @@ class Backtester:
                 if success:
                     new_trade_id = str(uuid.uuid4())
                     buy_price = buy_result['price']
-                    sell_target_price = strategy_rules.calculate_sell_target_price(buy_price)
+                    sell_target_price = strategy_rules.calculate_sell_target_price(buy_price, params=current_params)
 
                     open_positions[new_trade_id] = {
                         'price': buy_price, 'quantity': buy_result['quantity'],
@@ -150,6 +181,7 @@ class Backtester:
                     decision_context.pop('symbol', None)
                     decision_context['operating_mode'] = operating_mode
                     decision_context['buy_trigger_reason'] = reason
+                    decision_context['market_regime'] = current_regime
 
                     trade_data = {
                         'run_id': self.run_id, 'strategy_name': strategy_name, 'symbol': symbol,
@@ -161,7 +193,7 @@ class Backtester:
                         'commission_usd': buy_result['commission']
                     }
                     self.trade_logger.log_trade(trade_data)
-                    logger.info(f"BUY EXECUTED: TradeID: {new_trade_id} | Price: ${buy_price:,.2f} | Qty: {buy_result['quantity']:.8f}")
+                    logger.info(f"BUY EXECUTED: TradeID: {new_trade_id} | Price: ${buy_price:,.2f} | Qty: {buy_result['quantity']:.8f} | Regime: {current_regime}")
 
         self._generate_and_save_summary(open_positions, portfolio_history)
         logger.info(f"--- Backtest {self.run_id} finished ---")
