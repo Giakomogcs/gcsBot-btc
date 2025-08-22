@@ -16,7 +16,7 @@ class ConfigManager:
             config_file: The path to the configuration file.
         """
         load_dotenv()
-        self.config = configparser.ConfigParser()
+        self.config = configparser.ConfigParser(interpolation=None)
         if not config_file.exists():
             raise FileNotFoundError(f"Configuration file not found: {config_file}")
         self.config.read(config_file)

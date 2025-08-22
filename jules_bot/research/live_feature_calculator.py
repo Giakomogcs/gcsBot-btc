@@ -41,65 +41,67 @@ class LiveFeatureCalculator:
             logger.warning(f"Não foi possível buscar dados de sentimento ao vivo: {e}")
             return pd.DataFrame()
 
-    def get_current_candle_with_features(self) -> pd.Series:
+    def get_features_dataframe(self) -> pd.DataFrame:
         """
-        Orquestra a busca de todos os dados, o cálculo de features e retorna
-        a vela (Series) mais recente e completa para a tomada de decisão.
+        Orchestrates the fetching of all data, calculation of features, and returns
+        the complete, recent DataFrame.
         """
         logger.debug("Iniciando cálculo de features em tempo real...")
         
         # 1. Dados de Velas (OHLCV) da Binance (base principal)
-        df_candles = self.exchange_manager.get_historical_candles(self.symbol, '1m', limit=2*1440)
+        # Aumentar o limite para garantir que a janela rolante do SA tenha dados suficientes (e.g., 72 períodos)
+        df_candles = self.exchange_manager.get_historical_candles(self.symbol, '1m', limit=200)
         if df_candles.empty:
             logger.error("Falha ao obter velas históricas da Binance. Abortando ciclo.")
-            return pd.Series(dtype=float)
+            return pd.DataFrame()
 
         # 2. Dados Macro e de Sentimento (Apenas para modo 'trade')
         if self.mode == 'trade':
             df_macro = self.db_manager.get_price_data("macro_data_1m", start_date="-3d")
-            
             df_sentiment_live = self._get_live_sentiment_data()
             df_sentiment_db = self.db_manager.get_price_data("sentiment_fear_and_greed", start_date="-3d")
-            
-            if df_sentiment_db.empty and df_sentiment_live.empty:
-                df_sentiment = pd.DataFrame()
-            else:
-                df_sentiment = pd.concat([df_sentiment_db, df_sentiment_live]).drop_duplicates()
+            df_sentiment = pd.concat([df_sentiment_db, df_sentiment_live]).drop_duplicates() if not (df_sentiment_db.empty and df_sentiment_live.empty) else pd.DataFrame()
         else:
-            # Em modo 'test', não usamos esses dados
             df_macro = pd.DataFrame()
             df_sentiment = pd.DataFrame()
-
 
         # 4. Combinar todas as fontes de dados
         df_combined = df_candles.join(df_macro, how='left')
         if not df_sentiment.empty:
              df_combined = df_combined.join(df_sentiment, how='left')
 
-        df_combined.ffill(inplace=True) # Preenche lacunas com o último valor válido
-
-        # Adicionado para garantir que nenhum NaN passe para a engenharia de features
+        df_combined.ffill(inplace=True)
         if df_combined.isnull().values.any():
-            logger.warning("NaNs encontrados após o ffill (provavelmente no início do histórico). Preenchendo com 0.")
+            logger.warning("NaNs encontrados após o ffill. Preenchendo com 0.")
             df_combined.fillna(0, inplace=True)
 
-        # 5. Calcular todas as features usando a função centralizada
-        # O modo 'trade' é o único modo verdadeiramente "live"
+        # 5. Calcular todas as features
         is_live_mode = self.mode == 'trade'
         df_with_features = add_all_features(df_combined, live_mode=is_live_mode)
         
         if df_with_features.empty:
-            logger.error("O DataFrame ficou vazio após o cálculo de features. Abortando ciclo.")
-            return pd.Series(dtype=float)
+            logger.error("O DataFrame ficou vazio após o cálculo de features.")
+            return pd.DataFrame()
 
-        # 6. Obter o preço mais recente e preparar a vela final
+        # 6. Atualizar o preço de fechamento da última vela com o preço de ticker mais recente
         current_price = self.exchange_manager.get_current_price(self.symbol)
-        if current_price is None:
-            logger.error("Não foi possível obter o preço atual da corretora. Abortando ciclo.")
+        if current_price is not None:
+            df_with_features.iloc[-1, df_with_features.columns.get_loc('close')] = current_price
+        else:
+            logger.warning("Não foi possível obter o preço atual; o último preço de 'close' será da última vela.")
+
+        return df_with_features
+
+    def get_current_candle_with_features(self) -> pd.Series:
+        """
+        Retorna apenas a vela (Series) mais recente com todas as features.
+        Este é um wrapper de conveniência em torno do get_features_dataframe().
+        """
+        df_with_features = self.get_features_dataframe()
+        if df_with_features.empty:
             return pd.Series(dtype=float)
         
         final_candle = df_with_features.iloc[-1].copy()
-        final_candle['close'] = current_price
         final_candle.name = datetime.now(pd.Timestamp.utcnow().tz)
 
         logger.debug(f"Vela final gerada com {len(final_candle)} features.")
