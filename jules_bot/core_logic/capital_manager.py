@@ -26,8 +26,11 @@ class CapitalManager:
         self.correction_entry_multiplier = Decimal(config.get('STRATEGY_RULES', 'correction_entry_multiplier', '2.5'))
         self.max_open_positions = int(config.get('STRATEGY_RULES', 'max_open_positions', '20'))
         self.use_dynamic_capital = config.getboolean('STRATEGY_RULES', 'use_dynamic_capital', fallback=False)
+        self.use_percentage_sizing = config.getboolean('STRATEGY_RULES', 'use_percentage_based_sizing', fallback=False)
+        self.order_size_percentage = Decimal(config.get('STRATEGY_RULES', 'order_size_free_cash_percentage', '0.1'))
 
-    def get_buy_order_details(self, market_data: dict, open_positions: list, portfolio_value: Decimal, free_cash: Decimal, params: Dict[str, Decimal]) -> (Decimal, str, str):
+
+    def get_buy_order_details(self, market_data: dict, open_positions: list, portfolio_value: Decimal, free_cash: Decimal, params: Dict[str, Decimal]) -> tuple[Decimal, str, str]:
         """
         Determines the operating mode and calculates the appropriate buy amount based on that mode,
         using dynamic parameters.
@@ -56,14 +59,21 @@ class CapitalManager:
             mode = OperatingMode.ACCUMULATION
 
         buy_amount = Decimal('0')
-        base_usd_per_trade = params.get('order_size_usd', Decimal('20.0'))
+        # Determine the base buy amount
+        if self.use_percentage_sizing:
+            base_buy_amount = free_cash * self.order_size_percentage
+            reason = f"Sizing based on {self.order_size_percentage:.2%} of free cash"
+        else:
+            base_buy_amount = params.get('order_size_usd', Decimal('20.0'))
+            reason = "Using fixed order size from params"
+
 
         if mode == OperatingMode.ACCUMULATION:
-            buy_amount = base_usd_per_trade
+            buy_amount = base_buy_amount
         elif mode == OperatingMode.AGGRESSIVE:
-            buy_amount = base_usd_per_trade * self.aggressive_buy_multiplier
+            buy_amount = base_buy_amount * self.aggressive_buy_multiplier
         elif mode == OperatingMode.CORRECTION_ENTRY:
-            buy_amount = base_usd_per_trade * self.correction_entry_multiplier
+            buy_amount = base_buy_amount * self.correction_entry_multiplier
 
         # 3. Validate the calculated buy amount
         if buy_amount > 0:
