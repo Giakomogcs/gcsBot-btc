@@ -81,19 +81,18 @@ class StatusService:
             # to provide a real-time status view, independent of the bot's last saved state.
 
             # 1. Determine Market Regime
-            sa_instance = SituationalAwareness()
-            historical_data = self.feature_calculator.get_historical_data_with_features()
-            if historical_data is not None and not historical_data.empty:
-                sa_instance.fit(historical_data)
-
             current_regime = -1
-            if sa_instance.is_fitted:
-                try:
-                    regime_df = sa_instance.transform(market_data_series.to_frame().T)
-                    if not regime_df.empty:
+            try:
+                sa_instance = SituationalAwareness()
+                historical_data = self.feature_calculator.get_historical_data_with_features()
+                if historical_data is not None and not historical_data.empty:
+                    # Transform the historical data to get regimes for all points
+                    regime_df = sa_instance.transform(historical_data)
+                    if not regime_df.empty and 'market_regime' in regime_df.columns:
+                        # Get the latest market regime from the series
                         current_regime = regime_df['market_regime'].iloc[-1]
-                except Exception as e:
-                    logger.warning(f"Could not determine market regime for status: {e}")
+            except Exception as e:
+                logger.warning(f"Could not determine market regime for status: {e}")
 
             # 2. Get Dynamic Parameters
             dynamic_params = DynamicParameters(self.config_manager)

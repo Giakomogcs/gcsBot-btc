@@ -9,7 +9,18 @@ class DynamicParameters:
     def update_parameters(self, regime: int):
         """
         Loads the strategy parameters for a given market regime.
+        If the regime is -1 (undefined), it loads safe parameters to prevent trading.
         """
+        # If regime is undefined, use safe, non-trading parameters.
+        if regime == -1:
+            self.parameters = {
+                'target_profit': Decimal('0'),
+                'buy_dip_percentage': Decimal('1'), # 100% dip, effectively impossible
+                'sell_rise_percentage': Decimal('1'), # 100% rise
+                'order_size_usd': Decimal('0'), # No buy amount
+            }
+            return
+
         section_name = f'REGIME_{regime}'
         regime_config = self.config_manager.get_section(section_name)
 
