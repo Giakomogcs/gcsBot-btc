@@ -91,6 +91,16 @@ class PostgresManager:
                 db.rollback()
                 logger.error(f"Failed to write bot status to PostgreSQL: {e}")
 
+    def get_bot_status(self, bot_id: str) -> Optional[BotStatus]:
+        """Fetches the status of a bot from the database."""
+        with self.get_db() as db:
+            try:
+                status = db.query(BotStatus).filter(BotStatus.bot_id == bot_id).first()
+                return status
+            except Exception as e:
+                logger.error(f"Failed to get bot status for {bot_id}: {e}", exc_info=True)
+                return None
+
     def log_trade(self, trade_point: TradePoint):
         """
         Logs a trade to the database by creating a new record.

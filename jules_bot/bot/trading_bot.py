@@ -18,6 +18,7 @@ from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.database.portfolio_manager import PortfolioManager as DbPortfolioManager
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
 from jules_bot.services.status_service import StatusService
+from jules_bot.utils.helpers import _calculate_progress_pct
 
 getcontext().prec = 28
 
@@ -165,6 +166,26 @@ class TradingBot:
                 os.remove(filepath)
             except Exception as e:
                 logger.error(f"Error processing command file {filename}: {e}", exc_info=True)
+
+    def _calculate_buy_progress(self, market_data: dict, open_positions_count: int, current_params: dict) -> tuple[Decimal, Decimal]:
+        """
+        Calculates the target price for the next buy and the progress towards it.
+        """
+        try:
+            current_price = Decimal(str(market_data.get('close')))
+            high_price = Decimal(str(market_data.get('high', current_price)))
+            buy_dip_percentage = current_params.get('buy_dip_percentage', Decimal('0.02'))
+
+            # The buy target is a percentage dip from the recent high
+            target_price = high_price * (Decimal('1') - buy_dip_percentage)
+
+            # The "start price" for measuring progress is the recent high.
+            progress = _calculate_progress_pct(current_price, high_price, target_price)
+
+            return target_price, progress
+
+        except (InvalidOperation, TypeError):
+            return Decimal('0'), Decimal('0')
 
     def run(self):
         if self.mode not in ['trade', 'test']:
@@ -315,13 +336,20 @@ class TradingBot:
                 else:
                     logger.info(f"[{operating_mode}] No buy signal: {reason}")
 
+                # Calculate buy progress for TUI display
+                buy_target, buy_progress = self._calculate_buy_progress(market_data, len(open_positions), current_params)
+
                 # Persist the latest status to the database for the TUI
                 status_service.update_bot_status(
                     bot_id=self.run_id,
                     mode=self.mode,
                     reason=reason,
                     open_positions=len(open_positions),
-                    portfolio_value=total_portfolio_value
+                    portfolio_value=total_portfolio_value,
+                    market_regime=current_regime,
+                    operating_mode=operating_mode,
+                    buy_target=buy_target,
+                    buy_progress=buy_progress
                 )
 
                 logger.info("--- Cycle complete. Waiting 30 seconds... ---")

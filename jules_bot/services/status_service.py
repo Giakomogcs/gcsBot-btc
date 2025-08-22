@@ -8,31 +8,11 @@ from jules_bot.core_logic.capital_manager import CapitalManager
 from jules_bot.core.exchange_connector import ExchangeManager
 from jules_bot.utils.config_manager import ConfigManager
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
+from jules_bot.utils.helpers import _calculate_progress_pct
 from sqlalchemy.exc import OperationalError
 
 
 logger = logging.getLogger(__name__)
-
-def _calculate_progress_pct(current_price: Decimal, start_price: Decimal, target_price: Decimal) -> Decimal:
-    """
-    Calculates the percentage progress of a value from a starting point to a target.
-    Clamps the result between 0 and 100.
-    """
-    if current_price is None or start_price is None or target_price is None:
-        return Decimal('0.0')
-
-    # Avoid division by zero if start and target prices are the same.
-    if target_price == start_price:
-        return Decimal('100.0') if current_price >= target_price else Decimal('0.0')
-
-    try:
-        # Calculate progress as a percentage. This works for both long and short scenarios.
-        progress = (current_price - start_price) / (target_price - start_price) * Decimal('100')
-
-        # Clamp the result between 0% and 100%.
-        return max(Decimal('0'), min(progress, Decimal('100')))
-    except (InvalidOperation, ZeroDivisionError):
-        return Decimal('0.0')
 
 class StatusService:
     def __init__(self, db_manager: PostgresManager, config_manager: ConfigManager, feature_calculator: LiveFeatureCalculator):
@@ -43,7 +23,7 @@ class StatusService:
         self.capital_manager = CapitalManager(self.config_manager, self.strategy)
 
 
-    def update_bot_status(self, bot_id: str, mode: str, reason: str, open_positions: int, portfolio_value: Decimal):
+    def update_bot_status(self, bot_id: str, mode: str, reason: str, open_positions: int, portfolio_value: Decimal, market_regime: int, operating_mode: str, buy_target: Decimal, buy_progress: Decimal):
         """
         Creates or updates the status of a bot in the database.
         """
@@ -57,6 +37,10 @@ class StatusService:
                 status.last_buy_condition = reason
                 status.open_positions = open_positions
                 status.portfolio_value_usd = portfolio_value
+                status.market_regime = market_regime
+                status.operating_mode = operating_mode
+                status.buy_target = buy_target
+                status.buy_progress = buy_progress
                 status.is_running = True # Mark as running on update
                 
                 session.commit()
@@ -87,20 +71,22 @@ class StatusService:
 
             wallet_balances, total_wallet_usd_value = self._process_wallet_balances(exchange_manager, current_price)
             
-            # This part is for the TUI display, not for the bot's actual decision making
-            should_buy, regime, reason = self.strategy.evaluate_buy_signal(market_data, open_positions_count)
-
-            # Determine Operating Mode based on the same logic as CapitalManager
-            if not should_buy:
-                operating_mode = "PRESERVATION"
-            elif regime == "uptrend" and open_positions_count < (self.capital_manager.max_open_positions / 4):
-                operating_mode = "AGGRESSIVE"
-            elif regime == "downtrend" and open_positions_count == 0:
-                operating_mode = "CORRECTION_ENTRY"
+            # Get the persisted status from the database
+            bot_status = self.db_manager.get_bot_status(bot_id)
+            if bot_status:
+                market_regime = bot_status.market_regime
+                last_buy_condition = bot_status.last_buy_condition
+                operating_mode = bot_status.operating_mode
+                btc_purchase_target = bot_status.buy_target
+                btc_purchase_progress_pct = bot_status.buy_progress
             else:
-                operating_mode = "ACCUMULATION"
+                market_regime = -1
+                last_buy_condition = "N/A"
+                operating_mode = "N/A"
+                btc_purchase_target = Decimal('0')
+                btc_purchase_progress_pct = Decimal('0')
 
-            btc_purchase_target, btc_purchase_progress_pct = self._calculate_buy_progress(market_data, open_positions_count)
+            should_buy = False # This is for display only, not logic
 
             trade_history = self.db_manager.get_all_trades_in_range(environment) or []
             trade_history_dicts = [trade.to_dict() for trade in trade_history]
@@ -114,7 +100,8 @@ class StatusService:
                 "open_positions_status": positions_status,
                 "buy_signal_status": {
                     "should_buy": should_buy,
-                    "reason": reason, # Use the persisted reason
+                    "reason": last_buy_condition, # Use the persisted reason
+                    "market_regime": market_regime, # Add the market regime
                     "operating_mode": operating_mode,
                     "btc_purchase_target": btc_purchase_target,
                     "btc_purchase_progress_pct": btc_purchase_progress_pct
@@ -178,35 +165,3 @@ class StatusService:
                 continue
 
         return processed_balances, total_usd_value
-
-    def _calculate_buy_progress(self, market_data: dict, open_positions_count: int) -> tuple[Decimal, Decimal]:
-        """
-        Calculates the target price for the next buy and the progress towards it.
-        """
-        try:
-            current_price = Decimal(str(market_data.get('close')))
-            ema_20 = Decimal(str(market_data.get('ema_20')))
-            bbl = Decimal(str(market_data.get('bbl_20_2_0')))
-            ema_100 = Decimal(str(market_data.get('ema_100')))
-            high_price = Decimal(str(market_data.get('high', current_price)))
-        except (InvalidOperation, TypeError):
-            return Decimal('0'), Decimal('0')
-
-        if open_positions_count == 0:
-            if current_price > ema_100: # Uptrend
-                target_price = ema_20
-                # The "start price" for a dip is the recent high.
-                progress = _calculate_progress_pct(current_price, high_price, target_price)
-            else: # Downtrend
-                target_price = bbl
-                progress = _calculate_progress_pct(current_price, high_price, target_price)
-            return target_price, progress
-
-        if current_price > ema_100: # Uptrend pullback
-            target_price = ema_20
-            progress = _calculate_progress_pct(current_price, high_price, target_price)
-        else: # Downtrend breakout
-            target_price = bbl
-            progress = _calculate_progress_pct(current_price, high_price, target_price)
-
-        return target_price, progress
