@@ -18,6 +18,7 @@ class PostgresManager:
         self.engine = create_engine(self.db_url, connect_args={'connect_timeout': 5})
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
         self._initialized = False
+        self.initialize_db()
 
     def initialize_db(self):
         """
