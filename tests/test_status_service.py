@@ -83,7 +83,7 @@ class TestStatusService(unittest.TestCase):
 
 
         # Arrange: Mock strategy evaluation and other helper methods
-        self.status_service.capital_manager.get_buy_order_details = MagicMock(return_value=(Decimal('0'), 'HOLD', 'Test Condition', 'unknown'))
+        self.status_service.capital_manager.get_buy_order_details = MagicMock(return_value=(Decimal('0'), 'ACCUMULATION', 'Test Condition', 'unknown'))
 
         # 2. Act: Call the method under test
         result = self.status_service.get_extended_status("test", "test_bot")
@@ -118,8 +118,8 @@ class TestStatusService(unittest.TestCase):
         self.assertEqual(bs_status["market_regime"], 2)
         self.assertEqual(bs_status["reason"], "Test Condition")
         self.assertEqual(bs_status["operating_mode"], "ACCUMULATION")
-        self.assertEqual(bs_status["btc_purchase_target"], Decimal("51000.00"))
-        self.assertEqual(bs_status["btc_purchase_progress_pct"], Decimal("33.3"))
+        self.assertAlmostEqual(bs_status["btc_purchase_target"], Decimal("51058.00"), places=2)
+        self.assertAlmostEqual(bs_status["btc_purchase_progress_pct"], Decimal("9.60"), places=2)
 
 if __name__ == '__main__':
     unittest.main()

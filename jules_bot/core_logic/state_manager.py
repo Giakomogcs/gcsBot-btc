@@ -1,5 +1,6 @@
 import pandas as pd
 from decimal import Decimal
+import math
 from jules_bot.utils.logger import logger
 from jules_bot.database.postgres_manager import PostgresManager
 import uuid
@@ -7,13 +8,18 @@ from jules_bot.utils.config_manager import config_manager
 from jules_bot.services.trade_logger import TradeLogger
 from jules_bot.bot.account_manager import AccountManager
 from jules_bot.core_logic.strategy_rules import StrategyRules
+from jules_bot.bot.situational_awareness import SituationalAwareness
+from jules_bot.core_logic.dynamic_parameters import DynamicParameters
+from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
+
 
 class StateManager:
-    def __init__(self, mode: str, bot_id: str, db_manager: PostgresManager):
+    def __init__(self, mode: str, bot_id: str, db_manager: PostgresManager, feature_calculator: LiveFeatureCalculator):
         self.mode = mode
         self.bot_id = bot_id
         self.db_manager = db_manager
         self.SessionLocal = db_manager.SessionLocal # Add this line
+        self.feature_calculator = feature_calculator
 
         # The TradeLogger is now responsible for ALL WRITE operations.
         self.trade_logger = TradeLogger(mode=self.mode, db_manager=self.db_manager)
@@ -218,6 +224,59 @@ class StateManager:
 
         except Exception as e:
             logger.error(f"An error occurred during balance reconciliation for {symbol}: {e}", exc_info=True)
+
+    def recalculate_open_position_targets(self, strategy_rules: StrategyRules, sa_instance: SituationalAwareness, dynamic_params: DynamicParameters):
+        """
+        Recalculates the sell_target_price for all open positions based on the current
+        market regime and strategy parameters.
+        """
+        logger.info("--- Starting recalculation of sell targets for open positions ---")
+        open_positions = self.get_open_positions()
+        if not open_positions:
+            logger.info("No open positions to recalculate.")
+            return
+
+        # 1. Determine the current market regime
+        final_candle = self.feature_calculator.get_current_candle_with_features()
+        if final_candle.empty:
+            logger.error("Could not get current candle data. Aborting target recalculation.")
+            return
+
+        current_regime = -1
+        if sa_instance.is_fitted:
+            regime_df = sa_instance.transform(final_candle.to_frame().T)
+            if not regime_df.empty:
+                current_regime = regime_df['market_regime'].iloc[-1]
+
+        logger.info(f"Recalculating targets based on current market regime: {current_regime}")
+
+        # 2. Get the parameters for the current regime
+        dynamic_params.update_parameters(current_regime)
+        current_params = dynamic_params.parameters
+
+        # 3. Iterate through open positions and recalculate
+        updated_count = 0
+        for position in open_positions:
+            try:
+                purchase_price = Decimal(str(position.price))
+                current_target = Decimal(str(position.sell_target_price))
+
+                new_target = strategy_rules.calculate_sell_target_price(purchase_price, params=current_params)
+
+                # Use a small tolerance for comparison to avoid floating point issues
+                if not math.isclose(new_target, current_target, rel_tol=1e-9):
+                    self.db_manager.update_trade_sell_target(position.trade_id, new_target)
+                    logger.info(f"Updated sell target for trade {position.trade_id}: Old=${current_target:,.2f}, New=${new_target:,.2f}")
+                    updated_count += 1
+            except Exception as e:
+                logger.error(f"Failed to recalculate target for trade {position.trade_id}: {e}", exc_info=True)
+
+        if updated_count > 0:
+            logger.info(f"Successfully updated targets for {updated_count} open positions.")
+        else:
+            logger.info("All open position targets are already up to date.")
+
+        logger.info("--- Finished recalculating sell targets ---")
 
 
     def record_partial_sell(self, original_trade_id: str, remaining_quantity: Decimal, sell_data: dict):

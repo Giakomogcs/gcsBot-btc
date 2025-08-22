@@ -266,6 +266,24 @@ class PostgresManager:
                 db.rollback()
                 logger.error(f"Failed to update trade status for trade_id '{trade_id}': {e}", exc_info=True)
                 raise
+
+    def update_trade_sell_target(self, trade_id: str, new_target: 'Decimal'):
+        """Updates the sell_target_price of a specific trade in the database."""
+        with self.get_db() as db:
+            try:
+                trade_to_update = db.query(Trade).filter(Trade.trade_id == trade_id).first()
+
+                if not trade_to_update:
+                    logger.error(f"Could not find trade with trade_id '{trade_id}' to update sell target.")
+                    return
+
+                trade_to_update.sell_target_price = new_target
+                db.commit()
+
+            except Exception as e:
+                db.rollback()
+                logger.error(f"Failed to update sell target for trade_id '{trade_id}': {e}", exc_info=True)
+                raise
     
     def get_trade_by_binance_trade_id(self, binance_trade_id: int) -> Optional[Trade]:
         with self.get_db() as db:

@@ -210,7 +210,7 @@ class TradingBot:
 
         feature_calculator = LiveFeatureCalculator(self.db_manager, mode=self.mode)
         status_service = StatusService(self.db_manager, config_manager, feature_calculator)
-        state_manager = StateManager(mode=self.mode, bot_id=self.run_id, db_manager=self.db_manager)
+        state_manager = StateManager(mode=self.mode, bot_id=self.run_id, db_manager=self.db_manager, feature_calculator=feature_calculator)
         account_manager = AccountManager(self.trader.client)
         strategy_rules = StrategyRules(config_manager)
         capital_manager = CapitalManager(config_manager, strategy_rules)
@@ -235,6 +235,7 @@ class TradingBot:
             return
 
         state_manager.sync_holdings_with_binance(account_manager, strategy_rules, self.trader)
+        state_manager.recalculate_open_position_targets(strategy_rules, sa_instance, dynamic_params)
         logger.info(f"🚀 --- TRADING BOT STARTED --- RUN ID: {self.run_id} --- SYMBOL: {self.symbol} --- MODE: {self.mode.upper()} --- 🚀")
 
         while self.is_running:
