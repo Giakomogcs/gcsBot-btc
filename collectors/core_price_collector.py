@@ -207,7 +207,9 @@ def prepare_backtest_data(days: int):
     # This client does not require API keys for public data endpoints.
     try:
         logger.info("Initializing temporary live Binance client for accurate historical data...")
-        historical_client = Client(api_key="", api_secret="")
+        # Aumentar o timeout para 30 segundos
+        requests_params = {"timeout": 30}
+        historical_client = Client(api_key="", api_secret="", requests_params=requests_params)
         historical_client.ping()
         online_mode = True
         logger.info("Live Binance client connected successfully.")
