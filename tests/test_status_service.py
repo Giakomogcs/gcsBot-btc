@@ -60,20 +60,33 @@ class TestStatusService(unittest.TestCase):
         self.db_manager.get_open_positions.return_value = [trade1, trade2]
         self.db_manager.get_all_trades_in_range.return_value = [] # Not the focus of this test
 
+        # Arrange: Mock the new get_bot_status call
+        mock_status = MagicMock()
+        mock_status.market_regime = 2
+        mock_status.last_buy_condition = "Test Condition"
+        mock_status.operating_mode = "ACCUMULATION"
+        mock_status.buy_target = Decimal("51000.00")
+        mock_status.buy_progress = Decimal("33.3")
+        self.db_manager.get_bot_status.return_value = mock_status
+
         # Arrange: Mock market data from feature_calculator
-        mock_market_data = {'close': 52000.0, 'ema_20': 51000.0, 'bbl_20_2_0': 50000, 'high': 52100, 'ema_100': 50500}
+        mock_market_data = {'close': 52000.0, 'ema_20': 51000.0, 'bbl_20_2_0': 50000, 'high': 52100, 'ema_100': 50500, 'atr_14': 100, 'macd_diff_12_26_9': 50}
         # The feature calculator returns a pandas Series
         self.feature_calculator.get_current_candle_with_features.return_value = pd.Series(mock_market_data)
 
+        # Mock historical data for SA model training
+        historical_data = pd.DataFrame({
+            'atr_14': [50, 60, 70, 120], # one value above 100
+            'macd_diff_12_26_9': [10, -20, 30, 40]
+        })
+        self.feature_calculator.get_historical_data_with_features.return_value = historical_data
+
+
         # Arrange: Mock strategy evaluation and other helper methods
-        self.status_service.capital_manager.get_buy_order_details = MagicMock(return_value=(Decimal('0'), 'HOLD', 'test reason'))
-        with patch.object(self.status_service, '_calculate_buy_progress', return_value=(Decimal('51000'), Decimal('50.0'))) as mock_buy_progress:
+        self.status_service.capital_manager.get_buy_order_details = MagicMock(return_value=(Decimal('0'), 'ACCUMULATION', 'Test Condition', 'unknown'))
 
-            # 2. Act: Call the method under test
-            result = self.status_service.get_extended_status("test", "test_bot")
-
-            # Assert that the mocked method was called
-            mock_buy_progress.assert_called_once()
+        # 2. Act: Call the method under test
+        result = self.status_service.get_extended_status("test", "test_bot")
 
         # 3. Assert: Verify results
         # Assert that ExchangeManager was called correctly
@@ -99,40 +112,14 @@ class TestStatusService(unittest.TestCase):
         self.assertAlmostEqual(float(pos1_status["price_to_target"]), 3000, places=2)
         self.assertAlmostEqual(float(pos1_status["usd_to_target"]), 300, places=2)
         
-        # Assert that the buy signal status is included
+        # Assert that the buy signal status is included and contains the correct persisted data
         self.assertIn("buy_signal_status", result)
-
-    def test_calculate_buy_progress_in_uptrend_dip(self, MockExchangeManager):
-        """
-        Test the buy progress calculation specifically for the scenario where
-        the price is in an uptrend and waiting for a dip to the EMA20.
-        This verifies the fix for the "progress is 100% too early" bug.
-        """
-        # 1. Arrange: Define market data that represents the bug condition
-        # - Uptrend: current_price > ema_100
-        # - Waiting for a dip: current_price > ema_20 (the target)
-        # - A recent high price to act as the start of the dip range
-        market_data = {
-            'close': Decimal('52000'),      # Current price is high
-            'high': Decimal('52500'),       # Recent high is the start of our range
-            'ema_100': Decimal('50000'),    # Price is above this, so it's an uptrend
-            'ema_20': Decimal('51000'),      # This will be the buy target
-            'bbl_20_2_0': Decimal('50500')
-        }
-        open_positions_count = 0
-
-        # 2. Act: Call the private method directly to test its logic
-        target_price, progress = self.status_service._calculate_buy_progress(market_data, open_positions_count)
-
-        # 3. Assert: Verify the results
-        # The target price should be the EMA20
-        self.assertEqual(target_price, Decimal('51000'))
-
-        # The progress should be the percentage of the way from the high to the target
-        # Progress = (current - start) / (target - start)
-        # Progress = (52000 - 52500) / (51000 - 52500) = -500 / -1500 = 33.33%
-        self.assertAlmostEqual(progress, Decimal('33.3'), places=1)
-        self.assertNotEqual(progress, Decimal('100.0'))
+        bs_status = result["buy_signal_status"]
+        self.assertEqual(bs_status["market_regime"], 2)
+        self.assertEqual(bs_status["reason"], "Test Condition")
+        self.assertEqual(bs_status["operating_mode"], "ACCUMULATION")
+        self.assertAlmostEqual(bs_status["btc_purchase_target"], Decimal("51058.00"), places=2)
+        self.assertAlmostEqual(bs_status["btc_purchase_progress_pct"], Decimal("9.60"), places=2)
 
 if __name__ == '__main__':
     unittest.main()
