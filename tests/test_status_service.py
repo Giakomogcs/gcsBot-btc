@@ -70,12 +70,20 @@ class TestStatusService(unittest.TestCase):
         self.db_manager.get_bot_status.return_value = mock_status
 
         # Arrange: Mock market data from feature_calculator
-        mock_market_data = {'close': 52000.0, 'ema_20': 51000.0, 'bbl_20_2_0': 50000, 'high': 52100, 'ema_100': 50500}
+        mock_market_data = {'close': 52000.0, 'ema_20': 51000.0, 'bbl_20_2_0': 50000, 'high': 52100, 'ema_100': 50500, 'atr_14': 100, 'macd_diff_12_26_9': 50}
         # The feature calculator returns a pandas Series
         self.feature_calculator.get_current_candle_with_features.return_value = pd.Series(mock_market_data)
 
+        # Mock historical data for SA model training
+        historical_data = pd.DataFrame({
+            'atr_14': [50, 60, 70, 120], # one value above 100
+            'macd_diff_12_26_9': [10, -20, 30, 40]
+        })
+        self.feature_calculator.get_historical_data_with_features.return_value = historical_data
+
+
         # Arrange: Mock strategy evaluation and other helper methods
-        self.status_service.capital_manager.get_buy_order_details = MagicMock(return_value=(Decimal('0'), 'HOLD', 'test reason'))
+        self.status_service.capital_manager.get_buy_order_details = MagicMock(return_value=(Decimal('0'), 'HOLD', 'Test Condition', 'unknown'))
 
         # 2. Act: Call the method under test
         result = self.status_service.get_extended_status("test", "test_bot")

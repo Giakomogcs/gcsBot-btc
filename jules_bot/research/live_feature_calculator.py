@@ -104,3 +104,28 @@ class LiveFeatureCalculator:
 
         logger.debug(f"Vela final gerada com {len(final_candle)} features.")
         return final_candle
+
+    def get_historical_data_with_features(self) -> pd.DataFrame:
+        """
+        Busca um histórico de dados de velas e calcula todas as features,
+        retornando um DataFrame completo para o treinamento de modelos.
+        """
+        logger.debug("Buscando dados históricos para cálculo de features...")
+
+        # Busca um histórico maior para garantir que os indicadores (ex: médias móveis longas) sejam calculados corretamente
+        df_candles = self.exchange_manager.get_historical_candles(self.symbol, '1m', limit=5000)
+        if df_candles.empty:
+            logger.error("Falha ao obter velas históricas da Binance para o treinamento do SA.")
+            return pd.DataFrame()
+
+        # Para dados históricos, não precisamos de dados macro ou de sentimento em tempo real
+        # A função add_all_features já lida com a ausência dessas colunas
+
+        # O modo 'live' deve ser False, pois estamos lidando com um conjunto de dados históricos
+        df_with_features = add_all_features(df_candles, live_mode=False)
+
+        # Remove quaisquer linhas com NaNs que possam ter sido geradas no início do histórico
+        df_with_features.dropna(inplace=True)
+
+        logger.debug(f"DataFrame histórico com features gerado. Shape: {df_with_features.shape}")
+        return df_with_features

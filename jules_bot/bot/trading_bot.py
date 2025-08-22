@@ -2,7 +2,6 @@ import time
 import uuid
 import json
 import os
-import joblib
 from decimal import Decimal, getcontext, InvalidOperation
 from jules_bot.utils.logger import logger
 from jules_bot.utils.config_manager import config_manager
@@ -219,17 +218,17 @@ class TradingBot:
 
         # --- Dynamic Strategy Components ---
         dynamic_params = DynamicParameters(config_manager)
-        models_dir = config_manager.get('DATA_PATHS', 'models_dir', fallback='data/models')
-        sa_model_path = os.path.join(models_dir, 'sa_model.pkl')
+        sa_instance = SituationalAwareness()
 
-        sa_model = None
-        if os.path.exists(sa_model_path):
-            sa_model = SituationalAwareness.load_model(sa_model_path)
-            logger.info("Situational Awareness model loaded successfully.")
+        # "Train" the Situational Awareness model by calculating thresholds from historical data
+        logger.info("Fetching historical data to train Situational Awareness model...")
+        historical_data = feature_calculator.get_historical_data_with_features()
+        if historical_data is not None and not historical_data.empty:
+            sa_instance.fit(historical_data)
+            logger.info("Situational Awareness model trained successfully.")
         else:
-            logger.error(f"Situational Awareness model not found at {sa_model_path}. Dynamic strategy will not work.")
-            # Decide if the bot should stop or run with default parameters
-            # For now, it will run with defaults from DynamicParameters class
+            logger.error("Could not fetch historical data. Dynamic strategy will not work. The bot will run with default parameters.")
+            # The bot will continue with sa_instance.is_fitted = False
 
         if not self.trader.is_ready:
             logger.critical("Trader could not be initialized. Shutting down bot.")
@@ -251,9 +250,9 @@ class TradingBot:
 
                 # --- DYNAMIC STRATEGY LOGIC ---
                 current_regime = -1 # Default to fallback
-                if sa_model and sa_model.is_fitted:
+                if sa_instance and sa_instance.is_fitted:
                     try:
-                        regime_df = sa_model.transform(final_candle.to_frame().T)
+                        regime_df = sa_instance.transform(final_candle.to_frame().T)
                         if not regime_df.empty:
                             current_regime = regime_df['market_regime'].iloc[-1]
                             logger.info(f"Current market regime detected: {current_regime}")
