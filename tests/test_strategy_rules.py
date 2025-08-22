@@ -25,23 +25,6 @@ def mock_config_manager():
     mock.get_section.side_effect = get_section_side_effect
     return mock
 
-def test_get_next_buy_amount_when_balance_is_high(mock_config_manager):
-    """
-    Test that the buy amount is capped by usd_per_trade when the
-    available balance is high enough.
-    """
-    # Arrange
-    strategy_rules = StrategyRules(mock_config_manager)
-    # Available balance is $10,000. 2% of this is $200.
-    # Since $100 (usd_per_trade) < $200, it should return $100.
-    available_balance = 10000.0
-
-    # Act
-    buy_amount = strategy_rules.get_next_buy_amount(available_balance)
-
-    # Assert
-    assert buy_amount == 100.0
-
 def test_calculate_realized_pnl(mock_config_manager):
     """
     Tests the realized PnL calculation under different scenarios.
@@ -94,35 +77,40 @@ def test_calculate_realized_pnl(mock_config_manager):
     # Assert
     assert float(realized_pnl_breakeven) == pytest.approx(0.0, abs=1e-6)
 
-def test_get_next_buy_amount_when_balance_is_low(mock_config_manager):
+def test_evaluate_buy_signal_with_difficulty_factor(mock_config_manager):
     """
-    Test that the buy amount is capped by the percentage of available
-    balance when the balance is low.
-    """
-    # Arrange
-    strategy_rules = StrategyRules(mock_config_manager)
-    # Available balance is $1,000. 2% of this is $20.
-    # Since $20 < $100 (usd_per_trade), it should return $20.
-    available_balance = 1000.0
-
-    # Act
-    buy_amount = strategy_rules.get_next_buy_amount(available_balance)
-
-    # Assert
-    assert buy_amount == 20.0
-
-def test_get_next_buy_amount_at_breakeven_point(mock_config_manager):
-    """
-    Test that the buy amount is correct when the two potential values are equal.
+    Tests that the buy signal becomes stricter with a higher difficulty factor.
     """
     # Arrange
     strategy_rules = StrategyRules(mock_config_manager)
-    # Available balance is $5,000. 2% of this is $100.
-    # Since $100 (from balance) == $100 (usd_per_trade), it should return $100.
-    available_balance = 5000.0
+    # This data ensures the logic enters the 'downtrend' path (close < ema_100)
+    market_data = {
+        'close': 100.1, 'high': 101, 'ema_100': 110, 'ema_20': 105,
+        'bbl_20_2_0': 100.0
+    }
 
-    # Act
-    buy_amount = strategy_rules.get_next_buy_amount(available_balance)
+    # --- Scenario 1: Difficulty 0, price is NOT below BBL -> No Signal ---
+    should_buy, _, _ = strategy_rules.evaluate_buy_signal(market_data, 1, difficulty_factor=0)
+    assert not should_buy
 
-    # Assert
-    assert buy_amount == 100.0
+    # --- Scenario 2: Difficulty 0, price IS below BBL -> Signal ---
+    market_data['close'] = 99.9
+    should_buy, _, _ = strategy_rules.evaluate_buy_signal(market_data, 1, difficulty_factor=0)
+    assert should_buy
+
+    # --- Scenario 3: Difficulty 1 (1% stricter), price is NOT below adjusted BBL -> No Signal ---
+    # Adjusted BBL = 100.0 * (1 - 0.01) = 99.0
+    market_data['close'] = 99.1
+    should_buy, _, _ = strategy_rules.evaluate_buy_signal(market_data, 1, difficulty_factor=1)
+    assert not should_buy
+
+    # --- Scenario 4: Difficulty 1 (1% stricter), price IS below adjusted BBL -> Signal ---
+    market_data['close'] = 98.9
+    should_buy, _, _ = strategy_rules.evaluate_buy_signal(market_data, 1, difficulty_factor=1)
+    assert should_buy
+
+    # --- Scenario 5: Difficulty 2 (2% stricter), price is NOT below adjusted BBL -> No Signal ---
+    # Adjusted BBL = 100.0 * (1 - 0.02) = 98.0
+    market_data['close'] = 98.1
+    should_buy, _, _ = strategy_rules.evaluate_buy_signal(market_data, 1, difficulty_factor=2)
+    assert not should_buy

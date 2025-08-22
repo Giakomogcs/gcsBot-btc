@@ -1,5 +1,6 @@
 from decimal import Decimal, getcontext
 from jules_bot.utils.config_manager import ConfigManager
+from typing import Dict
 
 # Set precision for Decimal calculations
 getcontext().prec = 28
@@ -11,12 +12,11 @@ class StrategyRules:
         self.base_usd_per_trade = Decimal(self.rules.get('base_usd_per_trade', '20.0'))
         self.sell_factor = Decimal(self.rules.get('sell_factor', '0.9'))
         self.commission_rate = Decimal(self.rules.get('commission_rate', '0.001'))
-        self.target_profit = Decimal(self.rules.get('target_profit', '0.01'))
 
-    def evaluate_buy_signal(self, market_data: dict, open_positions_count: int) -> tuple[bool, str, str]:
+    def evaluate_buy_signal(self, market_data: dict, open_positions_count: int, difficulty_factor: int = 0, params: Dict[str, Decimal] = None) -> tuple[bool, str, str]:
         """
-        Evaluates if a buy signal is present. Non-financial logic, so floats are acceptable here
-        for performance with technical indicators.
+        Evaluates if a buy signal is present, providing detailed reasons for no signal.
+        Uses dynamic parameters for buy dip percentage.
         """
         current_price = market_data.get('close')
         high_price = market_data.get('high')
@@ -27,37 +27,56 @@ class StrategyRules:
         if any(v is None for v in [current_price, high_price, ema_100, ema_20, bbl]):
             return False, "unknown", "Not enough indicator data"
 
+        current_price = Decimal(str(current_price))
+        high_price = Decimal(str(high_price))
+        ema_100 = Decimal(str(ema_100))
+        ema_20 = Decimal(str(ema_20))
+        
+        difficulty_multiplier = Decimal(1) - (Decimal(difficulty_factor) * Decimal('0.01'))
+        adjusted_bbl = Decimal(str(bbl)) * difficulty_multiplier
+
+        # --- Dynamic Dip Logic ---
+        buy_dip_percentage = params.get('buy_dip_percentage', Decimal('0.02')) if params else Decimal('0.02')
+        price_dip_target = high_price * (Decimal('1') - buy_dip_percentage)
+
+        reason = ""
         if open_positions_count == 0:
             if current_price > ema_100:
                 if current_price > ema_20:
                     return True, "uptrend", "Aggressive first entry (price > ema_20)"
+                elif current_price <= price_dip_target:
+                    return True, "uptrend", f"Dip buy signal triggered at {buy_dip_percentage:.2%}"
+                else:
+                    reason = f"Price ${current_price:,.2f} is above EMA100 but below EMA20 ${ema_20:,.2f}"
             else:
-                if current_price <= bbl:
-                    return True, "downtrend", "Aggressive first entry (volatility breakout)"
+                if current_price <= adjusted_bbl:
+                    return True, "downtrend", f"Aggressive first entry (volatility breakout at difficulty {difficulty_factor})"
+                else:
+                    distance = current_price - adjusted_bbl
+                    reason = f"Price ${current_price:,.2f} is ${distance:,.2f} above adjusted BBL ${adjusted_bbl:,.2f} (diff {difficulty_factor})"
         else:
             if current_price > ema_100:
                 if high_price > ema_20 and current_price < ema_20:
                     return True, "uptrend", "Uptrend pullback"
+                elif current_price <= price_dip_target:
+                    return True, "uptrend", f"Dip buy signal on existing position at {buy_dip_percentage:.2%}"
+                else:
+                    reason = f"In uptrend (price > EMA100), but no pullback signal found"
             else:
-                if current_price <= bbl:
-                    return True, "downtrend", "Downtrend volatility breakout"
+                if current_price <= adjusted_bbl:
+                    return True, "downtrend", f"Downtrend volatility breakout (difficulty {difficulty_factor})"
+                else:
+                    distance = current_price - adjusted_bbl
+                    reason = f"Price ${current_price:,.2f} is ${distance:,.2f} above adjusted BBL ${adjusted_bbl:,.2f} (diff {difficulty_factor}, {open_positions_count} pos)"
+        
+        return False, "unknown", reason or "No signal"
 
-        return False, "unknown", "No signal"
-
-    def get_next_buy_amount(self, available_balance: Decimal) -> Decimal:
+    def calculate_sell_target_price(self, purchase_price: Decimal, params: Dict[str, Decimal]) -> Decimal:
         """
-        Calculates the USDT amount for the next purchase using Decimal.
-        """
-        available_balance = Decimal(available_balance)
-        capital_based_size = available_balance * self.max_capital_per_trade_percent
-        trade_size = min(self.base_usd_per_trade, capital_based_size)
-        return trade_size
-
-    def calculate_sell_target_price(self, purchase_price: Decimal) -> Decimal:
-        """
-        Calculates the target sell price using Decimal.
+        Calculates the target sell price using dynamic target_profit.
         """
         purchase_price = Decimal(purchase_price)
+        target_profit = params.get('target_profit', Decimal('0.01'))
         one = Decimal('1')
 
         numerator = purchase_price * (one + self.commission_rate)
@@ -67,7 +86,7 @@ class StrategyRules:
             return Decimal('inf')
 
         break_even_price = numerator / denominator
-        sell_target_price = break_even_price * (one + self.target_profit)
+        sell_target_price = break_even_price * (one + target_profit)
         return sell_target_price
 
     def calculate_realized_pnl(self, buy_price: Decimal, sell_price: Decimal, quantity_sold: Decimal) -> Decimal:

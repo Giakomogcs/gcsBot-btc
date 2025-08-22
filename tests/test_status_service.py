@@ -20,6 +20,21 @@ class TestStatusService(unittest.TestCase):
             'target_profit': '0.01',
             'sell_factor': '0.9'
         }
+        # Add side effects for individual 'get' calls needed by CapitalManager
+        def get_side_effect(section, key, fallback=None):
+            if section == 'TRADING_STRATEGY' and key == 'min_trade_size_usdt':
+                return '10.0'
+            if section == 'STRATEGY_RULES' and key == 'base_usd_per_trade':
+                return '20.0'
+            if section == 'STRATEGY_RULES' and key == 'aggressive_buy_multiplier':
+                return '2.0'
+            if section == 'STRATEGY_RULES' and key == 'correction_entry_multiplier':
+                return '2.5'
+            if section == 'STRATEGY_RULES' and key == 'max_open_positions':
+                return '10'
+            return fallback
+
+        self.config_manager.get.side_effect = get_side_effect
 
         # Instantiate the service with mocked dependencies
         self.status_service = StatusService(
@@ -50,11 +65,15 @@ class TestStatusService(unittest.TestCase):
         # The feature calculator returns a pandas Series
         self.feature_calculator.get_current_candle_with_features.return_value = pd.Series(mock_market_data)
 
-        # Arrange: Mock strategy evaluation
-        self.status_service.strategy.evaluate_buy_signal = MagicMock(return_value=(False, 'uptrend', 'Price > EMA20'))
+        # Arrange: Mock strategy evaluation and other helper methods
+        self.status_service.capital_manager.get_buy_order_details = MagicMock(return_value=(Decimal('0'), 'HOLD', 'test reason'))
+        with patch.object(self.status_service, '_calculate_buy_progress', return_value=(Decimal('51000'), Decimal('50.0'))) as mock_buy_progress:
 
-        # 2. Act: Call the method under test
-        result = self.status_service.get_extended_status("test", "test_bot")
+            # 2. Act: Call the method under test
+            result = self.status_service.get_extended_status("test", "test_bot")
+
+            # Assert that the mocked method was called
+            mock_buy_progress.assert_called_once()
 
         # 3. Assert: Verify results
         # Assert that ExchangeManager was called correctly
@@ -82,6 +101,38 @@ class TestStatusService(unittest.TestCase):
         
         # Assert that the buy signal status is included
         self.assertIn("buy_signal_status", result)
+
+    def test_calculate_buy_progress_in_uptrend_dip(self, MockExchangeManager):
+        """
+        Test the buy progress calculation specifically for the scenario where
+        the price is in an uptrend and waiting for a dip to the EMA20.
+        This verifies the fix for the "progress is 100% too early" bug.
+        """
+        # 1. Arrange: Define market data that represents the bug condition
+        # - Uptrend: current_price > ema_100
+        # - Waiting for a dip: current_price > ema_20 (the target)
+        # - A recent high price to act as the start of the dip range
+        market_data = {
+            'close': Decimal('52000'),      # Current price is high
+            'high': Decimal('52500'),       # Recent high is the start of our range
+            'ema_100': Decimal('50000'),    # Price is above this, so it's an uptrend
+            'ema_20': Decimal('51000'),      # This will be the buy target
+            'bbl_20_2_0': Decimal('50500')
+        }
+        open_positions_count = 0
+
+        # 2. Act: Call the private method directly to test its logic
+        target_price, progress = self.status_service._calculate_buy_progress(market_data, open_positions_count)
+
+        # 3. Assert: Verify the results
+        # The target price should be the EMA20
+        self.assertEqual(target_price, Decimal('51000'))
+
+        # The progress should be the percentage of the way from the high to the target
+        # Progress = (current - start) / (target - start)
+        # Progress = (52000 - 52500) / (51000 - 52500) = -500 / -1500 = 33.33%
+        self.assertAlmostEqual(progress, Decimal('33.3'), places=1)
+        self.assertNotEqual(progress, Decimal('100.0'))
 
 if __name__ == '__main__':
     unittest.main()

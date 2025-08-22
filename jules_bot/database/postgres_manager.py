@@ -15,24 +15,55 @@ from jules_bot.utils.logger import logger
 class PostgresManager:
     def __init__(self, config: dict):
         self.db_url = f"postgresql+psycopg2://{config['user']}:{config['password']}@{config['host']}:{config['port']}/{config['dbname']}"
-        self.engine = create_engine(self.db_url)
+        self.engine = create_engine(self.db_url, connect_args={'connect_timeout': 5})
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+        self._initialized = False
+
+    def initialize_db(self):
+        """
+        Cria tabelas e executa migrações. Deve ser chamado após a verificação da conexão.
+        """
+        if self._initialized:
+            return
         self.create_tables()
         self._run_migrations()
+        self._initialized = True
 
     def _run_migrations(self):
         inspector = inspect(self.engine)
         with self.engine.connect() as connection:
             try:
-                if not inspector.has_table("trades"):
-                    return
-                columns = [c['name'] for c in inspector.get_columns('trades')]
-                if 'binance_trade_id' not in columns:
-                    logger.info("Adding missing column 'binance_trade_id' to table 'trades'")
-                    with connection.begin():
-                        connection.execute(text('ALTER TABLE trades ADD COLUMN binance_trade_id INTEGER'))
+                # Migration for 'trades' table
+                if inspector.has_table("trades"):
+                    trade_columns = [c['name'] for c in inspector.get_columns('trades')]
+                    if 'binance_trade_id' not in trade_columns:
+                        logger.info("Running migration: Adding missing column 'binance_trade_id' to table 'trades'")
+                        with connection.begin():
+                            connection.execute(text('ALTER TABLE trades ADD COLUMN binance_trade_id INTEGER'))
+
+                # Migration for 'bot_status' table
+                if inspector.has_table("bot_status"):
+                    status_columns = [c['name'] for c in inspector.get_columns('bot_status')]
+                    if 'last_buy_condition' not in status_columns:
+                        logger.info("Running migration: Adding missing column 'last_buy_condition' to table 'bot_status'")
+                        with connection.begin():
+                            connection.execute(text('ALTER TABLE bot_status ADD COLUMN last_buy_condition VARCHAR'))
+
             except Exception as e:
                 logger.error(f"Failed to run migration: {e}")
+
+    def check_connection(self) -> tuple[bool, Optional[str]]:
+        """
+        Verifica se a conexão com o banco de dados pode ser estabelecida.
+        Retorna uma tupla (bool, Optional[str]) indicando sucesso e uma mensagem de erro.
+        """
+        try:
+            connection = self.engine.connect()
+            connection.close()
+            return True, None
+        except Exception as e:
+            # Retorna a mensagem de erro para ser exibida ao usuário
+            return False, str(e)
 
     def create_tables(self):
         Base.metadata.create_all(bind=self.engine)
