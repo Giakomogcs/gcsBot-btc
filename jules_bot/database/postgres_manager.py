@@ -24,13 +24,22 @@ class PostgresManager:
         inspector = inspect(self.engine)
         with self.engine.connect() as connection:
             try:
-                if not inspector.has_table("trades"):
-                    return
-                columns = [c['name'] for c in inspector.get_columns('trades')]
-                if 'binance_trade_id' not in columns:
-                    logger.info("Adding missing column 'binance_trade_id' to table 'trades'")
-                    with connection.begin():
-                        connection.execute(text('ALTER TABLE trades ADD COLUMN binance_trade_id INTEGER'))
+                # Migration for 'trades' table
+                if inspector.has_table("trades"):
+                    trade_columns = [c['name'] for c in inspector.get_columns('trades')]
+                    if 'binance_trade_id' not in trade_columns:
+                        logger.info("Running migration: Adding missing column 'binance_trade_id' to table 'trades'")
+                        with connection.begin():
+                            connection.execute(text('ALTER TABLE trades ADD COLUMN binance_trade_id INTEGER'))
+
+                # Migration for 'bot_status' table
+                if inspector.has_table("bot_status"):
+                    status_columns = [c['name'] for c in inspector.get_columns('bot_status')]
+                    if 'last_buy_condition' not in status_columns:
+                        logger.info("Running migration: Adding missing column 'last_buy_condition' to table 'bot_status'")
+                        with connection.begin():
+                            connection.execute(text('ALTER TABLE bot_status ADD COLUMN last_buy_condition VARCHAR'))
+
             except Exception as e:
                 logger.error(f"Failed to run migration: {e}")
 
