@@ -245,6 +245,13 @@ class TradingBot:
 
                 final_candle = features_df.iloc[-1]
 
+                # Defensively check for NaN values in the latest candle data.
+                # This can happen if there's not enough historical data for an indicator.
+                if final_candle.isnull().any():
+                    logger.warning(f"Final candle contains NaN values, skipping cycle. Data: {final_candle.to_dict()}")
+                    time.sleep(10)
+                    continue
+
                 # --- DYNAMIC STRATEGY LOGIC ---
                 current_regime = -1 # Default to fallback
                 if sa_instance:

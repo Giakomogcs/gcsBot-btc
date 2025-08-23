@@ -46,6 +46,12 @@ class ConfigManager:
             return {key: self._resolve_value(value) for key, value in section_items}
         return {}
 
+    def has_section(self, section: str) -> bool:
+        """
+        Checks if a section exists in the configuration file.
+        """
+        return self.config.has_section(section)
+
     def get(self, section: str, key: str, fallback: str = None) -> str:
         """
         Retrieves a specific key from a section, resolving env vars.

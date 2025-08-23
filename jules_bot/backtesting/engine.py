@@ -203,7 +203,8 @@ class Backtester:
             all_trades_df = pd.DataFrame([t.to_dict() for t in all_trades_for_run])
             for col in ['price', 'quantity', 'usd_value', 'commission', 'commission_usd', 'realized_pnl_usd', 'hodl_asset_amount', 'hodl_asset_value_at_sell']:
                 if col in all_trades_df.columns:
-                    all_trades_df[col] = all_trades_df[col].apply(lambda x: Decimal(str(x)) if x is not None else Decimal(0))
+                    # Use pd.isna to correctly handle both None and np.nan from pandas.
+                    all_trades_df[col] = all_trades_df[col].apply(lambda x: Decimal(str(x)) if not pd.isna(x) else Decimal(0))
 
         initial_balance = self.mock_trader.initial_balance
         final_balance = self.mock_trader.get_total_portfolio_value()
