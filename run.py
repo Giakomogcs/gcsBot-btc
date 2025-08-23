@@ -8,7 +8,26 @@ from typing import Optional
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.utils.config_manager import config_manager
 
-app = typer.Typer()
+CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
+app = typer.Typer(context_settings=CONTEXT_SETTINGS)
+
+# State dictionary to hold the bot name and env file
+state = {
+    "bot_name": "jules_bot",
+    "env_file": ".env"
+}
+
+@app.callback()
+def main(
+    bot_name: str = typer.Option("jules_bot", "--bot-name", "-n", help="O nome do bot para isolamento de logs e dados."),
+    env_file: str = typer.Option(".env", "--env-file", "-e", help="Caminho para o arquivo .env a ser usado.")
+):
+    """
+    Jules Bot - A crypto trading bot.
+    """
+    state["bot_name"] = bot_name
+    state["env_file"] = env_file
+    os.environ["ENV_FILE"] = env_file # Set ENV_FILE for docker-compose
 
 # --- Lógica de Detecção do Docker Compose ---
 
@@ -137,6 +156,9 @@ def _run_in_container(command: list, env_vars: dict = {}, interactive: bool = Fa
         elif interactive:
             exec_cmd.append("-it")
 
+        # Add bot_name to env_vars
+        env_vars["BOT_NAME"] = state["bot_name"]
+
         for key, value in env_vars.items():
             exec_cmd.extend(["-e", f"{key}={value}"])
 
@@ -186,12 +208,12 @@ def _confirm_and_clear_data(mode: str):
     Asks the user for confirmation to clear data for a specific mode.
     If confirmed, runs the appropriate data clearing script.
     """
-    prompt_message = f"Você deseja limpar todos os dados existentes do modo '{mode}' antes de continuar?"
+    prompt_message = f"Você deseja limpar todos os dados existentes do modo '{mode}' para o bot '{state['bot_name']}' antes de continuar?"
     if mode == 'trade':
-        prompt_message = f"⚠️ ATENÇÃO: Você está em modo 'trade' (live). Deseja limpar TODOS os dados do banco de dados (trades, status, histórico) antes de continuar?"
+        prompt_message = f"⚠️ ATENÇÃO: Você está em modo 'trade' (live). Deseja limpar TODOS os dados do banco de dados (trades, status, histórico) para o bot '{state['bot_name']}' antes de continuar?"
 
     if typer.confirm(prompt_message):
-        print(f"🗑️  Limpando dados do modo '{mode}'...")
+        print(f"🗑️  Limpando dados do modo '{mode}' para o bot '{state['bot_name']}'...")
         script_command = []
         if mode == 'test':
             script_command = ["scripts/clear_testnet_trades.py"]
@@ -214,7 +236,7 @@ def trade():
     """Inicia o bot em modo de negociação (live)."""
     mode = "trade"
     _confirm_and_clear_data(mode)
-    print(f"🚀 Iniciando o bot em modo '{mode.upper()}'...")
+    print(f"🚀 Iniciando o bot '{state['bot_name']}' em modo '{mode.upper()}'...")
     _run_in_container(
         command=["jules_bot/main.py"],
         env_vars={"BOT_MODE": mode}
@@ -225,7 +247,7 @@ def test():
     """Inicia o bot em modo de teste (testnet), opcionalmente limpando o estado anterior."""
     mode = "test"
     _confirm_and_clear_data(mode)
-    print(f"🚀 Iniciando o bot em modo '{mode.upper()}'...")
+    print(f"🚀 Iniciando o bot '{state['bot_name']}' em modo '{mode.upper()}'...")
     _run_in_container(
         command=["jules_bot/main.py"],
         env_vars={"BOT_MODE": mode}
@@ -241,7 +263,7 @@ def backtest(
     mode = "backtest"
     _confirm_and_clear_data(mode)
 
-    print(f"🚀 Iniciando execução de backtest para {days} dias...")
+    print(f"🚀 Iniciando execução de backtest para {days} dias para o bot '{state['bot_name']}'...")
 
     print("\n--- Etapa 1 de 2: Preparando dados ---")
     if not _run_in_container(["scripts/prepare_backtest_data.py", str(days)]):
@@ -263,7 +285,7 @@ def dashboard(
     )
 ):
     """Inicia a nova Interface de Usuário (TUI) para monitoramento e controle."""
-    print(f"🚀 Iniciando o dashboard para o modo '{mode.upper()}'...")
+    print(f"🚀 Iniciando o dashboard para o bot '{state['bot_name']}' no modo '{mode.upper()}'...")
     print("   Lembre-se que o bot (usando 'trade' ou 'test') deve estar rodando em outro terminal.")
 
     command_to_run = ["tui/app.py", "--mode", mode]
@@ -278,7 +300,7 @@ def dashboard(
 @app.command("clear-backtest-trades")
 def clear_backtest_trades():
     """Deletes all trades from the 'backtest' environment in the database."""
-    print("🗑️  Attempting to clear all backtest trades from the database...")
+    print(f"🗑️  Attempting to clear all backtest trades from the database for bot '{state['bot_name']}'...")
     _run_in_container(
         command=["scripts/clear_trades_measurement.py", "backtest"],
         interactive=True
@@ -287,7 +309,7 @@ def clear_backtest_trades():
 @app.command("clear-testnet-trades")
 def clear_testnet_trades():
     """Deletes all trades from the 'test' environment in the database."""
-    print("🗑️  Attempting to clear all testnet trades from the database...")
+    print(f"🗑️  Attempting to clear all testnet trades from the database for bot '{state['bot_name']}'...")
     _run_in_container(
         command=["scripts/clear_testnet_trades.py"],
         interactive=True
@@ -300,7 +322,7 @@ def wipe_db():
     Shows a confirmation prompt and then wipes all data from the main tables.
     This is a destructive operation.
     """
-    print("🗑️  Attempting to wipe the database...")
+    print(f"🗑️  Attempting to wipe the database for bot '{state['bot_name']}'...")
     print("   This will run the script inside the container.")
 
     _run_in_container(

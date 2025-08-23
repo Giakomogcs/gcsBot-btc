@@ -23,44 +23,65 @@ class PostgresManager:
         db_host = os.getenv("POSTGRES_HOST")
         db_port = os.getenv("POSTGRES_PORT", "5432")
         db_name = os.getenv("POSTGRES_DB")
+        self.bot_name = os.getenv("BOT_NAME", "jules_bot").replace("-", "_") # Sanitize bot name for schema
 
         print(f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}")
 
         self.db_url = f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
-        self.engine = create_engine(self.db_url, connect_args={'connect_timeout': 5})
+        self.engine = create_engine(
+            self.db_url,
+            connect_args={
+                'connect_timeout': 5,
+                'options': f'-csearch_path={self.bot_name},public'
+            }
+        )
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
         self._initialized = False
         self.initialize_db()
 
     def initialize_db(self):
         """
-        Cria tabelas e executa migrações. Deve ser chamado após a verificação da conexão.
+        Cria schema, tabelas e executa migrações.
         """
         if self._initialized:
             return
+        self.create_schema()
         self.create_tables()
         self._run_migrations()
         self._initialized = True
+
+    def create_schema(self):
+        """
+        Cria um novo schema para o bot se ele não existir.
+        """
+        with self.engine.connect() as connection:
+            try:
+                connection.execute(text(f"CREATE SCHEMA IF NOT EXISTS {self.bot_name}"))
+                connection.commit()
+                logger.info(f"Schema '{self.bot_name}' created or already exists.")
+            except Exception as e:
+                logger.error(f"Failed to create schema '{self.bot_name}': {e}")
+                raise
 
     def _run_migrations(self):
         inspector = inspect(self.engine)
         with self.engine.connect() as connection:
             try:
                 # Migration for 'trades' table
-                if inspector.has_table("trades"):
-                    trade_columns = [c['name'] for c in inspector.get_columns('trades')]
+                if inspector.has_table("trades", schema=self.bot_name):
+                    trade_columns = [c['name'] for c in inspector.get_columns('trades', schema=self.bot_name)]
                     if 'binance_trade_id' not in trade_columns:
-                        logger.info("Running migration: Adding missing column 'binance_trade_id' to table 'trades'")
+                        logger.info(f"Running migration: Adding missing column 'binance_trade_id' to table '{self.bot_name}.trades'")
                         with connection.begin():
-                            connection.execute(text('ALTER TABLE trades ADD COLUMN binance_trade_id INTEGER'))
+                            connection.execute(text(f'ALTER TABLE {self.bot_name}.trades ADD COLUMN binance_trade_id INTEGER'))
 
                 # Migration for 'bot_status' table
-                if inspector.has_table("bot_status"):
-                    status_columns = [c['name'] for c in inspector.get_columns('bot_status')]
+                if inspector.has_table("bot_status", schema=self.bot_name):
+                    status_columns = [c['name'] for c in inspector.get_columns('bot_status', schema=self.bot_name)]
                     if 'last_buy_condition' not in status_columns:
-                        logger.info("Running migration: Adding missing column 'last_buy_condition' to table 'bot_status'")
+                        logger.info(f"Running migration: Adding missing column 'last_buy_condition' to table '{self.bot_name}.bot_status'")
                         with connection.begin():
-                            connection.execute(text('ALTER TABLE bot_status ADD COLUMN last_buy_condition VARCHAR'))
+                            connection.execute(text(f'ALTER TABLE {self.bot_name}.bot_status ADD COLUMN last_buy_condition VARCHAR'))
 
             except Exception as e:
                 logger.error(f"Failed to run migration: {e}")
@@ -383,7 +404,7 @@ class PostgresManager:
     def clear_all_tables(self):
         with self.get_db() as db:
             try:
-                db.execute(text("TRUNCATE TABLE trades, bot_status, price_history RESTART IDENTITY;"))
+                db.execute(text(f"TRUNCATE TABLE {self.bot_name}.trades, {self.bot_name}.bot_status, {self.bot_name}.price_history RESTART IDENTITY;"))
                 db.commit()
                 logger.info("All tables cleared successfully.")
             except Exception as e:
@@ -415,7 +436,7 @@ class PostgresManager:
         with self.get_db() as db:
             try:
                 # Using text for a simple delete statement for clarity
-                statement = text("DELETE FROM trades WHERE environment = :env")
+                statement = text(f"DELETE FROM {self.bot_name}.trades WHERE environment = :env")
                 result = db.execute(statement, {"env": "backtest"})
                 db.commit()
                 logger.info(f"Successfully cleared {result.rowcount} backtest trades from the database.")
@@ -428,7 +449,7 @@ class PostgresManager:
         """Deletes all trades from the 'trades' table where the environment is 'test'."""
         with self.get_db() as db:
             try:
-                statement = text("DELETE FROM trades WHERE environment = :env")
+                statement = text(f"DELETE FROM {self.bot_name}.trades WHERE environment = :env")
                 result = db.execute(statement, {"env": "test"})
                 db.commit()
                 logger.info(f"Successfully cleared {result.rowcount} testnet trades from the database.")
