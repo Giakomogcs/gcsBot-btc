@@ -237,16 +237,16 @@ class StateManager:
             return
 
         # 1. Determine the current market regime
-        final_candle = self.feature_calculator.get_current_candle_with_features()
-        if final_candle.empty:
-            logger.error("Could not get current candle data. Aborting target recalculation.")
+        features_df = self.feature_calculator.get_features_dataframe()
+        if features_df.empty:
+            logger.error("Could not get features dataframe. Aborting target recalculation.")
             return
 
         current_regime = -1
-        if sa_instance.is_fitted:
-            regime_df = sa_instance.transform(final_candle.to_frame().T)
-            if not regime_df.empty:
-                current_regime = regime_df['market_regime'].iloc[-1]
+        # The sa_instance is always "fitted" as it's rule-based.
+        regime_df = sa_instance.transform(features_df)
+        if not regime_df.empty:
+            current_regime = int(regime_df['market_regime'].iloc[-1])
 
         logger.info(f"Recalculating targets based on current market regime: {current_regime}")
 

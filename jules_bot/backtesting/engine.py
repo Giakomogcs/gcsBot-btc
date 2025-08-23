@@ -86,7 +86,8 @@ class Backtester:
             # O regime de mercado é obtido diretamente da vela (candle), pois foi pré-calculado
             current_regime = candle.get('market_regime', -1)
             
-            self.dynamic_params.update_parameters(current_regime)
+            # Ensure the regime is an integer for correct config section lookup
+            self.dynamic_params.update_parameters(int(current_regime))
             current_params = self.dynamic_params.parameters
             # --- END DYNAMIC STRATEGY LOGIC ---
 
@@ -203,13 +204,23 @@ class Backtester:
             all_trades_df = pd.DataFrame([t.to_dict() for t in all_trades_for_run])
             for col in ['price', 'quantity', 'usd_value', 'commission', 'commission_usd', 'realized_pnl_usd', 'hodl_asset_amount', 'hodl_asset_value_at_sell']:
                 if col in all_trades_df.columns:
-                    all_trades_df[col] = all_trades_df[col].apply(lambda x: Decimal(str(x)) if x is not None else Decimal(0))
+                    # Use pd.isna to correctly handle both None and np.nan from pandas.
+                    all_trades_df[col] = all_trades_df[col].apply(lambda x: Decimal(str(x)) if not pd.isna(x) else Decimal(0))
 
         initial_balance = self.mock_trader.initial_balance
         final_balance = self.mock_trader.get_total_portfolio_value()
         net_pnl = final_balance - initial_balance
         net_pnl_percent = (net_pnl / initial_balance) * 100 if initial_balance > 0 else Decimal(0)
-        unrealized_pnl = sum((pos['quantity'] * self.mock_trader.get_current_price()) - pos['usd_value'] for pos in open_positions.values())
+
+        # Correctly calculate unrealized PnL by reusing the fee-aware pnl calculation method.
+        # This simulates closing all open positions at the current market price.
+        unrealized_pnl = sum(
+            self.strategy_rules.calculate_realized_pnl(
+                buy_price=pos['price'],
+                sell_price=self.mock_trader.get_current_price(),
+                quantity_sold=pos['quantity']
+            ) for pos in open_positions.values()
+        )
 
         # Initialize metrics to default values
         total_realized_pnl = Decimal(0)
@@ -271,14 +282,14 @@ class Backtester:
             logger.info(f" Period: {start_time} to {end_time}")
         logger.info(f" Initial Balance: ${initial_balance:,.2f}")
         logger.info(f" Final Balance:   ${final_balance:,.2f}")
-        logger.info(f" Net P&L:         ${net_pnl:,.2f} ({net_pnl_percent:.2f}%)")
+        logger.info(f" Net P&L:         ${net_pnl:,.2f} ({net_pnl_percent:.2f}%%)")
         logger.info(f"   - Realized PnL:   ${total_realized_pnl:,.2f}")
         logger.info(f"   - Unrealized PnL: ${unrealized_pnl:,.2f}")
         logger.info(f" Total Buy Trades:    {buy_trades_count}")
         logger.info(f" Total Sell Trades:   {sell_trades_count} (Completed Trades)")
-        logger.info(f" Success Rate:        {win_rate:.2f}%")
+        logger.info(f" Success Rate:        {win_rate:.2f}%%")
         logger.info(f" Payoff Ratio:        {payoff_ratio:.2f}")
-        logger.info(f" Maximum Drawdown:    {max_drawdown:.2%}")
+        logger.info(f" Maximum Drawdown:    {max_drawdown * 100:.2f}%%")
         logger.info(f" Total Fees Paid:     ${total_fees_usd:,.2f}")
         logger.info(f" BTC Treasury:        {btc_treasury_amount:.8f} BTC (${btc_treasury_value:,.2f})")
         logger.info("="*80)

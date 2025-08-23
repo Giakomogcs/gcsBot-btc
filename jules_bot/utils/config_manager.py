@@ -16,7 +16,7 @@ class ConfigManager:
             config_file: The path to the configuration file.
         """
         load_dotenv()
-        self.config = configparser.ConfigParser()
+        self.config = configparser.ConfigParser(interpolation=None)
         if not config_file.exists():
             raise FileNotFoundError(f"Configuration file not found: {config_file}")
         self.config.read(config_file)
@@ -46,6 +46,12 @@ class ConfigManager:
             return {key: self._resolve_value(value) for key, value in section_items}
         return {}
 
+    def has_section(self, section: str) -> bool:
+        """
+        Checks if a section exists in the configuration file.
+        """
+        return self.config.has_section(section)
+
     def get(self, section: str, key: str, fallback: str = None) -> str:
         """
         Retrieves a specific key from a section, resolving env vars.
@@ -74,9 +80,11 @@ class ConfigManager:
 
         # Evaluate the resolved value
         if isinstance(value, str):
-            if value.lower() in ('true', '1', 't', 'y', 'yes', 'on'):
+            # Strip inline comments and whitespace
+            cleaned_value = value.split('#')[0].strip()
+            if cleaned_value.lower() in ('true', '1', 't', 'y', 'yes', 'on'):
                 return True
-            if value.lower() in ('false', '0', 'f', 'n', 'no', 'off'):
+            if cleaned_value.lower() in ('false', '0', 'f', 'n', 'no', 'off'):
                 return False
 
         # If it's not a known string, it might be an invalid value.
