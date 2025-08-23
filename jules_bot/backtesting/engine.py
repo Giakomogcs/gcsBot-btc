@@ -211,7 +211,16 @@ class Backtester:
         final_balance = self.mock_trader.get_total_portfolio_value()
         net_pnl = final_balance - initial_balance
         net_pnl_percent = (net_pnl / initial_balance) * 100 if initial_balance > 0 else Decimal(0)
-        unrealized_pnl = sum((pos['quantity'] * self.mock_trader.get_current_price()) - pos['usd_value'] for pos in open_positions.values())
+
+        # Correctly calculate unrealized PnL by reusing the fee-aware pnl calculation method.
+        # This simulates closing all open positions at the current market price.
+        unrealized_pnl = sum(
+            self.strategy_rules.calculate_realized_pnl(
+                buy_price=pos['price'],
+                sell_price=self.mock_trader.get_current_price(),
+                quantity_sold=pos['quantity']
+            ) for pos in open_positions.values()
+        )
 
         # Initialize metrics to default values
         total_realized_pnl = Decimal(0)
