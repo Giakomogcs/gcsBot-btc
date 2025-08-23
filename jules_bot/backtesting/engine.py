@@ -86,7 +86,8 @@ class Backtester:
             # O regime de mercado é obtido diretamente da vela (candle), pois foi pré-calculado
             current_regime = candle.get('market_regime', -1)
             
-            self.dynamic_params.update_parameters(current_regime)
+            # Ensure the regime is an integer for correct config section lookup
+            self.dynamic_params.update_parameters(int(current_regime))
             current_params = self.dynamic_params.parameters
             # --- END DYNAMIC STRATEGY LOGIC ---
 
