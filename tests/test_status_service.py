@@ -74,10 +74,15 @@ class TestStatusService(unittest.TestCase):
         # The feature calculator returns a pandas Series
         self.feature_calculator.get_current_candle_with_features.return_value = pd.Series(mock_market_data)
 
-        # Mock historical data for SA model training
+        # Mock historical data for SA model training.
+        # The rolling window needs enough data points (min_periods=36).
+        # We create 40 data points and make the last 'atr_14' value exceptionally high
+        # to ensure it's classified as HIGH_VOLATILITY (regime 2).
+        atr_values = [50] * 39 + [200]
+        macd_values = ([10, -20, 30, 40] * 10)
         historical_data = pd.DataFrame({
-            'atr_14': [50, 60, 70, 120], # one value above 100
-            'macd_diff_12_26_9': [10, -20, 30, 40]
+            'atr_14': atr_values,
+            'macd_diff_12_26_9': macd_values
         })
         self.feature_calculator.get_historical_data_with_features.return_value = historical_data
 

@@ -70,3 +70,26 @@ def test_evaluate_buy_signal_dip_buying(mock_config_manager):
     assert should_buy
     assert regime == "START_MONITORING"
     assert "Dip target hit on existing position" in reason
+
+
+from jules_bot.core_logic.dynamic_parameters import DynamicParameters
+
+def test_dynamic_parameters_undefined_regime():
+    """
+    Tests that when the regime is -1 (undefined), DynamicParameters loads
+    safe, non-trading parameters.
+    """
+    # Arrange
+    mock_config = MagicMock(spec=ConfigManager)
+    # We don't need to mock get_section because the logic should not reach it.
+
+    dynamic_params = DynamicParameters(mock_config)
+
+    # Act
+    dynamic_params.update_parameters(-1)
+
+    # Assert
+    # The order size should be 0 to prevent trading.
+    assert dynamic_params.parameters['order_size_usd'] == Decimal('0')
+    # Other parameters should also be safe.
+    assert dynamic_params.parameters['buy_dip_percentage'] == Decimal('1')

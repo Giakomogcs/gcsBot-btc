@@ -220,15 +220,9 @@ class TradingBot:
         dynamic_params = DynamicParameters(config_manager)
         sa_instance = SituationalAwareness()
 
-        # "Train" the Situational Awareness model by calculating thresholds from historical data
-        logger.info("Fetching historical data to train Situational Awareness model...")
-        historical_data = feature_calculator.get_historical_data_with_features()
-        if historical_data is not None and not historical_data.empty:
-            sa_instance.fit(historical_data)
-            logger.info("Situational Awareness model trained successfully.")
-        else:
-            logger.error("Could not fetch historical data. Dynamic strategy will not work. The bot will run with default parameters.")
-            # The bot will continue with sa_instance.is_fitted = False
+        # The SituationalAwareness model is rule-based and doesn't require a separate training step.
+        # Its transform method calculates regimes dynamically based on the data provided.
+        logger.info("Situational Awareness model is rule-based and ready.")
 
         if not self.trader.is_ready:
             logger.critical("Trader could not be initialized. Shutting down bot.")
@@ -243,19 +237,30 @@ class TradingBot:
                 logger.info("--- Starting new trading cycle ---")
                 self._handle_ui_commands(self.trader, state_manager, strategy_rules)
 
-                final_candle = feature_calculator.get_current_candle_with_features()
-                if final_candle.empty:
-                    logger.warning("Could not get candle. Skipping cycle.")
+                features_df = feature_calculator.get_features_dataframe()
+                if features_df.empty:
+                    logger.warning("Could not get features dataframe. Skipping cycle.")
+                    time.sleep(10)
+                    continue
+
+                final_candle = features_df.iloc[-1]
+
+                # Defensively check for NaN values in the latest candle data.
+                # This can happen if there's not enough historical data for an indicator.
+                if final_candle.isnull().any():
+                    logger.warning(f"Final candle contains NaN values, skipping cycle. Data: {final_candle.to_dict()}")
                     time.sleep(10)
                     continue
 
                 # --- DYNAMIC STRATEGY LOGIC ---
                 current_regime = -1 # Default to fallback
-                if sa_instance and sa_instance.is_fitted:
+                if sa_instance:
                     try:
-                        regime_df = sa_instance.transform(final_candle.to_frame().T)
+                        # Pass the full dataframe to transform
+                        regime_df = sa_instance.transform(features_df)
                         if not regime_df.empty:
-                            current_regime = regime_df['market_regime'].iloc[-1]
+                            # Get the regime from the last row
+                            current_regime = int(regime_df['market_regime'].iloc[-1])
                             logger.info(f"Current market regime detected: {current_regime}")
                         else:
                             logger.warning("Could not determine market regime from candle.")

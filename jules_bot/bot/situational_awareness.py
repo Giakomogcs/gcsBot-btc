@@ -7,11 +7,9 @@ class SituationalAwareness:
     """
     Determina o regime de mercado atual usando uma abordagem baseada em regras,
     utilizando indicadores técnicos como ATR para volatilidade e MACD para tendência.
+    Este modelo agora usa uma janela rolante para calcular os limiares, evitando o lookahead bias.
     """
     def __init__(self):
-        # O limiar de volatilidade (baseado no ATR) será determinado pelo método fit()
-        self.volatility_threshold = None
-        self.is_fitted = False
         # Mapeamento de regimes para melhor legibilidade e manutenção
         self.regime_map = {
             "RANGING": 0,
@@ -19,58 +17,51 @@ class SituationalAwareness:
             "HIGH_VOLATILITY": 2,
             "DOWNTREND": 3
         }
+        # Carrega a configuração da janela rolante do config.ini
+        try:
+            self.rolling_window = int(config_manager.get('DATA_PIPELINE', 'regime_rolling_window'))
+        except (ValueError, KeyError) as e:
+            logger.warning(f"Não foi possível carregar 'regime_rolling_window' do config. Usando fallback para 72. Erro: {e}")
+            self.rolling_window = 72 # Fallback
 
-    def fit(self, features_df: pd.DataFrame, volatility_percentile: float = 0.75):
-        """
-        Calcula o limiar de volatilidade a partir de dados históricos.
-        Este método "treina" o classificador de regime.
-
-        Args:
-            features_df (pd.DataFrame): DataFrame contendo dados históricos com a coluna 'atr_14'.
-            volatility_percentile (float): O percentil do ATR a ser usado como limiar para alta volatilidade.
-        """
-        logger.info("Calculando limiares para o modelo de regime baseado em regras...")
-        
-        # Garante que a coluna 'atr_14' exista e não tenha NaNs para o cálculo
-        if 'atr_14' not in features_df.columns or features_df['atr_14'].isnull().all():
-            logger.error("A coluna 'atr_14' não está disponível ou está vazia. Não é possível treinar o modelo de regime.")
-            return
-
-        # Calcula o limiar de volatilidade com base no percentil definido
-        self.volatility_threshold = features_df['atr_14'].quantile(volatility_percentile)
-        self.is_fitted = True
-
-        logger.info(f"✅ Modelo de regime treinado. Limiar de volatilidade (ATR > {volatility_percentile:.0%}): {self.volatility_threshold:.4f}")
+        self.volatility_percentile = 0.75 # O percentil do ATR a ser usado como limiar para alta volatilidade
 
     def transform(self, features_df: pd.DataFrame) -> pd.DataFrame:
         """
         Aplica a lógica baseada em regras para determinar o regime de mercado para cada linha no DataFrame.
+        Calcula um limiar de volatilidade dinâmico usando uma janela rolante para evitar lookahead bias.
 
         Args:
-            features_df (pd.DataFrame): DataFrame com os dados de vela mais recentes, incluindo 'atr_14' e 'macd_diff_12_26_9'.
+            features_df (pd.DataFrame): DataFrame com dados históricos, incluindo 'atr_14' e 'macd_diff_12_26_9'.
 
         Returns:
             pd.DataFrame: O DataFrame original com uma nova coluna 'market_regime'.
         """
-        if not self.is_fitted:
-            raise RuntimeError("O modelo de SituationalAwareness deve ser treinado (.fit()) antes de ser usado (.transform()).")
+        logger.info(f"Calculando regimes de mercado com uma janela rolante de {self.rolling_window} períodos...")
         
         df = features_df.copy()
         
-        # Extrai as features de regime do config, embora agora usemos lógica explícita
-        regime_features = ast.literal_eval(config_manager.get('DATA_PIPELINE', 'regime_features'))
-
         # Garante que as colunas necessárias existam
         required_cols = ['atr_14', 'macd_diff_12_26_9']
         if not all(col in df.columns for col in required_cols):
-            logger.warning(f"Faltando colunas necessárias para a detecção de regime: {required_cols}. Retornando regime de fallback (-1).")
-            df['market_regime'] = -1
-            return df
+            logger.error(f"Faltando colunas cruciais para a detecção de regime: {required_cols}. Não é possível continuar.")
+            raise ValueError(f"Missing required columns for regime detection: {required_cols}")
+
+        # 1. Calcula o limiar de volatilidade rolante
+        # O min_periods garante que temos dados suficientes para um cálculo significativo
+        df['volatility_threshold'] = df['atr_14'].rolling(
+            window=self.rolling_window,
+            min_periods=self.rolling_window // 2
+        ).quantile(self.volatility_percentile)
 
         # Define uma função para aplicar a lógica de regime a cada linha
         def get_regime(row):
+            # Se o limiar de volatilidade for NaN (no início do período de dados), retorna um regime de fallback
+            if pd.isna(row['volatility_threshold']):
+                return -1 # Regime indefinido
+
             # 1. Checa por alta volatilidade primeiro, pois é o regime prioritário
-            if row['atr_14'] > self.volatility_threshold:
+            if row['atr_14'] > row['volatility_threshold']:
                 return self.regime_map["HIGH_VOLATILITY"]
 
             # 2. Checa por tendência de alta
@@ -87,4 +78,8 @@ class SituationalAwareness:
         # Aplica a função para determinar o regime. fillna(-1) para casos onde as features são NaN
         df['market_regime'] = df.apply(get_regime, axis=1).fillna(-1).astype(int)
         
+        # Limpa a coluna de limiar que não é mais necessária fora deste contexto
+        df.drop(columns=['volatility_threshold'], inplace=True)
+
+        logger.info("Cálculo de regimes de mercado concluído.")
         return df

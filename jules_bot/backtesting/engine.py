@@ -57,15 +57,14 @@ class Backtester:
 
         # --- Dynamic Strategy Components ---
         self.dynamic_params = DynamicParameters(config_manager)
-        models_dir = config_manager.get('DATA_PATHS', 'models_dir', fallback='data/models')
-        sa_model_path = os.path.join(models_dir, 'sa_model.pkl')
-
-        if os.path.exists(sa_model_path):
-            self.sa_model = SituationalAwareness.load_model(sa_model_path)
-            logger.info("Situational Awareness model loaded successfully for backtest.")
-        else:
-            logger.warning(f"Situational Awareness model not found at {sa_model_path}. Backtest will run with default parameters.")
-            self.sa_model = None
+        
+        logger.info("Initializing the Situational Awareness model...")
+        self.sa_model = SituationalAwareness()
+        
+        # A SA agora calcula os regimes para todo o conjunto de dados de uma vez, usando uma janela rolante
+        # para evitar o lookahead bias. A coluna 'market_regime' é adicionada ao feature_data.
+        self.feature_data = self.sa_model.transform(self.feature_data)
+        logger.info("Market regimes calculated for the entire backtest period.")
 
     def run(self):
         logger.info(f"--- Starting backtest run {self.run_id} ---")
@@ -78,22 +77,17 @@ class Backtester:
         open_positions = {}
         portfolio_history = []
 
+        # Itera sobre os dados que agora já contêm os regimes de mercado pré-calculados
         for current_time, candle in self.feature_data.iterrows():
             current_price = Decimal(str(candle['close']))
             self.mock_trader.set_current_time_and_price(current_time, current_price)
 
             # --- DYNAMIC STRATEGY LOGIC ---
-            current_regime = -1 # Default to fallback
-            if self.sa_model and self.sa_model.is_fitted:
-                try:
-                    # The model expects a DataFrame, so we convert the candle (Series) to a frame
-                    regime_df = self.sa_model.transform(candle.to_frame().T)
-                    if not regime_df.empty:
-                        current_regime = regime_df['market_regime'].iloc[-1]
-                except Exception as e:
-                    logger.error(f"Error getting market regime during backtest: {e}", exc_info=True)
+            # O regime de mercado é obtido diretamente da vela (candle), pois foi pré-calculado
+            current_regime = candle.get('market_regime', -1)
             
-            self.dynamic_params.update_parameters(current_regime)
+            # Ensure the regime is an integer for correct config section lookup
+            self.dynamic_params.update_parameters(int(current_regime))
             current_params = self.dynamic_params.parameters
             # --- END DYNAMIC STRATEGY LOGIC ---
 
@@ -157,7 +151,7 @@ class Backtester:
                         del open_positions[trade_id]
 
             market_data = candle.to_dict()
-            buy_amount_usdt, operating_mode, reason = self.capital_manager.get_buy_order_details(
+            buy_amount_usdt, operating_mode, reason, _ = self.capital_manager.get_buy_order_details(
                 market_data=market_data,
                 open_positions=list(open_positions.values()),
                 portfolio_value=total_portfolio_value,
@@ -202,7 +196,7 @@ class Backtester:
         logger.info("--- Generating and saving backtest summary ---")
 
         all_trades_for_run = self.db_manager.get_trades_by_run_id(self.run_id)
-
+        
         if not all_trades_for_run:
             logger.warning("No trades were executed in this backtest run.")
             all_trades_df = pd.DataFrame()
@@ -210,29 +204,64 @@ class Backtester:
             all_trades_df = pd.DataFrame([t.to_dict() for t in all_trades_for_run])
             for col in ['price', 'quantity', 'usd_value', 'commission', 'commission_usd', 'realized_pnl_usd', 'hodl_asset_amount', 'hodl_asset_value_at_sell']:
                 if col in all_trades_df.columns:
-                    all_trades_df[col] = all_trades_df[col].apply(lambda x: Decimal(str(x)) if x is not None else Decimal(0))
+                    # Use pd.isna to correctly handle both None and np.nan from pandas.
+                    all_trades_df[col] = all_trades_df[col].apply(lambda x: Decimal(str(x)) if not pd.isna(x) else Decimal(0))
 
         initial_balance = self.mock_trader.initial_balance
         final_balance = self.mock_trader.get_total_portfolio_value()
         net_pnl = final_balance - initial_balance
         net_pnl_percent = (net_pnl / initial_balance) * 100 if initial_balance > 0 else Decimal(0)
 
-        buy_trades = all_trades_df[all_trades_df['status'] != 'TREASURY']
-        sell_trades = all_trades_df[all_trades_df['status'] == 'CLOSED']
+        # Correctly calculate unrealized PnL by reusing the fee-aware pnl calculation method.
+        # This simulates closing all open positions at the current market price.
+        unrealized_pnl = sum(
+            self.strategy_rules.calculate_realized_pnl(
+                buy_price=pos['price'],
+                sell_price=self.mock_trader.get_current_price(),
+                quantity_sold=pos['quantity']
+            ) for pos in open_positions.values()
+        )
 
-        total_realized_pnl = sell_trades['realized_pnl_usd'].sum()
-        total_fees_usd = all_trades_df['commission_usd'].sum()
+        # Initialize metrics to default values
+        total_realized_pnl = Decimal(0)
+        total_fees_usd = Decimal(0)
+        win_rate = Decimal(0)
+        payoff_ratio = Decimal(0)
+        avg_gain = Decimal(0)
+        avg_loss = Decimal(0)
+        buy_trades_count = 0
+        sell_trades_count = 0
+        btc_treasury_amount = Decimal(0)
+        btc_treasury_value = Decimal(0)
 
-        winning_trades = sell_trades[sell_trades['realized_pnl_usd'] > 0]
-        losing_trades = sell_trades[sell_trades['realized_pnl_usd'] <= 0]
+        if not all_trades_df.empty:
+            buy_trades = all_trades_df[all_trades_df['status'] != 'TREASURY']
+            sell_trades = all_trades_df[all_trades_df['status'] == 'CLOSED']
+            buy_trades_count = len(buy_trades)
+            sell_trades_count = len(sell_trades)
 
-        win_rate = (len(winning_trades) / len(sell_trades)) * 100 if len(sell_trades) > 0 else Decimal(0)
+            total_realized_pnl = sell_trades['realized_pnl_usd'].sum()
+            total_fees_usd = all_trades_df['commission_usd'].sum()
 
-        avg_gain = winning_trades['realized_pnl_usd'].mean() if len(winning_trades) > 0 else Decimal(0)
-        avg_loss = abs(losing_trades['realized_pnl_usd'].mean()) if len(losing_trades) > 0 else Decimal(0)
-        payoff_ratio = avg_gain / avg_loss if avg_loss > 0 else Decimal('inf')
+            winning_trades = sell_trades[sell_trades['realized_pnl_usd'] > 0]
+            losing_trades = sell_trades[sell_trades['realized_pnl_usd'] <= 0]
 
-        unrealized_pnl = sum((pos['quantity'] * self.mock_trader.get_current_price()) - pos['usd_value'] for pos in open_positions.values())
+            if sell_trades_count > 0:
+                win_rate = (len(winning_trades) / sell_trades_count) * 100
+            
+            if len(winning_trades) > 0:
+                avg_gain = winning_trades['realized_pnl_usd'].mean()
+            
+            if len(losing_trades) > 0:
+                avg_loss = abs(losing_trades['realized_pnl_usd'].mean())
+            
+            if avg_loss > 0:
+                payoff_ratio = avg_gain / avg_loss
+
+            treasury_df = all_trades_df[all_trades_df['status'] == 'TREASURY']
+            if not treasury_df.empty:
+                btc_treasury_amount = treasury_df['quantity'].sum()
+                btc_treasury_value = btc_treasury_amount * self.mock_trader.get_current_price()
 
         max_drawdown = Decimal(0)
         peak = -Decimal('inf')
@@ -245,10 +274,6 @@ class Backtester:
                 if drawdown > max_drawdown:
                     max_drawdown = drawdown
 
-        treasury_df = all_trades_df[all_trades_df['status'] == 'TREASURY']
-        btc_treasury_amount = treasury_df['quantity'].sum()
-        btc_treasury_value = btc_treasury_amount * self.mock_trader.get_current_price()
-
         logger.info("="*30 + " BACKTEST RESULTS " + "="*30)
         logger.info(f" Backtest Run ID: {self.run_id}")
         if not self.feature_data.empty:
@@ -257,14 +282,14 @@ class Backtester:
             logger.info(f" Period: {start_time} to {end_time}")
         logger.info(f" Initial Balance: ${initial_balance:,.2f}")
         logger.info(f" Final Balance:   ${final_balance:,.2f}")
-        logger.info(f" Net P&L:         ${net_pnl:,.2f} ({net_pnl_percent:.2f}%)")
+        logger.info(f" Net P&L:         ${net_pnl:,.2f} ({net_pnl_percent:.2f}%%)")
         logger.info(f"   - Realized PnL:   ${total_realized_pnl:,.2f}")
         logger.info(f"   - Unrealized PnL: ${unrealized_pnl:,.2f}")
-        logger.info(f" Total Buy Trades:    {len(buy_trades)}")
-        logger.info(f" Total Sell Trades:   {len(sell_trades)} (Completed Trades)")
-        logger.info(f" Success Rate:        {win_rate:.2f}%")
+        logger.info(f" Total Buy Trades:    {buy_trades_count}")
+        logger.info(f" Total Sell Trades:   {sell_trades_count} (Completed Trades)")
+        logger.info(f" Success Rate:        {win_rate:.2f}%%")
         logger.info(f" Payoff Ratio:        {payoff_ratio:.2f}")
-        logger.info(f" Maximum Drawdown:    {max_drawdown:.2%}")
+        logger.info(f" Maximum Drawdown:    {max_drawdown * 100:.2f}%%")
         logger.info(f" Total Fees Paid:     ${total_fees_usd:,.2f}")
         logger.info(f" BTC Treasury:        {btc_treasury_amount:.8f} BTC (${btc_treasury_value:,.2f})")
         logger.info("="*80)

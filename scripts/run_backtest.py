@@ -86,6 +86,17 @@ def main():
         backtester.run()
         logger.info("--- Backtest Simulation Finished ---")
 
+    except ValueError as e:
+        if "No price data found" in str(e):
+            logger.error("Backtest failed: No historical price data was found in the database for the specified period.")
+            logger.warning("This usually happens for one of two reasons:")
+            logger.warning("1. The data preparation step failed to download data from the exchange (e.g., due to a network issue).")
+            logger.warning("2. The historical data for the requested period does not exist.")
+            logger.info("Please run the 'prepare_backtest_data.py' script again or check your network connection.")
+            sys.exit(1)
+        else:
+            # If it's a different ValueError, let the general exception handler catch it
+            raise
     except Exception as e:
         logger.error(f"An unexpected error occurred during the backtest execution: {e}", exc_info=True)
         sys.exit(1)

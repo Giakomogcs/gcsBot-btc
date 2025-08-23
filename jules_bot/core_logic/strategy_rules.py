@@ -1,5 +1,6 @@
-from decimal import Decimal, getcontext
+from decimal import Decimal, getcontext, InvalidOperation
 from jules_bot.utils.config_manager import ConfigManager
+from jules_bot.utils.logger import logger
 from typing import Dict
 
 # Set precision for Decimal calculations
@@ -7,12 +8,39 @@ getcontext().prec = 28
 
 class StrategyRules:
     def __init__(self, config_manager: ConfigManager):
-        self.rules = config_manager.get_section('STRATEGY_RULES')
-        self.max_capital_per_trade_percent = Decimal(self.rules.get('max_capital_per_trade_percent', '0.02'))
-        self.base_usd_per_trade = Decimal(self.rules.get('base_usd_per_trade', '20.0'))
-        self.sell_factor = Decimal(self.rules.get('sell_factor', '0.9'))
-        self.commission_rate = Decimal(self.rules.get('commission_rate', '0.001'))
-        self.use_reversal_buy_strategy = self.rules.get('use_reversal_buy_strategy', 'true').lower() == 'true'
+        self.config_manager = config_manager
+        self.section_name = 'STRATEGY_RULES'
+
+        # Load all parameters using the safe getter
+        self.max_capital_per_trade_percent = self._safe_get_decimal('max_capital_per_trade_percent', '0.02')
+        self.base_usd_per_trade = self._safe_get_decimal('base_usd_per_trade', '20.0')
+        self.sell_factor = self._safe_get_decimal('sell_factor', '0.9')
+        self.commission_rate = self._safe_get_decimal('commission_rate', '0.001')
+
+        # Boolean values don't need Decimal conversion
+        self.use_reversal_buy_strategy = self.config_manager.getboolean(
+            self.section_name, 'use_reversal_buy_strategy', fallback=True
+        )
+
+    def _safe_get_decimal(self, key: str, fallback: str) -> Decimal:
+        """
+        Safely gets a parameter from the STRATEGY_RULES section and converts it to a Decimal.
+        Logs a critical error and uses the fallback if conversion fails.
+        """
+        value_str = self.config_manager.get(self.section_name, key, fallback=fallback)
+
+        if value_str is None:
+            logger.warning(f"Config value for '{key}' in section '{self.section_name}' is missing. Using fallback '{fallback}'.")
+            return Decimal(fallback)
+
+        try:
+            return Decimal(value_str)
+        except (InvalidOperation, TypeError) as e:
+            logger.critical(
+                f"Invalid config value for '{key}' in section '{self.section_name}'. Could not convert to Decimal. "
+                f"Value was: '{value_str}'. Using fallback '{fallback}'. Error: {e}"
+            )
+            return Decimal(fallback)
 
     def evaluate_buy_signal(self, market_data: dict, open_positions_count: int, difficulty_factor: int = 0, params: Dict[str, Decimal] = None) -> tuple[bool, str, str]:
         """
