@@ -75,9 +75,7 @@ def main(
 
     # --- Inicialização e Verificação do Ambiente ---
     try:
-        config_manager = ConfigManager()
-        db_config = config_manager.get_db_config('POSTGRES')
-        db_manager = PostgresManager(config=db_config)
+        db_manager = PostgresManager()
 
         # A verificação do ambiente é a primeira coisa a ser feita.
         # Se isso falhar, o restante do script não deve ser executado.

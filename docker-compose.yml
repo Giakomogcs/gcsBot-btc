@@ -34,10 +34,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    env_file:
-      - .env
     environment:
-      POSTGRES_HOST: gcsbot-postgres
+      POSTGRES_HOST: postgres
     volumes:
       - .:/app
     ports:

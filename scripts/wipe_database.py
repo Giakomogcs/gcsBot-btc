@@ -36,8 +36,7 @@ def wipe_database(force=False):
     if user_confirmed:
         logger.info("User confirmed database wipe. Proceeding...")
         try:
-            db_config = config_manager.get_db_config('POSTGRES')
-            db_manager = PostgresManager(config=db_config)
+            db_manager = PostgresManager()
 
             logger.info("Instantiated PostgresManager. Calling clear_all_tables()...")
             db_manager.clear_all_tables()

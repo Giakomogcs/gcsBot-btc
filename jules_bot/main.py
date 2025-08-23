@@ -30,8 +30,7 @@ def main():
     bot = None
     try:
         # --- Configuração do Banco de Dados Unificado (PostgreSQL) ---
-        db_config = config_manager.get_db_config('POSTGRES')
-        db_manager = PostgresManager(config=db_config)
+        db_manager = PostgresManager()
         
         # O MarketDataProvider agora usa o mesmo PostgresManager
         market_data_provider = MarketDataProvider(db_manager=db_manager)

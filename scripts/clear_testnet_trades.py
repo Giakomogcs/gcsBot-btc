@@ -15,17 +15,7 @@ def clear_testnet_trades():
     try:
         logger.info("Starting the process to clear testnet trades...")
 
-        # Load database configuration from config.ini
-        db_config = {
-            'user': config_manager.get('POSTGRES', 'user'),
-            'password': config_manager.get('POSTGRES', 'password'),
-            'host': config_manager.get('POSTGRES', 'host'),
-            'port': config_manager.get('POSTGRES', 'port'),
-            'dbname': config_manager.get('POSTGRES', 'dbname')
-        }
-
-        # Initialize the PostgresManager
-        db_manager = PostgresManager(config=db_config)
+        db_manager = PostgresManager()
 
         # Call the method to clear testnet trades
         db_manager.clear_testnet_trades()

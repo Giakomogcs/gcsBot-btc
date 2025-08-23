@@ -28,8 +28,7 @@ def get_summary():
     sell_trade_count = 0
 
     try:
-        db_config = config_manager.get_db_config('POSTGRES')
-        db_manager = PostgresManager(config=db_config)
+        db_manager = PostgresManager()
 
         # Fetch all trades from all environments
         all_trades = db_manager.get_all_trades_in_range(mode='trade')

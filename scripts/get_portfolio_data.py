@@ -20,8 +20,7 @@ def get_portfolio_data():
     Fetches the latest portfolio snapshot, historical data, and DCOM status for the TUI.
     """
     try:
-        db_config = config_manager.get_section('POSTGRES')
-        db_manager = PostgresManager(config=db_config)
+        db_manager = PostgresManager()
         portfolio_manager = PortfolioManager(db_manager.SessionLocal)
 
         # --- Fetch Data ---

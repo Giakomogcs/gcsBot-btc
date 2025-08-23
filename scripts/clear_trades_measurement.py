@@ -19,9 +19,7 @@ def main(environment: str):
     try:
         logger.info(f"--- LIMPANDO A TABELA 'TRADES' DO AMBIENTE '{environment}' NO POSTGRESQL ---")
 
-        # Get the PostgreSQL config
-        db_config = config_manager.get_db_config('POSTGRES')
-        db_manager = PostgresManager(config=db_config)
+        db_manager = PostgresManager()
 
         with db_manager.get_db() as session:
             logger.info(f"Conectado ao banco de dados. Deletando trades do ambiente '{environment}'...")

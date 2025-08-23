@@ -69,9 +69,7 @@ def main():
     try:
         logger.info("--- Starting New Backtest Simulation ---")
         
-        # Create a single DB manager instance for the backtest
-        db_config = config_manager.get_db_config('POSTGRES')
-        db_manager = PostgresManager(config=db_config)
+        db_manager = PostgresManager()
 
         if args.clear_backtest_trades:
             logger.info("Clearing previous backtest trades as requested...")

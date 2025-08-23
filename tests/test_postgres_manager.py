@@ -11,14 +11,8 @@ TEST_DB_URL = "sqlite:///:memory:"
 @pytest.fixture(scope="function")
 def postgres_manager():
     """Returns a PostgresManager instance for testing, using an in-memory SQLite DB."""
-    # Dummy config, as we're overriding the engine
-    config = {
-        "user": "test", "password": "test", "host": "localhost", "port": "5432", "dbname": "test"
-    }
-
-    # Patch the __init__ method to prevent it from creating a real engine
-    with patch.object(PostgresManager, '__init__', lambda s, c: None) as mock_init:
-        manager = PostgresManager(config)
+    with patch.object(PostgresManager, '__init__', lambda s: None) as mock_init:
+        manager = PostgresManager()
 
         # Now, set up the engine and session for the in-memory SQLite DB
         engine = create_engine(TEST_DB_URL)

@@ -1,8 +1,10 @@
 import json
 import logging
+import os
 import uuid
 from typing import Optional, Iterator
 import pandas as pd
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, desc, and_, text, inspect
 from sqlalchemy.orm import sessionmaker, Session
 from contextlib import contextmanager
@@ -12,9 +14,19 @@ from jules_bot.database.models import Trade, BotStatus, PriceHistory
 from jules_bot.database.portfolio_models import PortfolioSnapshot, FinancialMovement
 from jules_bot.utils.logger import logger
 
+load_dotenv()
+
 class PostgresManager:
-    def __init__(self, config: dict):
-        self.db_url = f"postgresql+psycopg2://{config['user']}:{config['password']}@{config['host']}:{config['port']}/{config['dbname']}"
+    def __init__(self):
+        db_user = os.getenv("POSTGRES_USER")
+        db_password = os.getenv("POSTGRES_PASSWORD")
+        db_host = os.getenv("POSTGRES_HOST")
+        db_port = os.getenv("POSTGRES_PORT", "5432")
+        db_name = os.getenv("POSTGRES_DB")
+
+        print(f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}")
+
+        self.db_url = f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
         self.engine = create_engine(self.db_url, connect_args={'connect_timeout': 5})
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
         self._initialized = False
@@ -143,7 +155,7 @@ class PostgresManager:
 
                 trade_to_update.status = 'CLOSED'
                 trade_to_update.order_type = 'sell' # Reflects the last action on the trade
-                
+
                 # Update all relevant fields from the sell_data dictionary
                 trade_to_update.price = sell_data.get('price', trade_to_update.price)
                 trade_to_update.quantity = sell_data.get('quantity', trade_to_update.quantity)
@@ -184,7 +196,7 @@ class PostgresManager:
 
                 if df.empty:
                     logger.warning(f"DB: No price data found for {measurement} in the specified range.")
-                
+
                 return df
             except Exception as e:
                 logger.error(f"DB: Failed to get price data: {e}", exc_info=True)
@@ -206,10 +218,10 @@ class PostgresManager:
                     filters.append(Trade.run_id == bot_id)
                 if symbol:
                     filters.append(Trade.symbol == symbol)
-                
+
                 # MODIFIED: Added order_by clause to sort by timestamp descending
-                query = db.query(Trade).filter(and_(*filters)).order_by(desc(Trade.timestamp))              
-                
+                query = db.query(Trade).filter(and_(*filters)).order_by(desc(Trade.timestamp))
+
                 trades = query.all()
                 return trades
             except Exception as e:
@@ -284,7 +296,7 @@ class PostgresManager:
                 db.rollback()
                 logger.error(f"Failed to update sell target for trade_id '{trade_id}': {e}", exc_info=True)
                 raise
-    
+
     def get_trade_by_binance_trade_id(self, binance_trade_id: int) -> Optional[Trade]:
         with self.get_db() as db:
             try:
