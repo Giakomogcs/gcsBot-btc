@@ -8,13 +8,18 @@ sys.path.insert(0, project_root)
 
 from jules_bot.services.performance_service import get_summary
 
-def main():
+def main(bot_name: str):
     """
     This script acts as a data endpoint for the TUI.
     It fetches the performance summary and prints it as a JSON string.
     """
+    # Set BOT_NAME environment variable so other modules can pick it up
+    os.environ["BOT_NAME"] = bot_name
     summary_data = get_summary()
     print(json.dumps(summary_data))
 
 if __name__ == "__main__":
-    main()
+    bot_name = "jules_bot"
+    if len(sys.argv) > 1:
+        bot_name = sys.argv[1]
+    main(bot_name)

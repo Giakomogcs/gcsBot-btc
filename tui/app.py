@@ -128,7 +128,11 @@ class TUIApp(App):
         self.mode = mode
         self.selected_trade_id: str | None = None
         self.log_display: RichLog | None = None
-        self.log_file_path = os.path.join("logs", "jules_bot.jsonl")
+        
+        # Get bot name from environment variable for log isolation
+        self.bot_name = os.getenv("BOT_NAME", "jules_bot")
+        self.log_file_path = os.path.join("logs", f"{self.bot_name}.jsonl")
+        
         self.log_file_handle = None
         self.log_filter = ""
 
@@ -144,14 +148,14 @@ class TUIApp(App):
                     yield Button("Sell 100%", id="force_sell_100_button", variant="error", disabled=True)
                     yield Button("Sell 90%", id="force_sell_90_button", variant="warning", disabled=True)
 
-                yield Static("Live Log", classes="title")
+                yield Static(f"Live Log for {self.bot_name}", classes="title")
                 with Horizontal(id="log_filter_bar"):
                     yield Label("Filter:", id="log_filter_label")
                     yield Input(placeholder="e.g., ERROR", id="log_filter_input")
                 yield RichLog(id="log_display", wrap=True, markup=True, min_width=0)
 
             with VerticalScroll(id="middle_pane"):
-                yield Static("Bot Status", classes="title")
+                yield Static(f"Bot Status for {self.bot_name}", classes="title")
                 with Static(id="status_container"):
                     yield Static(f"Mode: {self.mode.upper()}", id="status_mode")
                     yield Static("Symbol: N/A", id="status_symbol")
@@ -202,7 +206,7 @@ class TUIApp(App):
 
     def on_mount(self) -> None:
         self.log_display = self.query_one(RichLog)
-        self.log_display.write("[bold green]TUI Initialized.[/bold green]")
+        self.log_display.write(f"[bold green]TUI Initialized for {self.bot_name}.[/bold green]")
 
         positions_table = self.query_one("#positions_table", DataTable)
         positions_table.cursor_type = "row"
@@ -330,7 +334,7 @@ class TUIApp(App):
                 self.log_display.write("[bold red]Invalid buy amount.[/bold red]")
                 return
             amount = input_widget.value
-            command = ["python", "scripts/force_buy.py", amount]
+            command = ["python", "scripts/force_buy.py", amount, self.bot_name]
             self.run_script_worker(command, CommandOutput) # Executa em segundo plano
             input_widget.value = ""
 
@@ -340,7 +344,7 @@ class TUIApp(App):
                 return
 
             percentage = "100" if event.button.id == "force_sell_100_button" else "90"
-            command = ["python", "scripts/force_sell.py", self.selected_trade_id, percentage]
+            command = ["python", "scripts/force_sell.py", self.selected_trade_id, percentage, self.bot_name]
             self.run_script_worker(command, CommandOutput) # Executa em segundo plano
 
             self.query_one("#force_sell_100_button").disabled = True
@@ -369,12 +373,12 @@ class TUIApp(App):
     # MODIFICADO: update_dashboard agora chama um worker
     def update_dashboard(self) -> None:
         """Inicia a atualização do dashboard em um worker."""
-        command = ["python", "scripts/get_bot_data.py", self.mode]
+        command = ["python", "scripts/get_bot_data.py", self.mode, self.bot_name]
         self.run_script_worker(command, DashboardData)
 
     def update_portfolio_dashboard(self) -> None:
         """Initiates the portfolio dashboard update in a worker."""
-        command = ["python", "scripts/get_portfolio_data.py"]
+        command = ["python", "scripts/get_portfolio_data.py", self.bot_name]
         self.run_script_worker(command, PortfolioData)
 
     # NOVO: Handler para a mensagem DashboardData, que atualiza a UI
@@ -560,7 +564,7 @@ class TUIApp(App):
 
     def update_performance_summary(self) -> None:
         """Initiates the performance summary update in a worker."""
-        command = ["python", "scripts/get_tui_performance_data.py"]
+        command = ["python", "scripts/get_tui_performance_data.py", self.bot_name]
         self.run_script_worker(command, PerformanceSummaryData)
 
     def on_performance_summary_data(self, message: PerformanceSummaryData) -> None:

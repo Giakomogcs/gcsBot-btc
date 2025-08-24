@@ -84,6 +84,25 @@ This will use the configuration from `.env.live-config` and create a bot instanc
 python run.py --bot-name my-live-bot --env-file .env.live-config trade
 ```
 
+## Running the TUI Dashboard
+
+The Text-based User Interface (TUI) dashboard allows you to monitor and control your bot instances in real-time.
+
+### Options
+
+-   `--mode` or `-m`: Specifies the operating mode to monitor (`trade` or `test`). Defaults to `test`.
+-   `--bot-name` or `-n`: Specifies the name of the bot instance to monitor. This must match the name of a running bot instance. Defaults to `jules_bot`.
+
+### Example
+
+To run the TUI dashboard for a bot named `my-test-bot` in `test` mode:
+
+```bash
+python run.py --bot-name my-test-bot dashboard --mode test
+```
+
+**Note:** The bot instance you wish to monitor (e.g., `my-test-bot` in `test` mode) must be running in a separate terminal for the dashboard to display live data.
+
 ## Stopping the Bot
 
 To stop all running services, use the `stop` command:

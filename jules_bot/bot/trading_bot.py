@@ -89,12 +89,13 @@ class TradingBot:
     def __init__(self, mode: str, bot_id: str, market_data_provider: MarketDataProvider, db_manager: PostgresManager):
         self.mode = mode
         self.run_id = bot_id
+        self.bot_name = os.getenv("BOT_NAME", "jules_bot")
         self.is_running = True
         self.market_data_provider = market_data_provider
         self.db_manager = db_manager
         self.trader = Trader(mode=self.mode)
         self.symbol = config_manager.get('APP', 'symbol')
-        self.state_file_path = "/tmp/bot_state.json"
+        self.state_file_path = f"/tmp/bot_state_{self.bot_name}.json"
 
         # -- State for Reversal Buy Strategy --
         self.is_monitoring_for_reversal = False
@@ -122,7 +123,7 @@ class TradingBot:
     def _handle_ui_commands(self, trader, state_manager, strategy_rules):
         # This function deals with external data, which can be kept as strings/floats
         # and converted to Decimal only when passed to financial calculations.
-        command_dir = "commands"
+        command_dir = os.path.join("commands", self.bot_name)
         if not os.path.exists(command_dir): return
 
         for filename in os.listdir(command_dir):
@@ -230,7 +231,7 @@ class TradingBot:
 
         state_manager.sync_holdings_with_binance(account_manager, strategy_rules, self.trader)
         state_manager.recalculate_open_position_targets(strategy_rules, sa_instance, dynamic_params)
-        logger.info(f"🚀 --- TRADING BOT STARTED --- RUN ID: {self.run_id} --- SYMBOL: {self.symbol} --- MODE: {self.mode.upper()} --- 🚀")
+        logger.info(f"🚀 --- TRADING BOT STARTED --- BOT NAME: {self.bot_name} --- RUN ID: {self.run_id} --- SYMBOL: {self.symbol} --- MODE: {self.mode.upper()} --- 🚀")
 
         while self.is_running:
             try:
@@ -407,7 +408,7 @@ class TradingBot:
                     buy_progress=buy_progress
                 )
 
-                logger.info("--- Cycle complete. Waiting 30 seconds... ---")
+                logger.info("--- Cycle complete. Waiting 30 seconds...")
                 time.sleep(30)
 
             except KeyboardInterrupt:

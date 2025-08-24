@@ -55,6 +55,10 @@ def main(
     mode: str = typer.Argument(
         "test",
         help="The environment to get data for ('trade' or 'test')."
+    ),
+    bot_name: str = typer.Argument(
+        "jules_bot",
+        help="The name of the bot to get data for."
     )
 ):
     """
@@ -71,7 +75,7 @@ def main(
         logger.error("Invalid mode specified. Please choose 'trade' or 'test'.")
         raise typer.Exit(code=1)
 
-    logger.info(f"Gathering bot data for '{mode}' environment...")
+    logger.info(f"Gathering bot data for '{bot_name}' in '{mode}' environment...")
 
     # --- Inicialização e Verificação do Ambiente ---
     try:
@@ -100,9 +104,8 @@ def main(
         logger.info("Ambiente verificado. Coletando dados do bot...")
         feature_calculator = LiveFeatureCalculator(db_manager, mode=mode)
         status_service = StatusService(db_manager, config_manager, feature_calculator)
-        bot_id = f"jules_{mode}_bot"
-
-        status_data = status_service.get_extended_status(mode, bot_id)
+        
+        status_data = status_service.get_extended_status(mode, bot_name)
 
         if "error" in status_data:
             logger.error(f"O serviço de status retornou um erro: {status_data['error']}")

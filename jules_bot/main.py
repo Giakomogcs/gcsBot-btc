@@ -21,7 +21,10 @@ def main():
     # Garante que qualquer espaço em branco seja removido antes de comparar
     bot_mode = bot_mode.strip().lower()
     
-    logger.info(f"--- INICIANDO O BOT EM MODO '{bot_mode.upper()}' (via variável de ambiente) ---")
+    # Get bot name from environment variable
+    bot_name = os.getenv("BOT_NAME", "jules_bot")
+
+    logger.info(f"--- INICIANDO O BOT '{bot_name}' EM MODO '{bot_mode.upper()}' (via variável de ambiente) ---")
     
     if bot_mode not in ['trade', 'test']:
         logger.error(f"Modo inválido '{bot_mode}'. Deve ser 'trade', 'test'.")

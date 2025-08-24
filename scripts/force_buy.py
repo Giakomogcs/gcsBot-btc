@@ -17,16 +17,21 @@ def main(
         help="The amount in USD to buy.",
         min=0.0,
         show_default=False
+    ),
+    bot_name: str = typer.Argument(
+        "jules_bot",
+        help="The name of the bot to send the command to."
     )
 ):
     """
     Creates a command file to instruct a running bot to execute a manual buy.
     """
-    logger.info(f"Received request to force buy ${amount_usd:.2f}.")
+    logger.info(f"Received request to force buy ${amount_usd:.2f} for bot '{bot_name}'.")
 
     try:
-        # Ensure the command directory exists
-        os.makedirs(COMMAND_DIR, exist_ok=True)
+        # Ensure the command directory for the specific bot exists
+        bot_command_dir = os.path.join(COMMAND_DIR, bot_name)
+        os.makedirs(bot_command_dir, exist_ok=True)
 
         # Define the command payload
         command = {
@@ -36,19 +41,19 @@ def main(
 
         # Create a unique filename for the command
         filename = f"cmd_buy_{int(time.time() * 1000)}.json"
-        filepath = os.path.join(COMMAND_DIR, filename)
+        filepath = os.path.join(bot_command_dir, filename)
 
         # Write the command to the file
         with open(filepath, "w") as f:
             json.dump(command, f)
 
         logger.info(f"Successfully created command file: {filepath}")
-        print(f"✅ Buy command for ${amount_usd:.2f} has been issued.")
-        print(f"   A running bot should execute it shortly.")
+        print(f"✅ Buy command for ${amount_usd:.2f} has been issued to bot '{bot_name}'.")
+        print(f"   The bot should execute it shortly.")
 
     except IOError as e:
         logger.error(f"Failed to write command file: {e}", exc_info=True)
-        print(f"❌ Error: Could not write command file to '{COMMAND_DIR}'.")
+        print(f"❌ Error: Could not write command file to '{bot_command_dir}'.")
         raise typer.Exit(code=1)
     except Exception as e:
         logger.error(f"An unexpected error occurred: {e}", exc_info=True)
