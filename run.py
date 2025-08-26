@@ -19,13 +19,13 @@ app = typer.Typer(context_settings=CONTEXT_SETTINGS)
 # State dictionary to hold the bot name and env file
 state = {
     "bot_name": "jules_bot",
-    "env_file": ".env"
+    "env_file": "env/default.env"
 }
 
 @app.callback()
 def main(
     bot_name: str = typer.Option("jules_bot", "--bot-name", "-n", help="O nome do bot para isolamento de logs e dados."),
-    env_file: str = typer.Option(".env", "--env-file", "-e", help="Caminho para o arquivo .env a ser usado.")
+    env_file: str = typer.Option("env/default.env", "--env-file", "-e", help="Caminho para o arquivo .env a ser usado.")
 ):
     """
     Jules Bot - A crypto trading bot.
@@ -320,31 +320,33 @@ def backtest(
 
 
 def _get_available_bots() -> dict[str, str]:
-    """Scans for .env files and returns a dictionary of bot_name: file_path."""
+    """
+    Scans the 'env/' directory for .env files and returns a dictionary of
+    bot_name: file_path.
+    """
     bots = {}
-    # Use glob to find all files starting with .env in the root directory
-    for env_file in glob.glob(".env*"):
+    env_dir = "env"
+    # Scan for all files ending with .env in the env/ directory
+    for env_file in glob.glob(os.path.join(env_dir, "*.env")):
         filename = os.path.basename(env_file)
-        if filename == ".env":
-            # Default bot name for the default .env file
-            bots["jules_bot"] = ".env"
-        elif filename.startswith(".env."):
-            # For files like .env.my_bot -> my_bot
-            bot_name = filename[5:]
-            if bot_name:
-                bots[bot_name] = env_file
-        elif filename.startswith(".env-"):
-            # For files like .env-2 -> 2
-            bot_name = filename[5:]
-            if bot_name:
-                bots[bot_name] = env_file
+        # The bot name is the filename without the .env extension
+        bot_name = filename[:-4]
+
+        if bot_name == "default":
+            # The default.env file corresponds to the main 'jules_bot'
+            bots["jules_bot"] = env_file
+        elif bot_name == "example":
+            # Ignore the example file
+            continue
+        else:
+            bots[bot_name] = env_file
     return bots
 
 
 @app.command("new-bot")
 def new_bot():
     """
-    Creates a new .env file for a new bot from the .env.example template.
+    Creates a new .env file for a new bot from the env/example.env template.
     """
     print("🤖 Criando um novo bot...")
 
@@ -353,7 +355,7 @@ def new_bot():
         raise typer.Exit(1)
 
     # Check for template file
-    template_file = ".env.example"
+    template_file = "env/example.env"
     if not os.path.exists(template_file):
         print(f"❌ Arquivo de template '{template_file}' não encontrado. Não é possível criar um novo bot.")
         raise typer.Exit(1)
@@ -369,7 +371,7 @@ def new_bot():
         raise typer.Exit()
 
     # Create new env file name
-    new_env_file = f".env.{bot_name}"
+    new_env_file = f"env/{bot_name}.env"
 
     # Check if file already exists
     if os.path.exists(new_env_file):
@@ -446,7 +448,7 @@ def _interactive_bot_selection() -> tuple[str, str]:
     """
     available_bots = _get_available_bots()
     if not available_bots:
-        print("❌ Nenhum bot encontrado (nenhum arquivo .env*). Crie um arquivo .env ou .env.<nome_do_bot>.")
+        print("❌ Nenhum bot encontrado. Crie um arquivo de configuração em 'env/' com a extensão .env (ex: env/meu-bot.env).")
         raise typer.Exit(1)
 
     if questionary is None:
