@@ -4,6 +4,11 @@ import shutil
 import typer
 import subprocess
 from typing import Optional
+import glob
+try:
+    import questionary
+except ImportError:
+    questionary = None
 
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.utils.config_manager import config_manager
@@ -278,14 +283,80 @@ def backtest(
     print("\n✅ Backtest finalizado com sucesso.")
 
 
-@app.command()
-def dashboard(
+def _get_available_bots() -> dict[str, str]:
+    """Scans for .env files and returns a dictionary of bot_name: file_path."""
+    bots = {}
+    # Use glob to find all files starting with .env in the root directory
+    for env_file in glob.glob(".env*"):
+        filename = os.path.basename(env_file)
+        if filename == ".env":
+            # Default bot name for the default .env file
+            bots["jules_bot"] = ".env"
+        elif filename.startswith(".env."):
+            # For files like .env.my_bot -> my_bot
+            bot_name = filename[5:]
+            if bot_name:
+                bots[bot_name] = env_file
+        elif filename.startswith(".env-"):
+            # For files like .env-2 -> 2
+            bot_name = filename[5:]
+            if bot_name:
+                bots[bot_name] = env_file
+    return bots
+
+
+@app.command("display")
+def display(
+    bot_name: Optional[str] = typer.Option(
+        None,
+        "--bot-name",
+        "-n",
+        help="O nome do bot para visualizar. Se não for fornecido, um menu de seleção será exibido."
+    ),
     mode: str = typer.Option(
         "test", "--mode", "-m", help="O modo de operação a ser monitorado ('trade' ou 'test')."
     )
 ):
-    """Inicia a nova Interface de Usuário (TUI) para monitoramento e controle."""
-    print(f"🚀 Iniciando o dashboard para o bot '{state['bot_name']}' no modo '{mode.upper()}'...")
+    """Inicia o display (TUI) para monitoramento e controle."""
+    final_bot_name = bot_name
+    final_env_file = None
+
+    available_bots = _get_available_bots()
+    if not available_bots:
+        print("❌ Nenhum bot encontrado (nenhum arquivo .env*). Crie um arquivo .env ou .env.<nome_do_bot>.")
+        raise typer.Exit(1)
+
+    if final_bot_name is None:
+        if questionary is None:
+            print("❌ A biblioteca 'questionary' não está instalada. Por favor, instale com 'pip install questionary' para usar o modo interativo.")
+            print(f"   Como alternativa, especifique um bot com --bot-name. Bots disponíveis: {', '.join(available_bots.keys())}")
+            raise typer.Exit(1)
+
+        if len(available_bots) == 1:
+            final_bot_name = list(available_bots.keys())[0]
+        else:
+            choice = questionary.select(
+                "Selecione o bot que deseja visualizar:",
+                choices=sorted(list(available_bots.keys()))
+            ).ask()
+
+            if choice is None:
+                print("👋 Operação cancelada.")
+                raise typer.Exit()
+            final_bot_name = choice
+
+    # Ensure the selected bot is valid and get its env file
+    if final_bot_name not in available_bots:
+        print(f"❌ Bot '{final_bot_name}' não encontrado. Bots disponíveis: {', '.join(available_bots.keys())}")
+        raise typer.Exit(1)
+    final_env_file = available_bots[final_bot_name]
+
+    # Update the global state and environment variables for the container
+    state["bot_name"] = final_bot_name
+    state["env_file"] = final_env_file
+    os.environ["ENV_FILE"] = final_env_file
+
+    print(f"🚀 Iniciando o display para o bot '{state['bot_name']}' no modo '{mode.upper()}'...")
     print("   Lembre-se que o bot (usando 'trade' ou 'test') deve estar rodando em outro terminal.")
 
     command_to_run = ["tui/app.py", "--mode", mode]
@@ -294,7 +365,7 @@ def dashboard(
         command=command_to_run,
         interactive=True
     )
-    print("\n✅ Dashboard encerrado.")
+    print("\n✅ Display encerrado.")
 
 
 @app.command("clear-backtest-trades")

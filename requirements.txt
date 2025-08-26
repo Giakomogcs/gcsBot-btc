@@ -30,6 +30,7 @@ tqdm
 joblib
 tabulate
 psycopg2-binary
+questionary
 
 # --- Plotting ---
 matplotlib
