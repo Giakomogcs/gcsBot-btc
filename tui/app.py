@@ -293,6 +293,11 @@ class TUIApp(App):
         """
         self.log_display.write(f"Executing: [yellow]{' '.join(command)}[/]")
         try:
+            # Garante que o BOT_NAME da TUI seja propagado para os scripts filhos.
+            # Esta é a correção para o bug de dados cruzados entre bots.
+            script_env = os.environ.copy()
+            script_env["BOT_NAME"] = self.bot_name
+
             # Executa o subprocesso de forma robusta e compatível com Windows/Linux.
             # - `encoding='utf-8'`: Garante que o output seja lido como UTF-8.
             # - `errors='replace'`: Previne falhas se o script gerar caracteres inválidos.
@@ -302,7 +307,8 @@ class TUIApp(App):
                 text=True,
                 check=False,
                 encoding='utf-8',
-                errors='replace'
+                errors='replace',
+                env=script_env
             )
 
             if process.returncode != 0:
