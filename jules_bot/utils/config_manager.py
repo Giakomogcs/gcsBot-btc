@@ -15,7 +15,8 @@ class ConfigManager:
         Args:
             config_file: The path to the configuration file.
         """
-        load_dotenv()
+        # Load environment variables from the specified .env file
+        load_dotenv(dotenv_path=os.getenv("ENV_FILE", ".env"))
         self.config = configparser.ConfigParser(interpolation=None)
         if not config_file.exists():
             raise FileNotFoundError(f"Configuration file not found: {config_file}")

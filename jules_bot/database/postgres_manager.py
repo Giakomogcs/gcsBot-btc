@@ -14,7 +14,8 @@ from jules_bot.database.models import Trade, BotStatus, PriceHistory
 from jules_bot.database.portfolio_models import PortfolioSnapshot, FinancialMovement
 from jules_bot.utils.logger import logger
 
-load_dotenv()
+# Load environment variables from the specified .env file
+load_dotenv(dotenv_path=os.getenv("ENV_FILE", ".env"))
 
 class PostgresManager:
     def __init__(self):

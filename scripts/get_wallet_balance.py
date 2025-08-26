@@ -5,8 +5,8 @@ import sys
 import typer
 from dotenv import load_dotenv
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from the specified .env file
+load_dotenv(dotenv_path=os.getenv("ENV_FILE", ".env"))
 
 # Add project root to sys.path to allow imports from other directories
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
