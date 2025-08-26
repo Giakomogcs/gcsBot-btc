@@ -22,17 +22,23 @@ state = {
     "env_file": "env/default.env"
 }
 
-@app.callback()
+@app.callback(invoke_without_command=True)
 def main(
+    ctx: typer.Context,
     bot_name: str = typer.Option("jules_bot", "--bot-name", "-n", help="O nome do bot para isolamento de logs e dados."),
     env_file: str = typer.Option("env/default.env", "--env-file", "-e", help="Caminho para o arquivo .env a ser usado.")
 ):
     """
     Jules Bot - A crypto trading bot.
     """
-    state["bot_name"] = bot_name
-    state["env_file"] = env_file
-    os.environ["ENV_FILE"] = env_file # Set ENV_FILE for docker-compose
+    # We only set the bot name and env file if a subcommand is invoked
+    # that is not an environment-level command.
+    env_commands = ["start", "stop", "status", "logs", "build"]
+    if ctx.invoked_subcommand and ctx.invoked_subcommand not in env_commands:
+        state["bot_name"] = bot_name
+        state["env_file"] = env_file
+        os.environ["ENV_FILE"] = env_file # Set ENV_FILE for docker-compose
+    # For env_commands, ENV_FILE is not set, so docker-compose uses its own safe default.
 
 # --- Lógica de Detecção do Docker Compose ---
 

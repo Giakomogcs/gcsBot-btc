@@ -35,7 +35,7 @@ services:
       postgres:
         condition: service_healthy
     env_file:
-      - ${ENV_FILE:-.env}
+      - ${ENV_FILE:-.env.dummy}
     environment:
       POSTGRES_HOST: postgres
     volumes:
