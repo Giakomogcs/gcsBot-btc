@@ -11,7 +11,7 @@ load_dotenv()
 # Add project root to sys.path to allow imports from other directories
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from jules_bot.utils.config_manager import ConfigManager
+from jules_bot.utils.config_manager import config_manager
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.services.status_service import StatusService
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
