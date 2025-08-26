@@ -54,10 +54,22 @@ The GCS Trading Bot is a powerful, fully automated trading bot designed for the 
   - **Paper Trading**: Trade on the Binance testnet without risking real funds.
   - **Backtesting**: Simulate strategies on historical data to evaluate performance.
 - **Situational Awareness Model**: Utilizes a K-Means clustering model to classify the market into "regimes" (e.g., _Bull Volatile_, _Bear Quiet_), allowing the strategy to adapt to changing conditions.
-- **Interactive Terminal UI (TUI)**: A high-performance dashboard (`run.py dashboard`) provides a real-time view of the bot's status, open positions, wallet balances, and live logs.
+- **Interactive Terminal UI (TUI)**: A high-performance dashboard (`run.py display`) provides a real-time view of the bot's status, open positions, wallet balances, and live logs.
 - **Automated Data Pipeline**: A built-in collector (`collectors/core_price_collector.py`) automatically ingests and stores all required price data in a PostgreSQL time-series database.
 
-## 3. System Architecture
+## 3. Bot Management Workflow
+
+Managing multiple bots is handled through a simple, interactive command-line workflow.
+
+| Command                   | Description                                                                 |
+| ------------------------- | --------------------------------------------------------------------------- |
+| `python run.py new-bot`   | Creates a new bot by asking for a name and copying the template `.env` file.  |
+| `python run.py test`      | Runs a bot in test mode. A menu will appear to select which bot to run.       |
+| `python run.py trade`     | Runs a bot in live mode. A menu will appear to select which bot to run.       |
+| `python run.py display`   | Displays the TUI for a running bot. A menu will appear for selection.         |
+| `python run.py delete-bot`| Deletes a bot after interactive selection and confirmation.                   |
+
+## 4. System Architecture
 
 ### Architectural Diagram
 
@@ -130,48 +142,45 @@ python run.py start
 
 The `app` container will start and remain in an idle state, waiting for you to issue a command.
 
-## 5. User Guide: A Typical Workflow
+## 5. User Guide: A Simplified Workflow
 
-Here is how you would typically run and interact with the bot.
+With the new interactive capabilities, managing and running your bots is easier than ever.
 
-### Step 1: Start the Services
+### Step 1: Create Your First Bot
 
-In your terminal, start all Docker services:
+If you haven't configured a bot yet, you can create one easily. This will create a `.env.mybot` file for you to edit.
+```bash
+python run.py new-bot
+# Follow the prompt and enter a name, e.g., "mybot"
+```
+Now, open `.env.mybot` and add your API keys.
 
+### Step 2: Start the Services
+
+In your terminal, start all Docker services. This only needs to be done once.
 ```bash
 python run.py start
 ```
 
-### Step 2: Run the Bot
+### Step 3: Run the Bot
 
-Open a **new terminal window** (or a new tab). Choose whether you want to run in live or paper trading mode. This command will occupy the terminal window with live logs from the bot.
+Open a **new terminal window**. To run your bot in paper trading (testnet) mode, just use the `test` command.
+```bash
+python run.py test
+```
+Since you now have more than one bot, an interactive menu will appear. Select `mybot` from the list and press Enter. The bot will start running and display its live logs in this terminal.
 
-- **For Live Trading:**
-  ```bash
-  python run.py trade
-  ```
-- **For Paper Trading (Testnet):**
-  ```bash
-  python run.py test
-  ```
+### Step 4: Monitor with the Display
 
-### Step 3: Monitor with the Dashboard
+Open a **third terminal window**. Launch the TUI (Text-based User Interface).
+```bash
+python run.py display
+```
+Again, the interactive menu will appear. Select the running bot (`mybot`) to start the dashboard.
 
-Open a **third terminal window**. Launch the TUI dashboard, making sure to specify the correct mode to monitor.
+### Step 5: Stop Everything
 
-- **To monitor the Testnet bot:**
-  ```bash
-  python run.py dashboard --mode test
-  ```
-- **To monitor the Live bot:**
-  ```bash
-  python run.py dashboard --mode trade
-  ```
-
-### Step 4: Stop Everything
-
-When you are finished, you can stop all services and remove the containers and volumes with a single command from any terminal window:
-
+When you are finished, you can stop all services with a single command:
 ```bash
 python run.py stop
 ```
@@ -189,9 +198,11 @@ These commands are your primary way of managing the bot's environment and applic
 | `status`                | Shows the current status of all running Docker services.                                          |
 | `build`                 | Forces a rebuild of the Docker images without starting them. Use after changing the `Dockerfile`. |
 | `logs [service]`        | Tails the logs of a specific service (e.g., `app`, `db`) or all services if none is specified.    |
-| `trade`                 | Starts the bot in **live trading mode**. Runs the main loop in the container.                     |
-| `test`                  | Starts the bot in **paper trading (testnet) mode**.                                               |
-| `dashboard --mode <m>`  | Starts the interactive TUI. Use `--mode trade` or `--mode test`.                                  |
+| `new-bot`               | Starts an interactive prompt to create a new bot configuration file.                              |
+| `delete-bot`            | Starts an interactive prompt to delete an existing bot's configuration file.                      |
+| `trade`                 | Starts the bot in **live trading mode**. Shows a selection menu if `--bot-name` is not used.      |
+| `test`                  | Starts the bot in **paper trading (testnet) mode**. Shows a selection menu if `--bot-name` is not used. |
+| `display --mode <m>`    | Starts the interactive TUI. Shows a selection menu if `--bot-name` is not used.                   |
 | `backtest --days <d>`   | Prepares historical data and runs a full backtest for the specified number of days.               |
 | `clear-testnet-trades`  | **DESTRUCTIVE:** Deletes all `test` environment trades from the PostgreSQL database.              |
 | `clear-backtest-trades` | **DESTRUCTIVE:** Deletes all `backtest` environment trades from the PostgreSQL database.          |
@@ -264,40 +275,20 @@ To prevent excessive disk usage, the log files are automatically rotated. **Only
 
 ## 10. Terminal User Interface (TUI)
 
-The bot includes a new, high-performance Terminal User Interface (TUI) for monitoring and manual control, launched with the `run.py dashboard` command. This TUI is built on the new script-based architecture, ensuring it is fast and reliable.
+The bot includes a high-performance Terminal User Interface (TUI) for monitoring and manual control, launched with the `run.py display` command.
 
-### TUI Preview
-
-A preview of the new dashboard layout:
-
-```
- +---------------------------------------------------------------------------------------------+
- | Jules Bot                                                                     मोड: TEST      |
- +---------------------------------------------------------------------------------------------+
- | Bot Control                        | Bot Status                                             |
- | Manual Buy (USD): [ 50.00 ]        | Symbol: BTC/USDT   Price: $34,567.89                     |
- | [ FORCE BUY ]                      |                                                        |
- |                                    | Open Positions                                         |
- | Selected Trade Actions (ID: ab12)  | ID   | Entry   | Value   | PnL     | Sell Target | Pr.. |
- | [ Sell 100% ] [ Sell 90% ]         |------|---------|---------|---------|-------------|------|
- |                                    | ab12 | 34000.0 | $345.67 | +$5.67  | $35000.0    | 56.7%|
- | Live Log                           | cd34 | 33950.0 | $691.35 | +$11.35 | $34800.0    | 70.1%|
- | [INFO] Bot cycle complete.         |                                                        |
- | [ERROR] Failed to fetch...         | Wallet Balances                                        |
- |                                    | Asset | Free      | Locked    | USD Value              |
- |                                    |-------|-----------|-----------|------------------------|
- |                                    | BTC   | 0.01234567| 0.00000000| $427.81                  |
- |                                    | USDT  | 1000.00   | 0.00      | $1000.00               |
- +---------------------------------------------------------------------------------------------+
-```
+If you have multiple bots, `run.py display` will first ask you which bot you want to monitor.
 
 ### Key UI Features
 
-- **Live Status**: Real-time updates on the bot's mode and the current asset price.
-- **Bot Control**: A panel to manually trigger a buy order for a specific USD amount.
-- **Live Log Panel**: A dedicated panel that streams the bot's most important messages directly from its structured log file, with color-coding for different log levels.
+- **Live Status**: Real-time updates on the bot's mode, the current asset price, wallet value, and open position count.
+- **Strategy Status Panel**: Shows the current operating mode of the strategy, the detected market regime, and the active buy/sell conditions.
+- **Bot Control**: A panel to manually trigger a `FORCE BUY` order for a specific USD amount.
+- **Live Log Panel**: Streams the bot's most important messages directly from its log file, with color-coding for different log levels and a filter bar.
 - **Open Positions Table**: A detailed list of all open trades, including unrealized PnL and a progress bar showing how close each position is to its sell target.
-- **Manual Intervention**: Select a trade in the table to bring up options to **Force Sell** either 100% or 90% of the position.
+- **Manual Intervention**: Select a trade in the table to enable the `FORCE SELL` buttons, allowing you to close a position manually.
+- **Portfolio Evolution**: Tracks the overall performance of your portfolio over time, including total and 24-hour percentage change.
+- **DCOM Status**: Displays the status of the Dynamic Capital & Operations Management system, including total equity, working capital, and the strategic reserve.
 
 ## 10. Status Data Structure
 

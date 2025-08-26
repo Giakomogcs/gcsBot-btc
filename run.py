@@ -237,8 +237,26 @@ def _confirm_and_clear_data(mode: str):
 
 
 @app.command()
-def trade():
+def trade(
+    bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="O nome do bot para executar. Se não for fornecido, um menu será exibido.")
+):
     """Inicia o bot em modo de negociação (live)."""
+    final_bot_name = bot_name
+
+    if final_bot_name is None:
+        final_bot_name, final_env_file = _interactive_bot_selection()
+    else:
+        available_bots = _get_available_bots()
+        if final_bot_name not in available_bots:
+            print(f"❌ Bot '{final_bot_name}' não encontrado. Bots disponíveis: {', '.join(available_bots.keys())}")
+            raise typer.Exit(1)
+        final_env_file = available_bots[final_bot_name]
+
+    # Update state for other functions to use
+    state["bot_name"] = final_bot_name
+    state["env_file"] = final_env_file
+    os.environ["ENV_FILE"] = final_env_file
+
     mode = "trade"
     _confirm_and_clear_data(mode)
     print(f"🚀 Iniciando o bot '{state['bot_name']}' em modo '{mode.upper()}'...")
@@ -248,8 +266,26 @@ def trade():
     )
 
 @app.command()
-def test():
+def test(
+    bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="O nome do bot para executar. Se não for fornecido, um menu será exibido.")
+):
     """Inicia o bot em modo de teste (testnet), opcionalmente limpando o estado anterior."""
+    final_bot_name = bot_name
+
+    if final_bot_name is None:
+        final_bot_name, final_env_file = _interactive_bot_selection()
+    else:
+        available_bots = _get_available_bots()
+        if final_bot_name not in available_bots:
+            print(f"❌ Bot '{final_bot_name}' não encontrado. Bots disponíveis: {', '.join(available_bots.keys())}")
+            raise typer.Exit(1)
+        final_env_file = available_bots[final_bot_name]
+
+    # Update state for other functions to use
+    state["bot_name"] = final_bot_name
+    state["env_file"] = final_env_file
+    os.environ["ENV_FILE"] = final_env_file
+
     mode = "test"
     _confirm_and_clear_data(mode)
     print(f"🚀 Iniciando o bot '{state['bot_name']}' em modo '{mode.upper()}'...")
@@ -305,6 +341,136 @@ def _get_available_bots() -> dict[str, str]:
     return bots
 
 
+@app.command("new-bot")
+def new_bot():
+    """
+    Creates a new .env file for a new bot from the .env.example template.
+    """
+    print("🤖 Criando um novo bot...")
+
+    if questionary is None:
+        print("❌ A biblioteca 'questionary' não está instalada. Por favor, instale com 'pip install questionary'.")
+        raise typer.Exit(1)
+
+    # Check for template file
+    template_file = ".env.example"
+    if not os.path.exists(template_file):
+        print(f"❌ Arquivo de template '{template_file}' não encontrado. Não é possível criar um novo bot.")
+        raise typer.Exit(1)
+
+    # Ask for bot name
+    bot_name = questionary.text(
+        "Qual o nome do novo bot? (letras minúsculas, sem espaços)",
+        validate=lambda text: True if text and ' ' not in text and text.islower() else "Nome inválido. Use apenas letras minúsculas e sem espaços."
+    ).ask()
+
+    if not bot_name:
+        print("👋 Operação cancelada.")
+        raise typer.Exit()
+
+    # Create new env file name
+    new_env_file = f".env.{bot_name}"
+
+    # Check if file already exists
+    if os.path.exists(new_env_file):
+        print(f"❌ O arquivo de ambiente '{new_env_file}' para o bot '{bot_name}' já existe.")
+        raise typer.Exit(1)
+
+    # Copy the template
+    try:
+        shutil.copy(template_file, new_env_file)
+        print(f"✅ Bot '{bot_name}' criado com sucesso!")
+        print(f"   -> O arquivo de configuração '{new_env_file}' foi criado.")
+        print(f"   -> Agora, edite este arquivo e preencha com suas chaves de API e outras configurações.")
+    except Exception as e:
+        print(f"❌ Ocorreu um erro ao criar o arquivo: {e}")
+        raise typer.Exit(1)
+
+
+@app.command("delete-bot")
+def delete_bot():
+    """
+    Deletes a bot's .env file after interactive selection and confirmation.
+    """
+    print("🗑️  Deletando um bot...")
+
+    if questionary is None:
+        print("❌ A biblioteca 'questionary' não está instalada. Por favor, instale com 'pip install questionary'.")
+        raise typer.Exit(1)
+
+    available_bots = _get_available_bots()
+
+    # Exclude the default bot from deletion for safety
+    deletable_bots = {name: path for name, path in available_bots.items() if name != "jules_bot"}
+
+    if not deletable_bots:
+        print("ℹ️ Nenhum bot personalizável para deletar. O bot padrão 'jules_bot' não pode ser deletado.")
+        raise typer.Exit()
+
+    # Select bot to delete
+    bot_to_delete = questionary.select(
+        "Selecione o bot que deseja deletar:",
+        choices=sorted(list(deletable_bots.keys()))
+    ).ask()
+
+    if not bot_to_delete:
+        print("👋 Operação cancelada.")
+        raise typer.Exit()
+
+    env_file_to_delete = deletable_bots[bot_to_delete]
+
+    # Confirmation
+    confirmed = questionary.confirm(
+        f"Você tem certeza que deseja deletar o bot '{bot_to_delete}'? Isso removerá o arquivo '{env_file_to_delete}' permanentemente."
+    ).ask()
+
+    if not confirmed:
+        print("👋 Operação cancelada.")
+        raise typer.Exit()
+
+    # Delete the file
+    try:
+        os.remove(env_file_to_delete)
+        print(f"✅ Bot '{bot_to_delete}' deletado com sucesso!")
+        print(f"   -> O arquivo de configuração '{env_file_to_delete}' foi removido.")
+    except OSError as e:
+        print(f"❌ Ocorreu um erro ao deletar o arquivo: {e}")
+        raise typer.Exit(1)
+
+
+def _interactive_bot_selection() -> tuple[str, str]:
+    """
+    Displays an interactive menu for the user to select a bot.
+    Returns the selected bot's name and its .env file path.
+    Handles errors and user cancellation gracefully.
+    """
+    available_bots = _get_available_bots()
+    if not available_bots:
+        print("❌ Nenhum bot encontrado (nenhum arquivo .env*). Crie um arquivo .env ou .env.<nome_do_bot>.")
+        raise typer.Exit(1)
+
+    if questionary is None:
+        print("❌ A biblioteca 'questionary' não está instalada. Por favor, instale com 'pip install questionary' para usar o modo interativo.")
+        print(f"   Como alternativa, especifique um bot com --bot-name. Bots disponíveis: {', '.join(available_bots.keys())}")
+        raise typer.Exit(1)
+
+    if len(available_bots) == 1:
+        selected_bot_name = list(available_bots.keys())[0]
+        print(f"✅ Bot '{selected_bot_name}' selecionado automaticamente (único disponível).")
+    else:
+        selected_bot_name = questionary.select(
+            "Selecione o bot:",
+            choices=sorted(list(available_bots.keys()))
+        ).ask()
+
+        if selected_bot_name is None:
+            print("👋 Operação cancelada.")
+            raise typer.Exit()
+
+    selected_env_file = available_bots[selected_bot_name]
+    return selected_bot_name, selected_env_file
+
+
 @app.command("display")
 def display(
     bot_name: Optional[str] = typer.Option(
@@ -319,37 +485,17 @@ def display(
 ):
     """Inicia o display (TUI) para monitoramento e controle."""
     final_bot_name = bot_name
-    final_env_file = None
-
-    available_bots = _get_available_bots()
-    if not available_bots:
-        print("❌ Nenhum bot encontrado (nenhum arquivo .env*). Crie um arquivo .env ou .env.<nome_do_bot>.")
-        raise typer.Exit(1)
 
     if final_bot_name is None:
-        if questionary is None:
-            print("❌ A biblioteca 'questionary' não está instalada. Por favor, instale com 'pip install questionary' para usar o modo interativo.")
-            print(f"   Como alternativa, especifique um bot com --bot-name. Bots disponíveis: {', '.join(available_bots.keys())}")
+        # User did not specify a bot, so we start the interactive selection.
+        final_bot_name, final_env_file = _interactive_bot_selection()
+    else:
+        # User specified a bot, so we find its env file.
+        available_bots = _get_available_bots()
+        if final_bot_name not in available_bots:
+            print(f"❌ Bot '{final_bot_name}' não encontrado. Bots disponíveis: {', '.join(available_bots.keys())}")
             raise typer.Exit(1)
-
-        if len(available_bots) == 1:
-            final_bot_name = list(available_bots.keys())[0]
-        else:
-            choice = questionary.select(
-                "Selecione o bot que deseja visualizar:",
-                choices=sorted(list(available_bots.keys()))
-            ).ask()
-
-            if choice is None:
-                print("👋 Operação cancelada.")
-                raise typer.Exit()
-            final_bot_name = choice
-
-    # Ensure the selected bot is valid and get its env file
-    if final_bot_name not in available_bots:
-        print(f"❌ Bot '{final_bot_name}' não encontrado. Bots disponíveis: {', '.join(available_bots.keys())}")
-        raise typer.Exit(1)
-    final_env_file = available_bots[final_bot_name]
+        final_env_file = available_bots[final_bot_name]
 
     # Update the global state and environment variables for the container
     state["bot_name"] = final_bot_name

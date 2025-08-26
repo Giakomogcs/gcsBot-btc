@@ -1,123 +1,46 @@
-# Jules Bot - A Crypto Trading Bot
+# Managing Multiple Bot Instances
 
-Jules Bot is a flexible and powerful cryptocurrency trading bot that can be configured to run in live or testnet mode. It supports running multiple bot instances in isolation, with separate logs and database schemas for each instance.
+Jules Bot is designed to support multiple, isolated bot instances. Each bot you create will have its own configuration, database schema, and log files, allowing you to run different strategies or manage separate accounts simultaneously.
 
-## Prerequisites
+The command-line interface (`run.py`) has been streamlined to make managing these bots simple and intuitive.
 
-Before you begin, ensure you have the following installed:
-- [Docker](https://docs.docker.com/get-docker/)
-- [Docker Compose](https://docs.docker.com/compose/install/) (v2)
+## The New Bot Management Workflow
 
-## Setup
+The entire lifecycle of a bot—from creation to deletion—is handled through interactive commands.
 
-1.  **Clone the repository:**
-    ```bash
-    git clone <repository-url>
-    cd gcsBot-btc
-    ```
+### 1. Create a New Bot
 
-2.  **Create your environment file:**
-    You can copy the example environment file and customize it with your API keys and other settings.
-    ```bash
-    cp .env.example .env
-    ```
-    You can create multiple `.env` files for different configurations (e.g., `.env.bot-1`, `.env.bot-2`).
-
-3.  **Start the services:**
-    This will build the Docker images and start the services in the background.
-    ```bash
-    python run.py start
-    ```
-
-## Running the Bot
-
-You can run the bot in `trade` (live) or `test` (testnet) mode. You can also specify a name for your bot instance and the environment file to use.
-
-### Options
-
--   `--bot-name` or `-n`: Specifies a unique name for the bot instance. This name is used for log files and database schemas. Defaults to `jules_bot`.
--   `--env-file` or `-e`: Specifies the path to the environment file to use. Defaults to `.env`.
-
-### Running in Test Mode
-
-To run the bot in testnet mode, use the `test` command.
-
-**Example 1: Running a test with the default configuration**
-This will use the `.env` file and the bot name `jules_bot`.
+To create a new bot, use the `new-bot` command:
 ```bash
+python run.py new-bot
+```
+The script will ask you for a name for your new bot and automatically create the necessary `.env.<bot_name>` configuration file from the template.
+
+### 2. Run, Test, or Display a Bot
+
+When you want to run a bot, simply use the `trade`, `test`, or `display` command without any arguments:
+```bash
+# To run a bot in test mode
 python run.py test
-```
 
-**Example 2: Running a test with a specific bot name**
-This will create a log file named `logs/my-test-bot.jsonl` and a database schema named `my_test_bot`.
-```bash
-python run.py --bot-name my-test-bot test
-```
-
-**Example 3: Running a test with a specific bot name and environment file**
-This will use the configuration from `.env.test-config` and create a bot instance named `my-test-bot`.
-```bash
-python run.py --bot-name my-test-bot --env-file .env.test-config test
-```
-
-### Running in Trade Mode
-
-To run the bot in live trading mode, use the `trade` command.
-
-**⚠️ Warning:** Running in trade mode will use real funds from your exchange account. Make sure you have configured your API keys and strategy correctly.
-
-**Example 1: Running a trade with the default configuration**
-This will use the `.env` file and the bot name `jules_bot`.
-```bash
+# To run a bot in live mode
 python run.py trade
-```
 
-**Example 2: Running a trade with a specific bot name**
-This will create a log file named `logs/my-live-bot.jsonl` and a database schema named `my_live_bot`.
+# To view the TUI dashboard for a bot
+python run.py display
+```
+If you have multiple bots, the script will present you with an interactive menu to choose which bot you want to use for that command.
+
+### 3. Delete a Bot
+
+To remove a bot you no longer need, use the `delete-bot` command:
 ```bash
-python run.py --bot-name my-live-bot trade
+python run.py delete-bot
 ```
+You will be presented with a list of bots to choose from. For safety, the script will ask for a final confirmation before deleting the bot's configuration file.
 
-**Example 3: Running a trade with a specific bot name and environment file**
-This will use the configuration from `.env.live-config` and create a bot instance named `my-live-bot`.
-```bash
-python run.py --bot-name my-live-bot --env-file .env.live-config trade
-```
+---
 
-## Running the TUI Dashboard
+## Comprehensive Documentation
 
-The Text-based User Interface (TUI) dashboard allows you to monitor and control your bot instances in real-time.
-
-### Options
-
--   `--mode` or `-m`: Specifies the operating mode to monitor (`trade` or `test`). Defaults to `test`.
--   `--bot-name` or `-n`: Specifies the name of the bot instance to monitor. This must match the name of a running bot instance. Defaults to `jules_bot`.
-
-### Example
-
-To run the TUI dashboard for a bot named `my-test-bot` in `test` mode:
-
-```bash
-python run.py --bot-name my-test-bot dashboard --mode test
-```
-
-**Note:** The bot instance you wish to monitor (e.g., `my-test-bot` in `test` mode) must be running in a separate terminal for the dashboard to display live data.
-
-## Stopping the Bot
-
-To stop all running services, use the `stop` command:
-```bash
-python run.py stop
-```
-
-## Viewing Logs
-
-The logs for each bot instance are stored in separate files in the `logs` directory. The log file name corresponds to the bot name you specified when running the bot.
-
-For example, if you ran a bot named `my-test-bot`, you can view its logs in `logs/my-test-bot.jsonl`.
-
-## Database Isolation
-
-Each bot instance has its own isolated data in the PostgreSQL database. The data is stored in a separate schema named after the bot. For example, a bot named `my-test-bot` will have its tables created in the `my_test_bot` schema.
-
-You can use a database tool like pgAdmin (available at `http://localhost:5050`) to connect to the database and inspect the data for each bot.
+For a complete guide to all features, commands, and the system architecture, please refer to the main [**README.md**](README.md) file.
