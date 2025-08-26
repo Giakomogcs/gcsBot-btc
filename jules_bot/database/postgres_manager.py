@@ -25,8 +25,6 @@ class PostgresManager:
         db_name = os.getenv("POSTGRES_DB")
         self.bot_name = os.getenv("BOT_NAME", "jules_bot").replace("-", "_") # Sanitize bot name for schema
 
-        print(f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}")
-
         self.db_url = f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
         self.engine = create_engine(
             self.db_url,
