@@ -3,11 +3,6 @@ import json
 import os
 import sys
 import typer
-from dotenv import load_dotenv
-
-# Load environment variables from the specified .env file
-load_dotenv(dotenv_path=os.getenv("ENV_FILE", ".env"))
-
 # Add project root to sys.path to allow imports from other directories
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -77,33 +72,17 @@ def main(
 
     logger.info(f"Gathering bot data for '{bot_name}' in '{mode}' environment...")
 
-    # Initialize the config manager with the bot name to load correct .env variables
-    config_manager.initialize(bot_name)
-
-    # --- Inicialização e Verificação do Ambiente ---
     try:
+        # 1. Initialize ConfigManager
+        config_manager.initialize(bot_name)
+
+        # 2. Instantiate services
         db_manager = PostgresManager()
 
-        # A verificação do ambiente é a primeira coisa a ser feita.
-        # Se isso falhar, o restante do script não deve ser executado.
+        # 3. Check environment dependencies (API keys, DB connection)
         _check_environment(mode, db_manager)
 
-    except FileNotFoundError as e:
-        logger.error(f"ERRO DE CONFIGURAÇÃO: O arquivo de configuração 'config.ini' não foi encontrado.")
-        logger.error(f"Detalhes: {e}")
-        raise typer.Exit(code=1)
-    except Exception as e:
-        # Captura outras exceções de inicialização que não são tratadas por _check_environment
-        logger.error(f"Ocorreu um erro crítico durante a inicialização: {e}", exc_info=True)
-        raise typer.Exit(code=1)
-
-
-    # --- Lógica Principal da Aplicação ---
-    try:
-        # A inicialização do DB (criação de tabelas) acontece aqui, somente após
-        # a verificação bem-sucedida da conexão.
-        db_manager.initialize_db()
-
+        # 4. Proceed with main logic
         logger.info("Ambiente verificado. Coletando dados do bot...")
         feature_calculator = LiveFeatureCalculator(db_manager, mode=mode)
         status_service = StatusService(db_manager, config_manager, feature_calculator)

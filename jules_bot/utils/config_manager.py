@@ -42,9 +42,9 @@ class ConfigManager:
 
         # 1. Try to get bot-specific environment variable first
         if self.bot_name:
-            # e.g., JULES_BOT_BINANCE_API_KEY
-            # Normalize bot name: uppercase and replace hyphens with underscores
-            normalized_bot_name = self.bot_name.upper().replace('-', '_')
+            # e.g., GCS-BOT_BINANCE_API_KEY
+            # Normalize bot name to uppercase, keeping hyphens.
+            normalized_bot_name = self.bot_name.upper()
             bot_specific_env_var = f"{normalized_bot_name}_{env_var_name}"
             env_var_value = os.getenv(bot_specific_env_var)
 

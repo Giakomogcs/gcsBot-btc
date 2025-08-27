@@ -13,26 +13,41 @@ from jules_bot.database.base import Base
 from jules_bot.database.models import Trade, BotStatus, PriceHistory
 from jules_bot.database.portfolio_models import PortfolioSnapshot, FinancialMovement
 from jules_bot.utils.logger import logger
-
-# Load environment variables from the specified .env file
-load_dotenv(dotenv_path=os.getenv("ENV_FILE", ".env"))
+from jules_bot.utils.config_manager import config_manager
 
 class PostgresManager:
     def __init__(self):
-        db_user = os.getenv("POSTGRES_USER")
-        db_password = os.getenv("POSTGRES_PASSWORD")
-        db_host = os.getenv("POSTGRES_HOST")
-        db_port = os.getenv("POSTGRES_PORT", "5432")
-        db_name = os.getenv("POSTGRES_DB")
-        self.bot_name = os.getenv("BOT_NAME", "jules_bot").replace("-", "_") # Sanitize bot name for schema
+        # The config_manager MUST be initialized before this class is instantiated.
+        if not config_manager.bot_name:
+            raise RuntimeError(
+                "ConfigManager has not been initialized. "
+                "Please call config_manager.initialize(bot_name) before instantiating PostgresManager."
+            )
+
+        db_config = config_manager.get_section("POSTGRES")
+
+        db_user = db_config.get("user")
+        db_password = db_config.get("password")
+        db_host = db_config.get("host")
+        db_port = db_config.get("port")
+        db_name = db_config.get("dbname")
+
+        if not all([db_user, db_password, db_host, db_port, db_name]):
+            raise ValueError("One or more database configuration values are missing. Check your .env file.")
+
+        # Sanitize bot name for schema (e.g., 'gcs-bot' -> 'gcs_bot')
+        self.bot_name = config_manager.bot_name.replace("-", "_")
 
         self.db_url = f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
         self.engine = create_engine(
             self.db_url,
             connect_args={
                 'connect_timeout': 5,
+                # Each bot operates in its own schema for data isolation.
                 'options': f'-csearch_path={self.bot_name},public'
-            }
+            },
+            # Add pool_pre_ping to handle connections that may have been closed by the DB server.
+            pool_pre_ping=True
         )
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
         self._initialized = False

@@ -166,7 +166,7 @@ def run_tests(
     )
 ):
     """Executa a suíte de testes (pytest) dentro do container."""
-    print(" запускаем тесты...")
+    print("Executando a suíte de testes...")
     command = ["-m", "pytest"]
     if pytest_args:
         # Naively split by space. For complex args, consider shlex.

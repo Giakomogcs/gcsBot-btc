@@ -34,10 +34,10 @@ def main():
 
     bot = None
     try:
-        # --- Configuração do Banco de Dados Unificado (PostgreSQL) ---
+        # --- Service Instantiation ---
+        # Services that depend on the configuration (like the database) must be
+        # instantiated only AFTER the config_manager has been initialized.
         db_manager = PostgresManager()
-        
-        # O MarketDataProvider agora usa o mesmo PostgresManager
         market_data_provider = MarketDataProvider(db_manager=db_manager)
 
         # --- Instanciação do Bot ---
