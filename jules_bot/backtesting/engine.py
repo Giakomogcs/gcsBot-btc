@@ -46,9 +46,11 @@ class Backtester:
         self.feature_data = add_all_features(price_data, live_mode=False).dropna()
         logger.info("Feature calculation complete.")
 
+        initial_balance_str = config_manager.get('BACKTEST', 'initial_balance') or '1000.0'
+        commission_fee_str = config_manager.get('BACKTEST', 'commission_fee') or '0.001'
         self.mock_trader = MockTrader(
-            initial_balance_usd=Decimal(config_manager.get('BACKTEST', 'initial_balance', fallback='1000.0')),
-            commission_fee_percent=Decimal(config_manager.get('BACKTEST', 'commission_fee', fallback='0.001')),
+            initial_balance_usd=Decimal(initial_balance_str),
+            commission_fee_percent=Decimal(commission_fee_str),
             symbol=symbol
         )
         self.strategy_rules = StrategyRules(config_manager)
