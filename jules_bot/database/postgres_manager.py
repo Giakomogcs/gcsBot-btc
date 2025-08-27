@@ -334,7 +334,7 @@ class PostgresManager:
                 logger.error(f"Failed to check for open positions: {e}", exc_info=True)
                 raise
 
-    def get_all_trades_in_range(self, mode: Optional[str] = None, symbol: Optional[str] = None, start_date: str = "-90d", end_date: str = "now()"):
+    def get_all_trades_in_range(self, mode: Optional[str] = None, symbol: Optional[str] = None, bot_id: Optional[str] = None, start_date: str = "-90d", end_date: str = "now()"):
         with self.get_db() as db:
             try:
                 # This is a simplified version. A more robust implementation would parse the date strings.
@@ -343,6 +343,8 @@ class PostgresManager:
                     query = query.filter(Trade.environment == mode)
                 if symbol:
                     query = query.filter(Trade.symbol == symbol)
+                if bot_id:
+                    query = query.filter(Trade.run_id == bot_id)
 
                 trades = query.all()
                 return trades

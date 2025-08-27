@@ -68,8 +68,7 @@ class StatusService:
             market_data = market_data_series.to_dict()
             current_price = Decimal(str(market_data.get('close', '0')))
 
-            bot_id_to_filter = bot_id if environment == 'backtest' else None
-            open_positions_db = self.db_manager.get_open_positions(environment, bot_id_to_filter) or []
+            open_positions_db = self.db_manager.get_open_positions(environment, bot_id) or []
             open_positions_count = len(open_positions_db)
 
             positions_status = self._process_open_positions(open_positions_db, current_price)

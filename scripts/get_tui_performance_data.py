@@ -15,7 +15,7 @@ def main(bot_name: str):
     """
     # Set BOT_NAME environment variable so other modules can pick it up
     os.environ["BOT_NAME"] = bot_name
-    summary_data = get_summary()
+    summary_data = get_summary(bot_id=bot_name)
     print(json.dumps(summary_data))
 
 if __name__ == "__main__":

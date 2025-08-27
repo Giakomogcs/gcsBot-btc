@@ -12,16 +12,19 @@ from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.utils.logger import logger
 
-def get_summary():
+def get_summary(bot_id: str = None):
     """
-    Connects to the database, fetches all sell trades, and calculates a
-    summary of performance including PnL in USD, PnL in BTC, and
-    total assets sent to treasury.
+    Connects to the database, fetches all sell trades for a specific bot,
+    and calculates a summary of performance including PnL in USD, PnL in BTC,
+    and total assets sent to treasury.
+
+    Args:
+        bot_id (str, optional): The ID of the bot to get the summary for. Defaults to None.
 
     Returns:
         dict: A dictionary containing the performance summary.
     """
-    logger.info("PerformanceService: Calculating performance summary...")
+    logger.info(f"PerformanceService: Calculating performance summary for bot_id: {bot_id}...")
     total_usd_pnl = Decimal('0')
     total_btc_pnl = Decimal('0')
     total_treasury_btc = Decimal('0')
@@ -30,10 +33,10 @@ def get_summary():
     try:
         db_manager = PostgresManager()
 
-        # Fetch all trades from all environments
-        all_trades = db_manager.get_all_trades_in_range(mode='trade')
-        all_trades.extend(db_manager.get_all_trades_in_range(mode='test'))
-        all_trades.extend(db_manager.get_all_trades_in_range(mode='backtest'))
+        # Fetch all trades from all environments for the specific bot
+        all_trades = db_manager.get_all_trades_in_range(mode='trade', bot_id=bot_id)
+        all_trades.extend(db_manager.get_all_trades_in_range(mode='test', bot_id=bot_id))
+        all_trades.extend(db_manager.get_all_trades_in_range(mode='backtest', bot_id=bot_id))
 
         if not all_trades:
             logger.warning("PerformanceService: No trades found in the database.")
