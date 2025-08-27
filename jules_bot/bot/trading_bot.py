@@ -87,13 +87,18 @@ class LivePortfolioManager:
 
 class TradingBot:
     def __init__(self, mode: str, bot_id: str, market_data_provider: MarketDataProvider, db_manager: PostgresManager):
+        # ConfigManager MUST be initialized before this class is instantiated.
+        if not config_manager.bot_name:
+            raise RuntimeError("ConfigManager must be initialized before creating a TradingBot.")
+
         self.mode = mode
         self.run_id = bot_id
-        self.bot_name = os.getenv("BOT_NAME", "jules_bot")
-        config_manager.initialize(bot_name=self.bot_name)
+        self.bot_name = config_manager.bot_name # Use the already-initialized bot name
         self.is_running = True
         self.market_data_provider = market_data_provider
         self.db_manager = db_manager
+
+        # Trader will now correctly use the bot-specific config loaded by config_manager
         self.trader = Trader(mode=self.mode)
         self.symbol = config_manager.get('APP', 'symbol')
         self.state_file_path = f"/tmp/bot_state_{self.bot_name}.json"

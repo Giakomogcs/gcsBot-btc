@@ -8,20 +8,18 @@ class ExchangeManager:
     """
     Handles all direct communication with the Binance API.
     """
-    def __init__(self, mode: str = 'trade', bot_name: str = None):
+    def __init__(self, mode: str = 'trade'):
+        # This component must be instantiated after config_manager is initialized.
+        if not config_manager.bot_name:
+            raise RuntimeError("ConfigManager has not been initialized. Cannot create ExchangeManager.")
+
         self.mode = mode
-        self.bot_name = bot_name
+        self.bot_name = config_manager.bot_name # Get bot_name from the initialized manager
         self.client = self._initialize_binance_client()
 
     def _initialize_binance_client(self):
         """Initializes the Binance client based on the execution mode."""
         testnet = False
-
-        # This is the crucial part for multi-bot support.
-        # We re-initialize the config_manager with the specific bot name
-        # so it can fetch the correct, bot-specific environment variables.
-        if self.bot_name:
-            config_manager.initialize(self.bot_name)
 
         if self.mode == 'test':
             api_key = config_manager.get('BINANCE_TESTNET', 'api_key')
