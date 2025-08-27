@@ -31,6 +31,78 @@ def main(
     """
     Jules Bot - A crypto trading bot.
     """
+    # --- Auto-configuração do ambiente ---
+    env_dir = "env"
+    example_file_path = os.path.join(env_dir, "example.env")
+
+    # Garante que o diretório 'env' exista
+    if not os.path.exists(env_dir):
+        print(f"INFO: Diretório '{env_dir}' não encontrado. Criando...")
+        os.makedirs(env_dir)
+
+    # Garante que o arquivo de exemplo exista para o comando 'new-bot'
+    if not os.path.exists(example_file_path):
+        print(f"INFO: Arquivo de template '{example_file_path}' não encontrado. Criando um template completo...")
+        template_content = '''# .env.example - Template para configuração do Bot
+
+# --- Segredos da API ---
+# Substitua pelos seus valores reais. Use as chaves de TESTNET se BOT_MODE='test'
+BINANCE_API_KEY=SUA_API_KEY_REAL
+BINANCE_API_SECRET=SEU_API_SECRET_REAL
+BINANCE_TESTNET_API_KEY=SUA_CHAVE_DE_API_TESTNET
+BINANCE_TESTNET_API_SECRET=SEU_SEGREDO_DE_API_TESTNET
+
+# --- Configurações do Bot ---
+# Define o modo de operação do bot. Obrigatório.
+# Opções: 'trade' (real), 'test' (testnet)
+BOT_MODE=test
+
+# --- Configuração do Banco de Dados ---
+# Usado pelo bot para se conectar ao container do Postgres
+POSTGRES_HOST=postgres
+POSTGRES_USER=gcs_user
+POSTGRES_PASSWORD=gcs_password
+POSTGRES_DB=gcs_db
+POSTGRES_PORT=5432
+
+# --- Configurações da Estratégia (Strategy Rules) ---
+STRATEGY_RULES_COMMISSION_RATE=0.001
+STRATEGY_RULES_SELL_FACTOR=1
+STRATEGY_RULES_TARGET_PROFIT=0.0035
+STRATEGY_RULES_MAX_CAPITAL_PER_TRADE_PERCENT=0.15
+STRATEGY_RULES_BASE_USD_PER_TRADE=10
+STRATEGY_RULES_MAX_OPEN_POSITIONS=150
+STRATEGY_RULES_USE_DYNAMIC_CAPITAL=true
+STRATEGY_RULES_WORKING_CAPITAL_PERCENTAGE=0.85
+STRATEGY_RULES_USE_PERCENTAGE_BASED_SIZING=true
+STRATEGY_RULES_ORDER_SIZE_FREE_CASH_PERCENTAGE=0.004
+STRATEGY_RULES_USE_FORMULA_SIZING=true
+STRATEGY_RULES_MIN_ORDER_PERCENTAGE=0.004
+STRATEGY_RULES_MAX_ORDER_PERCENTAGE=0.02
+STRATEGY_RULES_LOG_SCALING_FACTOR=0.002
+STRATEGY_RULES_USE_REVERSAL_BUY_STRATEGY=true
+STRATEGY_RULES_REVERSAL_BUY_THRESHOLD_PERCENT=0.005
+STRATEGY_RULES_REVERSAL_MONITORING_TIMEOUT_SECONDS=100
+
+# --- Configurações de Backtest ---
+BACKTEST_INITIAL_BALANCE=100
+BACKTEST_COMMISSION_FEE=0.1
+BACKTEST_DEFAULT_LOOKBACK_DAYS=10
+
+# --- Configurações da Aplicação ---
+APP_SYMBOL=BTCUSDT
+APP_FORCE_OFFLINE_MODE=false
+APP_USE_TESTNET=true
+APP_EQUITY_RECALCULATION_INTERVAL=300
+
+# --- Configurações da API (para o servidor de dados) ---
+API_PORT=8765
+API_MEASUREMENT=price_data
+API_UPDATE_INTERVAL=5
+'''
+        with open(example_file_path, "w", encoding='utf-8') as f:
+            f.write(template_content)
+
     # We only set the bot name and env file if a subcommand is invoked
     # that is not an environment-level command.
     env_commands = ["start", "stop", "status", "logs", "build"]
