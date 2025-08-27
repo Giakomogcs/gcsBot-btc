@@ -342,7 +342,8 @@ def _get_bots_from_env(env_file_path: str = ".env") -> list[str]:
 
             # Match lines like BOTNAME_BINANCE_API_KEY= or BOTNAME_BINANCE_TESTNET_API_KEY=
             # This is a good indicator of a bot's config block.
-            match = re.match(r'^([A-Z0-9_]+?)_BINANCE_(?:TESTNET_)?API_KEY=', line)
+            # Updated regex to include hyphens to find existing bots with names like 'gcs-bot'
+            match = re.match(r'^([A-Z0-9_-]+?)_BINANCE_(?:TESTNET_)?API_KEY=', line)
             if match:
                 bot_name_upper = match.group(1)
                 bots.add(bot_name_upper.lower())
@@ -384,8 +385,8 @@ def new_bot():
 
     # Pergunta o nome do bot
     bot_name = questionary.text(
-        "Qual o nome do novo bot? (letras minúsculas, sem espaços)",
-        validate=lambda text: True if text and ' ' not in text and text.islower() else "Nome inválido. Use apenas letras minúsculas e sem espaços."
+        "Qual o nome do novo bot? (use apenas letras minúsculas, números e '_', sem espaços)",
+        validate=lambda text: True if re.match(r"^[a-z0-9_]+$", text) else "Nome inválido. Use apenas letras minúsculas, números e '_', sem espaços."
     ).ask()
 
     if not bot_name:

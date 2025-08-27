@@ -126,7 +126,7 @@ class AccountManager:
         """
         Places a market sell order on Binance after full validation.
         """
-        if not self.client or config_manager.getboolean('APP', 'force_offline_mode'):
+        if not self.client or config_manager.getboolean('APP', 'force_offline_mode', fallback=False):
             logger.warning(f"OFFLINE MODE: Simulating sell of {quantity_btc:.8f} BTC.")
             return {"status": "FILLED"} # Simula uma ordem bem-sucedida
 
@@ -160,7 +160,7 @@ class AccountManager:
         """
         Places a market buy order on Binance.
         """
-        if not self.client or config_manager.getboolean('APP', 'force_offline_mode'):
+        if not self.client or config_manager.getboolean('APP', 'force_offline_mode', fallback=False):
             logger.warning(f"OFFLINE MODE: Simulating buy with {quote_order_qty:.2f} USDT.")
             return True # Simulate success
 
@@ -181,7 +181,7 @@ class AccountManager:
         """
         Fetches open orders from Binance for the current symbol.
         """
-        if not self.client or config_manager.getboolean('APP', 'force_offline_mode'):
+        if not self.client or config_manager.getboolean('APP', 'force_offline_mode', fallback=False):
             logger.warning("OFFLINE MODE: Cannot fetch open orders.")
             return []
 
@@ -199,7 +199,7 @@ class AccountManager:
         """
         Fetches trade history from Binance for the current symbol.
         """
-        if not self.client or config_manager.getboolean('APP', 'force_offline_mode'):
+        if not self.client or config_manager.getboolean('APP', 'force_offline_mode', fallback=False):
             logger.warning("OFFLINE MODE: Cannot fetch trade history.")
             return []
 
