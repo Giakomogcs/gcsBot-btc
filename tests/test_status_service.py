@@ -95,7 +95,7 @@ class TestStatusService(unittest.TestCase):
 
         # 3. Assert: Verify results
         # Assert that ExchangeManager was called correctly
-        MockExchangeManager.assert_called_with(mode='test')
+        MockExchangeManager.assert_called_with(mode='test', bot_name='test_bot')
         mock_exchange_instance.get_account_balance.assert_called_once()
         self.feature_calculator.get_current_candle_with_features.assert_called_once()
 

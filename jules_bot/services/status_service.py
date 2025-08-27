@@ -59,7 +59,7 @@ class StatusService:
         open positions' PnL, progress towards sell targets, and buy signal readiness.
         """
         try:
-            exchange_manager = ExchangeManager(mode=environment)
+            exchange_manager = ExchangeManager(mode=environment, bot_name=bot_id)
             symbol = "BTCUSDT"
 
             market_data_series = self.feature_calculator.get_current_candle_with_features()
@@ -117,7 +117,7 @@ class StatusService:
 
             should_buy = buy_amount_usdt > 0
 
-            trade_history = self.db_manager.get_all_trades_in_range(environment) or []
+            trade_history = self.db_manager.get_all_trades_in_range(mode=environment, bot_id=bot_id) or []
             trade_history_dicts = [trade.to_dict() for trade in trade_history]
 
             return {
