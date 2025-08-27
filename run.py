@@ -385,8 +385,8 @@ def new_bot():
 
     # Pergunta o nome do bot
     bot_name = questionary.text(
-        "Qual o nome do novo bot? (use apenas letras minúsculas, números e '_', sem espaços)",
-        validate=lambda text: True if re.match(r"^[a-z0-9_]+$", text) else "Nome inválido. Use apenas letras minúsculas, números e '_', sem espaços."
+        "Qual o nome do novo bot? (use apenas letras minúsculas, números, '_' e '-', sem espaços)",
+        validate=lambda text: True if re.match(r"^[a-z0-9_-]+$", text) else "Nome inválido. Use apenas letras minúsculas, números, '_' e '-', sem espaços."
     ).ask()
 
     if not bot_name:

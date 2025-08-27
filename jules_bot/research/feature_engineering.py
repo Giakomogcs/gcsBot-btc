@@ -81,8 +81,9 @@ def add_all_features(df: pd.DataFrame, live_mode: bool = False) -> pd.DataFrame:
     # Só executa se não estiver em modo live
     if not live_mode:
         logger.info("Calculando o alvo com o método da Barreira Tripla...")
-        cfg = config_manager.get_section('DATA_PIPELINE')
-        future_periods, profit_mult, stop_mult = int(cfg['future_periods']), float(cfg['profit_mult']), float(cfg['stop_mult'])
+        future_periods = int(config_manager.get('DATA_PIPELINE', 'future_periods', fallback='10'))
+        profit_mult = float(config_manager.get('DATA_PIPELINE', 'profit_mult', fallback='1.0'))
+        stop_mult = float(config_manager.get('DATA_PIPELINE', 'stop_mult', fallback='1.0'))
 
         if 'atr_14' not in df_copy.columns or df_copy['atr_14'].isnull().all():
             logger.error("A coluna 'atr_14' não pôde ser calculada. Impossível criar o target.")

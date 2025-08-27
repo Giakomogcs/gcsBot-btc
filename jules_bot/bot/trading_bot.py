@@ -207,8 +207,8 @@ class TradingBot:
         equity_recalc_interval = int(config_manager.get('APP', 'equity_recalculation_interval', fallback=300))
 
         # Reversal strategy specific configs
-        self.reversal_buy_threshold_percent = Decimal(strategy_config.get('reversal_buy_threshold_percent', '0.005'))
-        self.reversal_monitoring_timeout_seconds = int(strategy_config.get('reversal_monitoring_timeout_seconds', '300'))
+        self.reversal_buy_threshold_percent = Decimal(strategy_config.get('reversal_buy_threshold_percent') or '0.005')
+        self.reversal_monitoring_timeout_seconds = int(strategy_config.get('reversal_monitoring_timeout_seconds') or '300')
 
         feature_calculator = LiveFeatureCalculator(self.db_manager, mode=self.mode)
         status_service = StatusService(self.db_manager, config_manager, feature_calculator)
