@@ -75,16 +75,24 @@ class ConfigManager:
     def get(self, section: str, key: str, fallback: str = None) -> str:
         """
         Retrieves a specific key from a section, resolving env vars.
+        It correctly handles fallbacks for both missing keys and unresolved env vars.
         """
-        # Get the raw value from configparser
-        value = self.config.get(section, key, fallback=fallback)
+        # Use config.get with no fallback to see if the key exists in the .ini
+        raw_value = self.config.get(section, key, fallback=None)
 
-        # If the retrieved value is the fallback, don't try to resolve it, just return it.
-        # This can happen if the key does not exist in the .ini file.
-        if value == fallback:
+        if raw_value is None:
+            # The key was not found in the .ini file at all, so return the provided fallback.
             return fallback
 
-        return self._resolve_value(value)
+        # The key exists in the .ini, now try to resolve its value (e.g., from an env var).
+        resolved_value = self._resolve_value(raw_value)
+
+        if resolved_value is None:
+            # The key was in the .ini but pointed to an env var that was not set.
+            # In this case, we should also use the fallback.
+            return fallback
+
+        return resolved_value
 
     def getboolean(self, section: str, key: str, fallback: bool = None) -> bool:
         """
