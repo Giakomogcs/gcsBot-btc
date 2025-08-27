@@ -175,6 +175,7 @@ class TUIApp(App):
                     yield Static("Market Regime: N/A", id="strategy_market_regime")
                     yield Static("Buy Reason: N/A", id="strategy_buy_reason")
                     yield Static("Buy Target: N/A", id="strategy_buy_target")
+                    yield Static("Drop Needed: N/A", id="strategy_buy_target_percentage")
                     yield Static("Buy Progress: N/A", id="strategy_buy_progress")
 
                 yield Static("Wallet Balances", classes="title")
@@ -421,6 +422,7 @@ class TUIApp(App):
         condition_label = buy_signal_status.get("condition_label", "Buy Condition")
         condition_target = buy_signal_status.get("condition_target", "N/A")
         condition_progress = float(buy_signal_status.get("condition_progress", 0))
+        buy_target_percentage_drop = float(buy_signal_status.get("buy_target_percentage_drop", 0))
 
         self.query_one("#strategy_operating_mode").update(f"Operating Mode: {operating_mode}")
         self.query_one("#strategy_market_regime").update(f"Market Regime: {market_regime}")
@@ -428,6 +430,7 @@ class TUIApp(App):
 
         # Update the labels and values to be dynamic and descriptive
         self.query_one("#strategy_buy_target").update(f"{condition_label}: {condition_target}")
+        self.query_one("#strategy_buy_target_percentage").update(f"Drop Needed: {buy_target_percentage_drop:.2f}%")
         self.query_one("#strategy_buy_progress").update(f"Progress: {condition_progress:.1f}%")
 
         # Update wallet balances table

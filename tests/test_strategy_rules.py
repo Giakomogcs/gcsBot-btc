@@ -98,19 +98,21 @@ def test_evaluate_buy_signal_with_difficulty_factor(mock_config_manager):
     should_buy, _, _ = strategy_rules.evaluate_buy_signal(market_data, 1, difficulty_factor=0)
     assert should_buy
 
-    # --- Scenario 3: Difficulty 1 (1% stricter), price is NOT below adjusted BBL -> No Signal ---
-    # Adjusted BBL = 100.0 * (1 - 0.01) = 99.0
-    market_data['close'] = 99.1
+    # --- Scenario 3: Difficulty 1 (0.5% stricter), price is NOT below adjusted BBL -> No Signal ---
+    # Adjusted BBL = 100.0 * (1 - 0.005) = 99.5
+    market_data['close'] = 99.6
+    strategy_rules.difficulty_adjustment_factor = Decimal('0.005')
     should_buy, _, _ = strategy_rules.evaluate_buy_signal(market_data, 1, difficulty_factor=1)
     assert not should_buy
 
-    # --- Scenario 4: Difficulty 1 (1% stricter), price IS below adjusted BBL -> Signal ---
-    market_data['close'] = 98.9
+    # --- Scenario 4: Difficulty 1 (0.5% stricter), price IS below adjusted BBL -> Signal ---
+    market_data['close'] = 99.4
     should_buy, _, _ = strategy_rules.evaluate_buy_signal(market_data, 1, difficulty_factor=1)
     assert should_buy
 
-    # --- Scenario 5: Difficulty 2 (2% stricter), price is NOT below adjusted BBL -> No Signal ---
-    # Adjusted BBL = 100.0 * (1 - 0.02) = 98.0
-    market_data['close'] = 98.1
+    # --- Scenario 5: Difficulty 2 (1% stricter), price is NOT below adjusted BBL -> No Signal ---
+    # Adjusted BBL = 100.0 * (1 - 0.01) = 99.0
+    market_data['close'] = 99.1
+    strategy_rules.difficulty_adjustment_factor = Decimal('0.005')
     should_buy, _, _ = strategy_rules.evaluate_buy_signal(market_data, 1, difficulty_factor=2)
     assert not should_buy

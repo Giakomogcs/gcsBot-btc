@@ -116,6 +116,15 @@ class StatusService:
                 reason, market_data, current_params
             )
 
+            buy_target_percentage_drop = Decimal('0')
+            if 'N/A' not in condition_target and current_price > 0:
+                try:
+                    target_price = Decimal(condition_target.replace('$', '').replace(',', ''))
+                    if current_price > target_price:
+                        buy_target_percentage_drop = ((current_price - target_price) / current_price) * 100
+                except InvalidOperation:
+                    pass
+
             should_buy = buy_amount_usdt > 0
 
             trade_history = self.db_manager.get_all_trades_in_range(mode=environment, bot_id=bot_id) or []
@@ -135,7 +144,8 @@ class StatusService:
                     "operating_mode": operating_mode,
                     "condition_target": condition_target,
                     "condition_progress": condition_progress,
-                    "condition_label": condition_label
+                    "condition_label": condition_label,
+                    "buy_target_percentage_drop": buy_target_percentage_drop
                 },
                 "trade_history": trade_history_dicts,
                 "wallet_balances": wallet_balances
@@ -160,17 +170,28 @@ class StatusService:
         progress_pct = Decimal('0')
         label = "Buy Condition"
 
-        # Pattern 1: Waiting for price to drop to a Bollinger Band
-        bbl_match = re.search(r"above adjusted BBL \$([\d,\.]+)", reason)
+        # Pattern 1: Waiting for price to drop to a Bollinger Band (new format)
+        bbl_match = re.search(r"Buy target: \$([\d,\.]+)", reason)
         if bbl_match:
             try:
                 target_price = Decimal(bbl_match.group(1).replace(',', ''))
-                # Progress is from the high of the candle down to the BBL
                 progress_pct = _calculate_progress_pct(current_price, high_price, target_price)
                 target_value_str = f"${target_price:,.2f}"
-                label = "Price > Adj. BBL"
+                label = "Buy Target"
             except (InvalidOperation, IndexError):
                 pass
+        else:
+            # Pattern 1.1: Waiting for price to drop to a Bollinger Band (old format for compatibility)
+            bbl_match_old = re.search(r"above adjusted BBL \$([\d,\.]+)", reason)
+            if bbl_match_old:
+                try:
+                    target_price = Decimal(bbl_match_old.group(1).replace(',', ''))
+                    # Progress is from the high of the candle down to the BBL
+                    progress_pct = _calculate_progress_pct(current_price, high_price, target_price)
+                    target_value_str = f"${target_price:,.2f}"
+                    label = "Price > Adj. BBL"
+                except (InvalidOperation, IndexError):
+                    pass
 
         # Pattern 2: Waiting for price to drop below EMA20 in an uptrend
         ema_match = re.search(r"below EMA20 \$([\d,\.]+)", reason)

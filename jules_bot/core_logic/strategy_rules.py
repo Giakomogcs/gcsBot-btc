@@ -16,6 +16,7 @@ class StrategyRules:
         self.base_usd_per_trade = self._safe_get_decimal('base_usd_per_trade', '20.0')
         self.sell_factor = self._safe_get_decimal('sell_factor', '0.9')
         self.commission_rate = self._safe_get_decimal('commission_rate', '0.001')
+        self.difficulty_adjustment_factor = self._safe_get_decimal('difficulty_adjustment_factor', '0.005')
 
         # Boolean values don't need Decimal conversion
         self.use_reversal_buy_strategy = self.config_manager.getboolean(
@@ -61,7 +62,7 @@ class StrategyRules:
         ema_100 = Decimal(str(ema_100))
         ema_20 = Decimal(str(ema_20))
         
-        difficulty_multiplier = Decimal(1) - (Decimal(difficulty_factor) * Decimal('0.01'))
+        difficulty_multiplier = Decimal(1) - (Decimal(difficulty_factor) * self.difficulty_adjustment_factor)
         adjusted_bbl = Decimal(str(bbl)) * difficulty_multiplier
 
         # --- Dynamic Dip Logic ---
@@ -84,8 +85,7 @@ class StrategyRules:
                 if current_price <= adjusted_bbl:
                     return True, "downtrend", f"Aggressive first entry (volatility breakout at difficulty {difficulty_factor})"
                 else:
-                    distance = current_price - adjusted_bbl
-                    reason = f"Price ${current_price:,.2f} is ${distance:,.2f} above adjusted BBL ${adjusted_bbl:,.2f} (diff {difficulty_factor})"
+                    reason = f"Buy target: ${adjusted_bbl:,.2f}. Price is too high. Target adjusted for {open_positions_count} open positions."
         else:
             if current_price > ema_100:
                 if high_price > ema_20 and current_price < ema_20:
@@ -101,8 +101,7 @@ class StrategyRules:
                 if current_price <= adjusted_bbl:
                     return True, "downtrend", f"Downtrend volatility breakout (difficulty {difficulty_factor})"
                 else:
-                    distance = current_price - adjusted_bbl
-                    reason = f"Price ${current_price:,.2f} is ${distance:,.2f} above adjusted BBL ${adjusted_bbl:,.2f} (diff {difficulty_factor}, {open_positions_count} pos)"
+                    reason = f"Buy target: ${adjusted_bbl:,.2f}. Price is too high. Target adjusted for {open_positions_count} open positions."
         
         return False, "unknown", reason or "No signal"
 
