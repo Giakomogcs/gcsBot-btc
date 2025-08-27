@@ -15,6 +15,7 @@ class ConfigManager:
         Args:
             config_file: The path to the configuration file.
         """
+        self.bot_name: Optional[str] = None
         # Load environment variables from the specified .env file
         load_dotenv(dotenv_path=os.getenv("ENV_FILE", ".env"))
         self.config = configparser.ConfigParser(interpolation=None)
@@ -22,21 +23,39 @@ class ConfigManager:
             raise FileNotFoundError(f"Configuration file not found: {config_file}")
         self.config.read(config_file)
 
+    def initialize(self, bot_name: str):
+        """
+        Initializes the manager with a specific bot name to resolve bot-specific env vars.
+        """
+        self.bot_name = bot_name
+
     def _resolve_value(self, value: str) -> Optional[str]:
         """
         Resolves a value from an environment variable if it starts with @env/.
+        If a bot_name is set, it first tries to resolve a bot-specific env var.
         """
-        if isinstance(value, str) and value.startswith('@env/'):
-            env_var_name = value[5:]
+        if not isinstance(value, str) or not value.startswith('@env/'):
+            return value
+
+        env_var_name = value[5:]
+        env_var_value = None
+
+        # 1. Try to get bot-specific environment variable first
+        if self.bot_name:
+            # e.g., JULES_BOT_BINANCE_API_KEY
+            bot_specific_env_var = f"{self.bot_name.upper()}_{env_var_name}"
+            env_var_value = os.getenv(bot_specific_env_var)
+
+        # 2. If not found, fall back to the generic environment variable
+        if env_var_value is None:
             env_var_value = os.getenv(env_var_name)
 
-            # Special case for POSTGRES_HOST: default to 'localhost' if not set.
-            # This allows scripts to run from the host machine when the DB is in Docker.
-            if env_var_name == 'POSTGRES_HOST' and env_var_value is None:
-                return 'localhost'
+        # Special case for POSTGRES_HOST: default to 'localhost' if not set.
+        # This allows scripts to run from the host machine when the DB is in Docker.
+        if env_var_name == 'POSTGRES_HOST' and env_var_value is None:
+            return 'localhost'
 
-            return env_var_value
-        return value
+        return env_var_value
 
     def get_section(self, section: str) -> Dict[str, str]:
         """
@@ -98,9 +117,9 @@ class ConfigManager:
         This is the single source of truth for DB connection details.
         """
         if db_type.upper() == 'INFLUXDB':
-            db_url = os.getenv("INFLUXDB_URL")
-            db_token = os.getenv("INFLUXDB_TOKEN")
-            db_org = os.getenv("INFLUXDB_ORG")
+            db_url = self._resolve_value("@env/INFLUXDB_URL")
+            db_token = self._resolve_value("@env/INFLUXDB_TOKEN")
+            db_org = self._resolve_value("@env/INFLUXDB_ORG")
 
             if not all([db_url, db_token, db_org]):
                 raise ValueError(

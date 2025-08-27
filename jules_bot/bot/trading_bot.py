@@ -90,6 +90,7 @@ class TradingBot:
         self.mode = mode
         self.run_id = bot_id
         self.bot_name = os.getenv("BOT_NAME", "jules_bot")
+        config_manager.initialize(bot_name=self.bot_name)
         self.is_running = True
         self.market_data_provider = market_data_provider
         self.db_manager = db_manager

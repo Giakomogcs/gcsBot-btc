@@ -1,6 +1,5 @@
 import os
 import sys
-import uuid
 from jules_bot.bot.trading_bot import TradingBot
 from jules_bot.utils.logger import logger
 from jules_bot.database.postgres_manager import PostgresManager
@@ -39,15 +38,17 @@ def main():
         market_data_provider = MarketDataProvider(db_manager=db_manager)
 
         # --- Instanciação do Bot ---
-        bot_id = str(uuid.uuid4())
-        logger.info(f"Gerado ID único para a sessão do bot: {bot_id}")
+        # O nome do bot é o seu ID persistente. O run_id dentro do TradingBot será
+        # usado para identificar sessões de execução específicas, se necessário.
+        bot_id = bot_name
+        logger.info(f"Usando ID do bot: {bot_id}")
 
         # O TradingBot recebe o MarketDataProvider.
         # Internamente, o TradingBot e seus componentes (como StateManager)
         # criarão suas próprias instâncias do PostgresManager conforme necessário.
         bot = TradingBot(
             mode=bot_mode,
-            bot_id=bot_id,
+            bot_id=bot_id, # Passando o nome do bot como ID
             market_data_provider=market_data_provider,
             db_manager=db_manager
         )
