@@ -84,10 +84,12 @@ class Backtester:
 
             # --- DYNAMIC STRATEGY LOGIC ---
             # O regime de mercado é obtido diretamente da vela (candle), pois foi pré-calculado
-            current_regime = candle.get('market_regime', -1)
+            current_regime = candle.get('market_regime')
             
             # Ensure the regime is an integer for correct config section lookup
-            self.dynamic_params.update_parameters(int(current_regime))
+            # Defensively handle the case where the regime might be None from the dataframe
+            safe_regime = int(current_regime) if current_regime is not None else -1
+            self.dynamic_params.update_parameters(safe_regime)
             current_params = self.dynamic_params.parameters
             # --- END DYNAMIC STRATEGY LOGIC ---
 

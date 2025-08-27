@@ -22,6 +22,7 @@ class TestCapitalManager(unittest.TestCase):
         }
         self.mock_config_manager.get.side_effect = self.get_config_value
         self.mock_config_manager.getboolean.side_effect = self.get_config_boolean_value
+        self.mock_strategy_rules.base_usd_per_trade = Decimal('20.0')
 
         self.params = {
             'order_size_usd': Decimal('20.0'),
@@ -30,7 +31,7 @@ class TestCapitalManager(unittest.TestCase):
         }
 
         self.capital_manager = CapitalManager(
-            config=self.mock_config_manager,
+            config_manager=self.mock_config_manager,
             strategy_rules=self.mock_strategy_rules
         )
 
@@ -178,7 +179,7 @@ class TestCapitalManager(unittest.TestCase):
 
         self.assertEqual(amount, Decimal('0'))
         self.assertEqual(mode, OperatingMode.PRESERVATION.name)
-        self.assertIn("is below min size", reason)
+        self.assertIn("below min trade size", reason)
         self.mock_strategy_rules.evaluate_buy_signal.assert_called_with({}, 1, 0, params=self.params)
 
 if __name__ == '__main__':

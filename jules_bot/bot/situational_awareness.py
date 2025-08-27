@@ -19,8 +19,9 @@ class SituationalAwareness:
         }
         # Carrega a configuração da janela rolante do config.ini
         try:
-            self.rolling_window = int(config_manager.get('DATA_PIPELINE', 'regime_rolling_window'))
-        except (ValueError, KeyError) as e:
+            rolling_window_str = config_manager.get('DATA_PIPELINE', 'regime_rolling_window', fallback='72')
+            self.rolling_window = int(rolling_window_str)
+        except (ValueError, TypeError) as e:
             logger.warning(f"Não foi possível carregar 'regime_rolling_window' do config. Usando fallback para 72. Erro: {e}")
             self.rolling_window = 72 # Fallback
 

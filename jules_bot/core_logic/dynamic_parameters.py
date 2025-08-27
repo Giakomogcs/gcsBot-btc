@@ -37,19 +37,16 @@ class DynamicParameters:
         """
         if regime == -1:
             # A safe, non-trading default
-            section_name = 'STRATEGY_RULES'
-            if not self.config_manager.has_section(section_name):
-                logger.error(f"Default section 'STRATEGY_RULES' not found. Using safe, non-trading parameters.")
-                self.parameters = {
-                    'target_profit': Decimal('0'),
-                    'buy_dip_percentage': Decimal('1'),
-                    'sell_rise_percentage': Decimal('1'),
-                    'order_size_usd': Decimal('0'),
-                }
-                return
-        else:
-            section_name = f'REGIME_{regime}'
+            logger.debug("Regime is -1 (undefined). Loading safe, non-trading parameters.")
+            self.parameters = {
+                'target_profit': Decimal('0'),
+                'buy_dip_percentage': Decimal('1'),
+                'sell_rise_percentage': Decimal('1'),
+                'order_size_usd': Decimal('0'),
+            }
+            return
 
+        section_name = f'REGIME_{regime}'
         # If the specific regime section doesn't exist, fall back to the default strategy rules.
         if not self.config_manager.has_section(section_name):
             logger.warning(f"Config section '{section_name}' not found. Falling back to 'STRATEGY_RULES'.")

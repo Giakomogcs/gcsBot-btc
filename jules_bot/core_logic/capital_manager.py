@@ -139,8 +139,7 @@ class CapitalManager:
             reason += f", Capped at max trade size"
 
         if buy_amount > free_cash:
-            buy_amount = free_cash
-            reason += f", Capped at free cash"
+            return Decimal('0'), OperatingMode.PRESERVATION.name, f"Insufficient funds to place order of ${buy_amount:,.2f}", regime
 
         if buy_amount < self.min_trade_size:
             return Decimal('0'), OperatingMode.PRESERVATION.name, f"Amount ${buy_amount:,.2f} is below min trade size.", regime
