@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from decimal import Decimal, InvalidOperation
 
 from sqlalchemy import select
@@ -111,8 +112,8 @@ class StatusService:
             )
 
             # 4. Calculate Buy Progress
-            btc_purchase_target, btc_purchase_progress_pct = self._calculate_buy_progress(
-                market_data, open_positions_count, current_params
+            condition_target, condition_progress, condition_label = self._calculate_buy_condition_details(
+                reason, market_data, current_params
             )
 
             should_buy = buy_amount_usdt > 0
@@ -132,8 +133,9 @@ class StatusService:
                     "reason": reason,
                     "market_regime": current_regime,
                     "operating_mode": operating_mode,
-                    "btc_purchase_target": btc_purchase_target,
-                    "btc_purchase_progress_pct": btc_purchase_progress_pct
+                    "condition_target": condition_target,
+                    "condition_progress": condition_progress,
+                    "condition_label": condition_label
                 },
                 "trade_history": trade_history_dicts,
                 "wallet_balances": wallet_balances
@@ -145,25 +147,65 @@ class StatusService:
             logger.error(f"Error getting extended status: {e}", exc_info=True)
             return {"error": str(e)}
 
-    def _calculate_buy_progress(self, market_data: dict, open_positions_count: int, current_params: dict) -> tuple[Decimal, Decimal]:
+    def _calculate_buy_condition_details(self, reason: str, market_data: dict, current_params: dict) -> tuple[str, Decimal, str]:
         """
-        Calculates the target price for the next buy and the progress towards it.
+        Parses the 'reason' string from the buy signal evaluation to determine
+        the actual condition the bot is waiting for and calculates the progress towards it.
         """
-        try:
-            current_price = Decimal(str(market_data.get('close')))
-            high_price = Decimal(str(market_data.get('high', current_price)))
-            buy_dip_percentage = current_params.get('buy_dip_percentage', Decimal('0.02'))
+        current_price = Decimal(str(market_data.get('close')))
+        high_price = Decimal(str(market_data.get('high', current_price)))
 
-            # The buy target is a percentage dip from the recent high
-            target_price = high_price * (Decimal('1') - buy_dip_percentage)
+        # Default values
+        target_value_str = "N/A"
+        progress_pct = Decimal('0')
+        label = "Buy Condition"
 
-            # The "start price" for measuring progress is the recent high.
-            progress = _calculate_progress_pct(current_price, high_price, target_price)
+        # Pattern 1: Waiting for price to drop to a Bollinger Band
+        bbl_match = re.search(r"above adjusted BBL \$([\d,\.]+)", reason)
+        if bbl_match:
+            try:
+                target_price = Decimal(bbl_match.group(1).replace(',', ''))
+                # Progress is from the high of the candle down to the BBL
+                progress_pct = _calculate_progress_pct(current_price, high_price, target_price)
+                target_value_str = f"${target_price:,.2f}"
+                label = "Price > Adj. BBL"
+            except (InvalidOperation, IndexError):
+                pass
 
-            return target_price, progress
+        # Pattern 2: Waiting for price to drop below EMA20 in an uptrend
+        ema_match = re.search(r"below EMA20 \$([\d,\.]+)", reason)
+        if ema_match:
+            try:
+                target_price = Decimal(ema_match.group(1).replace(',', ''))
+                # Progress is from the high of the candle down to the EMA20
+                # We assume the current price is above the target
+                progress_pct = _calculate_progress_pct(current_price, high_price, target_price)
+                target_value_str = f"${target_price:,.2f}"
+                label = "Price > EMA20"
+            except (InvalidOperation, IndexError):
+                pass
 
-        except (InvalidOperation, TypeError):
-            return Decimal('0'), Decimal('0')
+        # Pattern 3: Waiting for a dip buy signal (price drop)
+        dip_match = re.search(r"Dip buy signal", reason) or "No signal" in reason
+        if dip_match and not (bbl_match or ema_match):
+            try:
+                buy_dip_percentage = current_params.get('buy_dip_percentage', Decimal('0.02'))
+                target_price = high_price * (Decimal('1') - buy_dip_percentage)
+                # Progress is from the high of the candle down to the dip target
+                progress_pct = _calculate_progress_pct(current_price, high_price, target_price)
+                target_value_str = f"${target_price:,.2f}"
+                label = f"Dip Target ({buy_dip_percentage:.1%})"
+            except InvalidOperation:
+                pass
+
+        # If a buy signal is active, progress is 100%
+        if "signal triggered" in reason or "entry" in reason or "pullback" in reason:
+            progress_pct = Decimal('100')
+            label = "Signal Active"
+            target_value_str = "Met"
+
+        return target_value_str, progress_pct, label
+
 
     def _process_open_positions(self, open_positions_db, current_price):
         positions_status = []
@@ -203,7 +245,12 @@ class StatusService:
                 free = Decimal(bal.get('free', '0'))
                 locked = Decimal(bal.get('locked', '0'))
                 total = free + locked
-                usd_value = (free * current_price) if asset == 'BTC' else free
+
+                # Correctly calculate USD value for both assets
+                if asset == 'BTC':
+                    usd_value = total * current_price
+                else: # For USDT, the value is the total amount
+                    usd_value = total
 
                 processed_balances.append({
                     'asset': asset, 'free': free, 'locked': locked,

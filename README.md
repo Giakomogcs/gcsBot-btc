@@ -282,7 +282,7 @@ If you have multiple bots, `run.py display` will first ask you which bot you wan
 ### Key UI Features
 
 - **Live Status**: Real-time updates on the bot's mode, the current asset price, wallet value, and open position count.
-- **Strategy Status Panel**: Shows the current operating mode of the strategy, the detected market regime, and the active buy/sell conditions.
+- **Strategy Status Panel**: Shows the current operating mode, the detected market regime, and the *actual* condition the bot is waiting for. This is no longer a simple "dip target" but a reflection of the real strategy rules (e.g., waiting for price to cross an EMA or a Bollinger Band).
 - **Bot Control**: A panel to manually trigger a `FORCE BUY` order for a specific USD amount.
 - **Live Log Panel**: Streams the bot's most important messages directly from its log file, with color-coding for different log levels and a filter bar.
 - **Open Positions Table**: A detailed list of all open trades, including unrealized PnL and a progress bar showing how close each position is to its sell target.
@@ -315,9 +315,12 @@ The `scripts/get_bot_data.py` script provides a comprehensive JSON snapshot of t
   ],
   "buy_signal_status": {
     "should_buy": false,
-    "reason": "Price is above the buy threshold.",
-    "btc_purchase_target": 48000.0,
-    "btc_purchase_progress_pct": 0.0
+    "reason": "Price $65123.45 is above adjusted BBL $65000.00",
+    "market_regime": 2,
+    "operating_mode": "ACCUMULATION",
+    "condition_label": "Price > Adj. BBL",
+    "condition_target": "$65000.00",
+    "condition_progress": 50.5
   },
   "trade_history": [
     {
@@ -360,11 +363,14 @@ The `scripts/get_bot_data.py` script provides a comprehensive JSON snapshot of t
   - `progress_to_sell_target_pct`: The percentage progress towards the sell target.
   - `price_to_target`: The absolute price difference to the sell target.
   - `usd_to_target`: The USD value of the `price_to_target`.
-- **`buy_signal_status`**: Information about the bot's readiness to make a new buy.
-  - `should_buy`: A boolean indicating if the strategy conditions for a buy are met.
-  - `reason`: A human-readable explanation of the current signal status.
-  - `btc_purchase_target`: The price at which the bot would consider buying.
-  - `btc_purchase_progress_pct`: The percentage progress towards the buy target.
+- **`buy_signal_status`**: Real-time information about the bot's readiness to make a new buy, reflecting the true strategy.
+  - `should_buy`: A boolean indicating if the strategy conditions for a buy are currently met.
+  - `reason`: The raw, human-readable explanation from the strategy engine.
+  - `market_regime`: The market regime detected by the Situational Awareness model.
+  - `operating_mode`: The bot's current capital management mode (e.g., `ACCUMULATION`).
+  - `condition_label`: A short label for the condition being monitored (e.g., `Price > Adj. BBL`).
+  - `condition_target`: The actual value of the target the bot is waiting for.
+  - `condition_progress`: The percentage progress towards meeting the `condition_target`.
 - **`trade_history`**: A list of all trades (open and closed) for the environment.
 - **`wallet_balances`**: A list of balances for relevant assets from the exchange.
   - `asset`: The ticker for the asset (e.g., `BTC`).

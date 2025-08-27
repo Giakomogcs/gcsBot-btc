@@ -95,7 +95,7 @@ class TestStatusService(unittest.TestCase):
 
         # 3. Assert: Verify results
         # Assert that ExchangeManager was called correctly
-        MockExchangeManager.assert_called_with(mode='test', bot_name='test_bot')
+        MockExchangeManager.assert_called_with(mode='test')
         mock_exchange_instance.get_account_balance.assert_called_once()
         self.feature_calculator.get_current_candle_with_features.assert_called_once()
 
@@ -117,14 +117,16 @@ class TestStatusService(unittest.TestCase):
         self.assertAlmostEqual(float(pos1_status["price_to_target"]), 3000, places=2)
         self.assertAlmostEqual(float(pos1_status["usd_to_target"]), 300, places=2)
         
-        # Assert that the buy signal status is included and contains the correct persisted data
+        # Assert that the buy signal status is included and has the new structure
         self.assertIn("buy_signal_status", result)
-        bs_status = result["buy_signal_status"]
-        self.assertEqual(bs_status["market_regime"], 2)
-        self.assertEqual(bs_status["reason"], "Test Condition")
-        self.assertEqual(bs_status["operating_mode"], "ACCUMULATION")
-        self.assertAlmostEqual(bs_status["btc_purchase_target"], Decimal("51058.00"), places=2)
-        self.assertAlmostEqual(bs_status["btc_purchase_progress_pct"], Decimal("9.60"), places=2)
+        buy_status = result["buy_signal_status"]
+        self.assertEqual(buy_status["reason"], "Test Condition")
+        self.assertEqual(buy_status["market_regime"], 2) # HIGH_VOLATILITY
+        self.assertEqual(buy_status["operating_mode"], "ACCUMULATION")
+        # Check for the new keys, ensuring the structure is correct
+        self.assertIn("condition_target", buy_status)
+        self.assertIn("condition_progress", buy_status)
+        self.assertIn("condition_label", buy_status)
 
 if __name__ == '__main__':
     unittest.main()

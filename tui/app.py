@@ -173,7 +173,7 @@ class TUIApp(App):
                 with Static(id="strategy_container"):
                     yield Static("Operating Mode: N/A", id="strategy_operating_mode")
                     yield Static("Market Regime: N/A", id="strategy_market_regime")
-                    yield Static("Buy Condition: N/A", id="strategy_buy_condition")
+                    yield Static("Buy Reason: N/A", id="strategy_buy_reason")
                     yield Static("Buy Target: N/A", id="strategy_buy_target")
                     yield Static("Buy Progress: N/A", id="strategy_buy_progress")
 
@@ -416,14 +416,19 @@ class TUIApp(App):
         operating_mode = buy_signal_status.get("operating_mode", "N/A")
         market_regime = buy_signal_status.get("market_regime", -1)
         reason = buy_signal_status.get("reason", "N/A")
-        buy_target = Decimal(buy_signal_status.get("btc_purchase_target", 0))
-        buy_progress = float(buy_signal_status.get("btc_purchase_progress_pct", 0))
+
+        # NEW: Use the accurate, detailed condition data
+        condition_label = buy_signal_status.get("condition_label", "Buy Condition")
+        condition_target = buy_signal_status.get("condition_target", "N/A")
+        condition_progress = float(buy_signal_status.get("condition_progress", 0))
 
         self.query_one("#strategy_operating_mode").update(f"Operating Mode: {operating_mode}")
         self.query_one("#strategy_market_regime").update(f"Market Regime: {market_regime}")
-        self.query_one("#strategy_buy_condition").update(f"Buy Condition: {reason}")
-        self.query_one("#strategy_buy_target").update(f"Buy Target: ${buy_target:,.2f}")
-        self.query_one("#strategy_buy_progress").update(f"Buy Progress: {buy_progress:.1f}%")
+        self.query_one("#strategy_buy_reason").update(f"Buy Reason: {reason}")
+
+        # Update the labels and values to be dynamic and descriptive
+        self.query_one("#strategy_buy_target").update(f"{condition_label}: {condition_target}")
+        self.query_one("#strategy_buy_progress").update(f"Progress: {condition_progress:.1f}%")
 
         # Update wallet balances table
         wallet_table = self.query_one("#wallet_table", DataTable)
