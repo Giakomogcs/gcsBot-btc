@@ -13,7 +13,9 @@ def clear_testnet_trades():
     Connects to the database and clears all trades from the 'test' environment.
     """
     try:
-        logger.info("Starting the process to clear testnet trades...")
+        bot_name = os.getenv("BOT_NAME", "jules_bot")
+        config_manager.initialize(bot_name)
+        logger.info(f"Starting the process to clear testnet trades for bot '{bot_name}'...")
 
         db_manager = PostgresManager()
 

@@ -7,14 +7,15 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, project_root)
 
 from jules_bot.services.performance_service import get_summary
+from jules_bot.utils.config_manager import config_manager
 
 def main(bot_name: str):
     """
     This script acts as a data endpoint for the TUI.
     It fetches the performance summary and prints it as a JSON string.
     """
-    # Set BOT_NAME environment variable so other modules can pick it up
-    os.environ["BOT_NAME"] = bot_name
+    # Initialize the config manager with the bot name to load correct .env variables
+    config_manager.initialize(bot_name)
     summary_data = get_summary(bot_id=bot_name)
     print(json.dumps(summary_data))
 

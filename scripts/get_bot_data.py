@@ -77,6 +77,9 @@ def main(
 
     logger.info(f"Gathering bot data for '{bot_name}' in '{mode}' environment...")
 
+    # Initialize the config manager with the bot name to load correct .env variables
+    config_manager.initialize(bot_name)
+
     # --- Inicialização e Verificação do Ambiente ---
     try:
         db_manager = PostgresManager()

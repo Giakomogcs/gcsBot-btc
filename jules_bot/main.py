@@ -23,6 +23,9 @@ def main():
     # Get bot name from environment variable
     bot_name = os.getenv("BOT_NAME", "jules_bot")
 
+    # Initialize the config manager with the bot name to load correct .env variables
+    config_manager.initialize(bot_name)
+
     logger.info(f"--- INICIANDO O BOT '{bot_name}' EM MODO '{bot_mode.upper()}' (via variável de ambiente) ---")
     
     if bot_mode not in ['trade', 'test']:

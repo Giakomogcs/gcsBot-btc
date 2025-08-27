@@ -17,7 +17,9 @@ def main(environment: str):
     Limpa todos os registros da tabela 'trades' para um ambiente específico no PostgreSQL.
     """
     try:
-        logger.info(f"--- LIMPANDO A TABELA 'TRADES' DO AMBIENTE '{environment}' NO POSTGRESQL ---")
+        bot_name = os.getenv("BOT_NAME", "jules_bot")
+        config_manager.initialize(bot_name)
+        logger.info(f"--- LIMPANDO A TABELA 'TRADES' DO AMBIENTE '{environment}' PARA O BOT '{bot_name}' NO POSTGRESQL ---")
 
         db_manager = PostgresManager()
 

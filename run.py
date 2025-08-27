@@ -156,6 +156,24 @@ def build():
     if run_docker_command(["build", "--no-cache"]):
         print("✅ Imagens reconstruídas com sucesso.")
 
+@app.command("run-tests")
+def run_tests(
+    pytest_args: str = typer.Option(
+        "",
+        "--pytest-args",
+        "-a",
+        help="Argumentos adicionais para passar ao pytest, entre aspas."
+    )
+):
+    """Executa a suíte de testes (pytest) dentro do container."""
+    print(" запускаем тесты...")
+    command = ["-m", "pytest"]
+    if pytest_args:
+        # Naively split by space. For complex args, consider shlex.
+        command.extend(pytest_args.split())
+
+    _run_in_container(command=command)
+
 # --- Comandos da Aplicação ---
 
 def _run_in_container(command: list, env_vars: dict = {}, interactive: bool = False, detached: bool = False):

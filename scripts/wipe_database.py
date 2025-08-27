@@ -36,6 +36,10 @@ def wipe_database(force=False):
     if user_confirmed:
         logger.info("User confirmed database wipe. Proceeding...")
         try:
+            bot_name = os.getenv("BOT_NAME", "jules_bot")
+            config_manager.initialize(bot_name)
+            logger.info(f"Wiping database for bot '{bot_name}'...")
+
             db_manager = PostgresManager()
 
             logger.info("Instantiated PostgresManager. Calling clear_all_tables()...")

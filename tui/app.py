@@ -16,6 +16,8 @@ from textual.message import Message # NOVO
 # Add project root to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+from jules_bot.utils.config_manager import config_manager
+
 class NumberValidator(Validator):
     def validate(self, value: str) -> ValidationResult:
         try:
@@ -131,6 +133,10 @@ class TUIApp(App):
         
         # Get bot name from environment variable for log isolation
         self.bot_name = os.getenv("BOT_NAME", "jules_bot")
+
+        # Initialize the config manager with the bot name to load correct .env variables
+        config_manager.initialize(self.bot_name)
+
         self.log_file_path = os.path.join("logs", f"{self.bot_name}.jsonl")
         
         self.log_file_handle = None

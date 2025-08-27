@@ -17,8 +17,9 @@ def get_portfolio_data(bot_name: str):
     Fetches the latest portfolio snapshot, historical data, and DCOM status for the TUI.
     """
     try:
-        # Set BOT_NAME environment variable so PostgresManager can pick it up
-        os.environ["BOT_NAME"] = bot_name
+        # Initialize the config manager with the bot name to load correct .env variables
+        config_manager.initialize(bot_name)
+
         db_manager = PostgresManager()
         portfolio_manager = PortfolioManager(db_manager.SessionLocal)
 
