@@ -59,7 +59,7 @@ class StatusService:
         open positions' PnL, progress towards sell targets, and buy signal readiness.
         """
         try:
-            exchange_manager = ExchangeManager(mode=environment, bot_name=bot_id)
+            exchange_manager = ExchangeManager(mode=environment)
             symbol = "BTCUSDT"
 
             market_data_series = self.feature_calculator.get_current_candle_with_features()
