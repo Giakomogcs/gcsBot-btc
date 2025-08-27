@@ -1,5 +1,6 @@
 import sys
 import os
+import argparse
 
 # Adiciona a raiz do projeto ao path para permitir a importação de módulos
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -8,8 +9,7 @@ if project_root not in sys.path:
 
 from collectors.core_price_collector import prepare_backtest_data
 from jules_bot.utils.logger import logger
-
-import argparse
+from jules_bot.utils.config_manager import config_manager
 
 def main():
     """
@@ -26,6 +26,10 @@ def main():
     args = parser.parse_args()
 
     try:
+        # Get bot name from environment variable and initialize the config manager
+        bot_name = os.getenv("BOT_NAME", "jules_bot")
+        config_manager.initialize(bot_name)
+
         logger.info(f"Starting backtest data preparation for the last {args.days} days...")
         
         prepare_backtest_data(days=args.days)
