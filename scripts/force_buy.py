@@ -17,15 +17,16 @@ def main(
         help="The amount in USD to buy.",
         min=0.0,
         show_default=False
-    ),
-    bot_name: str = typer.Argument(
-        "jules_bot",
-        help="The name of the bot to send the command to."
     )
 ):
     """
     Creates a command file to instruct a running bot to execute a manual buy.
     """
+    bot_name = os.getenv("BOT_NAME")
+    if not bot_name:
+        logger.error("ERRO CRÍTICO: A variável de ambiente BOT_NAME não está definida.")
+        sys.exit(1)
+
     logger.info(f"Received request to force buy ${amount_usd:.2f} for bot '{bot_name}'.")
 
     try:

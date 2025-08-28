@@ -292,19 +292,19 @@ class TUIApp(App):
     # --- Data Update Initiators ---
 
     def update_dashboard(self) -> None:
-        command = ["python", "scripts/get_bot_data.py", self.mode, self.bot_name]
+        command = ["python", "scripts/get_bot_data.py", self.mode]
         self.run_script_worker(command, DashboardData)
 
     def update_portfolio_dashboard(self) -> None:
-        command = ["python", "scripts/get_portfolio_data.py", self.bot_name]
+        command = ["python", "scripts/get_portfolio_data.py"]
         self.run_script_worker(command, PortfolioData)
 
     def update_performance_summary(self) -> None:
-        command = ["python", "scripts/get_tui_performance_data.py", self.bot_name]
+        command = ["python", "scripts/get_tui_performance_data.py"]
         self.run_script_worker(command, PerformanceSummaryData)
 
     def update_trade_history(self) -> None:
-        command = ["python", "scripts/get_trade_history.py", self.bot_name]
+        command = ["python", "scripts/get_trade_history.py"]
         self.run_script_worker(command, TradeHistoryData)
 
     # --- Message Handlers (UI Updates) ---
@@ -497,14 +497,14 @@ class TUIApp(App):
             input_widget = self.query_one("#manual_buy_input", Input)
             if input_widget.is_valid:
                 amount = input_widget.value
-                command = ["python", "scripts/force_buy.py", amount, self.bot_name]
+                command = ["python", "scripts/force_buy.py", amount]
                 self.run_script_worker(command, CommandOutput)
                 input_widget.value = ""
             else:
                 self.log_display.write("[bold red]Invalid buy amount.[/bold red]")
         elif event.button.id == "force_sell_button":
             if self.selected_trade_id:
-                command = ["python", "scripts/force_sell.py", self.selected_trade_id, "100", self.bot_name]
+                command = ["python", "scripts/force_sell.py", self.selected_trade_id, "100"]
                 self.run_script_worker(command, CommandOutput)
                 self.query_one("#force_sell_button").disabled = True
                 self.selected_trade_id = None

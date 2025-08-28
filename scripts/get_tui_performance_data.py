@@ -9,11 +9,17 @@ sys.path.insert(0, project_root)
 from jules_bot.services.performance_service import get_summary
 from jules_bot.utils.config_manager import config_manager
 
-def main(bot_name: str):
+def main():
     """
     This script acts as a data endpoint for the TUI.
     It fetches the performance summary and prints it as a JSON string.
+    The bot name is determined by the BOT_NAME environment variable.
     """
+    bot_name = os.getenv("BOT_NAME")
+    if not bot_name:
+        print(json.dumps({"error": "BOT_NAME environment variable not set."}), file=sys.stderr)
+        sys.exit(1)
+
     # Initialize the config manager with the bot name to load correct .env variables
     config_manager.initialize(bot_name)
 
@@ -21,7 +27,4 @@ def main(bot_name: str):
     print(json.dumps(summary_data))
 
 if __name__ == "__main__":
-    bot_name = "jules_bot"
-    if len(sys.argv) > 1:
-        bot_name = sys.argv[1]
-    main(bot_name)
+    main()

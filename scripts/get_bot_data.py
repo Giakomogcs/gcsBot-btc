@@ -50,10 +50,6 @@ def main(
     mode: str = typer.Argument(
         "test",
         help="The environment to get data for ('trade' or 'test')."
-    ),
-    bot_name: str = typer.Argument(
-        "jules_bot",
-        help="The name of the bot to get data for."
     )
 ):
     """
@@ -68,6 +64,13 @@ def main(
     """
     if mode not in ["trade", "test"]:
         logger.error("Invalid mode specified. Please choose 'trade' or 'test'.")
+        raise typer.Exit(code=1)
+
+    bot_name = os.getenv("BOT_NAME")
+    if not bot_name:
+        logger.error("ERRO CRÍTICO: A variável de ambiente BOT_NAME não está definida.")
+        # Print JSON error to stderr for TUI to catch
+        print(json.dumps({"error": "BOT_NAME environment variable not set."}), file=sys.stderr)
         raise typer.Exit(code=1)
 
     logger.info(f"Gathering bot data for '{bot_name}' in '{mode}' environment...")

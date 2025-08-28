@@ -23,14 +23,15 @@ def main(
         max=100.0,
         show_default=False
     )],
-    bot_name: str = typer.Argument(
-        "jules_bot",
-        help="The name of the bot to send the command to."
-    )
 ):
     """
     Creates a command file to instruct a running bot to force sell a position.
     """
+    bot_name = os.getenv("BOT_NAME")
+    if not bot_name:
+        logger.error("ERRO CRÍTICO: A variável de ambiente BOT_NAME não está definida.")
+        sys.exit(1)
+
     logger.info(f"Received request to force sell {percentage}% of trade {trade_id} for bot '{bot_name}'.")
 
     try:

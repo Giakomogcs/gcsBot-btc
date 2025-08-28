@@ -12,10 +12,15 @@ from jules_bot.utils.config_manager import config_manager
 from jules_bot.database.portfolio_manager import PortfolioManager
 from jules_bot.database.postgres_manager import PostgresManager
 
-def get_portfolio_data(bot_name: str):
+def get_portfolio_data():
     """
     Fetches the latest portfolio snapshot, historical data, and DCOM status for the TUI.
     """
+    bot_name = os.getenv("BOT_NAME")
+    if not bot_name:
+        print(json.dumps({"error": "BOT_NAME environment variable not set."}), file=sys.stderr)
+        sys.exit(1)
+
     try:
         # 1. Initialize ConfigManager
         config_manager.initialize(bot_name)
@@ -132,7 +137,4 @@ def get_portfolio_data(bot_name: str):
         sys.exit(1)
 
 if __name__ == "__main__":
-    bot_name = "jules_bot"
-    if len(sys.argv) > 1:
-        bot_name = sys.argv[1]
-    get_portfolio_data(bot_name)
+    get_portfolio_data()
