@@ -422,7 +422,7 @@ class TUIApp(App):
 
         # NEW: Use the accurate, detailed condition data
         condition_label = buy_signal_status.get("condition_label", "Buy Condition")
-        logger.info(f"TUI received condition_label: {condition_label}")
+        #logger.info(f"TUI received condition_label: {condition_label}")
         condition_target = buy_signal_status.get("condition_target", "N/A")
         condition_progress = float(buy_signal_status.get("condition_progress", 0))
         buy_target_percentage_drop = float(buy_signal_status.get("buy_target_percentage_drop", 0))
