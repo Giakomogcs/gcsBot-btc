@@ -17,6 +17,7 @@ from textual.message import Message # NOVO
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from jules_bot.utils.config_manager import config_manager
+from jules_bot.utils.logger import logger
 
 class NumberValidator(Validator):
     def validate(self, value: str) -> ValidationResult:
@@ -133,6 +134,7 @@ class TUIApp(App):
         
         # Get bot name from environment variable for log isolation
         self.bot_name = os.getenv("BOT_NAME", "jules_bot")
+        logger.info(f"TUI is initializing for bot: {self.bot_name}")
 
         # Initialize the config manager with the bot name to load correct .env variables
         config_manager.initialize(self.bot_name)
@@ -420,6 +422,7 @@ class TUIApp(App):
 
         # NEW: Use the accurate, detailed condition data
         condition_label = buy_signal_status.get("condition_label", "Buy Condition")
+        logger.info(f"TUI received condition_label: {condition_label}")
         condition_target = buy_signal_status.get("condition_target", "N/A")
         condition_progress = float(buy_signal_status.get("condition_progress", 0))
         buy_target_percentage_drop = float(buy_signal_status.get("buy_target_percentage_drop", 0))

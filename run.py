@@ -16,21 +16,8 @@ from jules_bot.utils.config_manager import config_manager
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 app = typer.Typer(context_settings=CONTEXT_SETTINGS)
 
-# State dictionary to hold the bot name
-state = {
-    "bot_name": "jules_bot",
-}
-
 @app.callback(invoke_without_command=True)
-def main(
-    ctx: typer.Context,
-    bot_name: str = typer.Option(
-        "jules_bot",
-        "--bot-name",
-        "-n",
-        help="O nome do bot para isolamento de logs e dados. Padrão: 'jules_bot'"
-    )
-):
+def main(ctx: typer.Context):
     """
     Jules Bot - A crypto trading bot.
     """
@@ -38,14 +25,6 @@ def main(
     if not os.path.exists(".env") and os.path.exists(".env.dummy"):
         print("INFO: Arquivo '.env' não encontrado. Copiando de '.env.dummy'...")
         shutil.copy(".env.dummy", ".env")
-
-    # We only set the bot name if a subcommand is invoked
-    # that is not an environment-level command.
-    env_commands = ["start", "stop", "status", "logs", "build", "new-bot", "delete-bot"]
-    if ctx.invoked_subcommand and ctx.invoked_subcommand not in env_commands:
-        state["bot_name"] = bot_name
-
-    # ENV_FILE is no longer needed, as docker-compose will use the root .env by default
 
 # --- Lógica de Detecção do Docker Compose ---
 
@@ -172,11 +151,11 @@ def run_tests(
         # Naively split by space. For complex args, consider shlex.
         command.extend(pytest_args.split())
 
-    _run_in_container(command=command)
+    _run_in_container(command=command, bot_name="jules_bot")
 
 # --- Comandos da Aplicação ---
 
-def _run_in_container(command: list, env_vars: dict = {}, interactive: bool = False, detached: bool = False):
+def _run_in_container(command: list, bot_name: str, env_vars: dict = {}, interactive: bool = False, detached: bool = False):
     """
     Executa um comando Python dentro do container 'app'.
     - Modo Padrão (interactive=False): Captura e exibe o output em tempo real.
@@ -193,7 +172,7 @@ def _run_in_container(command: list, env_vars: dict = {}, interactive: bool = Fa
             exec_cmd.append("-it")
 
         # Add bot_name to env_vars
-        env_vars["BOT_NAME"] = state["bot_name"]
+        env_vars["BOT_NAME"] = bot_name
 
         for key, value in env_vars.items():
             exec_cmd.extend(["-e", f"{key}={value}"])
@@ -239,17 +218,17 @@ def _run_in_container(command: list, env_vars: dict = {}, interactive: bool = Fa
         return False
 
 
-def _confirm_and_clear_data(mode: str):
+def _confirm_and_clear_data(mode: str, bot_name: str):
     """
     Asks the user for confirmation to clear data for a specific mode.
     If confirmed, runs the appropriate data clearing script.
     """
-    prompt_message = f"Você deseja limpar todos os dados existentes do modo '{mode}' para o bot '{state['bot_name']}' antes de continuar?"
+    prompt_message = f"Você deseja limpar todos os dados existentes do modo '{mode}' para o bot '{bot_name}' antes de continuar?"
     if mode == 'trade':
-        prompt_message = f"⚠️ ATENÇÃO: Você está em modo 'trade' (live). Deseja limpar TODOS os dados do banco de dados (trades, status, histórico) para o bot '{state['bot_name']}' antes de continuar?"
+        prompt_message = f"⚠️ ATENÇÃO: Você está em modo 'trade' (live). Deseja limpar TODOS os dados do banco de dados (trades, status, histórico) para o bot '{bot_name}' antes de continuar?"
 
     if typer.confirm(prompt_message):
-        print(f"🗑️  Limpando dados do modo '{mode}' para o bot '{state['bot_name']}'...")
+        print(f"🗑️  Limpando dados do modo '{mode}' para o bot '{bot_name}'...")
         script_command = []
         if mode == 'test':
             script_command = ["scripts/clear_testnet_trades.py"]
@@ -259,7 +238,7 @@ def _confirm_and_clear_data(mode: str):
         elif mode == 'backtest':
             script_command = ["scripts/clear_trades_measurement.py", "backtest"]
 
-        if not _run_in_container(command=script_command):
+        if not _run_in_container(command=script_command, bot_name=bot_name):
             print(f"❌ Falha ao limpar os dados do modo '{mode}'. Abortando.")
             raise typer.Exit(code=1)
         print(f"✅ Dados do modo '{mode}' limpos com sucesso.")
@@ -281,8 +260,6 @@ def _setup_bot_run(bot_name: Optional[str]) -> str:
             print(f"❌ Bot '{final_bot_name}' não encontrado. Bots disponíveis: {', '.join(available_bots)}")
             raise typer.Exit(1)
 
-    # Update state for other functions to use
-    state["bot_name"] = final_bot_name
     return final_bot_name
 
 @app.command()
@@ -292,10 +269,11 @@ def trade(
     """Inicia o bot em modo de negociação (live)."""
     final_bot_name = _setup_bot_run(bot_name)
     mode = "trade"
-    _confirm_and_clear_data(mode)
+    _confirm_and_clear_data(mode, final_bot_name)
     print(f"🚀 Iniciando o bot '{final_bot_name}' em modo '{mode.upper()}'...")
     _run_in_container(
         command=["jules_bot/main.py"],
+        bot_name=final_bot_name,
         env_vars={"BOT_MODE": mode}
     )
 
@@ -306,32 +284,35 @@ def test(
     """Inicia o bot em modo de teste (testnet), opcionalmente limpando o estado anterior."""
     final_bot_name = _setup_bot_run(bot_name)
     mode = "test"
-    _confirm_and_clear_data(mode)
+    _confirm_and_clear_data(mode, final_bot_name)
     print(f"🚀 Iniciando o bot '{final_bot_name}' em modo '{mode.upper()}'...")
     _run_in_container(
         command=["jules_bot/main.py"],
+        bot_name=final_bot_name,
         env_vars={"BOT_MODE": mode}
     )
 
 @app.command()
 def backtest(
+    bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="O nome do bot para executar. Se não for fornecido, um menu será exibido."),
     days: int = typer.Option(
         30, "--days", "-d", help="Número de dias de dados recentes para o backtest."
     )
 ):
     """Prepara os dados e executa um backtest completo dentro do container."""
+    final_bot_name = _setup_bot_run(bot_name)
     mode = "backtest"
-    _confirm_and_clear_data(mode)
+    _confirm_and_clear_data(mode, final_bot_name)
 
-    print(f"🚀 Iniciando execução de backtest para {days} dias para o bot '{state['bot_name']}'...")
+    print(f"🚀 Iniciando execução de backtest para {days} dias para o bot '{final_bot_name}'...")
 
     print("\n--- Etapa 1 de 2: Preparando dados ---")
-    if not _run_in_container(["scripts/prepare_backtest_data.py", str(days)]):
+    if not _run_in_container(["scripts/prepare_backtest_data.py", str(days)], bot_name=final_bot_name):
         print("❌ Falha na preparação dos dados. Abortando backtest.")
         return
 
     print("\n--- Etapa 2 de 2: Rodando o backtest ---")
-    if not _run_in_container(["scripts/run_backtest.py", str(days)]):
+    if not _run_in_container(["scripts/run_backtest.py", str(days)], bot_name=final_bot_name):
         print("❌ Falha na execução do backtest.")
         return
 
@@ -556,41 +537,48 @@ def display(
 
     _run_in_container(
         command=command_to_run,
+        bot_name=final_bot_name,
         interactive=True
     )
     print("\n✅ Display encerrado.")
 
 
 @app.command("clear-backtest-trades")
-def clear_backtest_trades():
+def clear_backtest_trades(bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="O nome do bot para o qual limpar os trades.")):
     """Deletes all trades from the 'backtest' environment in the database."""
-    print(f"🗑️  Attempting to clear all backtest trades from the database for bot '{state['bot_name']}'...")
+    final_bot_name = _setup_bot_run(bot_name)
+    print(f"🗑️  Attempting to clear all backtest trades from the database for bot '{final_bot_name}'...")
     _run_in_container(
         command=["scripts/clear_trades_measurement.py", "backtest"],
+        bot_name=final_bot_name,
         interactive=True
     )
 
 @app.command("clear-testnet-trades")
-def clear_testnet_trades():
+def clear_testnet_trades(bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="O nome do bot para o qual limpar os trades.")):
     """Deletes all trades from the 'test' environment in the database."""
-    print(f"🗑️  Attempting to clear all testnet trades from the database for bot '{state['bot_name']}'...")
+    final_bot_name = _setup_bot_run(bot_name)
+    print(f"🗑️  Attempting to clear all testnet trades from the database for bot '{final_bot_name}'...")
     _run_in_container(
         command=["scripts/clear_testnet_trades.py"],
+        bot_name=final_bot_name,
         interactive=True
     )
 
 
 @app.command("wipe-db")
-def wipe_db():
+def wipe_db(bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="O nome do bot para o qual limpar o banco de dados.")):
     """
     Shows a confirmation prompt and then wipes all data from the main tables.
     This is a destructive operation.
     """
-    print(f"🗑️  Attempting to wipe the database for bot '{state['bot_name']}'...")
+    final_bot_name = _setup_bot_run(bot_name)
+    print(f"🗑️  Attempting to wipe the database for bot '{final_bot_name}'...")
     print("   This will run the script inside the container.")
 
     _run_in_container(
         command=["scripts/wipe_database.py"],
+        bot_name=final_bot_name,
         interactive=True
     )
 
