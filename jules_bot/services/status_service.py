@@ -182,7 +182,7 @@ class StatusService:
                 target_price = Decimal(bbl_match.group(1).replace(',', ''))
                 progress_pct = _calculate_progress_pct(current_price, high_price, target_price)
                 target_value_str = f"${target_price:,.2f}"
-                label = "Buy Target"
+                label = "Buy Target (BBL)"
                 return target_value_str, progress_pct, label
             except (InvalidOperation, IndexError):
                 pass
@@ -194,21 +194,21 @@ class StatusService:
                 target_price = Decimal(ema_match.group(1).replace(',', ''))
                 progress_pct = _calculate_progress_pct(current_price, high_price, target_price)
                 target_value_str = f"${target_price:,.2f}"
-                label = "Price > EMA20"
+                label = "Pullback Target (EMA20)"
                 return target_value_str, progress_pct, label
             except (InvalidOperation, IndexError):
                 pass
 
-        # Pattern 3: Waiting for a general dip buy signal
-        if "dip buy" in reason.lower() or ("uptrend" in reason.lower() and "pullback" not in reason.lower()):
-             try:
+        # Pattern 3: Waiting for a general dip buy signal (handles "no pullback" and other dip scenarios)
+        if "dip buy" in reason.lower() or "no pullback" in reason.lower():
+            try:
                 buy_dip_percentage = current_params.get('buy_dip_percentage', Decimal('0.02'))
                 target_price = high_price * (Decimal('1') - buy_dip_percentage)
                 progress_pct = _calculate_progress_pct(current_price, high_price, target_price)
                 target_value_str = f"${target_price:,.2f}"
                 label = f"Dip Target ({buy_dip_percentage:.1%})"
                 return target_value_str, progress_pct, label
-             except InvalidOperation:
+            except InvalidOperation:
                 pass
 
         # If no specific target was parsed, return the generic status.

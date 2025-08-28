@@ -175,8 +175,8 @@ class TUIApp(App):
                 with Static(id="strategy_container"):
                     yield Static("Operating Mode: N/A", id="strategy_operating_mode")
                     yield Static("Market Regime: N/A", id="strategy_market_regime")
-                    yield Static("Buy Reason: N/A", id="strategy_buy_reason")
-                    yield Static("Buy Target: N/A", id="strategy_buy_target")
+                    yield Static("Status: N/A", id="strategy_buy_reason")
+                    yield Static("Next Buy Target: N/A", id="strategy_buy_target")
                     yield Static("Drop Needed: N/A", id="strategy_buy_target_percentage")
                     yield Static("Buy Progress: N/A", id="strategy_buy_progress")
 
@@ -440,7 +440,7 @@ class TUIApp(App):
 
         if is_info_only:
             # When no specific target, show the generic reason from the bot
-            self.query_one("#strategy_buy_reason").update(f"Buy Reason: {reason}")
+            self.query_one("#strategy_buy_reason").update(f"Status: {reason}")
         else:
             # When there is a specific target, show the detailed widgets
             self.query_one("#strategy_buy_target").update(f"{condition_label}: {condition_target}")
