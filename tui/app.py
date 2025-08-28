@@ -14,7 +14,7 @@ from textual.worker import Worker, get_current_worker
 from textual import work
 from textual.message import Message
 from textual.reactive import reactive
-from textual_plotext import plotext as Plotext
+from textual_plotext import PlotextPlot
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -151,7 +151,7 @@ class TUIApp(App):
 
                         with Vertical(id="bottom_middle_pane"):
                             yield Static("Portfolio Value History", classes="title")
-                            yield Plotext(id="portfolio_chart")
+                            yield PlotextPlot(id="portfolio_chart")
 
 
             with TabPane("Trade History", id="history"):
@@ -384,15 +384,16 @@ class TUIApp(App):
             )
 
     def update_portfolio_chart(self, history: list):
-        chart = self.query_one("#portfolio_chart", Plotext)
-        chart.clear()
+        chart = self.query_one("#portfolio_chart", PlotextPlot)
+        plt = chart.plt
+        plt.clear_data()
         if history:
             dates = [datetime.fromisoformat(item['timestamp']).strftime("%m-%d %H:%M") for item in reversed(history)]
             values = [float(item['value']) for item in reversed(history)]
-            chart.plot(dates, values)
-            chart.title("Portfolio Value (USD) - Last 50 Snapshots")
-            chart.x_label("Timestamp")
-            chart.y_label("USD Value")
+            plt.plot(dates, values)
+            plt.title("Portfolio Value (USD) - Last 50 Snapshots")
+            plt.xlabel("Timestamp")
+            plt.ylabel("USD Value")
         chart.refresh()
 
 
