@@ -2,7 +2,7 @@ import json
 import subprocess
 import sys
 import os
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import time
 from datetime import datetime
 
@@ -130,7 +130,6 @@ class TUIApp(App):
                                     yield Static(f"Mode: {self.mode.upper()}", id="status_mode")
                                     yield Static("Symbol: N/A", id="status_symbol")
                                     yield Static("Price: N/A", id="status_price")
-                                    yield Static("Open Positions: N/A", id="status_open_positions")
                                     yield Static("Wallet Value: N/A", id="status_wallet_usd")
 
                                 yield Static("Strategy Status", classes="title")
@@ -146,13 +145,11 @@ class TUIApp(App):
                                 yield Static("Wallet Balances", classes="title")
                                 yield DataTable(id="wallet_table")
 
-                                yield Static("Open Positions", classes="title")
-                                yield DataTable(id="positions_table")
-
                         # This section is now moved to the Trade History tab
-                        # with Vertical(id="bottom_middle_pane"):
-                        #     yield Static("Portfolio Value History", classes="title")
-                        #     yield PlotextPlot(id="portfolio_chart")
+                        with Vertical(id="open_positions"):
+                            yield Static("Open Positions", classes="title")
+                            yield Static("Open Positions: N/A", id="status_open_positions")
+                            yield DataTable(id="positions_table")
 
 
             with TabPane("Trade History", id="history"):
