@@ -14,7 +14,7 @@ from textual.worker import Worker, get_current_worker
 from textual import work
 from textual.message import Message
 from textual.reactive import reactive
-from textual_plotext import Plotext
+from textual_plotext import plotext as Plotext
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
