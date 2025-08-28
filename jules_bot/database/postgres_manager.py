@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import uuid
+from decimal import Decimal
 from typing import Optional, Iterator
 from datetime import datetime
 import pandas as pd
@@ -250,8 +251,12 @@ class PostgresManager:
                     Trade.status == "OPEN",
                     Trade.environment == environment
                 ]
-                if bot_id:
-                    filters.append(Trade.run_id == bot_id)
+                # O filtro por bot_id (que é na verdade run_id) foi removido daqui
+                # porque estava causando um bug na TUI. A TUI passava o bot_name,
+                # que nunca correspondia a um run_id. A conexão já está no escopo
+                # do schema do bot, então a filtragem por run_id não é estritamente
+                # necessária para a operação normal e deve ser usada apenas em
+                # contextos específicos como backtesting, o que pode exigir uma função separada.
                 if symbol:
                     filters.append(Trade.symbol == symbol)
 
@@ -315,7 +320,7 @@ class PostgresManager:
                 logger.error(f"Failed to update trade status for trade_id '{trade_id}': {e}", exc_info=True)
                 raise
 
-    def update_trade_sell_target(self, trade_id: str, new_target: 'Decimal'):
+    def update_trade_sell_target(self, trade_id: str, new_target: Decimal):
         """Updates the sell_target_price of a specific trade in the database."""
         with self.get_db() as db:
             try:
