@@ -390,6 +390,7 @@ class TUIApp(App):
         if history:
             dates = [datetime.fromisoformat(item['timestamp']).strftime("%m-%d %H:%M") for item in reversed(history)]
             values = [float(item['value']) for item in reversed(history)]
+            plt.date_form('m-d H:M')
             plt.plot(dates, values)
             plt.title("Portfolio Value (USD) - Last 50 Snapshots")
             plt.xlabel("Timestamp")
