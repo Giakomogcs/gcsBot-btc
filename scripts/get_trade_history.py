@@ -32,7 +32,7 @@ def get_trade_history():
 
         # Fetch all trades. For a TUI, fetching all trades is generally acceptable.
         # If performance becomes an issue, pagination could be added here.
-        all_trades = db_manager.get_all_trades_in_range()
+        all_trades = db_manager.get_all_trades_in_range(start_date=None, end_date=None)
 
         # Serialize the list of Trade objects into a list of dictionaries
         history_list = [trade.to_dict() for trade in all_trades]

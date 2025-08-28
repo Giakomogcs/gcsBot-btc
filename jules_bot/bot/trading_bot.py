@@ -156,6 +156,7 @@ class TradingBot:
                             if success:
                                 purchase_price = Decimal(buy_result.get('price'))
                                 sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
+                                logger.info(f"Calculated sell target for manual buy. Purchase price: ${purchase_price:,.2f}, Target price: ${sell_target_price:,.2f}")
                                 state_manager.create_new_position(buy_result, sell_target_price)
                             else:
                                 logger.error(f"Manual buy for ${amount_usd:.2f} failed. See trader logs for details (e.g., insufficient funds).")
@@ -248,12 +249,12 @@ class TradingBot:
             return
 
         state_manager.sync_holdings_with_binance(account_manager, strategy_rules, self.trader)
-        state_manager.recalculate_open_position_targets(strategy_rules, sa_instance, dynamic_params)
         logger.info(f"🚀 --- TRADING BOT STARTED --- BOT NAME: {self.bot_name} --- RUN ID: {self.run_id} --- SYMBOL: {self.symbol} --- MODE: {self.mode.upper()} --- 🚀")
 
         while self.is_running:
             try:
                 logger.info("--- Starting new trading cycle ---")
+                state_manager.recalculate_open_position_targets(strategy_rules, sa_instance, dynamic_params)
                 self._handle_ui_commands(self.trader, state_manager, strategy_rules)
 
                 features_df = feature_calculator.get_features_dataframe()
@@ -417,6 +418,7 @@ class TradingBot:
                             logger.info("Buy successful. Creating new position.")
                             purchase_price = Decimal(buy_result.get('price'))
                             sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price, params=current_params)
+                            logger.info(f"Calculated sell target for strategy buy. Purchase price: ${purchase_price:,.2f}, Target price: ${sell_target_price:,.2f}, Params: {current_params}")
                             state_manager.create_new_position(buy_result, sell_target_price)
                             live_portfolio_manager.get_total_portfolio_value(purchase_price, force_recalculation=True)
                 else:

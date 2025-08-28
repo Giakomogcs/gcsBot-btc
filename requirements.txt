@@ -36,6 +36,7 @@ questionary
 matplotlib
 seaborn
 textual
+textual-plotext
 
 # --- Testing ---
 pytest

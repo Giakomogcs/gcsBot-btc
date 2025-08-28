@@ -414,7 +414,7 @@ class PostgresManager:
     def get_all_trades_in_range(self, mode: Optional[str] = None, symbol: Optional[str] = None, bot_id: Optional[str] = None, start_date: any = "-90d", end_date: any = "now()"):
         with self.get_db() as db:
             try:
-                query = db.query(Trade).order_by(Trade.timestamp)
+                query = db.query(Trade).order_by(desc(Trade.timestamp))
 
                 filters = []
                 if mode:
@@ -425,18 +425,20 @@ class PostgresManager:
                     filters.append(Trade.run_id == bot_id)
 
                 # Handle start_date
-                if isinstance(start_date, datetime):
-                    filters.append(Trade.timestamp >= start_date)
-                elif isinstance(start_date, str) and '-' in start_date:
-                    filters.append(Trade.timestamp >= text(f"now() - interval '{start_date.replace('-', '')}'"))
-                else:
-                    filters.append(Trade.timestamp >= text(f"'{start_date}'"))
+                if start_date:
+                    if isinstance(start_date, datetime):
+                        filters.append(Trade.timestamp >= start_date)
+                    elif isinstance(start_date, str) and '-' in start_date:
+                        filters.append(Trade.timestamp >= text(f"now() - interval '{start_date.replace('-', '')}'"))
+                    else:
+                        filters.append(Trade.timestamp >= text(f"'{start_date}'"))
 
                 # Handle end_date
-                if isinstance(end_date, datetime):
-                    filters.append(Trade.timestamp <= end_date)
-                else:
-                    filters.append(Trade.timestamp <= text("now()") if end_date == "now()" else text(f"'{end_date}'"))
+                if end_date:
+                    if isinstance(end_date, datetime):
+                        filters.append(Trade.timestamp <= end_date)
+                    else:
+                        filters.append(Trade.timestamp <= text("now()") if end_date == "now()" else text(f"'{end_date}'"))
 
                 if filters:
                     query = query.filter(and_(*filters))

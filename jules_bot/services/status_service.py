@@ -250,9 +250,15 @@ class StatusService:
             usd_to_target = price_to_target * quantity
 
             positions_status.append({
-                "trade_id": trade.trade_id, "entry_price": entry_price, "current_price": current_price,
-                "quantity": quantity, "unrealized_pnl": unrealized_pnl, "sell_target_price": sell_target_price,
-                "progress_to_sell_target_pct": progress_pct, "price_to_target": price_to_target,
+                "trade_id": trade.trade_id,
+                "timestamp": trade.timestamp.isoformat(),
+                "entry_price": entry_price,
+                "current_price": current_price,
+                "quantity": quantity,
+                "unrealized_pnl": unrealized_pnl,
+                "sell_target_price": sell_target_price,
+                "progress_to_sell_target_pct": progress_pct,
+                "price_to_target": price_to_target,
                 "usd_to_target": usd_to_target,
             })
         return positions_status

@@ -7,13 +7,14 @@ import time
 from datetime import datetime
 
 from textual.app import App, ComposeResult
-from textual.containers import VerticalScroll, Horizontal, Vertical, Container
-from textual.widgets import Header, Footer, DataTable, Input, Button, Label, Static, RichLog, TabbedContent, TabPane
+from textual.containers import VerticalScroll, Horizontal, Vertical
+from textual.widgets import Footer, DataTable, Input, Button, Label, Static, RichLog, TabbedContent, TabPane
 from textual.validation import Validator, ValidationResult
 from textual.worker import Worker, get_current_worker
 from textual import work
 from textual.message import Message
 from textual.reactive import reactive
+from textual_plotext import Plotext
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -46,12 +47,6 @@ class CommandOutput(Message):
         super().__init__()
 
 class PortfolioData(Message):
-    def __init__(self, data: dict | str, success: bool) -> None:
-        self.data = data
-        self.success = success
-        super().__init__()
-
-class PerformanceSummaryData(Message):
     def __init__(self, data: dict | str, success: bool) -> None:
         self.data = data
         self.success = success
@@ -127,54 +122,37 @@ class TUIApp(App):
                             yield Input(placeholder="e.g., ERROR", id="log_filter_input")
                         yield RichLog(id="log_display", wrap=True, markup=True, min_width=0)
 
-                    with VerticalScroll(id="middle_pane"):
-                        yield Static(f"Bot Status for {self.bot_name}", classes="title")
-                        with Static(id="status_container"):
-                            yield Static(f"Mode: {self.mode.upper()}", id="status_mode")
-                            yield Static("Symbol: N/A", id="status_symbol")
-                            yield Static("BTC Price: N/A", id="status_price")
-                            yield Static("Open Positions: N/A", id="status_open_positions")
-                            yield Static("Wallet Value: N/A", id="status_wallet_usd")
+                    with Vertical(id="middle_pane"):
+                        with Horizontal(id="top_middle_pane"):
+                            with Vertical(id="status_and_strategy"):
+                                yield Static(f"Bot Status for {self.bot_name}", classes="title")
+                                with Static(id="status_container"):
+                                    yield Static(f"Mode: {self.mode.upper()}", id="status_mode")
+                                    yield Static("Symbol: N/A", id="status_symbol")
+                                    yield Static("Price: N/A", id="status_price")
+                                    yield Static("Open Positions: N/A", id="status_open_positions")
+                                    yield Static("Wallet Value: N/A", id="status_wallet_usd")
 
-                        yield Static("Strategy Status", classes="title")
-                        with Static(id="strategy_container"):
-                            yield Static("Operating Mode: N/A", id="strategy_operating_mode")
-                            yield Static("Market Regime: N/A", id="strategy_market_regime")
-                            yield Static("Status: N/A", id="strategy_buy_reason")
-                            yield Static("Next Buy Target: N/A", id="strategy_buy_target")
-                            yield Static("Drop Needed: N/A", id="strategy_buy_target_percentage")
-                            yield Static("Buy Progress: N/A", id="strategy_buy_progress")
+                                yield Static("Strategy Status", classes="title")
+                                with Static(id="strategy_container"):
+                                    yield Static("Operating Mode: N/A", id="strategy_operating_mode")
+                                    yield Static("Market Regime: N/A", id="strategy_market_regime")
+                                    yield Static("Status: N/A", id="strategy_buy_reason")
+                                    yield Static("Next Buy Target: N/A", id="strategy_buy_target")
+                                    yield Static("Drop Needed: N/A", id="strategy_buy_target_percentage")
+                                    yield Static("Buy Progress: N/A", id="strategy_buy_progress")
 
-                        yield Static("Wallet Balances", classes="title")
-                        yield DataTable(id="wallet_table")
+                            with VerticalScroll(id="portfolio_and_positions"):
+                                yield Static("Wallet Balances", classes="title")
+                                yield DataTable(id="wallet_table")
 
-                        yield Static("Open Positions", classes="title")
-                        yield DataTable(id="positions_table")
+                                yield Static("Open Positions", classes="title")
+                                yield DataTable(id="positions_table")
 
-                    with VerticalScroll(id="right_pane"):
-                        yield Static("Performance Summary", classes="title")
-                        with Static(id="performance_summary_container"):
-                            yield Label("Total Realized PnL (USD): N/A", id="perf_pnl_usd")
-                            yield Label("Total Realized PnL (BTC): N/A", id="perf_pnl_btc")
-                            yield Label("Total Treasury (BTC): N/A", id="perf_treasury_btc")
+                        with Vertical(id="bottom_middle_pane"):
+                            yield Static("Portfolio Value History", classes="title")
+                            yield Plotext(id="portfolio_chart")
 
-                        yield Static("Portfolio Evolution", classes="title")
-                        yield Static("Total Portfolio Value: N/A", id="portfolio_total_value")
-                        yield Static("Evolution (Total): N/A", id="portfolio_evolution_total")
-                        yield Static("Realized Profit/Loss: N/A", id="portfolio_realized_pnl")
-                        yield Static("Evolution (24h): N/A", id="portfolio_evolution_24h")
-                        yield Static("BTC Treasury: N/A", id="portfolio_btc_treasury")
-                        yield Static("Accumulated BTC: N/A", id="portfolio_accumulated_btc")
-
-                        yield Static("DCOM Status", classes="title")
-                        yield Static("Total Equity: N/A", id="dcom_total_equity")
-                        yield Static("Working Capital: N/A", id="dcom_working_capital")
-                        yield Static("Strategic Reserve: N/A", id="dcom_strategic_reserve")
-                        yield Static("Operating Mode: N/A", id="dcom_operating_mode")
-
-                        yield Static("Portfolio Value History", classes="title")
-                        with Vertical(id="chart_container"):
-                            yield Static(id="portfolio_chart")
 
             with TabPane("Trade History", id="history"):
                 yield DataTable(id="history_table")
@@ -188,12 +166,13 @@ class TUIApp(App):
         # Setup tables
         positions_table = self.query_one("#positions_table", DataTable)
         positions_table.cursor_type = "row"
-        positions_table.add_columns("ID", "Entry", "Value", "PnL", "Sell Target", "Target Status")
+        positions_table.add_columns("ID", "Timestamp", "Entry", "Value", "PnL", "Sell Target", "Target Status")
 
         wallet_table = self.query_one("#wallet_table", DataTable)
         wallet_table.add_columns("Asset", "Free", "Locked", "Total", "USD Value")
 
         history_table = self.query_one("#history_table", DataTable)
+        history_table.cursor_type = "row"
         history_table.add_columns("Timestamp", "Symbol", "Type", "Status", "Price", "Quantity", "USD Value", "PnL (USD)")
 
         # Start background workers
@@ -201,10 +180,8 @@ class TUIApp(App):
         self.set_interval(20.0, self.update_dashboard)
         self.update_portfolio_dashboard()
         self.set_interval(30.0, self.update_portfolio_dashboard)
-        self.update_performance_summary()
-        self.set_interval(60.0, self.update_performance_summary)
         self.update_trade_history()
-        self.set_interval(120.0, self.update_trade_history)
+        self.set_interval(60.0, self.update_trade_history)
 
         self.query_one("#manual_buy_input").focus()
         self.stream_docker_logs()
@@ -239,53 +216,37 @@ class TUIApp(App):
         """
         Executes a script inside a temporary, networked Docker container.
         """
-        # These names are defined in run.py and must match.
         PROJECT_NAME = "gcsbot-btc"
         DOCKER_IMAGE_NAME = f"{PROJECT_NAME}-app"
         DOCKER_NETWORK_NAME = f"{PROJECT_NAME}_default"
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
         try:
-            # Construct the full docker command
-            # Get the absolute path to the project root directory
-            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-
             docker_command = [
-                "docker", "run",
-                "--rm",
-                "--network", DOCKER_NETWORK_NAME,
-                "--env-file", ".env",
-                "-e", f"BOT_NAME={self.bot_name}",
-                # Mount the project directory to /app in the container
-                "-v", f"{project_root}:/app",
-                DOCKER_IMAGE_NAME,
+                "docker", "run", "--rm", "--network", DOCKER_NETWORK_NAME,
+                "--env-file", ".env", "-e", f"BOT_NAME={self.bot_name}",
+                "-v", f"{project_root}:/app", DOCKER_IMAGE_NAME,
             ] + command
 
             process = subprocess.run(
-                docker_command,
-                capture_output=True,
-                text=True,
-                check=False,
-                encoding='utf-8',
-                errors='replace'
+                docker_command, capture_output=True, text=True, check=False,
+                encoding='utf-8', errors='replace'
             )
 
-            if process.returncode != 0:
-                output = process.stderr.strip() or process.stdout.strip()
-                success = False
+            output = process.stdout.strip() if process.returncode == 0 else process.stderr.strip()
+            success = process.returncode == 0
+            if not success:
                 self.call_from_thread(self.log_display.write, f"[bold red]Script Error ({command[1]}):[/] {output}")
-            else:
-                output = process.stdout.strip()
-                success = True
-            
+
             try:
-                data = json.loads(output)
+                data = json.loads(process.stdout.strip())
                 self.post_message(message_type(data, success))
             except (json.JSONDecodeError, TypeError):
                 self.post_message(message_type(output, success))
 
         except FileNotFoundError:
             self.post_message(message_type("Docker not found", False))
-            self.call_from_thread(self.log_display.write, "[bold red]Error: 'docker' command not found. Is Docker installed and in your PATH?[/]")
+            self.call_from_thread(self.log_display.write, "[bold red]Error: 'docker' command not found.[/]")
         except Exception as e:
             self.post_message(message_type(f"Worker error: {e}", False))
 
@@ -298,10 +259,6 @@ class TUIApp(App):
     def update_portfolio_dashboard(self) -> None:
         command = ["python", "scripts/get_portfolio_data.py"]
         self.run_script_worker(command, PortfolioData)
-
-    def update_performance_summary(self) -> None:
-        command = ["python", "scripts/get_tui_performance_data.py"]
-        self.run_script_worker(command, PerformanceSummaryData)
 
     def update_trade_history(self) -> None:
         command = ["python", "scripts/get_trade_history.py", self.bot_name]
@@ -325,59 +282,16 @@ class TUIApp(App):
         self.query_one("#status_open_positions").update(f"Open Positions: {data.get('open_positions_count', 0)}")
         self.query_one("#status_wallet_usd").update(f"Wallet Value: ${Decimal(data.get('total_wallet_usd_value', 0)):,.2f}")
 
-        self.update_strategy_panel(data.get("buy_signal_status", {}), price)
+        self.update_strategy_panel(data.get("buy_signal_status", {}))
         self.update_wallet_table(data.get("wallet_balances", []))
         self.update_positions_table(data.get("open_positions_status", []), price)
 
     def on_portfolio_data(self, message: PortfolioData) -> None:
-        """Updates the TUI with portfolio evolution data."""
         if not message.success or not isinstance(message.data, dict):
             self.log_display.write(f"[bold red]Failed to get portfolio data: {message.data}[/]")
             return
 
-        data = message.data
-        snapshot = data.get("latest_snapshot")
-
-        if snapshot:
-            total_value = Decimal(snapshot.get("total_portfolio_value_usd", "0"))
-            realized_pnl = Decimal(snapshot.get("realized_pnl_usd", "0"))
-            btc_treasury_amount = Decimal(snapshot.get("btc_treasury_amount", "0"))
-            btc_treasury_value = Decimal(snapshot.get("btc_treasury_value_usd", "0"))
-
-            self.query_one("#portfolio_total_value").update(f"Total Portfolio Value: ${total_value:,.2f} USD")
-            self.query_one("#portfolio_realized_pnl").update(f"Realized Profit/Loss: ${realized_pnl:,.2f} USD")
-            self.query_one("#portfolio_btc_treasury").update(f"BTC Treasury: ₿{btc_treasury_amount:.8f} (${btc_treasury_value:,.2f} USD)")
-
-        evolution_total = Decimal(data.get("evolution_total", "0"))
-        evolution_24h = Decimal(data.get("evolution_24h", "0"))
-
-        self.query_one("#portfolio_evolution_total").update(f"Evolution (Total): {evolution_total:+.2f}%")
-        self.query_one("#portfolio_evolution_24h").update(f"Evolution (24h): {evolution_24h:+.2f}%")
-
-        dcom_status = data.get("dcom_status", {})
-        if dcom_status:
-            self.query_one("#dcom_total_equity").update(f"Total Equity: ${Decimal(dcom_status.get('total_equity', '0')):,.2f}")
-            self.query_one("#dcom_working_capital").update(f"Working Capital: ${Decimal(dcom_status.get('working_capital_in_use', '0')):,.2f}")
-            self.query_one("#dcom_strategic_reserve").update(f"Strategic Reserve: ${Decimal(dcom_status.get('strategic_reserve', '0')):,.2f}")
-            self.query_one("#dcom_operating_mode").update(f"Operating Mode: {dcom_status.get('operating_mode', 'N/A')}")
-
-    def on_performance_summary_data(self, message: PerformanceSummaryData) -> None:
-        """Updates the TUI with performance summary data."""
-        if not message.success or not isinstance(message.data, dict):
-            self.log_display.write(f"[bold red]Failed to get performance summary data: {message.data}[/]")
-            return
-
-        data = message.data
-        pnl_usd = data.get("total_usd_pnl", "0.0")
-        pnl_btc = data.get("total_btc_pnl", "0.0")
-        treasury_btc = data.get("total_treasury_btc", "0.0")
-
-        usd_color = "green" if not str(pnl_usd).startswith('-') else "red"
-        btc_color = "green" if not str(pnl_btc).startswith('-') else "red"
-
-        self.query_one("#perf_pnl_usd").update(f"Total Realized PnL (USD):  [{usd_color}]$ {pnl_usd}[/]")
-        self.query_one("#perf_pnl_btc").update(f"Total Realized PnL (BTC):    [{btc_color}]{pnl_btc} BTC[/]")
-        self.query_one("#perf_treasury_btc").update(f"Total Treasury (BTC):          {treasury_btc} BTC")
+        self.update_portfolio_chart(message.data.get("history", []))
 
     def on_trade_history_data(self, message: TradeHistoryData) -> None:
         if not message.success or not isinstance(message.data, list):
@@ -385,22 +299,18 @@ class TUIApp(App):
             return
         table = self.query_one("#history_table", DataTable)
         table.clear()
+        if not message.data:
+            table.add_row("No trade history found.")
+            return
         for trade in message.data:
             pnl = trade.get('realized_pnl_usd')
             pnl_str = f"${Decimal(pnl):,.2f}" if pnl is not None else "N/A"
             pnl_color = "green" if pnl is not None and Decimal(pnl) >= 0 else "red"
-
-            timestamp = datetime.fromisoformat(trade['timestamp']).strftime('%Y-%m-%d %H:%M:%S')
-
+            timestamp = datetime.fromisoformat(trade['timestamp']).strftime('%Y-%m-%d %H:%M')
             table.add_row(
-                timestamp,
-                trade.get('symbol'),
-                trade.get('order_type'),
-                trade.get('status'),
-                f"${Decimal(trade.get('price', 0)):,.2f}",
-                f"{Decimal(trade.get('quantity', 0)):.8f}",
-                f"${Decimal(trade.get('usd_value', 0)):,.2f}",
-                f"[{pnl_color}]{pnl_str}[/]",
+                timestamp, trade.get('symbol'), trade.get('order_type'), trade.get('status'),
+                f"${Decimal(trade.get('price', 0)):,.2f}", f"{Decimal(trade.get('quantity', 0)):.8f}",
+                f"${Decimal(trade.get('usd_value', 0)):,.2f}", f"[{pnl_color}]{pnl_str}[/]",
                 key=trade.get('trade_id')
             )
 
@@ -414,7 +324,7 @@ class TUIApp(App):
 
     # --- UI Update Helpers ---
 
-    def update_strategy_panel(self, status: dict, price: Decimal):
+    def update_strategy_panel(self, status: dict):
         """Updates the strategy panel with the latest signal data."""
         operating_mode = status.get("operating_mode", "N/A")
         market_regime = status.get("market_regime", -1)
@@ -447,15 +357,10 @@ class TUIApp(App):
             wallet_table.add_row("No balance data.")
             return
         for bal in balances:
-            asset = bal.get('asset')
-            free = Decimal(bal.get('free', '0'))
-            locked = Decimal(bal.get('locked', '0'))
+            asset, free, locked, usd_value = bal.get('asset'), Decimal(bal.get('free','0')), Decimal(bal.get('locked','0')), Decimal(bal.get('usd_value','0'))
             total = free + locked
-            usd_value = Decimal(bal.get('usd_value', '0'))
-            if asset == 'BTC':
-                wallet_table.add_row(asset, f"{free:.8f}", f"{locked:.8f}", f"{total:.8f}", f"${usd_value:,.2f}")
-            else:
-                wallet_table.add_row(asset, f"${free:,.2f}", f"${locked:,.2f}", f"${total:,.2f}", f"${usd_value:,.2f}")
+            row_format = "₿{:.8f}" if asset == 'BTC' else "${:,.2f}"
+            wallet_table.add_row(asset, row_format.format(free), row_format.format(locked), row_format.format(total), f"${usd_value:,.2f}")
 
     def update_positions_table(self, positions: list, price: Decimal):
         pos_table = self.query_one("#positions_table", DataTable)
@@ -466,29 +371,40 @@ class TUIApp(App):
         for pos in positions:
             pnl = Decimal(pos.get("unrealized_pnl", 0))
             pnl_color = "green" if pnl >= 0 else "red"
-            progress_text = f"{float(pos.get('progress_to_sell_target_pct', 0)):.1f}%"
+            timestamp = datetime.fromisoformat(pos.get('timestamp')).strftime('%Y-%m-%d %H:%M')
             pos_table.add_row(
                 pos.get("trade_id", "N/A").split('-')[0],
+                timestamp,
                 f"${Decimal(pos.get('entry_price', 0)):,.2f}",
                 f"${Decimal(pos.get('quantity', 0)) * price:,.2f}",
                 f"[{pnl_color}]${pnl:,.2f}[/]",
                 f"${Decimal(pos.get('sell_target_price', 0)):,.2f}",
-                progress_text,
+                f"{float(pos.get('progress_to_sell_target_pct', 0)):.1f}%",
                 key=pos.get("trade_id")
             )
+
+    def update_portfolio_chart(self, history: list):
+        chart = self.query_one("#portfolio_chart", Plotext)
+        chart.clear()
+        if history:
+            dates = [datetime.fromisoformat(item['timestamp']).strftime("%m-%d %H:%M") for item in reversed(history)]
+            values = [float(item['value']) for item in reversed(history)]
+            chart.plot(dates, values)
+            chart.title("Portfolio Value (USD) - Last 50 Snapshots")
+            chart.x_label("Timestamp")
+            chart.y_label("USD Value")
+        chart.refresh()
+
 
     def process_log_line(self, line: str) -> None:
         try:
             log_entry = json.loads(line)
-            level = log_entry.get("level", "INFO")
-            message = log_entry.get("message", "")
+            level, message = log_entry.get("level", "INFO"), log_entry.get("message", "")
             if self.log_filter.lower() in message.lower() or self.log_filter.upper() in level:
-                color_map = {"INFO": "green", "WARNING": "yellow", "ERROR": "red", "CRITICAL": "bold red"}
-                color = color_map.get(level, "white")
+                color = {"INFO": "green", "WARNING": "yellow", "ERROR": "red", "CRITICAL": "bold red"}.get(level, "white")
                 self.log_display.write(f"[[{color}]{level}[/{color}]] {message}")
         except json.JSONDecodeError:
-            if self.log_filter == "":
-                self.log_display.write(f"[dim]{line.strip()}[/dim]")
+            if self.log_filter == "": self.log_display.write(f"[dim]{line.strip()}[/dim]")
 
     # --- Event Handlers ---
 
@@ -496,18 +412,16 @@ class TUIApp(App):
         if event.button.id == "force_buy_button":
             input_widget = self.query_one("#manual_buy_input", Input)
             if input_widget.is_valid:
-                amount = input_widget.value
-                command = ["python", "scripts/force_buy.py", amount]
+                command = ["python", "scripts/force_buy.py", input_widget.value]
                 self.run_script_worker(command, CommandOutput)
                 input_widget.value = ""
             else:
                 self.log_display.write("[bold red]Invalid buy amount.[/bold red]")
-        elif event.button.id == "force_sell_button":
-            if self.selected_trade_id:
-                command = ["python", "scripts/force_sell.py", self.selected_trade_id, "100"]
-                self.run_script_worker(command, CommandOutput)
-                self.query_one("#force_sell_button").disabled = True
-                self.selected_trade_id = None
+        elif event.button.id == "force_sell_button" and self.selected_trade_id:
+            command = ["python", "scripts/force_sell.py", self.selected_trade_id, "100"]
+            self.run_script_worker(command, CommandOutput)
+            self.query_one("#force_sell_button").disabled = True
+            self.selected_trade_id = None
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         if event.control.id == "positions_table":

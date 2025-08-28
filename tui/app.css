@@ -1,20 +1,41 @@
+/* General Layout */
 #main_container {
     layout: horizontal;
 }
+
 #left_pane {
-    width: 30%;
-    padding: 1;
-    border-right: solid $accent;
-}
-#middle_pane {
-    width: 45%;
-    padding: 1;
-    border-right: solid $accent;
-}
-#right_pane {
     width: 25%;
-    padding: 1;
+    padding: 0 1;
+    border-right: solid $accent;
 }
+
+#middle_pane {
+    width: 75%;
+    padding: 0 1;
+    layout: vertical;
+}
+
+#top_middle_pane {
+    layout: horizontal;
+    height: 50%;
+}
+
+#bottom_middle_pane {
+    height: 50%;
+}
+
+#status_and_strategy {
+    width: 50%;
+    padding-right: 1;
+    border-right: solid $accent;
+}
+
+#portfolio_and_positions {
+    width: 50%;
+    padding-left: 1;
+}
+
+/* Common Widget Styles */
 .title {
     background: $accent;
     color: $text;
@@ -22,43 +43,40 @@
     padding: 0 1;
     margin-top: 1;
 }
+
 #status_container, #strategy_container {
-    layout: grid;
-    grid-gutter: 1;
+    padding: 0 1;
     height: auto;
 }
-#status_container {
-    grid-size: 3;
-}
-#strategy_container {
-    grid-size: 2;
-}
-#positions_table, #history_table {
+
+#positions_table, #wallet_table, #history_table {
     margin-top: 1;
-    height: 100%;
+    max-height: 15;
 }
+
 #log_display {
     height: 1fr;
-}
-#chart_container {
-    height: 12;
     border: round $primary;
-    padding: 0 1;
+    margin-top: 1;
 }
-#performance_summary_container {
-    padding: 0 1;
-    margin-bottom: 1;
+
+#portfolio_chart {
     border: round $primary;
-    height: auto;
+    height: 100%;
+    margin-top: 1;
 }
+
 #action_bar, #log_filter_bar {
     margin-top: 1;
     height: auto;
     align: right middle;
 }
+
 .hidden {
     display: none;
 }
+
+/* Header Styles */
 CustomHeader {
     dock: top;
     width: 100%;
