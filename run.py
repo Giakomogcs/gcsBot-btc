@@ -302,18 +302,29 @@ def _setup_bot_run(bot_name: Optional[str]) -> str:
 @app.command()
 def trade(
     bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="O nome do bot para executar. Se não for fornecido, um menu será exibido."),
-    detached: bool = typer.Option(False, "--detached", "-d", help="Executa o bot em segundo plano (modo detached).")
+    detached: Optional[bool] = typer.Option(None, "--detached", "-d", help="Executa o bot em segundo plano. Se não for especificado, será perguntado.")
 ):
     """Inicia o bot em modo de negociação (live)."""
+    was_interactive_selection = bot_name is None
     final_bot_name = _setup_bot_run(bot_name)
     mode = "trade"
 
+    final_detached = detached
+    if was_interactive_selection and final_detached is None:
+        if questionary is None:
+            print("❌ A biblioteca 'questionary' é necessária para o modo interativo.")
+            raise typer.Exit(1)
+        final_detached = questionary.confirm("Executar este bot em modo detached (segundo plano)?").ask()
+        if final_detached is None:
+            print("👋 Operação cancelada.")
+            raise typer.Exit()
+
     # Não limpar dados se estiver iniciando em modo detached para um bot já existente
-    if not detached or not process_manager.get_bot_by_name(final_bot_name):
+    if not final_detached or not process_manager.get_bot_by_name(final_bot_name):
          _confirm_and_clear_data(mode, final_bot_name)
 
     env_vars = {"BOT_MODE": mode}
-    if detached:
+    if final_detached:
         env_vars["JULES_BOT_SCRIPT_MODE"] = "1"
         print(f"🚀 Iniciando o bot '{final_bot_name}' em modo '{mode.upper()}' em SEGUNDO PLANO...")
 
@@ -343,17 +354,28 @@ def trade(
 @app.command()
 def test(
     bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="O nome do bot para executar. Se não for fornecido, um menu será exibido."),
-    detached: bool = typer.Option(False, "--detached", "-d", help="Executa o bot em segundo plano (modo detached).")
+    detached: Optional[bool] = typer.Option(None, "--detached", "-d", help="Executa o bot em segundo plano. Se não for especificado, será perguntado.")
 ):
     """Inicia o bot em modo de teste (testnet)."""
+    was_interactive_selection = bot_name is None
     final_bot_name = _setup_bot_run(bot_name)
     mode = "test"
 
-    if not detached or not process_manager.get_bot_by_name(final_bot_name):
+    final_detached = detached
+    if was_interactive_selection and final_detached is None:
+        if questionary is None:
+            print("❌ A biblioteca 'questionary' é necessária para o modo interativo.")
+            raise typer.Exit(1)
+        final_detached = questionary.confirm("Executar este bot em modo detached (segundo plano)?").ask()
+        if final_detached is None:
+            print("👋 Operação cancelada.")
+            raise typer.Exit()
+
+    if not final_detached or not process_manager.get_bot_by_name(final_bot_name):
         _confirm_and_clear_data(mode, final_bot_name)
 
     env_vars = {"BOT_MODE": mode}
-    if detached:
+    if final_detached:
         env_vars["JULES_BOT_SCRIPT_MODE"] = "1"
         print(f"🚀 Iniciando o bot '{final_bot_name}' em modo '{mode.upper()}' em SEGUNDO PLANO...")
 
