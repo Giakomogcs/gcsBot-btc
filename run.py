@@ -5,6 +5,7 @@ import typer
 import subprocess
 from typing import Optional
 import glob
+from jules_bot.utils import process_manager
 try:
     import questionary
 except ImportError:
@@ -108,23 +109,58 @@ def status():
     run_docker_command(["ps"])
 
 @app.command("logs")
-def logs(service_name: Optional[str] = typer.Argument(None, help="Nome do serviço para ver os logs (ex: 'app', 'db').")):
-    """Acompanha os logs de um serviço específico ou de todos."""
-    try:
-        base_command = get_docker_compose_command()
-        full_command = base_command + ["logs", "-f"]
+def logs(
+    bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="Nome do bot para ver os logs.")
+):
+    """Acompanha os logs de um bot específico."""
+    log_file_path = ""
 
-        if service_name:
-            print(f"📄 Acompanhando logs do serviço '{service_name}'...")
-            full_command.append(service_name)
+    if bot_name:
+        # Check if a log file exists for this bot
+        potential_log_file = f"logs/{bot_name}.jsonl"
+        if os.path.exists(potential_log_file):
+            log_file_path = potential_log_file
         else:
-            print("📄 Acompanhando logs de todos os serviços...")
+            print(f"❌ Nenhum arquivo de log encontrado para o bot '{bot_name}' em '{potential_log_file}'.")
+            raise typer.Exit(1)
+    else:
+        # Se nenhum bot for especificado, mostre um menu interativo
+        log_files = glob.glob("logs/*.jsonl")
+        # Excluir logs de performance da seleção principal
+        log_files = [f for f in log_files if not f.endswith("_performance.jsonl")]
 
-        print(f"   (Pressione Ctrl+C para parar)")
-        subprocess.run(full_command)
+        if not log_files:
+            print("ℹ️ Nenhum arquivo de log de bot encontrado na pasta 'logs/'.")
+            raise typer.Exit()
 
+        if questionary is None:
+            print("❌ A biblioteca 'questionary' é necessária para o modo interativo.")
+            raise typer.Exit(1)
+
+        # Extrai nomes de bots dos nomes de arquivo
+        bot_choices = [os.path.basename(f).replace(".jsonl", "") for f in log_files]
+
+        selected_bot = questionary.select(
+            "Selecione o bot para ver os logs:",
+            choices=sorted(bot_choices)
+        ).ask()
+
+        if not selected_bot:
+            print("👋 Operação cancelada.")
+            raise typer.Exit()
+
+        log_file_path = f"logs/{selected_bot}.jsonl"
+
+    print(f"📄 Acompanhando logs de '{log_file_path}'...")
+    print("   (Pressione Ctrl+C para parar)")
+    try:
+        # Usamos 'tail -f' para acompanhar o arquivo de log
+        # Isso é mais eficiente do que ler o arquivo em Python
+        subprocess.run(["tail", "-f", log_file_path])
     except KeyboardInterrupt:
         print("\n🛑 Acompanhamento de logs interrompido.")
+    except FileNotFoundError:
+        print(f"❌ Comando 'tail' não encontrado. Esta função pode não funcionar no seu sistema (comum no Windows).")
     except Exception as e:
         print(f"❌ Erro ao obter logs: {e}")
 
@@ -155,67 +191,77 @@ def run_tests(
 
 # --- Comandos da Aplicação ---
 
-def _run_in_container(command: list, bot_name: str, env_vars: dict = {}, interactive: bool = False, detached: bool = False):
+def _run_in_container(command: list, bot_name: str, env_vars: dict = {}, interactive: bool = False, detached: bool = False) -> Optional[str]:
     """
     Executa um comando Python dentro do container 'app'.
     - Modo Padrão (interactive=False): Captura e exibe o output em tempo real.
     - Modo Interativo (interactive=True): Anexa o terminal ao processo (para TUIs).
-    - Modo Detached (detached=True): Executa o comando em segundo plano.
+    - Modo Detached (detached=True): Executa em segundo plano e retorna o ID do container.
     """
     try:
         docker_cmd = get_docker_compose_command()
-
         exec_cmd = docker_cmd + ["exec"]
+
         if detached:
             exec_cmd.append("-d")
         elif interactive:
+            # O sinal '-T' desativa a alocação de um pseudo-TTY.
+            # É crucial para evitar problemas de "the input device is not a TTY"
+            # ao executar comandos não interativos com a flag -it.
+            # No entanto, para a TUI, precisamos de um TTY, então não o usamos lá.
+            # A lógica aqui é complexa; por enquanto, '-it' é mantido para a TUI.
             exec_cmd.append("-it")
 
-        # Add bot_name to env_vars
-        env_vars["BOT_NAME"] = bot_name
 
+        env_vars["BOT_NAME"] = bot_name
         for key, value in env_vars.items():
             exec_cmd.extend(["-e", f"{key}={value}"])
 
-        # Comando final a ser executado no container
         container_command = ["app", "python"] + command
         exec_cmd.extend(container_command)
 
         print(f"   (executando: `{' '.join(exec_cmd)}`)")
 
-        if interactive:
-            # Para TUIs e outros aplicativos interativos, precisamos que o processo
-            # anexe diretamente ao terminal do host.
-            # `subprocess.run` sem capturar I/O (stdout, stderr, stdin) é a forma
-            # correta de ceder o controle do terminal ao processo filho.
-            # NOTA PARA WINDOWS: Para que a TUI funcione corretamente, é altamente
-            # recomendável usar um terminal moderno como o Windows Terminal. O CMD
-            # e o PowerShell legados podem ter problemas com a renderização.
+        if detached:
+            # Em modo detached, capturamos o output para obter o ID do container
+            result = subprocess.run(exec_cmd, capture_output=True, text=True, check=True, encoding='utf-8')
+            container_id = result.stdout.strip()
+            if not container_id:
+                print("❌ Falha ao obter o ID do container do comando docker exec.")
+                print(f"   Stderr: {result.stderr}")
+                return None
+            return container_id
+
+        elif interactive:
+            # Para TUIs, cedemos o controle do terminal
             result = subprocess.run(exec_cmd, check=False)
             if result.returncode != 0:
                 print(f"\n❌ Comando interativo finalizado com código de saída: {result.returncode}")
-            return result.returncode == 0
-        else:
-            # Para logs, usamos Popen para streaming de output em tempo real
-            process = subprocess.Popen(exec_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, encoding='utf-8', errors='replace')
+            return "interactive_success" if result.returncode == 0 else None
 
-            # Lê e imprime cada linha de output assim que ela aparece
+        else:
+            # Para logs em tempo real (não detached, não interativo)
+            process = subprocess.Popen(exec_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, encoding='utf-8', errors='replace')
             for line in iter(process.stdout.readline, ''):
                 print(line, end='')
-
             process.wait()
             process.stdout.close()
 
             if process.returncode != 0:
                 print(f"\n❌ Comando falhou com código de saída: {process.returncode}")
-                return False
-            return True
+                return None
+            return "foreground_success"
 
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Erro ao executar o comando no container. Código de saída: {e.returncode}")
+        print(f"   Stderr:\n{e.stderr}")
+        print(f"   Stdout:\n{e.stdout}")
     except Exception as e:
         print(f"❌ Ocorreu um erro ao executar o comando no container: {e}")
         import traceback
         traceback.print_exc()
-        return False
+
+    return None
 
 
 def _confirm_and_clear_data(mode: str, bot_name: str):
@@ -264,33 +310,176 @@ def _setup_bot_run(bot_name: Optional[str]) -> str:
 
 @app.command()
 def trade(
-    bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="O nome do bot para executar. Se não for fornecido, um menu será exibido.")
+    bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="O nome do bot para executar. Se não for fornecido, um menu será exibido."),
+    detached: bool = typer.Option(False, "--detached", "-d", help="Executa o bot em segundo plano (modo detached).")
 ):
     """Inicia o bot em modo de negociação (live)."""
     final_bot_name = _setup_bot_run(bot_name)
     mode = "trade"
-    _confirm_and_clear_data(mode, final_bot_name)
-    print(f"🚀 Iniciando o bot '{final_bot_name}' em modo '{mode.upper()}'...")
-    _run_in_container(
-        command=["jules_bot/main.py"],
-        bot_name=final_bot_name,
-        env_vars={"BOT_MODE": mode}
-    )
+
+    # Não limpar dados se estiver iniciando em modo detached para um bot já existente
+    if not detached or not process_manager.get_bot_by_name(final_bot_name):
+         _confirm_and_clear_data(mode, final_bot_name)
+
+    env_vars = {"BOT_MODE": mode}
+    if detached:
+        env_vars["JULES_BOT_SCRIPT_MODE"] = "1"
+        print(f"🚀 Iniciando o bot '{final_bot_name}' em modo '{mode.upper()}' em SEGUNDO PLANO...")
+
+        container_id = _run_in_container(
+            command=["jules_bot/main.py"],
+            bot_name=final_bot_name,
+            env_vars=env_vars,
+            detached=True
+        )
+
+        if container_id:
+            log_file = f"logs/{final_bot_name}.jsonl"
+            process_manager.add_running_bot(final_bot_name, container_id, mode, log_file)
+            print(f"✅ Bot '{final_bot_name}' iniciado com sucesso em segundo plano.")
+            print(f"   ID do Container: {container_id[:12]}")
+            print(f"   Para ver os logs, use: python run.py logs --bot-name {final_bot_name}")
+        else:
+            print(f"❌ Falha ao iniciar o bot '{final_bot_name}' em segundo plano.")
+
+    else:
+        print(f"🚀 Iniciando o bot '{final_bot_name}' em modo '{mode.upper()}' em PRIMEIRO PLANO...")
+        _run_in_container(
+            command=["jules_bot/main.py"],
+            bot_name=final_bot_name,
+            env_vars=env_vars
+        )
 
 @app.command()
 def test(
-    bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="O nome do bot para executar. Se não for fornecido, um menu será exibido.")
+    bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="O nome do bot para executar. Se não for fornecido, um menu será exibido."),
+    detached: bool = typer.Option(False, "--detached", "-d", help="Executa o bot em segundo plano (modo detached).")
 ):
-    """Inicia o bot em modo de teste (testnet), opcionalmente limpando o estado anterior."""
+    """Inicia o bot em modo de teste (testnet)."""
     final_bot_name = _setup_bot_run(bot_name)
     mode = "test"
-    _confirm_and_clear_data(mode, final_bot_name)
-    print(f"🚀 Iniciando o bot '{final_bot_name}' em modo '{mode.upper()}'...")
-    _run_in_container(
-        command=["jules_bot/main.py"],
-        bot_name=final_bot_name,
-        env_vars={"BOT_MODE": mode}
-    )
+
+    if not detached or not process_manager.get_bot_by_name(final_bot_name):
+        _confirm_and_clear_data(mode, final_bot_name)
+
+    env_vars = {"BOT_MODE": mode}
+    if detached:
+        env_vars["JULES_BOT_SCRIPT_MODE"] = "1"
+        print(f"🚀 Iniciando o bot '{final_bot_name}' em modo '{mode.upper()}' em SEGUNDO PLANO...")
+
+        container_id = _run_in_container(
+            command=["jules_bot/main.py"],
+            bot_name=final_bot_name,
+            env_vars=env_vars,
+            detached=True
+        )
+
+        if container_id:
+            log_file = f"logs/{final_bot_name}.jsonl"
+            process_manager.add_running_bot(final_bot_name, container_id, mode, log_file)
+            print(f"✅ Bot '{final_bot_name}' iniciado com sucesso em segundo plano.")
+            print(f"   ID do Container: {container_id[:12]}")
+            print(f"   Para ver os logs, use: python run.py logs --bot-name {final_bot_name}")
+        else:
+            print(f"❌ Falha ao iniciar o bot '{final_bot_name}' em segundo plano.")
+    else:
+        print(f"🚀 Iniciando o bot '{final_bot_name}' em modo '{mode.upper()}' em PRIMEIRO PLANO...")
+        _run_in_container(
+            command=["jules_bot/main.py"],
+            bot_name=final_bot_name,
+            env_vars=env_vars
+        )
+
+# --- Comandos de Gerenciamento de Bots ---
+
+@app.command("list-bots")
+def list_bots():
+    """Lista todos os bots que estão atualmente em execução em segundo plano."""
+    print("🤖 Verificando bots em execução...")
+
+    # Sincroniza o arquivo de PID com os containers Docker ativos
+    running_bots = process_manager.sync_and_get_running_bots()
+
+    if not running_bots:
+        print("ℹ️ Nenhum bot em execução no momento.")
+        return
+
+    # Prepara os dados para a tabela
+    from tabulate import tabulate
+    headers = ["Bot Name", "Mode", "Container ID", "Log File", "Start Time"]
+    table_data = [
+        [
+            bot.bot_name,
+            bot.bot_mode,
+            bot.container_id[:12], # Mostra o ID curto para legibilidade
+            bot.log_file,
+            bot.start_time
+        ]
+        for bot in running_bots
+    ]
+
+    print(tabulate(table_data, headers=headers, tablefmt="heavy_grid"))
+
+@app.command("stop-bot")
+def stop_bot(
+    bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="Nome do bot para parar.")
+):
+    """Para um bot específico que está em execução em segundo plano."""
+
+    running_bots = process_manager.sync_and_get_running_bots()
+    if not running_bots:
+        print("ℹ️ Nenhum bot em execução para parar.")
+        raise typer.Exit()
+
+    bot_to_stop = None
+    if bot_name:
+        bot_to_stop = next((b for b in running_bots if b.bot_name == bot_name), None)
+        if not bot_to_stop:
+            print(f"❌ Bot '{bot_name}' não está em execução.")
+            raise typer.Exit(1)
+    else:
+        if questionary is None:
+            print("❌ A biblioteca 'questionary' é necessária para o modo interativo.")
+            raise typer.Exit(1)
+
+        bot_choices = [b.bot_name for b in running_bots]
+        selected_name = questionary.select(
+            "Selecione o bot para parar:",
+            choices=sorted(bot_choices)
+        ).ask()
+
+        if not selected_name:
+            print("👋 Operação cancelada.")
+            raise typer.Exit()
+
+        bot_to_stop = next((b for b in running_bots if b.bot_name == selected_name), None)
+
+    if not bot_to_stop:
+        print("❌ Seleção inválida.")
+        raise typer.Exit(1)
+
+    print(f"🛑 Parando o bot '{bot_to_stop.bot_name}' (Container ID: {bot_to_stop.container_id[:12]})...")
+
+    try:
+        # Usamos 'docker stop' que envia um SIGTERM, permitindo um encerramento gracioso
+        subprocess.run(["docker", "stop", bot_to_stop.container_id], check=True, capture_output=True, text=True)
+        print(f"✅ Container '{bot_to_stop.container_id[:12]}' parado com sucesso.")
+
+        # Remove o bot do arquivo de tracking
+        process_manager.remove_running_bot(bot_to_stop.bot_name)
+        print(f"✅ Bot '{bot_to_stop.bot_name}' removido da lista de processos em execução.")
+
+    except subprocess.CalledProcessError as e:
+        # Se o container já foi parado, pode dar erro. Verificamos se o erro é "No such container"
+        if "No such container" in e.stderr:
+            print(f"⚠️  O container para o bot '{bot_to_stop.bot_name}' já não existia. Removendo da lista.")
+            process_manager.remove_running_bot(bot_to_stop.bot_name)
+        else:
+            print(f"❌ Erro ao parar o container: {e.stderr}")
+            print("   Tente parar manualmente com: docker stop", bot_to_stop.container_id)
+    except Exception as e:
+        print(f"❌ Ocorreu um erro inesperado: {e}")
+
 
 @app.command()
 def backtest(
