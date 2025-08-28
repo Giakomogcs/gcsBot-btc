@@ -65,9 +65,11 @@ class StrategyRules:
         difficulty_multiplier = Decimal(1) - (Decimal(difficulty_factor) * self.difficulty_adjustment_factor)
         adjusted_bbl = Decimal(str(bbl)) * difficulty_multiplier
 
-        # --- Dynamic Dip Logic ---
-        buy_dip_percentage = params.get('buy_dip_percentage', Decimal('0.02')) if params else Decimal('0.02')
-        price_dip_target = high_price * (Decimal('1') - buy_dip_percentage)
+        # --- Dynamic Dip Logic with Difficulty Adjustment ---
+        base_buy_dip = params.get('buy_dip_percentage', Decimal('0.02')) if params else Decimal('0.02')
+        difficulty_adjustment = Decimal(difficulty_factor) * self.difficulty_adjustment_factor
+        adjusted_buy_dip_percentage = base_buy_dip + difficulty_adjustment
+        price_dip_target = high_price * (Decimal('1') - adjusted_buy_dip_percentage)
 
         reason = ""
         if open_positions_count == 0:
@@ -76,9 +78,9 @@ class StrategyRules:
                     return True, "uptrend", "Aggressive first entry (price > ema_20)"
                 elif current_price <= price_dip_target:
                     if self.use_reversal_buy_strategy:
-                        return True, "START_MONITORING", f"Dip target hit at {buy_dip_percentage:.2%}. Starting reversal monitoring."
+                        return True, "START_MONITORING", f"Dip target hit at {adjusted_buy_dip_percentage:.2%}. Starting reversal monitoring."
                     else:
-                        return True, "uptrend", f"Dip buy signal triggered at {buy_dip_percentage:.2%}"
+                        return True, "uptrend", f"Dip buy signal triggered at {adjusted_buy_dip_percentage:.2%}"
                 else:
                     reason = f"Price ${current_price:,.2f} is above EMA100 but below EMA20 ${ema_20:,.2f}"
             else:
@@ -92,9 +94,9 @@ class StrategyRules:
                     return True, "uptrend", "Uptrend pullback"
                 elif current_price <= price_dip_target:
                     if self.use_reversal_buy_strategy:
-                        return True, "START_MONITORING", f"Dip target hit on existing position at {buy_dip_percentage:.2%}. Starting reversal monitoring."
+                        return True, "START_MONITORING", f"Dip target hit on existing position at {adjusted_buy_dip_percentage:.2%}. Starting reversal monitoring."
                     else:
-                        return True, "uptrend", f"Dip buy signal on existing position at {buy_dip_percentage:.2%}"
+                        return True, "uptrend", f"Dip buy signal on existing position at {adjusted_buy_dip_percentage:.2%}"
                 else:
                     reason = f"In uptrend (price > EMA100), but no pullback signal found"
             else:
@@ -107,7 +109,7 @@ class StrategyRules:
 
     def calculate_sell_target_price(self, purchase_price: Decimal, params: Dict[str, Decimal] = None) -> Decimal:
         """
-        Calculates the target sell price using dynamic target_profit.
+        Calculates the target sell price using dynamic sell_rise_percentage.
         Handles cases where params might be None.
         """
         purchase_price = Decimal(purchase_price)
@@ -116,7 +118,8 @@ class StrategyRules:
         if params is None:
             params = {}
 
-        target_profit = params.get('target_profit', Decimal('0.01'))
+        # Use sell_rise_percentage for the calculation, not target_profit
+        sell_rise_percentage = params.get('sell_rise_percentage', Decimal('0.01'))
         one = Decimal('1')
 
         numerator = purchase_price * (one + self.commission_rate)
@@ -126,7 +129,8 @@ class StrategyRules:
             return Decimal('inf')
 
         break_even_price = numerator / denominator
-        sell_target_price = break_even_price * (one + target_profit)
+        # The sell target is based on the rise percentage from the break-even price
+        sell_target_price = break_even_price * (one + sell_rise_percentage)
         return sell_target_price
 
     def calculate_realized_pnl(self, buy_price: Decimal, sell_price: Decimal, quantity_sold: Decimal) -> Decimal:
