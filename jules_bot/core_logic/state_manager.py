@@ -1,7 +1,7 @@
 import pandas as pd
 from decimal import Decimal
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from jules_bot.utils.logger import logger
 from jules_bot.database.postgres_manager import PostgresManager
 import uuid
@@ -383,7 +383,6 @@ class StateManager:
         logger.info(f"Closing original position {original_trade_id} after partial sell and treasury creation.")
         self.db_manager.update_trade_status(original_trade_id, 'CLOSED')
 
-
     def close_forced_position(self, trade_id: str, sell_result: dict, realized_pnl: Decimal):
         """
         Updates a specific trade to CLOSED status after a forced sell,
@@ -396,7 +395,7 @@ class StateManager:
         # Convert integer timestamp (milliseconds) to datetime object before DB insertion
         raw_timestamp = update_data.get('timestamp')
         if isinstance(raw_timestamp, int):
-            update_data['timestamp'] = datetime.fromtimestamp(raw_timestamp / 1000, tz=datetime.timezone.utc)
+            update_data['timestamp'] = datetime.fromtimestamp(raw_timestamp / 1000, tz=timezone.utc)
 
         # Add the PnL to the sell data dictionary
         update_data['realized_pnl_usd'] = realized_pnl
