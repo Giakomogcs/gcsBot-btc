@@ -394,8 +394,8 @@ class TradingBot:
 
                 elif buy_amount_usdt > 0:
                     logger.info(f"[{operating_mode}] Buy signal triggered: {reason}. Preparing to buy ${buy_amount_usdt:,.2f} USD.")
-                    if buy_amount_usdt < min_trade_size:
-                        logger.warning(f"Proposed buy amount ${buy_amount_usdt:,.2f} is less than minimum trade size ${min_trade_size:,.2f}. Aborting.")
+                    if buy_amount_usdt < self.min_trade_size:
+                        logger.warning(f"Proposed buy amount ${buy_amount_usdt:,.2f} is less than minimum trade size ${self.min_trade_size:,.2f}. Aborting.")
                     else:
                         decision_context = {
                             "operating_mode": operating_mode,
