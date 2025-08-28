@@ -389,8 +389,30 @@ class TUIApp(App):
     # --- UI Update Helpers ---
 
     def update_strategy_panel(self, status: dict, price: Decimal):
-        # Placeholder for brevity
-        self.query_one("#strategy_operating_mode").update(f"Operating Mode: {status.get('operating_mode', 'N/A')}")
+        """Updates the strategy panel with the latest signal data."""
+        operating_mode = status.get("operating_mode", "N/A")
+        market_regime = status.get("market_regime", -1)
+        reason = status.get("reason", "N/A")
+        condition_label = status.get("condition_label", "Buy Condition")
+        condition_target = status.get("condition_target", "N/A")
+        condition_progress = float(status.get("condition_progress", 0))
+        buy_target_percentage_drop = float(status.get("buy_target_percentage_drop", 0))
+
+        self.query_one("#strategy_operating_mode").update(f"Operating Mode: {operating_mode}")
+        self.query_one("#strategy_market_regime").update(f"Market Regime: {market_regime}")
+
+        is_info_only = condition_label == "INFO"
+        self.query_one("#strategy_buy_reason").set_class(is_info_only, "hidden")
+        self.query_one("#strategy_buy_target").set_class(not is_info_only, "hidden")
+        self.query_one("#strategy_buy_target_percentage").set_class(not is_info_only, "hidden")
+        self.query_one("#strategy_buy_progress").set_class(not is_info_only, "hidden")
+
+        if is_info_only:
+            self.query_one("#strategy_buy_reason").update(f"Status: {reason}")
+        else:
+            self.query_one("#strategy_buy_target").update(f"{condition_label}: {condition_target}")
+            self.query_one("#strategy_buy_target_percentage").update(f"Drop Needed: {buy_target_percentage_drop:.2f}%")
+            self.query_one("#strategy_buy_progress").update(f"Progress: {condition_progress:.1f}%")
 
     def update_wallet_table(self, balances: list):
         wallet_table = self.query_one("#wallet_table", DataTable)
