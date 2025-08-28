@@ -139,8 +139,10 @@ class StatusService:
 
             should_buy = buy_amount_usdt > 0
 
-            trade_history = self.db_manager.get_all_trades_in_range(mode=environment, bot_id=bot_id) or []
-            trade_history_dicts = [trade.to_dict() for trade in trade_history]
+            # This second call is to get the full history for the TUI display.
+            # The one above is just for the recent history for the capital manager.
+            full_trade_history = self.db_manager.get_all_trades_in_range(mode=environment, bot_id=bot_id) or []
+            trade_history_dicts = [trade.to_dict() for trade in full_trade_history]
 
             # Determine high-level bot status
             bot_status_db = self.db_manager.get_bot_status(bot_id)

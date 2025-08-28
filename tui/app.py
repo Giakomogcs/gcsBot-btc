@@ -236,17 +236,38 @@ class TUIApp(App):
 
     @work(thread=True)
     def run_script_worker(self, command: list[str], message_type: type[Message]) -> None:
-        # This function now only handles the subprocess execution part.
-        # The logging of the command execution is removed to avoid clutter.
+        """
+        Executes a script inside a temporary, networked Docker container.
+        """
+        # These names are defined in run.py and must match.
+        PROJECT_NAME = "gcsbot-btc"
+        DOCKER_IMAGE_NAME = f"{PROJECT_NAME}-app"
+        DOCKER_NETWORK_NAME = f"{PROJECT_NAME}_default"
+
         try:
-            script_env = os.environ.copy()
-            script_env["BOT_NAME"] = self.bot_name
-            process = subprocess.run(command, capture_output=True, text=True, check=False, encoding='utf-8', errors='replace', env=script_env)
+            # Construct the full docker command
+            docker_command = [
+                "docker", "run",
+                "--rm",
+                "--network", DOCKER_NETWORK_NAME,
+                "--env-file", ".env",
+                "-e", f"BOT_NAME={self.bot_name}",
+                DOCKER_IMAGE_NAME,
+            ] + command # command is something like ["python", "scripts/get_bot_data.py", ...]
+
+            process = subprocess.run(
+                docker_command,
+                capture_output=True,
+                text=True,
+                check=False,
+                encoding='utf-8',
+                errors='replace'
+            )
 
             if process.returncode != 0:
                 output = process.stderr.strip() or process.stdout.strip()
                 success = False
-                self.call_from_thread(self.log_display.write, f"[bold red]Script Error ({' '.join(command)}):[/] {output}")
+                self.call_from_thread(self.log_display.write, f"[bold red]Script Error ({command[1]}):[/] {output}")
             else:
                 output = process.stdout.strip()
                 success = True
@@ -258,8 +279,8 @@ class TUIApp(App):
                 self.post_message(message_type(output, success))
 
         except FileNotFoundError:
-            self.post_message(message_type("Script not found", False))
-            self.call_from_thread(self.log_display.write, f"[bold red]Error: Script '{command[1]}' not found.[/]")
+            self.post_message(message_type("Docker not found", False))
+            self.call_from_thread(self.log_display.write, "[bold red]Error: 'docker' command not found. Is Docker installed and in your PATH?[/]")
         except Exception as e:
             self.post_message(message_type(f"Worker error: {e}", False))
 
