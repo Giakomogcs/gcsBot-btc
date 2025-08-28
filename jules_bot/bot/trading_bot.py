@@ -365,6 +365,7 @@ class TradingBot:
                     portfolio_value=total_portfolio_value,
                     free_cash=cash_balance,
                     params=current_params,
+                    trade_history=trade_history,
                     force_buy_signal=buy_from_reversal,
                     forced_reason="Buy triggered by price reversal."
                 )

@@ -5,6 +5,7 @@ from jules_bot.core_logic.strategy_rules import StrategyRules
 from enum import Enum, auto
 from typing import Dict
 import math
+import time
 
 # Set precision for Decimal calculations
 getcontext().prec = 28
@@ -46,6 +47,20 @@ class CapitalManager:
         self.use_dynamic_capital = self.config_manager.getboolean('STRATEGY_RULES', 'use_dynamic_capital', fallback=False)
         self.use_percentage_sizing = self.config_manager.getboolean('STRATEGY_RULES', 'use_percentage_based_sizing', fallback=False)
         self.use_formula_sizing = self.config_manager.getboolean('STRATEGY_RULES', 'use_formula_sizing', fallback=False)
+
+        try:
+            consecutive_buys_str = self.config_manager.get('STRATEGY_RULES', 'consecutive_buys_threshold', fallback='5')
+            self.consecutive_buys_threshold = int(consecutive_buys_str)
+        except (ValueError, TypeError) as e:
+            logger.critical(f"Invalid value for 'consecutive_buys_threshold'. Using fallback '5'. Error: {e}")
+            self.consecutive_buys_threshold = 5
+
+        try:
+            reset_hours_str = self.config_manager.get('STRATEGY_RULES', 'difficulty_reset_timeout_hours', fallback='2')
+            self.difficulty_reset_timeout_hours = int(reset_hours_str)
+        except (ValueError, TypeError) as e:
+            logger.critical(f"Invalid value for 'difficulty_reset_timeout_hours'. Using fallback '2'. Error: {e}")
+            self.difficulty_reset_timeout_hours = 2
 
     def _safe_get_decimal(self, section: str, key: str, fallback: str) -> Decimal:
         """Safely gets a parameter from config and converts it to Decimal."""
@@ -90,7 +105,7 @@ class CapitalManager:
 
         return max(base_buy_amount, self.min_trade_size), reason
 
-    def get_buy_order_details(self, market_data: dict, open_positions: list, portfolio_value: Decimal, free_cash: Decimal, params: Dict[str, Decimal], force_buy_signal: bool = False, forced_reason: str = None) -> tuple[Decimal, str, str, str]:
+    def get_buy_order_details(self, market_data: dict, open_positions: list, portfolio_value: Decimal, free_cash: Decimal, params: Dict[str, Decimal], trade_history: list = None, force_buy_signal: bool = False, forced_reason: str = None) -> tuple[Decimal, str, str, str]:
         """
         Determines the operating mode and calculates the appropriate buy amount based on that mode.
         Can be forced to assume a buy signal is present.
@@ -101,7 +116,7 @@ class CapitalManager:
         if not self.use_dynamic_capital and num_open_positions >= self.max_open_positions:
             return Decimal('0'), OperatingMode.PRESERVATION.name, f"Max open positions ({self.max_open_positions}) reached.", "PRESERVATION"
 
-        difficulty_factor = num_open_positions // 5 if self.use_dynamic_capital else 0
+        difficulty_factor = self._calculate_difficulty_factor(trade_history or [])
 
         if force_buy_signal:
             should_buy, regime, reason = True, "uptrend", forced_reason or "Buy signal forced by reversal."
@@ -146,3 +161,34 @@ class CapitalManager:
 
         final_amount = buy_amount.quantize(Decimal("0.01"))
         return final_amount, mode.name, reason, regime
+
+    def _calculate_difficulty_factor(self, trade_history: list) -> int:
+        """
+        Calculates the difficulty factor based on consecutive buys.
+        """
+        if not self.use_dynamic_capital or not trade_history:
+            return 0
+
+        # Sort trades by timestamp, most recent first
+        sorted_trades = sorted(trade_history, key=lambda t: t.timestamp, reverse=True)
+
+        # Check for timeout since last buy
+        last_trade_time = sorted_trades[0].timestamp
+        time_since_last_trade = (Decimal(time.time()) - Decimal(last_trade_time.timestamp())) / Decimal(3600)
+        if time_since_last_trade > self.difficulty_reset_timeout_hours:
+            logger.info("Difficulty factor reset due to timeout.")
+            return 0
+
+        consecutive_buys = 0
+        for trade in sorted_trades:
+            if trade.order_type == 'buy':
+                consecutive_buys += 1
+            elif trade.order_type == 'sell':
+                logger.info("Consecutive buy streak broken by a sell.")
+                break  # Streak is broken by a sell
+
+        if consecutive_buys > self.consecutive_buys_threshold:
+            logger.info(f"Difficulty factor of 1 applied due to {consecutive_buys} consecutive buys.")
+            return 1
+
+        return 0

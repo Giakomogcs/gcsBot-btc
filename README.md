@@ -57,7 +57,54 @@ The GCS Trading Bot is a powerful, fully automated trading bot designed for the 
 - **Interactive Terminal UI (TUI)**: A high-performance dashboard (`run.py display`) provides a real-time view of the bot's status, open positions, wallet balances, and live logs.
 - **Automated Data Pipeline**: A built-in collector (`collectors/core_price_collector.py`) automatically ingests and stores all required price data in a PostgreSQL time-series database.
 
-## 3. Bot Management Workflow
+## 3. Trading Strategy and Configuration
+
+The bot's decision-making is governed by a sophisticated, configurable strategy that adapts to market conditions.
+
+### Buy Strategies Explained
+
+The bot doesn't use a single, simple rule to buy. Instead, its behavior changes based on the market trend and its current state. The core logic is found in `jules_bot/core_logic/strategy_rules.py`.
+
+The main buy scenarios are:
+
+1.  **In an Uptrend (Price > 100-period EMA):**
+    *   **Aggressive First Entry**: If the bot has no open positions and detects a strong uptrend (Price > 20-period EMA), it makes an initial purchase to establish a position early.
+    *   **Dip Buying / Pullbacks**: If the bot already has positions, it waits for the price to temporarily dip below a shorter-term average (like the 20-period EMA) or hit a calculated dip target (a percentage drop from the recent high). This allows the bot to add to its position at a better price during an overall uptrend.
+
+2.  **In a Downtrend (Price < 100-period EMA):**
+    *   **Volatility Breakout (Bottom Fishing)**: The bot becomes much more conservative. It will only buy if the price drops below a dynamically calculated target based on the lower Bollinger Band. This is a "bottom-fishing" strategy that aims to buy when the price is significantly oversold and likely to revert.
+    *   **Dynamic Difficulty**: This is a key risk management feature. The buy target in a downtrend becomes progressively harder to hit based on certain conditions, preventing the bot from over-investing in a falling market.
+
+### Strategy Configuration Variables
+
+You can fine-tune almost every aspect of the trading strategy by editing the variables in your `.env` file (e.g., `.env.mybot`).
+
+#### Main Strategy Switches
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `STRATEGY_RULES_USE_DYNAMIC_CAPITAL` | `True` | **Master switch for the dynamic difficulty logic.** If `False`, the bot will not use the consecutive buy logic to adjust its buy target. |
+| `STRATEGY_RULES_USE_REVERSAL_BUY_STRATEGY` | `True` | If `True`, the bot will enter a "monitoring mode" on a dip instead of buying instantly. It then waits for the price to rise by a certain percentage before buying, confirming a reversal. |
+
+#### Dynamic Difficulty Parameters
+
+These variables control the new consecutive buy logic. They are only active if `USE_DYNAMIC_CAPITAL` is `True`.
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `STRATEGY_RULES_CONSECUTIVE_BUYS_THRESHOLD` | `5` | The number of consecutive buys (without a sell) required to trigger the difficulty adjustment. |
+| `STRATEGY_RULES_DIFFICULTY_RESET_TIMEOUT_HOURS` | `2` | If the bot doesn't make a new purchase for this many hours, the consecutive buy count resets to zero. |
+| `STRATEGY_RULES_DIFFICULTY_ADJUSTMENT_FACTOR`| `0.005` | The factor used to lower the buy target when difficulty is active. `0.005` corresponds to a `0.5%` adjustment. |
+
+#### Order Sizing
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `STRATEGY_RULES_USE_FORMULA_SIZING` | `True` | If `True`, order size is calculated with a logarithmic formula based on total portfolio value. |
+| `STRATEGY_RULES_USE_PERCENTAGE_BASED_SIZING` | `True` | If `USE_FORMULA_SIZING` is `False`, this uses a fixed percentage of your free cash for each order. |
+| `REGIME_X_ORDER_SIZE_USD` | `10` | If both of the above are `False`, the bot uses a fixed USD amount for each buy, defined per market regime. |
+
+## 4. Bot Management Workflow
 
 Managing multiple bots is handled through a simple, interactive command-line workflow.
 
@@ -69,7 +116,7 @@ Managing multiple bots is handled through a simple, interactive command-line wor
 | `python run.py display`   | Displays the TUI for a running bot. A menu will appear for selection.         |
 | `python run.py delete-bot`| Deletes a bot after interactive selection and confirmation.                   |
 
-## 4. System Architecture
+## 5. System Architecture
 
 ### Architectural Diagram
 
@@ -108,7 +155,7 @@ The system is centered around a main bot process running inside a Docker contain
 
 The bot application itself **always runs inside the `app` Docker container**. The `run.py` script on your host machine is a convenience wrapper that executes commands _inside_ that container using `docker-compose exec`. This is a crucial concept to understand.
 
-## 4. Setup and Installation
+## 6. Setup and Installation
 
 ### Prerequisites
 
@@ -142,7 +189,7 @@ python run.py start
 
 The `app` container will start and remain in an idle state, waiting for you to issue a command.
 
-## 5. User Guide: A Simplified Workflow
+## 7. User Guide: A Simplified Workflow
 
 With the new interactive capabilities, managing and running your bots is easier than ever.
 
@@ -185,7 +232,7 @@ When you are finished, you can stop all services with a single command:
 python run.py stop
 ```
 
-## 6. Complete Command Reference
+## 8. Complete Command Reference
 
 ### `run.py`: The Main Control Script
 
@@ -225,11 +272,11 @@ These scripts can be run from your host machine's terminal for automation or dir
 | `clear_trades_measurement.py` | **DESTRUCTIVE:** Clears all data from the `trades` measurement for a given environment.        | `--env <name>` (Required)                |
 | `wipe_database.py`            | **EXTREMELY DESTRUCTIVE:** Wipes all tables in the PostgreSQL database. Requires confirmation. | None                                     |
 
-## 7. Execution Environment Clarification
+## 9. Execution Environment Clarification
 
 ### Why Docker?
 
-The bot is designed to run within a Docker container for several critical reasons:
+The bot is designed to run within a Docker container for a several critical reasons:
 
 1.  **Consistency:** It ensures that the bot runs in the exact same environment every time, with the same dependencies and configuration, regardless of your host operating system.
 2.  **Dependency Management:** All Python and system-level dependencies are managed within the `Dockerfile`, preventing conflicts with other projects on your machine.
@@ -241,7 +288,7 @@ The bot is designed to run within a Docker container for several critical reason
 
 While you may see a `.venv` directory if you are developing on the code, this virtual environment is for your IDE to provide features like code completion and linting. It is **not** for running the bot itself. The `run.py` script and the `scripts/` are the only components designed to be executed directly on your host machine, and their purpose is to control the bot running inside Docker.
 
-## 8. Data and Database
+## 10. Data and Database
 
 ### Database Schema
 
@@ -256,7 +303,7 @@ The bot generates structured JSON logs in the `logs/` directory. This directory 
 
 To prevent excessive disk usage, the log files are automatically rotated. **Only the most recent 2 days of logs are kept.** Older log files are automatically deleted.
 
-## 9. Troubleshooting
+## 11. Troubleshooting
 
 **"Docker Compose not found" error:**
 
@@ -273,7 +320,7 @@ To prevent excessive disk usage, the log files are automatically rotated. **Only
 
 - You must restart the Docker services for changes in the `.env` file to be loaded. Run `python run.py stop` and then `python run.py start`.
 
-## 10. Terminal User Interface (TUI)
+## 12. Terminal User Interface (TUI)
 
 The bot includes a high-performance Terminal User Interface (TUI) for monitoring and manual control, launched with the `run.py display` command.
 
@@ -290,7 +337,7 @@ If you have multiple bots, `run.py display` will first ask you which bot you wan
 - **Portfolio Evolution**: Tracks the overall performance of your portfolio over time, including total and 24-hour percentage change.
 - **DCOM Status**: Displays the status of the Dynamic Capital & Operations Management system, including total equity, working capital, and the strategic reserve.
 
-## 10. Status Data Structure
+## 13. Status Data Structure
 
 The `scripts/get_bot_data.py` script provides a comprehensive JSON snapshot of the bot's current state. This data is used to populate the TUI and can be used for any external monitoring. Below is an example of the structure with explanations for each key.
 

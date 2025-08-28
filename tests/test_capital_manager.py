@@ -1,8 +1,11 @@
 import unittest
 from unittest.mock import MagicMock, patch
 from decimal import Decimal
+import time
+from datetime import datetime, timedelta
 from jules_bot.core_logic.capital_manager import CapitalManager, OperatingMode
 from jules_bot.core_logic.strategy_rules import StrategyRules
+from jules_bot.database.models import Trade
 
 class TestCapitalManager(unittest.TestCase):
     def setUp(self):
@@ -57,22 +60,6 @@ class TestCapitalManager(unittest.TestCase):
         self.assertEqual(amount, Decimal('0'))
         self.assertEqual(mode, OperatingMode.PRESERVATION.name)
         self.assertIn("Max open positions (10) reached", reason)
-
-    def test_scaling_difficulty_when_dynamic_difficulty_is_on(self):
-        """Should calculate a scaling difficulty factor when dynamic difficulty is on."""
-        self.config_values[('STRATEGY_RULES', 'use_dynamic_capital')] = True
-        self.capital_manager = CapitalManager(self.mock_config_manager, self.mock_strategy_rules)
-        self.mock_strategy_rules.evaluate_buy_signal.return_value = (False, "unknown", "No signal")
-
-        # Test with 12 open positions, expecting a difficulty factor of 2 (12 // 5)
-        self.capital_manager.get_buy_order_details(
-            market_data={},
-            open_positions=[MagicMock()] * 12,
-            portfolio_value=Decimal('1000'),
-            free_cash=Decimal('100'),
-            params=self.params
-        )
-        self.mock_strategy_rules.evaluate_buy_signal.assert_called_with({}, 12, 2, params=self.params)
 
     def test_preservation_mode_when_no_buy_signal(self):
         """Should not buy if there is no buy signal."""
@@ -184,3 +171,62 @@ class TestCapitalManager(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class TestConsecutiveBuyDifficulty(unittest.TestCase):
+    def setUp(self):
+        self.mock_config_manager = MagicMock()
+        self.mock_strategy_rules = MagicMock(spec=StrategyRules)
+
+        self.config_values = {
+            ('STRATEGY_RULES', 'use_dynamic_capital'): True,
+            ('STRATEGY_RULES', 'consecutive_buys_threshold'): 5,
+            ('STRATEGY_RULES', 'difficulty_reset_timeout_hours'): 2,
+        }
+        self.mock_config_manager.get.side_effect = self.get_config_value
+        self.mock_config_manager.getboolean.side_effect = self.get_config_boolean_value
+
+        self.capital_manager = CapitalManager(
+            config_manager=self.mock_config_manager,
+            strategy_rules=self.mock_strategy_rules
+        )
+
+    def get_config_value(self, section, key, fallback=None):
+        return self.config_values.get((section, key), fallback)
+
+    def get_config_boolean_value(self, section, key, fallback=None):
+        val = self.config_values.get((section, key), fallback)
+        if isinstance(val, bool):
+            return val
+        return str(val).lower() in ('true', '1', 't')
+
+    def create_mock_trade(self, order_type, minutes_ago):
+        trade = MagicMock(spec=Trade)
+        trade.order_type = order_type
+        trade.timestamp = datetime.now() - timedelta(minutes=minutes_ago)
+        return trade
+
+    def test_no_difficulty_with_fewer_than_threshold_buys(self):
+        """Should have difficulty factor 0 with 5 or fewer consecutive buys."""
+        trade_history = [self.create_mock_trade('buy', i) for i in range(5)] # 5 buys
+        difficulty = self.capital_manager._calculate_difficulty_factor(trade_history)
+        self.assertEqual(difficulty, 0)
+
+    def test_difficulty_applied_after_consecutive_buys(self):
+        """Should have difficulty factor 1 after more than 5 consecutive buys."""
+        trade_history = [self.create_mock_trade('buy', i) for i in range(6)] # 6 buys
+        difficulty = self.capital_manager._calculate_difficulty_factor(trade_history)
+        self.assertEqual(difficulty, 1)
+
+    def test_difficulty_resets_after_sell(self):
+        """A sell should break the streak and reset difficulty to 0."""
+        trade_history = [self.create_mock_trade('buy', i) for i in range(6)]
+        trade_history.insert(2, self.create_mock_trade('sell', 2.5)) # A sell in the middle
+        difficulty = self.capital_manager._calculate_difficulty_factor(trade_history)
+        self.assertEqual(difficulty, 0)
+
+    def test_difficulty_resets_after_timeout(self):
+        """Difficulty should be 0 if the last buy was more than the timeout ago."""
+        # 6 buys, but the most recent one was 3 hours ago
+        trade_history = [self.create_mock_trade('buy', i + 180) for i in range(6)]
+        difficulty = self.capital_manager._calculate_difficulty_factor(trade_history)
+        self.assertEqual(difficulty, 0)
