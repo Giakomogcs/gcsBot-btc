@@ -149,13 +149,19 @@ class TUIApp(App):
                                 yield Static("Open Positions", classes="title")
                                 yield DataTable(id="positions_table")
 
-                        with Vertical(id="bottom_middle_pane"):
-                            yield Static("Portfolio Value History", classes="title")
-                            yield PlotextPlot(id="portfolio_chart")
+                        # This section is now moved to the Trade History tab
+                        # with Vertical(id="bottom_middle_pane"):
+                        #     yield Static("Portfolio Value History", classes="title")
+                        #     yield PlotextPlot(id="portfolio_chart")
 
 
             with TabPane("Trade History", id="history"):
-                yield DataTable(id="history_table")
+                with Vertical():
+                    yield DataTable(id="history_table", classes="history_table")
+                    with Vertical(id="portfolio_chart_container"):
+                        yield Static("Portfolio Value History (Last 50 Snapshots)", classes="title", id="portfolio_title")
+                        yield PlotextPlot(id="portfolio_chart")
+
         yield Footer()
 
     def on_mount(self) -> None:
@@ -166,10 +172,10 @@ class TUIApp(App):
         # Setup tables
         positions_table = self.query_one("#positions_table", DataTable)
         positions_table.cursor_type = "row"
-        positions_table.add_columns("ID", "Timestamp", "Entry", "Value", "PnL", "Sell Target", "Target Status")
+        positions_table.add_columns("ID", "Entry", "Value", "PnL", "Target", "To Target ($)", "Progress")
 
         wallet_table = self.query_one("#wallet_table", DataTable)
-        wallet_table.add_columns("Asset", "Free", "Locked", "Total", "USD Value")
+        wallet_table.add_columns("Asset", "Available", "Total", "USD Value")
 
         history_table = self.query_one("#history_table", DataTable)
         history_table.cursor_type = "row"
@@ -282,9 +288,9 @@ class TUIApp(App):
         self.query_one("#status_open_positions").update(f"Open Positions: {data.get('open_positions_count', 0)}")
         self.query_one("#status_wallet_usd").update(f"Wallet Value: ${Decimal(data.get('total_wallet_usd_value', 0)):,.2f}")
 
-        self.update_strategy_panel(data.get("buy_signal_status", {}))
+        self.update_strategy_panel(data.get("buy_signal_status", {}), price)
         self.update_wallet_table(data.get("wallet_balances", []))
-        self.update_positions_table(data.get("open_positions_status", []), price)
+        self.update_positions_table(data.get("open_positions_status", []))
 
     def on_portfolio_data(self, message: PortfolioData) -> None:
         if not message.success or not isinstance(message.data, dict):
@@ -324,31 +330,35 @@ class TUIApp(App):
 
     # --- UI Update Helpers ---
 
-    def update_strategy_panel(self, status: dict):
+    def update_strategy_panel(self, status: dict, current_price: Decimal):
         """Updates the strategy panel with the latest signal data."""
         operating_mode = status.get("operating_mode", "N/A")
         market_regime = status.get("market_regime", -1)
         reason = status.get("reason", "N/A")
-        condition_label = status.get("condition_label", "Buy Condition")
-        condition_target = status.get("condition_target", "N/A")
-        condition_progress = float(status.get("condition_progress", 0))
-        buy_target_percentage_drop = float(status.get("buy_target_percentage_drop", 0))
+        condition_target_str = status.get("condition_target", "N/A")
 
         self.query_one("#strategy_operating_mode").update(f"Operating Mode: {operating_mode}")
         self.query_one("#strategy_market_regime").update(f"Market Regime: {market_regime}")
+        self.query_one("#strategy_buy_reason").update(f"Status: {reason}")
 
-        is_info_only = condition_label == "INFO"
-        self.query_one("#strategy_buy_reason").set_class(is_info_only, "hidden")
-        self.query_one("#strategy_buy_target").set_class(not is_info_only, "hidden")
-        self.query_one("#strategy_buy_target_percentage").set_class(not is_info_only, "hidden")
-        self.query_one("#strategy_buy_progress").set_class(not is_info_only, "hidden")
+        try:
+            target_price = Decimal(condition_target_str.replace('$', '').replace(',', ''))
+            price_drop_needed = current_price - target_price
+            percentage_drop_needed = (price_drop_needed / current_price * 100) if current_price > 0 else 0
 
-        if is_info_only:
-            self.query_one("#strategy_buy_reason").update(f"Status: {reason}")
-        else:
-            self.query_one("#strategy_buy_target").update(f"{condition_label}: {condition_target}")
-            self.query_one("#strategy_buy_target_percentage").update(f"Drop Needed: {buy_target_percentage_drop:.2f}%")
-            self.query_one("#strategy_buy_progress").update(f"Progress: {condition_progress:.1f}%")
+            self.query_one("#strategy_buy_target").update(f"Buy Target: ${target_price:,.2f}")
+            self.query_one("#strategy_buy_target_percentage").update(f"Price Drop Needed: ${price_drop_needed:,.2f} ({percentage_drop_needed:.2f}%)")
+
+            # Simple text progress bar
+            progress = float(status.get("condition_progress", 0))
+            progress_bar = "█" * int(progress / 10) + "░" * (10 - int(progress / 10))
+            self.query_one("#strategy_buy_progress").update(f"Progress: [{progress_bar}] {progress:.1f}%")
+
+        except (ValueError, InvalidOperation):
+            # Handle cases where condition_target is not a valid number (e.g., "Met", "N/A")
+            self.query_one("#strategy_buy_target").update(f"Buy Target: {condition_target_str}")
+            self.query_one("#strategy_buy_target_percentage").update("Price Drop Needed: N/A")
+            self.query_one("#strategy_buy_progress").update("Progress: N/A")
 
     def update_wallet_table(self, balances: list):
         wallet_table = self.query_one("#wallet_table", DataTable)
@@ -357,12 +367,11 @@ class TUIApp(App):
             wallet_table.add_row("No balance data.")
             return
         for bal in balances:
-            asset, free, locked, usd_value = bal.get('asset'), Decimal(bal.get('free','0')), Decimal(bal.get('locked','0')), Decimal(bal.get('usd_value','0'))
-            total = free + locked
-            row_format = "₿{:.8f}" if asset == 'BTC' else "${:,.2f}"
-            wallet_table.add_row(asset, row_format.format(free), row_format.format(locked), row_format.format(total), f"${usd_value:,.2f}")
+            asset, free, total, usd_value = bal.get('asset'), Decimal(bal.get('free','0')), Decimal(bal.get('total','0')), Decimal(bal.get('usd_value','0'))
+            row_format = "{:,.8f}" if asset == 'BTC' else "{:,.2f}"
+            wallet_table.add_row(asset, row_format.format(free), row_format.format(total), f"${usd_value:,.2f}")
 
-    def update_positions_table(self, positions: list, price: Decimal):
+    def update_positions_table(self, positions: list):
         pos_table = self.query_one("#positions_table", DataTable)
         pos_table.clear()
         if not positions:
@@ -371,15 +380,22 @@ class TUIApp(App):
         for pos in positions:
             pnl = Decimal(pos.get("unrealized_pnl", 0))
             pnl_color = "green" if pnl >= 0 else "red"
-            timestamp = datetime.fromisoformat(pos.get('timestamp')).strftime('%Y-%m-%d %H:%M')
+
+            # Progress bar
+            progress = float(pos.get('progress_to_sell_target_pct', 0))
+            progress_bar = "█" * int(progress / 10) + "░" * (10 - int(progress / 10))
+            progress_str = f"[{progress_bar}] {progress:.1f}%"
+
+            current_value = Decimal(pos.get('quantity', 0)) * Decimal(pos.get('current_price', 0))
+
             pos_table.add_row(
                 pos.get("trade_id", "N/A").split('-')[0],
-                timestamp,
                 f"${Decimal(pos.get('entry_price', 0)):,.2f}",
-                f"${Decimal(pos.get('quantity', 0)) * price:,.2f}",
+                f"${current_value:,.2f}",
                 f"[{pnl_color}]${pnl:,.2f}[/]",
                 f"${Decimal(pos.get('sell_target_price', 0)):,.2f}",
-                f"{float(pos.get('progress_to_sell_target_pct', 0)):.1f}%",
+                f"${Decimal(pos.get('usd_to_target', 0)):,.2f}",
+                progress_str,
                 key=pos.get("trade_id")
             )
 
