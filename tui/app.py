@@ -154,7 +154,6 @@ class TUIApp(App):
                 with Horizontal():
                     yield Button("FORCE BUY", id="force_buy_button", variant="primary")
                     yield Button("Sell 100%", id="force_sell_100_button", variant="error", disabled=True)
-                    yield Button("Sell 90%", id="force_sell_90_button", variant="warning", disabled=True)
 
                 yield Static(f"Live Log for {self.bot_name}", classes="title")
                 with Horizontal(id="log_filter_bar"):
@@ -353,17 +352,16 @@ class TUIApp(App):
             self.run_script_worker(command, CommandOutput) # Executa em segundo plano
             input_widget.value = ""
 
-        elif event.button.id in ["force_sell_100_button", "force_sell_90_button"]:
+        elif event.button.id == "force_sell_100_button":
             if not self.selected_trade_id:
                 self.log_display.write("[bold red]No trade selected for selling.[/bold red]")
                 return
 
-            percentage = "100" if event.button.id == "force_sell_100_button" else "90"
+            percentage = "100"
             command = ["python", "scripts/force_sell.py", self.selected_trade_id, percentage, self.bot_name]
-            self.run_script_worker(command, CommandOutput) # Executa em segundo plano
+            self.run_script_worker(command, CommandOutput)
 
             self.query_one("#force_sell_100_button").disabled = True
-            self.query_one("#force_sell_90_button").disabled = True
             self.query_one("#positions_table").move_cursor(row=-1)
             self.selected_trade_id = None
 

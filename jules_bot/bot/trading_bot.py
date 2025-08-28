@@ -108,6 +108,10 @@ class TradingBot:
         self.lowest_price_since_monitoring_started = None
         self.monitoring_started_at = None
 
+        # -- Load Core Strategy Configuration --
+        self.min_trade_size = Decimal(config_manager.get('TRADING_STRATEGY', 'min_trade_size_usdt', fallback='10.0'))
+
+
     def _write_state_to_file(self, open_positions: list, current_price: Decimal, wallet_balances: list, trade_history: list, portfolio_value: Decimal):
         serializable_trade_history = [t.to_dict() for t in trade_history]
         serializable_open_positions = [p.to_dict() for p in open_positions]
@@ -145,11 +149,16 @@ class TradingBot:
                 if cmd_type == "force_buy":
                     amount_usd = Decimal(command.get("amount_usd", "0"))
                     if amount_usd > 0:
-                        success, buy_result = trader.execute_buy(amount_usd, self.run_id, {"reason": "manual_override"})
-                        if success:
-                            purchase_price = Decimal(buy_result.get('price'))
-                            sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
-                            state_manager.create_new_position(buy_result, sell_target_price)
+                        if amount_usd < self.min_trade_size:
+                            logger.error(f"Manual buy command for ${amount_usd:.2f} is below the minimum trade size of ${self.min_trade_size:.2f}. Aborting.")
+                        else:
+                            success, buy_result = trader.execute_buy(amount_usd, self.run_id, {"reason": "manual_override"})
+                            if success:
+                                purchase_price = Decimal(buy_result.get('price'))
+                                sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
+                                state_manager.create_new_position(buy_result, sell_target_price)
+                            else:
+                                logger.error(f"Manual buy for ${amount_usd:.2f} failed. See trader logs for details (e.g., insufficient funds).")
 
                 elif cmd_type == "force_sell":
                     trade_id = command.get("trade_id")
@@ -172,7 +181,7 @@ class TradingBot:
                                 logger.info("Manual sell executed. Triggering state reconciliation.")
                                 state_manager.reconcile_holdings(self.symbol, trader)
                             else:
-                                logger.error(f"Manual sell for trade {trade_id} failed.")
+                                logger.error(f"Manual sell for trade {trade_id} failed. See trader logs for details.")
 
                 os.remove(filepath)
             except Exception as e:
@@ -207,7 +216,6 @@ class TradingBot:
         base_asset = self.symbol.replace(quote_asset, "")
 
         # --- Load Strategy Configuration ---
-        min_trade_size = Decimal(config_manager.get('TRADING_STRATEGY', 'min_trade_size_usdt', fallback='10.0'))
         equity_recalc_interval = int(config_manager.get('APP', 'equity_recalculation_interval', fallback=300))
 
         # Reversal strategy specific configs
