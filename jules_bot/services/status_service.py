@@ -112,8 +112,9 @@ class StatusService:
             )
 
             # 4. Calculate Buy Progress
+            should_buy = buy_amount_usdt > 0
             condition_target, condition_progress, condition_label = self._calculate_buy_condition_details(
-                reason, market_data, current_params
+                reason, market_data, current_params, should_buy
             )
 
             buy_target_percentage_drop = Decimal('0')
@@ -157,11 +158,15 @@ class StatusService:
             logger.error(f"Error getting extended status: {e}", exc_info=True)
             return {"error": str(e)}
 
-    def _calculate_buy_condition_details(self, reason: str, market_data: dict, current_params: dict) -> tuple[str, Decimal, str]:
+    def _calculate_buy_condition_details(self, reason: str, market_data: dict, current_params: dict, should_buy: bool) -> tuple[str, Decimal, str]:
         """
         Parses the 'reason' string from the buy signal evaluation to determine
         the actual condition the bot is waiting for and calculates the progress towards it.
         """
+        # If a buy signal is definitively active, we don't need to parse the reason.
+        if should_buy:
+            return "Met", Decimal('100'), "Signal Active"
+
         current_price = Decimal(str(market_data.get('close')))
         high_price = Decimal(str(market_data.get('high', current_price)))
 
@@ -170,7 +175,7 @@ class StatusService:
         progress_pct = Decimal('0')
         label = "Buy Condition"
 
-        # Pattern 1: Waiting for price to drop to a Bollinger Band (new format)
+        # Pattern 1: Waiting for price to drop to a Bollinger Band
         bbl_match = re.search(r"Buy target: \$([\d,\.]+)", reason)
         if bbl_match:
             try:
@@ -178,54 +183,37 @@ class StatusService:
                 progress_pct = _calculate_progress_pct(current_price, high_price, target_price)
                 target_value_str = f"${target_price:,.2f}"
                 label = "Buy Target"
+                return target_value_str, progress_pct, label
             except (InvalidOperation, IndexError):
                 pass
-        else:
-            # Pattern 1.1: Waiting for price to drop to a Bollinger Band (old format for compatibility)
-            bbl_match_old = re.search(r"above adjusted BBL \$([\d,\.]+)", reason)
-            if bbl_match_old:
-                try:
-                    target_price = Decimal(bbl_match_old.group(1).replace(',', ''))
-                    # Progress is from the high of the candle down to the BBL
-                    progress_pct = _calculate_progress_pct(current_price, high_price, target_price)
-                    target_value_str = f"${target_price:,.2f}"
-                    label = "Price > Adj. BBL"
-                except (InvalidOperation, IndexError):
-                    pass
 
         # Pattern 2: Waiting for price to drop below EMA20 in an uptrend
         ema_match = re.search(r"below EMA20 \$([\d,\.]+)", reason)
         if ema_match:
             try:
                 target_price = Decimal(ema_match.group(1).replace(',', ''))
-                # Progress is from the high of the candle down to the EMA20
-                # We assume the current price is above the target
                 progress_pct = _calculate_progress_pct(current_price, high_price, target_price)
                 target_value_str = f"${target_price:,.2f}"
                 label = "Price > EMA20"
+                return target_value_str, progress_pct, label
             except (InvalidOperation, IndexError):
                 pass
 
-        # Pattern 3: Waiting for a dip buy signal (price drop)
-        dip_match = re.search(r"Dip buy signal", reason) or "No signal" in reason
-        if dip_match and not (bbl_match or ema_match):
-            try:
+        # Pattern 3: Waiting for a general dip buy signal
+        if "dip buy" in reason.lower() or ("uptrend" in reason.lower() and "pullback" not in reason.lower()):
+             try:
                 buy_dip_percentage = current_params.get('buy_dip_percentage', Decimal('0.02'))
                 target_price = high_price * (Decimal('1') - buy_dip_percentage)
-                # Progress is from the high of the candle down to the dip target
                 progress_pct = _calculate_progress_pct(current_price, high_price, target_price)
                 target_value_str = f"${target_price:,.2f}"
                 label = f"Dip Target ({buy_dip_percentage:.1%})"
-            except InvalidOperation:
+                return target_value_str, progress_pct, label
+             except InvalidOperation:
                 pass
 
-        # If a buy signal is active, progress is 100%
-        if "signal triggered" in reason or "entry" in reason or "pullback" in reason:
-            progress_pct = Decimal('100')
-            label = "Signal Active"
-            target_value_str = "Met"
-
-        return target_value_str, progress_pct, label
+        # If no specific target was parsed, return the generic status.
+        # This signals to the TUI to simplify the display.
+        return reason, Decimal('0'), "INFO"
 
 
     def _process_open_positions(self, open_positions_db, current_price):

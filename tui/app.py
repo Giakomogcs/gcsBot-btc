@@ -426,12 +426,23 @@ class TUIApp(App):
 
         self.query_one("#strategy_operating_mode").update(f"Operating Mode: {operating_mode}")
         self.query_one("#strategy_market_regime").update(f"Market Regime: {market_regime}")
-        self.query_one("#strategy_buy_reason").update(f"Buy Reason: {reason}")
 
-        # Update the labels and values to be dynamic and descriptive
-        self.query_one("#strategy_buy_target").update(f"{condition_label}: {condition_target}")
-        self.query_one("#strategy_buy_target_percentage").update(f"Drop Needed: {buy_target_percentage_drop:.2f}%")
-        self.query_one("#strategy_buy_progress").update(f"Progress: {condition_progress:.1f}%")
+        # Dynamically show/hide widgets based on the context
+        is_info_only = condition_label == "INFO"
+
+        self.query_one("#strategy_buy_reason").set_class(is_info_only, "hidden", not is_info_only)
+        self.query_one("#strategy_buy_target").set_class(not is_info_only, "hidden", is_info_only)
+        self.query_one("#strategy_buy_target_percentage").set_class(not is_info_only, "hidden", is_info_only)
+        self.query_one("#strategy_buy_progress").set_class(not is_info_only, "hidden", is_info_only)
+
+        if is_info_only:
+            # When no specific target, show the generic reason from the bot
+            self.query_one("#strategy_buy_reason").update(f"Buy Reason: {reason}")
+        else:
+            # When there is a specific target, show the detailed widgets
+            self.query_one("#strategy_buy_target").update(f"{condition_label}: {condition_target}")
+            self.query_one("#strategy_buy_target_percentage").update(f"Drop Needed: {buy_target_percentage_drop:.2f}%")
+            self.query_one("#strategy_buy_progress").update(f"Progress: {condition_progress:.1f}%")
 
         # Update wallet balances table
         wallet_table = self.query_one("#wallet_table", DataTable)
