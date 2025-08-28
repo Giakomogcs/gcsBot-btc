@@ -12,19 +12,22 @@ from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.utils.logger import logger
 
-def get_summary(bot_id: str = None):
+def get_summary(bot_name: str = None):
     """
     Connects to the database, fetches all sell trades for a specific bot,
     and calculates a summary of performance including PnL in USD, PnL in BTC,
-    and total assets sent to treasury.
+    and total assets sent to treasury. The connection is scoped to the bot's
+    schema via the config_manager, which must be initialized by the caller.
 
     Args:
-        bot_id (str, optional): The ID of the bot to get the summary for. Defaults to None.
+        bot_name (str, optional): The name of the bot to get the summary for.
+                                This name is used to ensure the DB connection
+                                uses the correct schema.
 
     Returns:
         dict: A dictionary containing the performance summary.
     """
-    logger.info(f"PerformanceService: Calculating performance summary for bot_id: {bot_id}...")
+    logger.info(f"PerformanceService: Calculating performance summary for bot: {bot_name}...")
     total_usd_pnl = Decimal('0')
     total_btc_pnl = Decimal('0')
     total_treasury_btc = Decimal('0')
@@ -33,10 +36,11 @@ def get_summary(bot_id: str = None):
     try:
         db_manager = PostgresManager()
 
-        # Fetch all trades from all environments for the specific bot
-        all_trades = db_manager.get_all_trades_in_range(mode='trade', bot_id=bot_id)
-        all_trades.extend(db_manager.get_all_trades_in_range(mode='test', bot_id=bot_id))
-        all_trades.extend(db_manager.get_all_trades_in_range(mode='backtest', bot_id=bot_id))
+        # Fetch all trades from all environments. The bot_name is used by the
+        # config_manager to connect to the correct schema, so no further filtering is needed here.
+        all_trades = db_manager.get_all_trades_in_range(mode='trade')
+        all_trades.extend(db_manager.get_all_trades_in_range(mode='test'))
+        all_trades.extend(db_manager.get_all_trades_in_range(mode='backtest'))
 
         if not all_trades:
             logger.warning("PerformanceService: No trades found in the database.")
