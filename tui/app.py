@@ -246,14 +246,19 @@ class TUIApp(App):
 
         try:
             # Construct the full docker command
+            # Get the absolute path to the project root directory
+            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
             docker_command = [
                 "docker", "run",
                 "--rm",
                 "--network", DOCKER_NETWORK_NAME,
                 "--env-file", ".env",
                 "-e", f"BOT_NAME={self.bot_name}",
+                # Mount the project directory to /app in the container
+                "-v", f"{project_root}:/app",
                 DOCKER_IMAGE_NAME,
-            ] + command # command is something like ["python", "scripts/get_bot_data.py", ...]
+            ] + command
 
             process = subprocess.run(
                 docker_command,
