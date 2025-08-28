@@ -387,13 +387,26 @@ class TUIApp(App):
         chart = self.query_one("#portfolio_chart", PlotextPlot)
         plt = chart.plt
         plt.clear_data()
-        if history:
-            dates = [datetime.fromisoformat(item['timestamp']) for item in reversed(history)]
-            values = [float(item['value']) for item in reversed(history)]
-            plt.plot(dates, values)
-            plt.title("Portfolio Value (USD) - Last 50 Snapshots")
-            plt.xlabel("Timestamp")
-            plt.ylabel("USD Value")
+
+        if not history:
+            chart.refresh()
+            return
+
+        # The timestamps are already strings in ISO format from the script.
+        # We'll format them for display.
+        dates = [datetime.fromisoformat(item['timestamp']).strftime("%m-%d %H:%M") for item in reversed(history)]
+        values = [float(item['value']) for item in reversed(history)]
+
+        # Do not use plt.date_form(), as it can cause issues on Windows with timestamp conversion.
+        # Instead, we'll plot the data with string labels for the x-axis.
+        plt.plot(values) # Plot only values
+        plt.xticks(range(len(dates)), dates) # Set string labels for ticks
+
+        plt.title("Portfolio Value (USD) - Last 50 Snapshots")
+        plt.xlabel("Timestamp")
+        plt.ylabel("USD Value")
+
+        # Manually clear and redraw the plot to ensure changes are applied.
         chart.refresh()
 
 
