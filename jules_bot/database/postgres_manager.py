@@ -3,6 +3,7 @@ import logging
 import os
 import uuid
 from typing import Optional, Iterator
+from datetime import datetime
 import pandas as pd
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, desc, and_, text, inspect
@@ -349,17 +350,35 @@ class PostgresManager:
                 logger.error(f"Failed to check for open positions: {e}", exc_info=True)
                 raise
 
-    def get_all_trades_in_range(self, mode: Optional[str] = None, symbol: Optional[str] = None, bot_id: Optional[str] = None, start_date: str = "-90d", end_date: str = "now()"):
+    def get_all_trades_in_range(self, mode: Optional[str] = None, symbol: Optional[str] = None, bot_id: Optional[str] = None, start_date: any = "-90d", end_date: any = "now()"):
         with self.get_db() as db:
             try:
-                # This is a simplified version. A more robust implementation would parse the date strings.
                 query = db.query(Trade).order_by(Trade.timestamp)
+
+                filters = []
                 if mode:
-                    query = query.filter(Trade.environment == mode)
+                    filters.append(Trade.environment == mode)
                 if symbol:
-                    query = query.filter(Trade.symbol == symbol)
+                    filters.append(Trade.symbol == symbol)
                 if bot_id:
-                    query = query.filter(Trade.run_id == bot_id)
+                    filters.append(Trade.run_id == bot_id)
+
+                # Handle start_date
+                if isinstance(start_date, datetime):
+                    filters.append(Trade.timestamp >= start_date)
+                elif isinstance(start_date, str) and '-' in start_date:
+                    filters.append(Trade.timestamp >= text(f"now() - interval '{start_date.replace('-', '')}'"))
+                else:
+                    filters.append(Trade.timestamp >= text(f"'{start_date}'"))
+
+                # Handle end_date
+                if isinstance(end_date, datetime):
+                    filters.append(Trade.timestamp <= end_date)
+                else:
+                    filters.append(Trade.timestamp <= text("now()") if end_date == "now()" else text(f"'{end_date}'"))
+
+                if filters:
+                    query = query.filter(and_(*filters))
 
                 trades = query.all()
                 return trades

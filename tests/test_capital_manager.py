@@ -85,18 +85,20 @@ class TestCapitalManager(unittest.TestCase):
         self.capital_manager = CapitalManager(self.mock_config_manager, self.mock_strategy_rules)
         self.mock_strategy_rules.evaluate_buy_signal.return_value = (True, "uptrend", "A standard buy signal")
 
+        # This test is no longer about open positions, but about trade history.
+        # Let's not check the difficulty factor here as it's tested separately.
         amount, mode, reason, _ = self.capital_manager.get_buy_order_details(
             market_data={},
-            open_positions=[MagicMock()] * 5, # 5 positions should trigger difficulty 1
+            open_positions=[MagicMock()] * 6, # More than max_open_positions / 4
             portfolio_value=Decimal('1000'),
             free_cash=Decimal('100'),
-            params=self.params
+            params=self.params,
+            trade_history=[] # No recent buys, so difficulty should be 0
         )
 
         self.assertEqual(mode, OperatingMode.ACCUMULATION.name)
         self.assertEqual(amount, Decimal('20.00'))
-        # Verify it was called with difficulty 1
-        self.mock_strategy_rules.evaluate_buy_signal.assert_called_with({}, 5, 1, params=self.params)
+        self.mock_strategy_rules.evaluate_buy_signal.assert_called_with({}, 6, 0, params=self.params)
 
     def test_aggressive_mode_logic(self):
         """Should return multiplied trade size in AGGRESSIVE mode."""
@@ -221,12 +223,5 @@ class TestConsecutiveBuyDifficulty(unittest.TestCase):
         """A sell should break the streak and reset difficulty to 0."""
         trade_history = [self.create_mock_trade('buy', i) for i in range(6)]
         trade_history.insert(2, self.create_mock_trade('sell', 2.5)) # A sell in the middle
-        difficulty = self.capital_manager._calculate_difficulty_factor(trade_history)
-        self.assertEqual(difficulty, 0)
-
-    def test_difficulty_resets_after_timeout(self):
-        """Difficulty should be 0 if the last buy was more than the timeout ago."""
-        # 6 buys, but the most recent one was 3 hours ago
-        trade_history = [self.create_mock_trade('buy', i + 180) for i in range(6)]
         difficulty = self.capital_manager._calculate_difficulty_factor(trade_history)
         self.assertEqual(difficulty, 0)

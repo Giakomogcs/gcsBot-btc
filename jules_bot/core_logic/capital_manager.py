@@ -5,7 +5,6 @@ from jules_bot.core_logic.strategy_rules import StrategyRules
 from enum import Enum, auto
 from typing import Dict
 import math
-import time
 
 # Set precision for Decimal calculations
 getcontext().prec = 28
@@ -169,16 +168,9 @@ class CapitalManager:
         if not self.use_dynamic_capital or not trade_history:
             return 0
 
-        logger.info(f"Calculating difficulty factor based on {len(trade_history)} trades for this run.")
+        logger.info(f"Calculating difficulty factor based on {len(trade_history)} trades in the last {self.difficulty_reset_timeout_hours} hours.")
         # Sort trades by timestamp, most recent first
         sorted_trades = sorted(trade_history, key=lambda t: t.timestamp, reverse=True)
-
-        # Check for timeout since last buy
-        last_trade_time = sorted_trades[0].timestamp
-        time_since_last_trade = (Decimal(time.time()) - Decimal(last_trade_time.timestamp())) / Decimal(3600)
-        if time_since_last_trade > self.difficulty_reset_timeout_hours:
-            logger.info("Difficulty factor reset due to timeout.")
-            return 0
 
         consecutive_buys = 0
         for trade in sorted_trades:

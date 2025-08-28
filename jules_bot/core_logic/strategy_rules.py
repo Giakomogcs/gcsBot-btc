@@ -85,7 +85,7 @@ class StrategyRules:
                 if current_price <= adjusted_bbl:
                     return True, "downtrend", f"Aggressive first entry (volatility breakout at difficulty {difficulty_factor})"
                 else:
-                    reason = f"Buy target: ${adjusted_bbl:,.2f}. Price is too high. Target adjusted for {open_positions_count} open positions."
+                    reason = f"Buy target: ${adjusted_bbl:,.2f}. Price is too high."
         else:
             if current_price > ema_100:
                 if high_price > ema_20 and current_price < ema_20:
@@ -101,7 +101,7 @@ class StrategyRules:
                 if current_price <= adjusted_bbl:
                     return True, "downtrend", f"Downtrend volatility breakout (difficulty {difficulty_factor})"
                 else:
-                    reason = f"Buy target: ${adjusted_bbl:,.2f}. Price is too high. Target adjusted for {open_positions_count} open positions."
+                    reason = f"Buy target: ${adjusted_bbl:,.2f}. Price is too high."
         
         return False, "unknown", reason or "No signal"
 

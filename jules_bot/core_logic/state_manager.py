@@ -1,6 +1,7 @@
 import pandas as pd
 from decimal import Decimal
 import math
+from datetime import datetime, timedelta
 from jules_bot.utils.logger import logger
 from jules_bot.database.postgres_manager import PostgresManager
 import uuid
@@ -50,6 +51,16 @@ class StateManager:
     def get_trade_history_for_run(self) -> list:
         """Fetches all trades from the database for the current bot run."""
         return self.db_manager.get_trades_by_run_id(run_id=self.bot_id)
+
+    def get_trades_in_last_n_hours(self, hours: int) -> list:
+        """Fetches all trades from the database within the last N hours."""
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(hours=hours)
+        return self.db_manager.get_all_trades_in_range(
+            mode=self.mode,
+            start_date=start_date,
+            end_date=end_date
+        )
 
     def get_last_purchase_price(self) -> Decimal:
         """

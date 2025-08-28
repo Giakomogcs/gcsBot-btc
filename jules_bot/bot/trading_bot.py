@@ -283,8 +283,15 @@ class TradingBot:
 
                 all_prices = self.trader.get_all_prices()
                 wallet_balances = account_manager.get_all_account_balances(all_prices)
-                trade_history = state_manager.get_trade_history_for_run()
-                self._write_state_to_file(open_positions, current_price, wallet_balances, trade_history, total_portfolio_value)
+
+                # Fetch recent trades for difficulty calculation
+                trade_history = state_manager.get_trades_in_last_n_hours(
+                    hours=capital_manager.difficulty_reset_timeout_hours
+                )
+
+                # For the state file, we might still want the full history
+                full_trade_history = state_manager.get_trade_history_for_run()
+                self._write_state_to_file(open_positions, current_price, wallet_balances, full_trade_history, total_portfolio_value)
 
                 # --- SELL LOGIC ---
                 positions_to_sell = [p for p in open_positions if current_price >= Decimal(str(p.sell_target_price or 'inf'))]
