@@ -298,8 +298,12 @@ class TradingBot:
                 wallet_balances = account_manager.get_all_account_balances(all_prices)
 
                 # Fetch recent trades for difficulty calculation
-                trade_history = state_manager.get_trades_in_last_n_hours(
-                    hours=capital_manager.difficulty_reset_timeout_hours
+                end_date = datetime.utcnow()
+                start_date = end_date - timedelta(hours=capital_manager.difficulty_reset_timeout_hours)
+                trade_history = self.db_manager.get_all_trades_in_range(
+                    mode=self.mode,
+                    start_date=start_date,
+                    end_date=end_date
                 )
 
                 # For the state file, we might still want the full history
