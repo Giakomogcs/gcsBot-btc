@@ -39,7 +39,6 @@ class DynamicParameters:
             # A safe, non-trading default
             logger.debug("Regime is -1 (undefined). Loading safe, non-trading parameters.")
             self.parameters = {
-                'target_profit': Decimal('0'),
                 'buy_dip_percentage': Decimal('1'),
                 'sell_rise_percentage': Decimal('1'),
                 'order_size_usd': Decimal('0'),
@@ -52,11 +51,14 @@ class DynamicParameters:
             logger.warning(f"Config section '{section_name}' not found. Falling back to 'STRATEGY_RULES'.")
             section_name = 'STRATEGY_RULES'
 
+        # The fallback for sell_rise_percentage should be the same as target_profit
+        # from the default section for consistency, as target_profit is a legacy name for the same concept.
+        default_sell_rise = self._safe_get_decimal('STRATEGY_RULES', 'target_profit', '0.01')
+
         # Load parameters using the safe getter method for robustness
         self.parameters = {
-            'target_profit': self._safe_get_decimal(section_name, 'target_profit', '0.01'),
             'buy_dip_percentage': self._safe_get_decimal(section_name, 'buy_dip_percentage', '0.02'),
-            'sell_rise_percentage': self._safe_get_decimal(section_name, 'sell_rise_percentage', '0.02'),
+            'sell_rise_percentage': self._safe_get_decimal(section_name, 'sell_rise_percentage', str(default_sell_rise)),
             'order_size_usd': self._safe_get_decimal(section_name, 'order_size_usd', '20.0'),
         }
 

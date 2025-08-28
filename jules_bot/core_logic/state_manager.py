@@ -120,10 +120,24 @@ class StateManager:
             existing_binance_trade_ids = {t.binance_trade_id for t in db_trades if t.binance_trade_id}
             logger.info(f"Found {len(existing_binance_trade_ids)} existing trades in the database for {symbol}.")
 
-            # 3. Reconcile: Iterate through Binance trades and create local records for new BUYS
+            # 3. Reconcile: Iterate through Binance trades and create/update local records
             new_trades_synced = 0
+            updated_trades = 0
             for b_trade in binance_trades:
                 if b_trade['id'] in existing_binance_trade_ids:
+                    continue
+
+                # If the trade is not in our DB by binance_trade_id, check by exchange_order_id
+                # This handles the case where the trade was logged before the binance_trade_id was available
+                local_trade = self.db_manager.get_trade_by_exchange_order_id(str(b_trade['orderId']))
+
+                if local_trade and local_trade.binance_trade_id is None:
+                    # Found a match! Update the existing record with the binance_trade_id
+                    logger.info(f"Found matching local trade ({local_trade.trade_id}) for Binance trade ID {b_trade['id']} by matching order ID. Updating.")
+                    self.db_manager.update_trade_binance_id(local_trade.trade_id, b_trade['id'])
+                    # Add the newly linked ID to the set to prevent duplicates in the same run
+                    existing_binance_trade_ids.add(b_trade['id'])
+                    updated_trades += 1
                     continue
 
                 if b_trade['isBuyer']:
@@ -131,12 +145,12 @@ class StateManager:
                     self._create_position_from_trade(b_trade, strategy_rules)
                     new_trades_synced += 1
 
-            if new_trades_synced > 0:
-                logger.info(f"Successfully synced {new_trades_synced} new buy trades from Binance.")
+            if new_trades_synced > 0 or updated_trades > 0:
+                logger.info(f"Sync complete. New trades created: {new_trades_synced}. Trades updated: {updated_trades}.")
                 # After syncing, reconcile the total position with the actual balance
                 self.reconcile_holdings(symbol, trader)
             else:
-                logger.info("Database is already in sync with Binance. No new trades to add.")
+                logger.info("Database is already in sync with Binance. No new trades to add or update.")
 
             logger.info("--- Trade synchronization finished ---")
 
@@ -227,11 +241,27 @@ class StateManager:
                 
                 # Use a Decimal for tolerance comparison
                 if new_quantity <= Decimal('0.00000001'):
-                    logger.info(f"Closing position {position.trade_id} as it has been fully sold (reconciled).")
-                    self.db_manager.update_trade_status(position.trade_id, 'CLOSED')
+                    logger.info(f"Closing position {position.trade_id} via reconciliation as it has been fully sold.")
+                    context_update = {
+                        "reconciliation_note": "Position closed by reconciliation process due to balance discrepancy.",
+                        "reconciliation_time": datetime.utcnow().isoformat()
+                    }
+                    self.db_manager.update_trade_status_and_context(
+                        trade_id=position.trade_id,
+                        new_status='RECONCILED_CLOSED',
+                        context_update=context_update
+                    )
                 else:
                     logger.info(f"Reducing quantity of position {position.trade_id} by {quantity_to_reduce:.8f} to new quantity {new_quantity:.8f}.")
-                    self.db_manager.update_trade_quantity(position.trade_id, new_quantity)
+                    context_update = {
+                        "reconciliation_note": f"Position quantity reduced by {quantity_to_reduce:.8f} due to balance discrepancy.",
+                        "reconciliation_time": datetime.utcnow().isoformat()
+                    }
+                    self.db_manager.update_trade_quantity_and_context(
+                        trade_id=position.trade_id,
+                        new_quantity=float(new_quantity), # Ensure it's a float for the DB
+                        context_update=context_update
+                    )
                 
                 discrepancy -= quantity_to_reduce
 
@@ -353,6 +383,21 @@ class StateManager:
         logger.info(f"Closing original position {original_trade_id} after partial sell and treasury creation.")
         self.db_manager.update_trade_status(original_trade_id, 'CLOSED')
 
+
+    def close_forced_position(self, trade_id: str, sell_result: dict, realized_pnl: Decimal):
+        """
+        Updates a specific trade to CLOSED status after a forced sell,
+        and records the realized PnL. This directly updates the existing trade record.
+        """
+        logger.info(f"Force closing position {trade_id} with PnL: ${realized_pnl:.2f}")
+
+        # Add the PnL to the sell data dictionary
+        update_data = sell_result.copy()
+        update_data['realized_pnl_usd'] = realized_pnl
+
+        # Use the direct DB method to update the original trade record
+        # This bypasses the event-style logging of TradeLogger for a direct state update.
+        self.db_manager.update_trade_on_sell(trade_id, update_data)
 
     def close_position(self, trade_id: str, exit_data: dict, is_partial_close: bool = True):
         """

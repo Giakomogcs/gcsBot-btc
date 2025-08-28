@@ -320,6 +320,32 @@ class PostgresManager:
                 logger.error(f"Failed to update trade status for trade_id '{trade_id}': {e}", exc_info=True)
                 raise
 
+    def update_trade_status_and_context(self, trade_id: str, new_status: str, context_update: dict):
+        """Updates the status and merges new data into the decision_context of a specific trade."""
+        with self.get_db() as db:
+            try:
+                trade_to_update = db.query(Trade).filter(Trade.trade_id == trade_id).first()
+
+                if not trade_to_update:
+                    logger.error(f"Could not find trade with trade_id '{trade_id}' to update status and context.")
+                    return
+
+                logger.info(f"Updating status for trade {trade_id} to '{new_status}' and updating context.")
+                trade_to_update.status = new_status
+
+                # Merge the new context with the existing one
+                existing_context = trade_to_update.decision_context or {}
+                existing_context.update(context_update)
+                trade_to_update.decision_context = existing_context
+
+                db.commit()
+                logger.info(f"Successfully updated status and context for trade {trade_id}.")
+
+            except Exception as e:
+                db.rollback()
+                logger.error(f"Failed to update status and context for trade_id '{trade_id}': {e}", exc_info=True)
+                raise
+
     def update_trade_sell_target(self, trade_id: str, new_target: Decimal):
         """Updates the sell_target_price of a specific trade in the database."""
         with self.get_db() as db:
@@ -346,6 +372,36 @@ class PostgresManager:
             except Exception as e:
                 logger.error(f"Failed to get trade by binance_trade_id '{binance_trade_id}': {e}")
                 return None
+
+    def get_trade_by_exchange_order_id(self, exchange_order_id: str) -> Optional[Trade]:
+        """Fetches a trade by its exchange_order_id."""
+        with self.get_db() as db:
+            try:
+                trade = db.query(Trade).filter(Trade.exchange_order_id == exchange_order_id).first()
+                return trade
+            except Exception as e:
+                logger.error(f"Failed to get trade by exchange_order_id '{exchange_order_id}': {e}", exc_info=True)
+                return None
+
+    def update_trade_binance_id(self, trade_id: str, binance_trade_id: int):
+        """Updates the binance_trade_id of a specific trade."""
+        with self.get_db() as db:
+            try:
+                trade_to_update = db.query(Trade).filter(Trade.trade_id == trade_id).first()
+
+                if not trade_to_update:
+                    logger.error(f"Could not find trade with trade_id '{trade_id}' to update binance_trade_id.")
+                    return
+
+                logger.info(f"Updating binance_trade_id for trade {trade_id} to {binance_trade_id}.")
+                trade_to_update.binance_trade_id = binance_trade_id
+                db.commit()
+                logger.info(f"Successfully updated binance_trade_id for trade {trade_id}.")
+
+            except Exception as e:
+                db.rollback()
+                logger.error(f"Failed to update binance_trade_id for trade_id '{trade_id}': {e}", exc_info=True)
+                raise
 
     def has_open_positions(self) -> bool:
         with self.get_db() as db:
@@ -439,6 +495,31 @@ class PostgresManager:
             except Exception as e:
                 db.rollback()
                 logger.error(f"Failed to update trade quantity for trade_id '{trade_id}': {e}", exc_info=True)
+                raise
+
+    def update_trade_quantity_and_context(self, trade_id: str, new_quantity: float, context_update: dict):
+        """Updates the quantity and merges new data into the decision_context of a specific trade."""
+        with self.get_db() as db:
+            try:
+                trade_to_update = db.query(Trade).filter(Trade.trade_id == trade_id).first()
+
+                if not trade_to_update:
+                    logger.error(f"Could not find trade with trade_id '{trade_id}' to update quantity and context.")
+                    return
+
+                logger.info(f"Updating quantity for trade {trade_id} to {new_quantity} and updating context.")
+                trade_to_update.quantity = new_quantity
+
+                existing_context = trade_to_update.decision_context or {}
+                existing_context.update(context_update)
+                trade_to_update.decision_context = existing_context
+
+                db.commit()
+                logger.info(f"Successfully updated quantity and context for trade {trade_id}.")
+
+            except Exception as e:
+                db.rollback()
+                logger.error(f"Failed to update quantity and context for trade_id '{trade_id}': {e}", exc_info=True)
                 raise
 
     def clear_all_tables(self):

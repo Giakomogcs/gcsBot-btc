@@ -177,9 +177,14 @@ class TradingBot:
 
                             success, sell_result = trader.execute_sell(sell_position_data, self.run_id, {"reason": "manual_force_sell"})
                             if success:
-                                # After a manual sell, it's crucial to reconcile the state
-                                logger.info("Manual sell executed. Triggering state reconciliation.")
-                                state_manager.reconcile_holdings(self.symbol, trader)
+                                # Calculate PnL for the sold portion
+                                buy_price = Decimal(str(position.price))
+                                sell_price = Decimal(str(sell_result.get('price')))
+                                realized_pnl = strategy_rules.calculate_realized_pnl(buy_price, sell_price, quantity_to_sell)
+
+                                # Close the position correctly instead of just reconciling
+                                state_manager.close_forced_position(trade_id, sell_result, realized_pnl)
+                                logger.info(f"Successfully closed trade {trade_id} via force sell with PnL ${realized_pnl:.2f}.")
                             else:
                                 logger.error(f"Manual sell for trade {trade_id} failed. See trader logs for details.")
 

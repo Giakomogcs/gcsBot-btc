@@ -153,8 +153,7 @@ class TUIApp(App):
                 yield Input(placeholder="e.g., 50.00", id="manual_buy_input", validators=[NumberValidator()])
                 with Horizontal():
                     yield Button("FORCE BUY", id="force_buy_button", variant="primary")
-                    yield Button("Sell 90%", id="force_sell_90_button", variant="error", disabled=True)
-                    yield Button("Sell 100%", id="force_sell_100_button", variant="error", disabled=True)
+                    yield Button("FORCE SELL", id="force_sell_button", variant="error", disabled=True)
 
                 yield Static(f"Live Log for {self.bot_name}", classes="title")
                 with Horizontal(id="log_filter_bar"):
@@ -353,17 +352,16 @@ class TUIApp(App):
             self.run_script_worker(command, CommandOutput) # Executa em segundo plano
             input_widget.value = ""
 
-        elif event.button.id == "force_sell_90_button" or event.button.id == "force_sell_100_button":
+        elif event.button.id == "force_sell_button":
             if not self.selected_trade_id:
                 self.log_display.write("[bold red]No trade selected for selling.[/bold red]")
                 return
 
-            percentage = "90" if event.button.id == "force_sell_90_button" else "100"
+            percentage = "100"
             command = ["python", "scripts/force_sell.py", self.selected_trade_id, percentage, self.bot_name]
             self.run_script_worker(command, CommandOutput)
 
-            self.query_one("#force_sell_90_button").disabled = True
-            self.query_one("#force_sell_100_button").disabled = True
+            self.query_one("#force_sell_button").disabled = True
             self.query_one("#positions_table").move_cursor(row=-1)
             self.selected_trade_id = None
 
@@ -371,8 +369,7 @@ class TUIApp(App):
         # If the click is not on the datatable, deselect row and disable buttons
         try:
             if not self.query_one("#positions_table").hit(event.x, event.y):
-                self.query_one("#force_sell_100_button").disabled = True
-                self.query_one("#force_sell_90_button").disabled = True
+                self.query_one("#force_sell_button").disabled = True
                 self.query_one("#positions_table").cursor_type = 'row'
                 self.query_one("#positions_table").move_cursor(row=-1, animate=True)
                 self.selected_trade_id = None
@@ -382,8 +379,7 @@ class TUIApp(App):
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         if event.control.id == "positions_table":
             self.selected_trade_id = event.row_key.value
-            self.query_one("#force_sell_100_button").disabled = False
-            self.query_one("#force_sell_90_button").disabled = False
+            self.query_one("#force_sell_button").disabled = False
     
     # MODIFICADO: update_dashboard agora chama um worker
     def update_dashboard(self) -> None:
@@ -422,7 +418,7 @@ class TUIApp(App):
 
         # NEW: Use the accurate, detailed condition data
         condition_label = buy_signal_status.get("condition_label", "Buy Condition")
-        #logger.info(f"TUI received condition_label: {condition_label}")
+        logger.info(f"TUI received condition_label: {condition_label}")
         condition_target = buy_signal_status.get("condition_target", "N/A")
         condition_progress = float(buy_signal_status.get("condition_progress", 0))
         buy_target_percentage_drop = float(buy_signal_status.get("buy_target_percentage_drop", 0))
