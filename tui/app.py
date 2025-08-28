@@ -94,14 +94,14 @@ class TUIApp(App):
     BINDINGS = [("d", "toggle_dark", "Toggle Dark Mode"), ("q", "quit", "Quit")]
     CSS_PATH = "app.css"
 
-    def __init__(self, mode: str = "test", container_id: str | None = None, *args, **kwargs):
+    def __init__(self, mode: str = "test", container_id: str | None = None, bot_name: str = "jules_bot", *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.mode = mode
         self.container_id = container_id
         self.selected_trade_id: str | None = None
         self.log_display: RichLog | None = None
         
-        self.bot_name = os.getenv("BOT_NAME", "jules_bot")
+        self.bot_name = bot_name
         logger.info(f"TUI is initializing for bot: {self.bot_name} (Container: {self.container_id})")
 
         config_manager.initialize(self.bot_name)
@@ -304,7 +304,7 @@ class TUIApp(App):
         self.run_script_worker(command, PerformanceSummaryData)
 
     def update_trade_history(self) -> None:
-        command = ["python", "scripts/get_trade_history.py"]
+        command = ["python", "scripts/get_trade_history.py", self.bot_name]
         self.run_script_worker(command, TradeHistoryData)
 
     # --- Message Handlers (UI Updates) ---
@@ -526,9 +526,10 @@ def run_tui():
     parser = argparse.ArgumentParser(description="Run the Jules Bot TUI Dashboard.")
     parser.add_argument("--mode", type=str, choices=["trade", "test"], default="test", help="Trading mode to monitor.")
     parser.add_argument("--container-id", type=str, required=True, help="The container ID of the running bot for log streaming.")
+    parser.add_argument("--bot-name", type=str, default=os.getenv("BOT_NAME", "jules_bot"), help="The name of the bot to monitor.")
     args = parser.parse_args()
 
-    app = TUIApp(mode=args.mode, container_id=args.container_id)
+    app = TUIApp(mode=args.mode, container_id=args.container_id, bot_name=args.bot_name)
     app.run()
 
 if __name__ == "__main__":

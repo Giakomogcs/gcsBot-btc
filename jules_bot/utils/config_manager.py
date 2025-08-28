@@ -52,10 +52,15 @@ class ConfigManager:
         if env_var_value is None:
             env_var_value = os.getenv(env_var_name)
 
-        # Special case for POSTGRES_HOST: default to 'localhost' if not set.
-        # This allows scripts to run from the host machine when the DB is in Docker.
-        if env_var_name == 'POSTGRES_HOST' and env_var_value is None:
-            return 'localhost'
+        # Special case for POSTGRES_HOST: if running locally (not in Docker),
+        # and the host is set to 'postgres', override to 'localhost'.
+        if env_var_name == 'POSTGRES_HOST':
+            # A simple way to check if we're not in a Docker container.
+            # This works for Linux-based Docker containers.
+            is_running_locally = not os.path.exists('/.dockerenv')
+
+            if is_running_locally and (env_var_value == 'postgres' or env_var_value is None):
+                return 'localhost'
 
         return env_var_value
 

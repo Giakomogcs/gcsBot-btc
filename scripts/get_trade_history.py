@@ -11,11 +11,16 @@ from jules_bot.database.postgres_manager import PostgresManager
 def get_trade_history():
     """
     Fetches the complete trade history for a given bot and prints it as JSON.
-    The bot name is determined by the BOT_NAME environment variable.
+    The bot name is taken from command-line arguments or the BOT_NAME env var.
     """
-    bot_name = os.getenv("BOT_NAME")
+    bot_name = None
+    if len(sys.argv) > 1:
+        bot_name = sys.argv[1]
+    else:
+        bot_name = os.getenv("BOT_NAME")
+
     if not bot_name:
-        print(json.dumps({"error": "BOT_NAME environment variable not set."}), file=sys.stderr)
+        print(json.dumps({"error": "Bot name not provided. Pass it as a command-line argument or set the BOT_NAME environment variable."}), file=sys.stderr)
         sys.exit(1)
 
     try:
