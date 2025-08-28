@@ -391,8 +391,14 @@ class StateManager:
         """
         logger.info(f"Force closing position {trade_id} with PnL: ${realized_pnl:.2f}")
 
-        # Add the PnL to the sell data dictionary
         update_data = sell_result.copy()
+
+        # Convert integer timestamp (milliseconds) to datetime object before DB insertion
+        raw_timestamp = update_data.get('timestamp')
+        if isinstance(raw_timestamp, int):
+            update_data['timestamp'] = datetime.fromtimestamp(raw_timestamp / 1000, tz=datetime.timezone.utc)
+
+        # Add the PnL to the sell data dictionary
         update_data['realized_pnl_usd'] = realized_pnl
 
         # Use the direct DB method to update the original trade record
