@@ -103,12 +103,18 @@ class StatusService:
             cash_balance = next((bal['free'] for bal in wallet_balances if bal['asset'] == 'USDT'), Decimal('0'))
 
             # The regime is returned but not used in the TUI status, so we can ignore it with `_`
+            # FIX: Fetch recent trade history to correctly calculate difficulty factor for the live status
+            trade_history = self.db_manager.get_trades_in_last_n_hours(
+                hours=self.capital_manager.difficulty_reset_timeout_hours
+            )
+
             buy_amount_usdt, operating_mode, reason, _ = self.capital_manager.get_buy_order_details(
                 market_data=market_data,
                 open_positions=open_positions_db,
                 portfolio_value=total_wallet_usd_value, # Using wallet value as proxy
                 free_cash=cash_balance,
-                params=current_params
+                params=current_params,
+                trade_history=trade_history
             )
 
             # 4. Calculate Buy Progress
