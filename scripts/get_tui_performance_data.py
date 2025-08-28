@@ -17,7 +17,7 @@ def main(bot_name: str):
     # Initialize the config manager with the bot name to load correct .env variables
     config_manager.initialize(bot_name)
 
-    summary_data = get_summary(bot_id=bot_name)
+    summary_data = get_summary(bot_name=bot_name)
     print(json.dumps(summary_data))
 
 if __name__ == "__main__":
