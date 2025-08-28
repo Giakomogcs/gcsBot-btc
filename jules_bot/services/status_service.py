@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 from sqlalchemy import select
@@ -104,8 +105,12 @@ class StatusService:
 
             # The regime is returned but not used in the TUI status, so we can ignore it with `_`
             # FIX: Fetch recent trade history to correctly calculate difficulty factor for the live status
-            trade_history = self.db_manager.get_trades_in_last_n_hours(
-                hours=self.capital_manager.difficulty_reset_timeout_hours
+            end_date = datetime.utcnow()
+            start_date = end_date - timedelta(hours=self.capital_manager.difficulty_reset_timeout_hours)
+            trade_history = self.db_manager.get_all_trades_in_range(
+                mode=environment,
+                start_date=start_date,
+                end_date=end_date
             )
 
             buy_amount_usdt, operating_mode, reason, _ = self.capital_manager.get_buy_order_details(
