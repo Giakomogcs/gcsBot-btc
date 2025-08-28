@@ -81,6 +81,13 @@ class StatusIndicator(Static):
     def watch_status(self, new_status: str) -> None:
         self.refresh()
 
+class CustomHeader(Static):
+    """A custom header widget that includes a title and status indicator."""
+    def compose(self) -> ComposeResult:
+        with Horizontal():
+            yield Label("GCS Trading Bot Dashboard", id="header_title")
+            yield StatusIndicator(id="status_indicator")
+
 class TUIApp(App):
     """A Textual app to display and control the trading bot's status."""
 
@@ -102,7 +109,7 @@ class TUIApp(App):
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
-        yield Header()
+        yield CustomHeader()
         with TabbedContent(initial="dashboard"):
             with TabPane("Dashboard", id="dashboard"):
                 with Horizontal(id="main_container"):
@@ -175,11 +182,6 @@ class TUIApp(App):
 
     def on_mount(self) -> None:
         """Called when the app is mounted."""
-        # Add status indicator to header
-        header = self.query_one(Header)
-        header.tall = False
-        header.add_child(StatusIndicator(id="status_indicator"))
-
         self.log_display = self.query_one(RichLog)
         self.log_display.write(f"[bold green]TUI Initialized for {self.bot_name}.[/bold green]")
 
@@ -289,6 +291,7 @@ class TUIApp(App):
         
         data = message.data
         self.query_one(StatusIndicator).status = data.get("bot_status", "OFF")
+        self.query_one("#header_title").update(f"GCS Trading Bot Dashboard - {self.bot_name}")
         
         price = Decimal(data.get("current_btc_price", 0))
         self.query_one("#status_symbol").update(f"Symbol: {data.get('symbol', 'N/A')}")
@@ -301,18 +304,54 @@ class TUIApp(App):
         self.update_positions_table(data.get("open_positions_status", []), price)
 
     def on_portfolio_data(self, message: PortfolioData) -> None:
+        """Updates the TUI with portfolio evolution data."""
         if not message.success or not isinstance(message.data, dict):
             self.log_display.write(f"[bold red]Failed to get portfolio data: {message.data}[/]")
             return
-        # Dummy implementation for now
-        pass
+
+        data = message.data
+        snapshot = data.get("latest_snapshot")
+
+        if snapshot:
+            total_value = Decimal(snapshot.get("total_portfolio_value_usd", "0"))
+            realized_pnl = Decimal(snapshot.get("realized_pnl_usd", "0"))
+            btc_treasury_amount = Decimal(snapshot.get("btc_treasury_amount", "0"))
+            btc_treasury_value = Decimal(snapshot.get("btc_treasury_value_usd", "0"))
+
+            self.query_one("#portfolio_total_value").update(f"Total Portfolio Value: ${total_value:,.2f} USD")
+            self.query_one("#portfolio_realized_pnl").update(f"Realized Profit/Loss: ${realized_pnl:,.2f} USD")
+            self.query_one("#portfolio_btc_treasury").update(f"BTC Treasury: ₿{btc_treasury_amount:.8f} (${btc_treasury_value:,.2f} USD)")
+
+        evolution_total = Decimal(data.get("evolution_total", "0"))
+        evolution_24h = Decimal(data.get("evolution_24h", "0"))
+
+        self.query_one("#portfolio_evolution_total").update(f"Evolution (Total): {evolution_total:+.2f}%")
+        self.query_one("#portfolio_evolution_24h").update(f"Evolution (24h): {evolution_24h:+.2f}%")
+
+        dcom_status = data.get("dcom_status", {})
+        if dcom_status:
+            self.query_one("#dcom_total_equity").update(f"Total Equity: ${Decimal(dcom_status.get('total_equity', '0')):,.2f}")
+            self.query_one("#dcom_working_capital").update(f"Working Capital: ${Decimal(dcom_status.get('working_capital_in_use', '0')):,.2f}")
+            self.query_one("#dcom_strategic_reserve").update(f"Strategic Reserve: ${Decimal(dcom_status.get('strategic_reserve', '0')):,.2f}")
+            self.query_one("#dcom_operating_mode").update(f"Operating Mode: {dcom_status.get('operating_mode', 'N/A')}")
 
     def on_performance_summary_data(self, message: PerformanceSummaryData) -> None:
+        """Updates the TUI with performance summary data."""
         if not message.success or not isinstance(message.data, dict):
             self.log_display.write(f"[bold red]Failed to get performance summary data: {message.data}[/]")
             return
-        # Dummy implementation for now
-        pass
+
+        data = message.data
+        pnl_usd = data.get("total_usd_pnl", "0.0")
+        pnl_btc = data.get("total_btc_pnl", "0.0")
+        treasury_btc = data.get("total_treasury_btc", "0.0")
+
+        usd_color = "green" if not str(pnl_usd).startswith('-') else "red"
+        btc_color = "green" if not str(pnl_btc).startswith('-') else "red"
+
+        self.query_one("#perf_pnl_usd").update(f"Total Realized PnL (USD):  [{usd_color}]$ {pnl_usd}[/]")
+        self.query_one("#perf_pnl_btc").update(f"Total Realized PnL (BTC):    [{btc_color}]{pnl_btc} BTC[/]")
+        self.query_one("#perf_treasury_btc").update(f"Total Treasury (BTC):          {treasury_btc} BTC")
 
     def on_trade_history_data(self, message: TradeHistoryData) -> None:
         if not message.success or not isinstance(message.data, list):

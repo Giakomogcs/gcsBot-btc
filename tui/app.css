@@ -60,6 +60,19 @@
 .hidden {
     display: none;
 }
+CustomHeader {
+    dock: top;
+    width: 100%;
+    background: $primary;
+    color: $text;
+    height: 1;
+}
+
+#header_title {
+    content-align: left middle;
+    width: 1fr;
+}
+
 #status_indicator {
     width: auto;
     margin: 0 2;

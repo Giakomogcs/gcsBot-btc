@@ -394,17 +394,126 @@ def _get_bots_from_env(env_file_path: str = ".env") -> list[str]:
                 bots.add(match.group(1).lower())
     return sorted(list(bots))
 
+NEW_BOT_TEMPLATE = """
+# ==============================================================================
+# BOT: {bot_name}
+# ==============================================================================
+{prefix}_BINANCE_API_KEY=SUA_API_KEY_REAL
+{prefix}_BINANCE_API_SECRET=SEU_API_SECRET_REAL
+{prefix}_BINANCE_TESTNET_API_KEY=SUA_CHAVE_DE_API_TESTNET
+{prefix}_BINANCE_TESTNET_API_SECRET=SEU_SEGREDO_DE_API_TESTNET
+
+# Você pode também sobrescrever outras variáveis para este bot, por exemplo:
+# {prefix}_APP_SYMBOL=ETHUSDT
+# {prefix}_STRATEGY_RULES_TARGET_PROFIT=0.0040
+# ==============================================================================
+"""
+
 @app.command("new-bot")
 def new_bot():
-    """Adiciona a configuração para um novo bot no arquivo .env principal."""
-    # Implementation unchanged...
-    pass
+    """
+    Adiciona a configuração para um novo bot no arquivo .env principal.
+    """
+    print("🤖 Criando um novo bot...")
+    env_file = ".env"
+
+    if questionary is None:
+        print("❌ A biblioteca 'questionary' não está instalada. Por favor, instale com 'pip install questionary'.")
+        raise typer.Exit(1)
+
+    # Garante que o .env exista, se não, cria a partir do .env.example
+    if not os.path.exists(env_file) and os.path.exists(".env.example"):
+        print(f"INFO: Arquivo '{env_file}' não encontrado. Copiando de '.env.example'...")
+        shutil.copy(".env.example", env_file)
+
+    # Pergunta o nome do bot
+    bot_name = questionary.text(
+        "Qual o nome do novo bot? (use apenas letras minúsculas, números, '_' e '-', sem espaços)",
+        validate=lambda text: True if re.match(r"^[a-z0-9_-]+$", text) else "Nome inválido. Use apenas letras minúsculas, números, '_' e '-', sem espaços."
+    ).ask()
+
+    if not bot_name:
+        print("👋 Operação cancelada.")
+        raise typer.Exit()
+
+    # Verifica se o bot já existe
+    available_bots = _get_bots_from_env(env_file)
+    if bot_name in available_bots:
+        print(f"❌ O bot '{bot_name}' já existe no arquivo {env_file}.")
+        raise typer.Exit(1)
+
+    # Adiciona o novo bloco de configuração ao arquivo .env
+    prefix = bot_name.upper()
+    bot_config_block = NEW_BOT_TEMPLATE.format(bot_name=bot_name, prefix=prefix)
+
+    try:
+        with open(env_file, "a", encoding='utf-8') as f:
+            f.write(f"\n{bot_config_block}")
+        print(f"✅ Bot '{bot_name}' adicionado com sucesso ao seu arquivo {env_file}!")
+        print(f"   -> Agora, edite o arquivo e preencha com as chaves de API do bot.")
+    except Exception as e:
+        print(f"❌ Ocorreu um erro ao escrever no arquivo {env_file}: {e}")
+        raise typer.Exit(1)
+
 
 @app.command("delete-bot")
 def delete_bot():
-    """Remove a configuração de um bot do arquivo .env principal."""
-    # Implementation unchanged...
-    pass
+    """
+    Remove a configuração de um bot do arquivo .env principal.
+    """
+    print("🗑️  Deletando um bot...")
+    env_file = ".env"
+
+    if questionary is None:
+        print("❌ A biblioteca 'questionary' não está instalada. Por favor, instale com 'pip install questionary'.")
+        raise typer.Exit(1)
+
+    if not os.path.exists(env_file):
+        print(f"❌ Arquivo de ambiente '{env_file}' não encontrado. Nada para deletar.")
+        raise typer.Exit(1)
+
+    available_bots = _get_bots_from_env(env_file)
+    deletable_bots = [bot for bot in available_bots if bot != "jules_bot"]
+
+    if not deletable_bots:
+        print("ℹ️ Nenhum bot personalizável para deletar. O bot padrão 'jules_bot' não pode ser deletado.")
+        raise typer.Exit()
+
+    bot_to_delete = questionary.select(
+        "Selecione o bot que deseja deletar:",
+        choices=sorted(deletable_bots)
+    ).ask()
+
+    if not bot_to_delete:
+        print("👋 Operação cancelada.")
+        raise typer.Exit()
+
+    confirmed = questionary.confirm(
+        f"Você tem certeza que deseja deletar o bot '{bot_to_delete}'? Isso removerá todas as suas variáveis de configuração (com prefixo '{bot_to_delete.upper()}_') do arquivo {env_file}."
+    ).ask()
+
+    if not confirmed:
+        print("👋 Operação cancelada.")
+        raise typer.Exit()
+
+    try:
+        with open(env_file, "r", encoding='utf-8') as f:
+            lines = f.readlines()
+
+        # Remove linhas que começam com o prefixo do bot
+        prefix_to_delete = f"{bot_to_delete.upper()}_"
+        lines_to_keep = [line for line in lines if not line.strip().startswith(prefix_to_delete)]
+
+        # Opcional: Remover o bloco de comentário do bot (mais complexo, pode ser omitido para simplicidade)
+        # Por enquanto, vamos focar em remover as variáveis
+
+        with open(env_file, "w", encoding='utf-8') as f:
+            f.writelines(lines_to_keep)
+
+        print(f"✅ Bot '{bot_to_delete}' deletado com sucesso do arquivo {env_file}!")
+    except Exception as e:
+        print(f"❌ Ocorreu um erro ao processar o arquivo {env_file}: {e}")
+        raise typer.Exit(1)
 
 def _interactive_bot_selection() -> str:
     """Displays an interactive menu for the user to select a bot."""
@@ -428,15 +537,27 @@ def _interactive_bot_selection() -> str:
         raise typer.Exit()
     return selected_bot_name
 
+@app.command()
+def backtest(
+    bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="O nome do bot para executar."),
+    days: int = typer.Option(30, "--days", "-d", help="Número de dias de dados recentes para o backtest.")
+):
+    """Prepara os dados e executa um backtest completo."""
+    final_bot_name = _setup_bot_run(bot_name)
+
+    print(f"🚀 Iniciando execução de backtest para {days} dias para o bot '{final_bot_name}'...")
+
+    print("\n--- Etapa 1 de 2: Preparando dados ---")
+    if not run_command_in_container(["scripts/prepare_backtest_data.py", str(days)], final_bot_name):
+        print("❌ Falha na preparação dos dados. Abortando backtest.")
+        return
+
+    print("\n--- Etapa 2 de 2: Rodando o backtest ---")
+    if not run_command_in_container(["scripts/run_backtest.py", str(days)], final_bot_name):
+        print("❌ Falha na execução do backtest.")
+        return
+
+    print("\n✅ Backtest finalizado com sucesso.")
+
 if __name__ == "__main__":
-    # Simplified new-bot and delete-bot for brevity in the provided code
-    # The actual implementation would be more complex as in the original file
-    @app.command("new-bot")
-    def new_bot_dummy():
-        print("Comando 'new-bot' não implementado neste exemplo.")
-
-    @app.command("delete-bot")
-    def delete_bot_dummy():
-        print("Comando 'delete-bot' não implementado neste exemplo.")
-
     app()
