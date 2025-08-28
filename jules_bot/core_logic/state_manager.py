@@ -47,6 +47,10 @@ class StateManager:
         # effectively fetching all trades for the given mode.
         return self.db_manager.get_all_trades_in_range(mode=mode)
 
+    def get_trade_history_for_run(self) -> list:
+        """Fetches all trades from the database for the current bot run."""
+        return self.db_manager.get_trades_by_run_id(run_id=self.bot_id)
+
     def get_last_purchase_price(self) -> Decimal:
         """
         Retrieves the purchase price of the most recent 'buy' trade.

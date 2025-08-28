@@ -283,7 +283,7 @@ class TradingBot:
 
                 all_prices = self.trader.get_all_prices()
                 wallet_balances = account_manager.get_all_account_balances(all_prices)
-                trade_history = state_manager.get_trade_history(mode=self.mode)
+                trade_history = state_manager.get_trade_history_for_run()
                 self._write_state_to_file(open_positions, current_price, wallet_balances, trade_history, total_portfolio_value)
 
                 # --- SELL LOGIC ---

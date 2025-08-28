@@ -169,6 +169,7 @@ class CapitalManager:
         if not self.use_dynamic_capital or not trade_history:
             return 0
 
+        logger.info(f"Calculating difficulty factor based on {len(trade_history)} trades for this run.")
         # Sort trades by timestamp, most recent first
         sorted_trades = sorted(trade_history, key=lambda t: t.timestamp, reverse=True)
 
