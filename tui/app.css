@@ -1,6 +1,5 @@
 #main_container {
     layout: horizontal;
-    height: 100%;
 }
 #left_pane {
     width: 30%;
@@ -77,11 +76,5 @@ CustomHeader {
     width: auto;
     margin: 0 2;
     content-align: right middle;
-    height: 100%;
-}
-TabbedContent {
-    height: 100%;
-}
-TabPane {
     height: 100%;
 }
