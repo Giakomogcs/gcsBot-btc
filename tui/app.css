@@ -1,0 +1,74 @@
+#main_container {
+    layout: horizontal;
+    height: 100%;
+}
+#left_pane {
+    width: 30%;
+    padding: 1;
+    border-right: solid $accent;
+}
+#middle_pane {
+    width: 45%;
+    padding: 1;
+    border-right: solid $accent;
+}
+#right_pane {
+    width: 25%;
+    padding: 1;
+}
+.title {
+    background: $accent;
+    color: $text;
+    width: 100%;
+    padding: 0 1;
+    margin-top: 1;
+}
+#status_container, #strategy_container {
+    layout: grid;
+    grid-gutter: 1;
+    height: auto;
+}
+#status_container {
+    grid-size: 3;
+}
+#strategy_container {
+    grid-size: 2;
+}
+#positions_table, #history_table {
+    margin-top: 1;
+    height: 100%;
+}
+#log_display {
+    height: 1fr;
+}
+#chart_container {
+    height: 12;
+    border: round $primary;
+    padding: 0 1;
+}
+#performance_summary_container {
+    padding: 0 1;
+    margin-bottom: 1;
+    border: round $primary;
+    height: auto;
+}
+#action_bar, #log_filter_bar {
+    margin-top: 1;
+    height: auto;
+    align: right middle;
+}
+.hidden {
+    display: none;
+}
+#status_indicator {
+    width: auto;
+    margin: 0 2;
+    content-align: right middle;
+    height: 100%;
+}
+TabbedContent {
+    height: 100%;
+}
+TabPane {
+    height: 100%;
+}

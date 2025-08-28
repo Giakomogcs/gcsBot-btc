@@ -30,43 +30,27 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(log_object)
 
 # --- CONFIGURAÇÃO DO LOGGER ---
-LOGS_DIR = "logs"
-os.makedirs(LOGS_DIR, exist_ok=True)
-
 # Get bot name from environment variable for log isolation
 bot_name = os.getenv("BOT_NAME", "jules_bot")
-log_file_name = f"{bot_name}.jsonl"
-perf_log_file_name = f"{bot_name}_performance.jsonl"
 
 logger = logging.getLogger(f"gcsBot.{bot_name}")
 logger.setLevel(logging.DEBUG)
 logger.propagate = False # Impede que os logs sejam passados para o logger root
 
+# Como não estamos mais logando para arquivos, só precisamos de um handler de console.
+# Este handler enviará logs para o stderr, que é o que o 'docker logs' captura.
 if not logger.handlers:
     json_formatter = JsonFormatter()
 
-    # 1. Handler para o ARQUIVO DE LOG ESTRUTURADO
-    log_file_path = os.path.join(LOGS_DIR, log_file_name)
-    file_handler = logging.FileHandler(log_file_path, mode='a', encoding='utf-8')
-    file_handler.setFormatter(json_formatter)
-    file_handler.setLevel(logging.DEBUG) # Captura todos os níveis no arquivo
-    logger.addHandler(file_handler)
+    # Handler para o CONSOLE
+    console_handler = logging.StreamHandler(sys.stderr)
+    console_handler.setFormatter(json_formatter)
+    # Define o nível para DEBUG para capturar tudo. O controle de verbosidade
+    # pode ser feito no ambiente de visualização, se necessário.
+    console_handler.setLevel(logging.DEBUG)
+    logger.addHandler(console_handler)
 
-    # 2. Handler para o CONSOLE (condicional)
-    if os.getenv("JULES_BOT_SCRIPT_MODE") != "1":
-        console_handler = logging.StreamHandler(sys.stderr)
-        console_handler.setFormatter(json_formatter)
-        console_handler.setLevel(logging.INFO)
-        logger.addHandler(console_handler)
-
-    # 3. Handler para o ARQUIVO DE PERFORMANCE
-    perf_log_path = os.path.join(LOGS_DIR, perf_log_file_name)
-    perf_handler = logging.FileHandler(perf_log_path, mode='a', encoding='utf-8')
-    perf_handler.setFormatter(json_formatter)
-    perf_handler.setLevel(PERFORMANCE_LEVEL_NUM)
-    logger.addHandler(perf_handler)
-
-    logger.info(f"Logger configurado para output JSON estruturado. Bot: {bot_name}")
+    logger.info(f"Logger configurado para output de console (stderr). Bot: {bot_name}")
 
 def log_table(title, data, headers="keys", tablefmt="heavy_grid"):
     try:

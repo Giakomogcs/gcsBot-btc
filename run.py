@@ -112,55 +112,46 @@ def status():
 def logs(
     bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="Nome do bot para ver os logs.")
 ):
-    """Acompanha os logs de um bot específico."""
-    log_file_path = ""
+    """Acompanha os logs de um bot específico em execução."""
+    running_bots = process_manager.sync_and_get_running_bots()
+    if not running_bots:
+        print("ℹ️ Nenhum bot em execução para ver os logs.")
+        raise typer.Exit()
 
+    bot_to_log = None
     if bot_name:
-        # Check if a log file exists for this bot
-        potential_log_file = f"logs/{bot_name}.jsonl"
-        if os.path.exists(potential_log_file):
-            log_file_path = potential_log_file
-        else:
-            print(f"❌ Nenhum arquivo de log encontrado para o bot '{bot_name}' em '{potential_log_file}'.")
+        bot_to_log = next((b for b in running_bots if b.bot_name == bot_name), None)
+        if not bot_to_log:
+            print(f"❌ Bot '{bot_name}' não está em execução.")
             raise typer.Exit(1)
     else:
-        # Se nenhum bot for especificado, mostre um menu interativo
-        log_files = glob.glob("logs/*.jsonl")
-        # Excluir logs de performance da seleção principal
-        log_files = [f for f in log_files if not f.endswith("_performance.jsonl")]
-
-        if not log_files:
-            print("ℹ️ Nenhum arquivo de log de bot encontrado na pasta 'logs/'.")
-            raise typer.Exit()
-
         if questionary is None:
             print("❌ A biblioteca 'questionary' é necessária para o modo interativo.")
             raise typer.Exit(1)
 
-        # Extrai nomes de bots dos nomes de arquivo
-        bot_choices = [os.path.basename(f).replace(".jsonl", "") for f in log_files]
-
-        selected_bot = questionary.select(
+        bot_choices = [b.bot_name for b in running_bots]
+        selected_name = questionary.select(
             "Selecione o bot para ver os logs:",
             choices=sorted(bot_choices)
         ).ask()
 
-        if not selected_bot:
+        if not selected_name:
             print("👋 Operação cancelada.")
             raise typer.Exit()
 
-        log_file_path = f"logs/{selected_bot}.jsonl"
+        bot_to_log = next((b for b in running_bots if b.bot_name == selected_name), None)
 
-    print(f"📄 Acompanhando logs de '{log_file_path}'...")
+    if not bot_to_log:
+        print("❌ Seleção inválida.")
+        raise typer.Exit(1)
+
+    print(f"📄 Acompanhando logs do bot '{bot_to_log.bot_name}' (Container: {bot_to_log.container_id[:12]})...")
     print("   (Pressione Ctrl+C para parar)")
     try:
-        # Usamos 'tail -f' para acompanhar o arquivo de log
-        # Isso é mais eficiente do que ler o arquivo em Python
-        subprocess.run(["tail", "-f", log_file_path])
+        # Usamos 'docker logs -f' para acompanhar os logs do container em tempo real
+        subprocess.run(["docker", "logs", "-f", bot_to_log.container_id])
     except KeyboardInterrupt:
         print("\n🛑 Acompanhamento de logs interrompido.")
-    except FileNotFoundError:
-        print(f"❌ Comando 'tail' não encontrado. Esta função pode não funcionar no seu sistema (comum no Windows).")
     except Exception as e:
         print(f"❌ Erro ao obter logs: {e}")
 
@@ -334,8 +325,7 @@ def trade(
         )
 
         if container_id:
-            log_file = f"logs/{final_bot_name}.jsonl"
-            process_manager.add_running_bot(final_bot_name, container_id, mode, log_file)
+            process_manager.add_running_bot(final_bot_name, container_id, mode)
             print(f"✅ Bot '{final_bot_name}' iniciado com sucesso em segundo plano.")
             print(f"   ID do Container: {container_id[:12]}")
             print(f"   Para ver os logs, use: python run.py logs --bot-name {final_bot_name}")
@@ -375,8 +365,7 @@ def test(
         )
 
         if container_id:
-            log_file = f"logs/{final_bot_name}.jsonl"
-            process_manager.add_running_bot(final_bot_name, container_id, mode, log_file)
+            process_manager.add_running_bot(final_bot_name, container_id, mode)
             print(f"✅ Bot '{final_bot_name}' iniciado com sucesso em segundo plano.")
             print(f"   ID do Container: {container_id[:12]}")
             print(f"   Para ver os logs, use: python run.py logs --bot-name {final_bot_name}")
@@ -406,13 +395,13 @@ def list_bots():
 
     # Prepara os dados para a tabela
     from tabulate import tabulate
-    headers = ["Bot Name", "Mode", "Container ID", "Log File", "Start Time"]
+    headers = ["Bot Name", "Mode", "Container ID", "Status", "Start Time"]
     table_data = [
         [
             bot.bot_name,
             bot.bot_mode,
-            bot.container_id[:12], # Mostra o ID curto para legibilidade
-            bot.log_file,
+            bot.container_id[:12],
+            "Running",
             bot.start_time
         ]
         for bot in running_bots
@@ -711,24 +700,62 @@ def display(
         "--bot-name",
         "-n",
         help="O nome do bot para visualizar. Se não for fornecido, um menu de seleção será exibido."
-    ),
-    mode: str = typer.Option(
-        "test", "--mode", "-m", help="O modo de operação a ser monitorado ('trade' ou 'test')."
     )
 ):
-    """Inicia o display (TUI) para monitoramento e controle."""
-    final_bot_name = _setup_bot_run(bot_name)
+    """Inicia o display (TUI) para monitoramento e controle de um bot em execução."""
+    running_bots = process_manager.sync_and_get_running_bots()
+    if not running_bots:
+        print("ℹ️ Nenhum bot em execução para monitorar.")
+        raise typer.Exit()
 
-    print(f"🚀 Iniciando o display para o bot '{final_bot_name}' no modo '{mode.upper()}'...")
-    print("   Lembre-se que o bot (usando 'trade' ou 'test') deve estar rodando em outro terminal.")
+    bot_to_display = None
+    if bot_name:
+        bot_to_display = next((b for b in running_bots if b.bot_name == bot_name), None)
+        if not bot_to_display:
+            print(f"❌ Bot '{bot_name}' não está em execução.")
+            raise typer.Exit(1)
+    else:
+        if questionary is None:
+            print("❌ A biblioteca 'questionary' é necessária para o modo interativo.")
+            raise typer.Exit(1)
 
-    command_to_run = ["tui/app.py", "--mode", mode]
+        bot_choices = [b.bot_name for b in running_bots]
+        selected_name = questionary.select(
+            "Selecione o bot para monitorar:",
+            choices=sorted(bot_choices)
+        ).ask()
 
-    _run_in_container(
-        command=command_to_run,
-        bot_name=final_bot_name,
-        interactive=True
-    )
+        if not selected_name:
+            print("👋 Operação cancelada.")
+            raise typer.Exit()
+
+        bot_to_display = next((b for b in running_bots if b.bot_name == selected_name), None)
+
+    if not bot_to_display:
+        print("❌ Seleção inválida.")
+        raise typer.Exit(1)
+
+    print(f"🚀 Iniciando o display para o bot '{bot_to_display.bot_name}' no modo '{bot_to_display.bot_mode.upper()}'...")
+
+    command_to_run = ["tui/app.py", "--mode", bot_to_display.bot_mode, "--container-id", bot_to_display.container_id]
+
+    # O display da TUI é executado diretamente no host, não dentro do container 'app'
+    # para garantir que ele tenha acesso ao docker e outros comandos do sistema.
+    try:
+        # Passa o BOT_NAME como variável de ambiente para que a TUI saiba para qual bot buscar dados.
+        tui_env = os.environ.copy()
+        tui_env["BOT_NAME"] = bot_to_display.bot_name
+
+        # Usamos `sys.executable` para garantir que estamos usando o mesmo interpretador Python
+        # que está executando run.py
+        full_command = [sys.executable, "-m"] + command_to_run
+
+        print(f"   (executando: `{' '.join(full_command)}`)")
+        subprocess.run(full_command, env=tui_env, check=True)
+
+    except Exception as e:
+        print(f"❌ Erro ao iniciar o display: {e}")
+
     print("\n✅ Display encerrado.")
 
 

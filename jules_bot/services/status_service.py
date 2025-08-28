@@ -142,7 +142,15 @@ class StatusService:
             trade_history = self.db_manager.get_all_trades_in_range(mode=environment, bot_id=bot_id) or []
             trade_history_dicts = [trade.to_dict() for trade in trade_history]
 
+            # Determine high-level bot status
+            bot_status_db = self.db_manager.get_bot_status(bot_id)
+            if bot_status_db and bot_status_db.is_running:
+                bot_status_str = "RUNNING"
+            else:
+                bot_status_str = "STOPPED"
+
             return {
+                "bot_status": bot_status_str,
                 "mode": environment,
                 "symbol": "BTC/USDT",
                 "current_btc_price": current_price,
@@ -167,7 +175,7 @@ class StatusService:
             return {"error": "Database connection failed.", "details": str(e)}
         except Exception as e:
             logger.error(f"Error getting extended status: {e}", exc_info=True)
-            return {"error": str(e)}
+            return {"error": str(e), "bot_status": "ERROR"}
 
     def _calculate_buy_condition_details(self, reason: str, market_data: dict, current_params: dict, should_buy: bool) -> tuple[str, Decimal, str]:
         """
