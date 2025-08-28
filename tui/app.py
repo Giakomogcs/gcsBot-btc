@@ -430,10 +430,10 @@ class TUIApp(App):
         # Dynamically show/hide widgets based on the context
         is_info_only = condition_label == "INFO"
 
-        self.query_one("#strategy_buy_reason").set_class(is_info_only, "hidden", not is_info_only)
-        self.query_one("#strategy_buy_target").set_class(not is_info_only, "hidden", is_info_only)
-        self.query_one("#strategy_buy_target_percentage").set_class(not is_info_only, "hidden", is_info_only)
-        self.query_one("#strategy_buy_progress").set_class(not is_info_only, "hidden", is_info_only)
+        self.query_one("#strategy_buy_reason").set_class(not is_info_only, "hidden")
+        self.query_one("#strategy_buy_target").set_class(is_info_only, "hidden")
+        self.query_one("#strategy_buy_target_percentage").set_class(is_info_only, "hidden")
+        self.query_one("#strategy_buy_progress").set_class(is_info_only, "hidden")
 
         if is_info_only:
             # When no specific target, show the generic reason from the bot
