@@ -69,6 +69,10 @@ def main():
     try:
         logger.info("--- Starting New Backtest Simulation ---")
         
+        # Initialize ConfigManager first
+        bot_name = os.getenv("BOT_NAME", "jules_bot")
+        config_manager.initialize(bot_name)
+
         db_manager = PostgresManager()
 
         if args.clear_backtest_trades:
