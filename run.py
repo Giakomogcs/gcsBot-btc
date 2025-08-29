@@ -66,9 +66,19 @@ def _ensure_env_is_running():
         result = subprocess.run(check_command, capture_output=True, text=True, check=False)
         if not result.stdout.strip():
             print("🚀 Ambiente Docker não detectado. Iniciando serviços de suporte (PostgreSQL, etc.)...")
-            if not run_docker_compose_command(["up", "-d", "--build"], capture_output=True):
-                print("❌ Falha ao iniciar o ambiente Docker. Verifique a sua instalação do Docker.")
+            
+            print("   -> Etapa 1: Construindo a imagem da aplicação (isso pode levar um momento)...")
+            # Run build with streaming output for better user feedback by setting capture_output=False
+            if not run_docker_compose_command(["build"], capture_output=False):
+                print("❌ Falha ao construir a imagem Docker. Verifique a sua instalação do Docker e o Dockerfile.")
                 return False
+
+            print("\n   -> Etapa 2: Iniciando os containers em background...")
+            # Run 'up' without build, as it's already done
+            if not run_docker_compose_command(["up", "-d"], capture_output=True):
+                print("❌ Falha ao iniciar os containers Docker. Verifique a sua instalação do Docker.")
+                return False
+            
             print("✅ Serviços de ambiente iniciados com sucesso.")
     except Exception as e:
         print(f"❌ Erro inesperado ao verificar o ambiente Docker: {e}")
@@ -430,6 +440,20 @@ def _interactive_bot_selection() -> str:
         print("👋 Operação cancelada.")
         raise typer.Exit()
     return selected_bot_name
+
+@app.command()
+def validate(bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="O nome do bot para validar.")):
+    """Executa o script de validação de dados no container."""
+    if not _ensure_env_is_running():
+        raise typer.Exit(1)
+    
+    final_bot_name = _setup_bot_run(bot_name)
+    print(f"🔎 Executando script de validação de dados para o bot '{final_bot_name}'...")
+    if not run_command_in_container(["scripts/validate_trade_data.py", final_bot_name], final_bot_name):
+        print("❌ Falha ao executar o script de validação.")
+    else:
+        print("✅ Script de validação concluído.")
+
 
 @app.command()
 def backtest(bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="O nome do bot para executar."), days: int = typer.Option(30, "--days", "-d", help="Número de dias de dados recentes para o backtest.")):

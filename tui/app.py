@@ -147,9 +147,10 @@ class TUIApp(App):
                             with VerticalScroll(id="portfolio_and_positions"):
                                 yield Static("Wallet Balances", classes="title")
                                 yield DataTable(id="wallet_table")
+                                yield Static("Positions Summary", classes="title")
+                                yield Label("Summary: N/A", id="positions_summary_label")
                         with Vertical(id="open_positions"):
                             yield Static("Open Positions", classes="title")
-                            yield Label("Summary: N/A", id="positions_summary_label")
                             yield DataTable(id="positions_table")
             with TabPane("Trade History", id="history"):
                 with Vertical():
@@ -159,10 +160,11 @@ class TUIApp(App):
                         yield Button("Calendar", id="calendar_button")
                         yield Button("Filter", id="filter_history_button")
                     yield Label("Summary: N/A", id="history_summary_label")
-                    yield DataTable(id="history_table", classes="history_table")
-                    with Vertical(id="portfolio_chart_container"):
-                        yield Static("Portfolio Value History", classes="title", id="portfolio_title")
-                        yield PlotextPlot(id="portfolio_chart")
+                    with Horizontal():
+                        yield DataTable(id="history_table", classes="history_table")
+                        with Vertical(id="portfolio_chart_container"):
+                            yield Static("Portfolio Value History", classes="title", id="portfolio_title")
+                            yield PlotextPlot(id="portfolio_chart")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -218,7 +220,7 @@ class TUIApp(App):
 
             self.call_from_thread(self.log_display.write, f"[dim]TUI worker using network: {docker_network_name}[/dim]")
 
-            docker_command = SUDO_PREFIX + ["docker", "run", "--rm", "--network", docker_network_name, "--env-file", ".env", "-e", f"BOT_NAME={self.bot_name}", "-v", f"{project_root}:/app", docker_image_name] + command
+            docker_command = SUDO_PREFIX + ["docker", "run", "--rm", "--network", docker_network_name, "--env-file", ".env", "-e", f"BOT_NAME={self.bot_name}", "-e", f"BOT_MODE={self.mode}", "-v", f"{project_root}:/app", docker_image_name] + command
             process = subprocess.run(docker_command, capture_output=True, text=True, check=False, encoding='utf-8', errors='replace')
             output = process.stdout.strip() if process.returncode == 0 else process.stderr.strip()
             success = process.returncode == 0

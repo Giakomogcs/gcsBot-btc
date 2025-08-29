@@ -53,10 +53,20 @@
 }
 
 #positions_table,
-#wallet_table,
-#history_table {
+#wallet_table {
   margin-top: 1;
   max-height: 25;
+}
+
+#history_table {
+  width: 70%;
+  height: 100%;
+}
+
+#portfolio_chart_container {
+  width: 30%;
+  height: 100%;
+  padding-left: 1;
 }
 
 #log_display {

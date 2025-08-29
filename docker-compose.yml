@@ -30,6 +30,7 @@ services:
 
   app:
     build: .
+    image: gcsbot-btc-app
     container_name: gcsbot-app
     depends_on:
       postgres:

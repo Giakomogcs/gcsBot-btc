@@ -41,6 +41,36 @@ def main():
         db_manager = PostgresManager()
         market_data_provider = MarketDataProvider(db_manager=db_manager)
 
+        # --- Sincronização de Histórico ---
+        # Antes de iniciar o bot, garante que o banco de dados local está
+        # sincronizado com o histórico de trades da exchange.
+        try:
+            from jules_bot.core.exchange_connector import ExchangeManager
+            from jules_bot.bot.synchronization_manager import SynchronizationManager
+
+            logger.info("Iniciando a sincronização do histórico de trades com a Binance...")
+            
+            # O SynchronizationManager precisa de um cliente de exchange autenticado
+            exchange_manager = ExchangeManager(mode=bot_mode)
+            
+            # E precisa do nome do símbolo para buscar os trades corretos
+            symbol = config_manager.get('APP', 'symbol')
+
+            sync_manager = SynchronizationManager(
+                binance_client=exchange_manager.client,
+                db_manager=db_manager,
+                symbol=symbol,
+                environment=bot_mode
+            )
+            sync_manager.run_full_sync()
+            logger.info("Sincronização do histórico de trades concluída com sucesso.")
+
+        except Exception as e:
+            logger.error(f"Ocorreu um erro durante a sincronização do histórico de trades: {e}", exc_info=True)
+            # Decide se o bot deve continuar mesmo com a falha na sincronização.
+            # Por segurança, é melhor parar.
+            raise RuntimeError("Falha na sincronização do histórico, abortando a inicialização do bot.")
+
         # --- Instanciação do Bot ---
         # O nome do bot é para configuração. O run_id é para identificar esta sessão específica.
         run_id = str(uuid.uuid4())

@@ -7,7 +7,7 @@ from typing import Optional, Iterator
 from datetime import datetime
 import pandas as pd
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, desc, and_, text, inspect
+from sqlalchemy import create_engine, desc, and_, text, inspect, asc
 from sqlalchemy.orm import sessionmaker, Session
 from contextlib import contextmanager
 from jules_bot.core.schemas import TradePoint
@@ -224,6 +224,24 @@ class PostgresManager:
                 logger.error(f"DB: Failed to get price data: {e}", exc_info=True)
                 return pd.DataFrame()
 
+    def get_oldest_open_buy_trade(self) -> Optional[Trade]:
+        """
+        Fetches the oldest open 'buy' trade from the database.
+        This is used for FIFO sell logic.
+        """
+        with self.get_db() as db:
+            try:
+                trade = db.query(Trade).filter(
+                    and_(
+                        Trade.status == "OPEN",
+                        Trade.order_type == "buy"
+                    )
+                ).order_by(asc(Trade.timestamp)).first()
+                return trade
+            except Exception as e:
+                logger.error(f"Failed to get oldest open buy trade: {e}", exc_info=True)
+                return None
+
     def get_open_positions(self, environment: str, bot_id: Optional[str] = None, symbol: Optional[str] = None) -> list:
         """
         Fetches open positions for a given environment.
@@ -396,7 +414,7 @@ class PostgresManager:
                 logger.error(f"Failed to check for open positions: {e}", exc_info=True)
                 raise
 
-    def get_all_trades_in_range(self, mode: Optional[str] = None, symbol: Optional[str] = None, bot_id: Optional[str] = None, start_date: any = "-90d", end_date: any = "now()"):
+    def get_all_trades_in_range(self, mode: Optional[str] = None, symbol: Optional[str] = None, bot_id: Optional[str] = None, start_date: any = None, end_date: any = "now()"):
         with self.get_db() as db:
             try:
                 query = db.query(Trade).order_by(desc(Trade.timestamp))
@@ -446,18 +464,22 @@ class PostgresManager:
                 logger.error(f"Failed to get trades by run_id '{run_id}': {e}", exc_info=True)
                 raise
 
-    def get_last_trade_id(self, environment: str) -> int:
+    def get_last_binance_trade_id(self) -> int:
         """
-        Fetches the ID of the last trade for a given environment from the database.
+        Fetches the ID of the most recent trade in the database based on binance_trade_id.
+        This is used to know where to start the next sync from.
         """
         with self.get_db() as db:
             try:
-                last_trade = db.query(Trade).filter(Trade.environment == environment).order_by(desc(Trade.binance_trade_id)).first()
+                # No environment filter, we want the absolute last trade ID recorded for this bot
+                last_trade = db.query(Trade).order_by(desc(Trade.binance_trade_id)).first()
                 if last_trade and last_trade.binance_trade_id is not None:
+                    logger.info(f"Last known Binance trade ID is {last_trade.binance_trade_id}")
                     return last_trade.binance_trade_id
+                logger.info("No existing Binance trade ID found in the database, will sync from the beginning.")
                 return 0
             except Exception as e:
-                logger.error(f"Failed to get last trade ID from DB: {e}", exc_info=True)
+                logger.error(f"Failed to get last binance trade ID from DB: {e}", exc_info=True)
                 return 0
 
     def update_trade_quantity(self, trade_id: str, new_quantity: float):
