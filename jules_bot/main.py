@@ -61,6 +61,10 @@ def main():
 
     except Exception as e:
         logger.critical(f"Erro fatal ao executar o bot: {e}", exc_info=True)
+        # Manter o container vivo por um tempo para permitir a inspeção de logs em ambientes Docker.
+        import time
+        logger.info("Ocorreu um erro fatal. O bot irá encerrar em 5 minutos. Use 'docker logs' para inspecionar o erro.")
+        time.sleep(300)
         sys.exit(1)
     finally:
         logger.info("--- Encerrando o bot ---")
