@@ -198,7 +198,7 @@ class StateManager:
                 "commission_asset": binance_trade['commissionAsset'],
                 "exchange_order_id": str(binance_trade['orderId']),
                 "binance_trade_id": int(binance_trade['id']),
-                "timestamp": pd.to_datetime(binance_trade['time'], unit='ms', tz='UTC'),
+                "timestamp": pd.to_datetime(binance_trade['time'], unit='ms', tz='UTC').to_pydatetime(),
                 "decision_context": {"reason": "sync_from_binance_buy"},
                 "environment": self.mode, "status": "OPEN", "order_type": "buy",
                 "sell_target_price": sell_target_price
@@ -223,7 +223,7 @@ class StateManager:
                 'usd_value': sell_price * quantity_sold,
                 'commission': Decimal(str(binance_sell_trade['commission'])),
                 'commission_asset': binance_sell_trade['commissionAsset'],
-                'timestamp': pd.to_datetime(binance_sell_trade['time'], unit='ms', tz='UTC'),
+                'timestamp': pd.to_datetime(binance_sell_trade['time'], unit='ms', tz='UTC').to_pydatetime(),
                 'exchange_order_id': str(binance_sell_trade['orderId']),
                 'binance_trade_id': int(binance_sell_trade['id']),
                 'decision_context': {'reason': 'sync_from_binance_sell'},
