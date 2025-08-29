@@ -162,55 +162,32 @@ class PostgresManager:
 
     def log_trade(self, trade_point: TradePoint):
         """
-        Logs a trade to the database by creating a new record.
-        Updates to existing trades should be handled by specific update methods.
+        Logs a trade to the database. It can handle both creating a new trade
+        and updating an existing one based on the 'trade_id'.
         """
         with self.get_db() as db:
             try:
-                logger.info(f"Creating new trade record for trade_id: {trade_point.trade_id}")
-                new_trade = Trade(**trade_point.__dict__)
-                db.add(new_trade)
+                # Check if a trade with this trade_id already exists
+                existing_trade = db.query(Trade).filter(Trade.trade_id == trade_point.trade_id).first()
+
+                if existing_trade:
+                    # Update existing trade
+                    logger.info(f"Updating existing trade record for trade_id: {trade_point.trade_id}")
+                    for key, value in trade_point.__dict__.items():
+                        if value is not None:
+                            setattr(existing_trade, key, value)
+                else:
+                    # Create new trade
+                    logger.info(f"Creating new trade record for trade_id: {trade_point.trade_id}")
+                    new_trade = Trade(**trade_point.__dict__)
+                    db.add(new_trade)
+
                 db.commit()
-                logger.info(f"Successfully logged '{new_trade.order_type}' for trade_id: {trade_point.trade_id}")
+                logger.info(f"Successfully logged '{trade_point.order_type}' for trade_id: {trade_point.trade_id}")
+
             except Exception as e:
                 db.rollback()
                 logger.error(f"Failed to log trade to PostgreSQL: {e}", exc_info=True)
-
-    def update_trade_on_sell(self, trade_id: str, sell_data: dict):
-        """
-        Updates an existing trade record with sell-side information, marking it as 'CLOSED'.
-        """
-        with self.get_db() as db:
-            try:
-                trade_to_update = db.query(Trade).filter(Trade.trade_id == trade_id).first()
-
-                if not trade_to_update:
-                    logger.error(f"DB: Could not find trade with trade_id '{trade_id}' to update with sell data.")
-                    return
-
-                logger.info(f"DB: Updating and closing trade {trade_id} with sell information.")
-
-                trade_to_update.status = 'CLOSED'
-                trade_to_update.order_type = 'sell' # Reflects the last action on the trade
-
-                # Update all relevant fields from the sell_data dictionary
-                trade_to_update.price = sell_data.get('price', trade_to_update.price)
-                trade_to_update.quantity = sell_data.get('quantity', trade_to_update.quantity)
-                trade_to_update.usd_value = sell_data.get('usd_value', trade_to_update.usd_value)
-                trade_to_update.commission = sell_data.get('commission', trade_to_update.commission)
-                trade_to_update.timestamp = sell_data.get('timestamp', trade_to_update.timestamp)
-                trade_to_update.decision_context = sell_data.get('decision_context', trade_to_update.decision_context)
-                trade_to_update.commission_usd = sell_data.get('commission_usd')
-                trade_to_update.realized_pnl_usd = sell_data.get('realized_pnl_usd')
-                trade_to_update.hodl_asset_amount = sell_data.get('hodl_asset_amount')
-                trade_to_update.hodl_asset_value_at_sell = sell_data.get('hodl_asset_value_at_sell')
-
-                db.commit()
-                logger.info(f"DB: Successfully updated and closed trade {trade_id}.")
-
-            except Exception as e:
-                db.rollback()
-                logger.error(f"DB: Failed to update trade on sell for trade_id '{trade_id}': {e}", exc_info=True)
                 raise
 
     def get_price_data(self, measurement: str, start_date: str = "-30d", end_date: str = "now()") -> pd.DataFrame:

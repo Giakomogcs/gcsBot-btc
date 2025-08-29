@@ -49,13 +49,13 @@ class Trade(Base):
     binance_trade_id = Column(Integer)
     decision_context = Column(JSON)
     sell_target_price = Column(Numeric(20, 8))
+    sell_price = Column(Numeric(20, 8))
+    sell_usd_value = Column(Numeric(20, 8))
     commission_usd = Column(Numeric(20, 8))
     realized_pnl_usd = Column(Numeric(20, 8))
     hodl_asset_amount = Column(Numeric(20, 8))
     hodl_asset_value_at_sell = Column(Numeric(20, 8))
     backtest_id = Column(String)
-    realized_pnl = Column(Numeric(20, 8))
-    held_quantity = Column(Numeric(20, 8))
 
 class BotStatus(Base):
     __tablename__ = 'bot_status'

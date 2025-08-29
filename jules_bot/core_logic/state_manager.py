@@ -215,14 +215,17 @@ class StateManager:
         try:
             sell_price = Decimal(str(binance_sell_trade['price']))
             sell_trade_id = str(uuid.uuid4())
+            sell_usd_value = sell_price * quantity_sold
 
             sell_data = {
                 'run_id': original_buy_trade.run_id, 'environment': self.mode,
                 'strategy_name': original_buy_trade.strategy_name, 'symbol': original_buy_trade.symbol,
                 'trade_id': sell_trade_id, 'linked_trade_id': original_buy_trade.trade_id,
                 'exchange': original_buy_trade.exchange, 'status': 'CLOSED', 'order_type': 'sell',
-                'price': sell_price, 'quantity': quantity_sold,
-                'usd_value': sell_price * quantity_sold,
+                'price': original_buy_trade.price, 'quantity': quantity_sold,
+                'usd_value': original_buy_trade.price * quantity_sold,
+                'sell_price': sell_price,
+                'sell_usd_value': sell_usd_value,
                 'commission': Decimal(str(binance_sell_trade['commission'])),
                 'commission_asset': binance_sell_trade['commissionAsset'],
                 'timestamp': datetime.utcfromtimestamp(binance_sell_trade['time'] / 1000).replace(tzinfo=timezone.utc),
@@ -316,9 +319,11 @@ class StateManager:
             'exchange': original_trade.exchange,
             'status': 'CLOSED',  # A sell action is always final
             'order_type': 'sell',
-            'price': Decimal(str(sell_data['price'])),
+            'price': original_trade.price,
             'quantity': Decimal(str(sell_data['quantity'])),
-            'usd_value': Decimal(str(sell_data['usd_value'])),
+            'usd_value': original_trade.price * Decimal(str(sell_data['quantity'])),
+            'sell_price': Decimal(str(sell_data['price'])),
+            'sell_usd_value': Decimal(str(sell_data['usd_value'])),
             'commission': Decimal(str(sell_data.get('commission', '0'))),
             'commission_asset': sell_data.get('commission_asset'),
             'timestamp': datetime.utcfromtimestamp(sell_data['timestamp'] / 1000).replace(tzinfo=timezone.utc),
@@ -383,9 +388,11 @@ class StateManager:
             'exchange': original_trade.exchange,
             'status': 'CLOSED',
             'order_type': 'sell',
-            'price': Decimal(str(sell_result['price'])),
+            'price': original_trade.price,
             'quantity': Decimal(str(sell_result['quantity'])),
-            'usd_value': Decimal(str(sell_result['usd_value'])),
+            'usd_value': original_trade.price * Decimal(str(sell_result['quantity'])),
+            'sell_price': Decimal(str(sell_result['price'])),
+            'sell_usd_value': Decimal(str(sell_result['usd_value'])),
             'commission': Decimal(str(sell_result.get('commission', '0'))),
             'commission_asset': sell_result.get('commission_asset'),
             'timestamp': datetime.utcfromtimestamp(sell_result['timestamp'] / 1000).replace(tzinfo=timezone.utc),

@@ -37,24 +37,6 @@ class TradeLogger:
             logger.error(f"TradeLogger: An unexpected error occurred while logging trade: {e}", exc_info=True)
             return False
 
-    def update_trade(self, trade_data: Dict[str, Any]):
-        """
-        Updates an existing trade in the database with sell-side information.
-        """
-        try:
-            trade_id = str(trade_data['trade_id'])
-            # We don't need a full TradePoint, just the data to update.
-            # The structure is validated implicitly by the db manager method.
-            self.db_manager.update_trade_on_sell(trade_id, trade_data)
-            logger.info(f"Successfully logged 'sell' trade for trade_id: {trade_id}")
-            return True
-        except KeyError as e:
-            logger.error(f"TradeLogger: Missing 'trade_id' for update. Error: {e}")
-            return False
-        except Exception as e:
-            logger.error(f"TradeLogger: An unexpected error occurred while updating trade: {e}", exc_info=True)
-            return False
-
     def _create_trade_point(self, trade_data: Dict[str, Any]) -> TradePoint:
         """Helper to create and validate a TradePoint from a dictionary."""
         return TradePoint(
@@ -69,6 +51,8 @@ class TradeLogger:
             price=float(trade_data['price']),
             quantity=float(trade_data['quantity']),
             usd_value=float(trade_data['usd_value']),
+            sell_price=float(trade_data.get('sell_price')) if trade_data.get('sell_price') is not None else None,
+            sell_usd_value=float(trade_data.get('sell_usd_value')) if trade_data.get('sell_usd_value') is not None else None,
             commission=float(trade_data.get('commission', 0.0)),
             commission_asset=str(trade_data.get('commission_asset', 'USDT')),
             timestamp=self._convert_timestamp(trade_data.get('timestamp')),

@@ -68,6 +68,21 @@ class StatusService:
                 session.rollback()
                 logger.error(f"Failed to set bot status to stopped for {bot_id}: {e}", exc_info=True)
 
+    def set_bot_running(self, bot_id: str, mode: str):
+        """Explicitly sets the bot's status to running."""
+        with self.db_manager.get_db() as session:
+            try:
+                status = session.query(BotStatus).filter(BotStatus.bot_id == bot_id).first()
+                if not status:
+                    status = BotStatus(bot_id=bot_id, mode=mode)
+                    session.add(status)
+                status.is_running = True
+                session.commit()
+                logger.info(f"Set bot '{bot_id}' status to RUNNING.")
+            except Exception as e:
+                session.rollback()
+                logger.error(f"Failed to set bot status to running for {bot_id}: {e}", exc_info=True)
+
     def get_extended_status(self, environment: str, bot_id: str):
         """
         Gathers and calculates extended status information, including

@@ -230,6 +230,12 @@ class TradingBot:
                     os.remove(filepath)
             except Exception as e:
                 logger.error(f"Error processing command file {filename}: {e}", exc_info=True)
+                # Attempt to remove the problematic file to prevent loop
+                try:
+                    os.remove(filepath)
+                    logger.warning(f"Removed problematic command file {filepath} to prevent command loop.")
+                except OSError as a:
+                    logger.error(f"Could not remove problematic command file {filepath}: {a}")
 
     def _calculate_buy_progress(self, market_data: dict, open_positions_count: int, current_params: dict) -> tuple[Decimal, Decimal]:
         """
@@ -282,22 +288,9 @@ class TradingBot:
         # Its transform method calculates regimes dynamically based on the data provided.
         logger.info("Situational Awareness model is rule-based and ready.")
 
-        # Immediately set the bot's status to RUNNING in the database.
-        # This fixes the TUI showing "STOPPED" during bot startup.
-        self.status_service.update_bot_status(
-            bot_id=self.bot_name,
-            mode=self.mode,
-            reason="Initializing...",
-            open_positions=0,
-            portfolio_value=Decimal('0'),
-            market_regime=-1,
-            operating_mode="Initializing",
-            buy_target=Decimal('0'),
-            buy_progress=Decimal('0')
-        )
-        
         if not self.trader.is_ready:
             logger.critical("Trader could not be initialized. Shutting down bot.")
+            self.shutdown()
             return
 
         state_manager.sync_holdings_with_binance(account_manager, strategy_rules, self.trader)
@@ -307,6 +300,8 @@ class TradingBot:
         state_manager.recalculate_open_position_targets(strategy_rules, sa_instance, dynamic_params)
         logger.info("Initial recalculation complete.")
 
+        # Now that initialization is complete, set the status to RUNNING
+        self.status_service.set_bot_running(self.bot_name, self.mode)
         logger.info(f"🚀 --- TRADING BOT STARTED --- BOT NAME: {self.bot_name} --- RUN ID: {self.run_id} --- SYMBOL: {self.symbol} --- MODE: {self.mode.upper()} --- 🚀")
 
         try:

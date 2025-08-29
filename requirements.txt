@@ -2,7 +2,7 @@
 
 # --- Core Libraries ---
 numpy==1.26.4
-pandas
+pandas==2.2.0
 setuptools
 
 # --- Machine Learning & AI ---
@@ -29,7 +29,6 @@ python-dotenv
 tqdm
 joblib
 tabulate
-psycopg2-binary
 questionary
 
 # --- Plotting ---

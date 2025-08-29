@@ -136,6 +136,7 @@ class TUIApp(App):
                                     yield Static("Price: N/A", id="status_price")
                                     yield Static("Wallet Value: N/A", id="status_wallet_usd")
                                     yield Static("Total PnL: N/A", id="status_total_pnl")
+                                    yield Static("Realized PnL: N/A", id="status_realized_pnl")
 
                                 yield Static("Strategy Status", classes="title")
                                 with Static(id="strategy_container"):
@@ -181,7 +182,7 @@ class TUIApp(App):
 
         history_table = self.query_one("#history_table", DataTable)
         history_table.cursor_type = "row"
-        history_table.add_columns("Timestamp", "Symbol", "Type", "Status", "Price", "Quantity", "USD Value", "PnL (USD)", "Trade ID")
+        history_table.add_columns("Timestamp", "Symbol", "Type", "Status", "Buy Price", "Sell Price", "Quantity", "USD Value", "PnL (USD)", "Trade ID")
 
         # Start background workers
         self.update_dashboard()
@@ -297,6 +298,11 @@ class TUIApp(App):
         pnl_color = "green" if total_pnl >= 0 else "red"
         self.query_one("#status_total_pnl").update(f"Total PnL: [{pnl_color}]${total_pnl:,.2f}[/]")
 
+        # Update Realized PnL
+        realized_pnl = Decimal(data.get("total_realized_pnl", 0))
+        realized_pnl_color = "green" if realized_pnl >= 0 else "red"
+        self.query_one("#status_realized_pnl").update(f"Realized PnL: [{realized_pnl_color}]${realized_pnl:,.2f}[/]")
+
         self.update_strategy_panel(data.get("buy_signal_status", {}), price)
         self.update_wallet_table(data.get("wallet_balances", []))
         self.update_positions_table(data.get("open_positions_status", []))
@@ -332,12 +338,16 @@ class TUIApp(App):
             timestamp = datetime.fromisoformat(trade['timestamp']).strftime('%Y-%m-%d %H:%M')
             trade_id_short = trade.get('trade_id', 'N/A').split('-')[0]
 
+            buy_price = f"${Decimal(trade.get('price', 0)):,.2f}"
+            sell_price = f"${Decimal(trade.get('sell_price', 0)):,.2f}" if trade.get('sell_price') else "N/A"
+
             table.add_row(
                 timestamp,
                 trade.get('symbol'),
                 type_cell,
                 trade.get('status'),
-                f"${Decimal(trade.get('price', 0)):,.2f}",
+                buy_price,
+                sell_price,
                 f"{Decimal(trade.get('quantity', 0)):.8f}",
                 f"${Decimal(trade.get('usd_value', 0)):,.2f}",
                 pnl_cell,
