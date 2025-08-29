@@ -191,17 +191,18 @@ class TUIApp(App):
     def run_script_worker(self, command: list[str], message_type: type[Message]) -> None:
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
         try:
-            # FIX: Use the network name passed from run.py, with a fallback for safety.
-            project_name = "gcsbot-btc" # This is used for the image name
+            project_name = os.getenv("PROJECT_NAME", "gcsbot-btc")
             docker_image_name = f"{project_name}-app"
             docker_network_name = os.getenv("DOCKER_NETWORK_NAME", f"{project_name}_default")
+
+            self.call_from_thread(self.log_display.write, f"[dim]TUI worker using network: {docker_network_name}[/dim]")
 
             docker_command = SUDO_PREFIX + ["docker", "run", "--rm", "--network", docker_network_name, "--env-file", ".env", "-e", f"BOT_NAME={self.bot_name}", "-v", f"{project_root}:/app", docker_image_name] + command
             process = subprocess.run(docker_command, capture_output=True, text=True, check=False, encoding='utf-8', errors='replace')
             output = process.stdout.strip() if process.returncode == 0 else process.stderr.strip()
             success = process.returncode == 0
             if not success:
-                self.call_from_thread(self.log_display.write, f"[bold red]Script Error ({command[1]}):[/] {output}")
+                self.call_from_thread(self.log_display.write, f"[bold red]Script Error ({' '.join(command)}):[/] {output}")
             try:
                 data = json.loads(process.stdout.strip())
                 self.post_message(message_type(data, success))
@@ -266,10 +267,10 @@ class TUIApp(App):
         if not self.trade_history_data:
             table.add_row("No trade history found.")
             return
-        sort_key_map = {"Timestamp": "timestamp", "Buy Price": "price", "Sell Price": "sell_price", "PnL (USD)": "realized_pnl_usd"}
+        sort_key_map = {"Timestamp": "timestamp", "Buy Price": "price", "Sell Price": "sell_price", "PnL (USD)": "realized_pnl_usd", "PnL (%)": "pnl_percentage"}
         sort_key = sort_key_map.get(self.history_sort_column, "timestamp")
         def sort_func(trade):
-            val = trade.get(sort_key)
+            val = trade.get(sort_key) if sort_key != 'pnl_percentage' else trade.get('decision_context', {}).get('pnl_percentage')
             if val is None: return -float('inf') if self.history_sort_reverse else float('inf')
             if sort_key == "timestamp": return val
             try: return Decimal(val)
@@ -297,7 +298,7 @@ class TUIApp(App):
                 except InvalidOperation: pnl_pct_cell = "err"
             table.add_row(timestamp, trade.get('symbol'), type_cell, trade.get('status'), buy_price, sell_price, f"{Decimal(trade.get('quantity', 0)):.8f}", f"${Decimal(trade.get('usd_value', 0)):,.2f}", pnl_cell, pnl_pct_cell if order_type == 'sell' else "N/A", trade_id_short, key=trade.get('trade_id'))
         table.scroll_y = scroll_y
-        if cursor_row < len(table.rows): table.cursor_row = cursor_row
+        if cursor_row < len(table.rows): table.scroll_to_row(cursor_row, animate=False)
 
     def on_command_output(self, message: CommandOutput) -> None:
         if message.success: self.log_display.write(f"[green]Command success:[/green] {message.output}")
@@ -358,7 +359,7 @@ class TUIApp(App):
             current_value = Decimal(pos.get('quantity', 0)) * Decimal(pos.get('current_price', 0))
             pos_table.add_row(pos.get("trade_id", "N/A").split('-')[0], f"${Decimal(pos.get('entry_price', 0)):,.2f}", f"${current_value:,.2f}", f"[{pnl_color}]${pnl:,.2f}[/]", f"${Decimal(pos.get('sell_target_price', 0)):,.2f}", f"${Decimal(pos.get('usd_to_target', 0)):,.2f}", progress_str, key=pos.get("trade_id"))
         pos_table.scroll_y = scroll_y
-        if cursor_row < len(pos_table.rows): pos_table.cursor_row = cursor_row
+        if cursor_row < len(pos_table.rows): pos_table.scroll_to_row(cursor_row, animate=False)
 
     def update_portfolio_chart(self, history: list):
         chart = self.query_one("#portfolio_chart", PlotextPlot)
