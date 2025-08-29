@@ -267,7 +267,7 @@ class TradingBot:
         self.reversal_monitoring_timeout_seconds = int(config_manager.get('STRATEGY_RULES', 'reversal_monitoring_timeout_seconds', fallback='300'))
 
         feature_calculator = LiveFeatureCalculator(self.db_manager, mode=self.mode)
-        status_service = StatusService(self.db_manager, config_manager, feature_calculator)
+        self.status_service = StatusService(self.db_manager, config_manager, feature_calculator)
         state_manager = StateManager(mode=self.mode, bot_id=self.run_id, db_manager=self.db_manager, feature_calculator=feature_calculator)
         account_manager = AccountManager(self.trader.client)
         strategy_rules = StrategyRules(config_manager)
@@ -484,8 +484,8 @@ class TradingBot:
                 buy_target, buy_progress = self._calculate_buy_progress(market_data, len(open_positions), current_params)
 
                 # Persist the latest status to the database for the TUI
-                status_service.update_bot_status(
-                    bot_id=self.run_id,
+                self.status_service.update_bot_status(
+                    bot_id=self.bot_name, # Use the persistent bot_name as the key
                     mode=self.mode,
                     reason=reason,
                     open_positions=len(open_positions),
@@ -511,4 +511,6 @@ class TradingBot:
 
     def shutdown(self):
         logger.info("[SHUTDOWN] Initiating graceful shutdown...")
+        if hasattr(self, 'status_service'):
+            self.status_service.set_bot_stopped(self.bot_name)
         logger.info("[SHUTDOWN] Cleanup complete. Goodbye!")
