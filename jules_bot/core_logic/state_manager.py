@@ -4,6 +4,7 @@ import math
 from datetime import datetime, timedelta, timezone
 from jules_bot.utils.logger import logger
 from jules_bot.database.postgres_manager import PostgresManager
+from jules_bot.database.models import Trade
 import uuid
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.services.trade_logger import TradeLogger
