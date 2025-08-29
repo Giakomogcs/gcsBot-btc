@@ -160,7 +160,9 @@ class StateManager:
 
                     # Create a new SELL record for this part of the transaction
                     buy_price = Decimal(str(open_pos.price))
+                    logger.info(f"MATCH: Matched sell trade {sell_trade['id']} (Qty: {quantity_to_sell_from_pos}) with buy trade {open_pos.trade_id} (Buy Price: ${buy_price:,.2f}).")
                     realized_pnl = strategy_rules.calculate_realized_pnl(buy_price, sell_price, quantity_to_sell_from_pos)
+                    logger.info(f"CALC PNL: Realized PnL for this portion is ${realized_pnl:,.2f}.")
 
                     self._create_sell_record_from_sync(open_pos, sell_trade, quantity_to_sell_from_pos, realized_pnl)
 
@@ -198,7 +200,7 @@ class StateManager:
                 "commission_asset": binance_trade['commissionAsset'],
                 "exchange_order_id": str(binance_trade['orderId']),
                 "binance_trade_id": int(binance_trade['id']),
-                "timestamp": pd.to_datetime(binance_trade['time'], unit='ms', tz='UTC').to_pydatetime(),
+                "timestamp": datetime.fromtimestamp(binance_trade['time'] / 1000, tz=timezone.utc),
                 "decision_context": {"reason": "sync_from_binance_buy"},
                 "environment": self.mode, "status": "OPEN", "order_type": "buy",
                 "sell_target_price": sell_target_price
@@ -223,7 +225,7 @@ class StateManager:
                 'usd_value': sell_price * quantity_sold,
                 'commission': Decimal(str(binance_sell_trade['commission'])),
                 'commission_asset': binance_sell_trade['commissionAsset'],
-                'timestamp': pd.to_datetime(binance_sell_trade['time'], unit='ms', tz='UTC').to_pydatetime(),
+                'timestamp': datetime.fromtimestamp(binance_sell_trade['time'] / 1000, tz=timezone.utc),
                 'exchange_order_id': str(binance_sell_trade['orderId']),
                 'binance_trade_id': int(binance_sell_trade['id']),
                 'decision_context': {'reason': 'sync_from_binance_sell'},
@@ -302,18 +304,32 @@ class StateManager:
 
         # 1. Create a new 'sell' record for the sold portion
         sell_trade_id = str(uuid.uuid4())
+        
+        # Explicitly construct the dictionary to ensure type safety and handle the timestamp correctly.
         sell_record_data = {
-            **sell_data,
             'run_id': self.bot_id,
+            'environment': self.mode,
+            'strategy_name': original_trade.strategy_name,
+            'symbol': original_trade.symbol,
             'trade_id': sell_trade_id,
             'linked_trade_id': original_trade_id,
-            'status': 'CLOSED', # A sell action is always final
-            'order_type': 'sell',
-            'realized_pnl_usd': sell_data.get('realized_pnl_usd'),
-            'strategy_name': original_trade.strategy_name,
-            'environment': self.mode,
             'exchange': original_trade.exchange,
+            'status': 'CLOSED',  # A sell action is always final
+            'order_type': 'sell',
+            'price': Decimal(str(sell_data['price'])),
+            'quantity': Decimal(str(sell_data['quantity'])),
+            'usd_value': Decimal(str(sell_data['usd_value'])),
+            'commission': Decimal(str(sell_data.get('commission', '0'))),
+            'commission_asset': sell_data.get('commission_asset'),
+            'timestamp': datetime.fromtimestamp(sell_data['timestamp'] / 1000, tz=timezone.utc),
+            'exchange_order_id': sell_data.get('exchange_order_id'),
+            'binance_trade_id': sell_data.get('binance_trade_id'),
+            'decision_context': sell_data.get('decision_context'),
+            'realized_pnl_usd': sell_data.get('realized_pnl_usd'),
+            'hodl_asset_amount': sell_data.get('hodl_asset_amount'),
+            'hodl_asset_value_at_sell': sell_data.get('hodl_asset_value_at_sell'),
         }
+
         self.trade_logger.log_trade(sell_record_data)
         logger.info(f"Created new SELL record {sell_trade_id} for partial sell of {original_trade_id}.")
 
@@ -338,6 +354,12 @@ class StateManager:
         """
         Records a new 'sell' trade to close a position after a forced sell,
         and updates the original 'buy' trade's status to 'CLOSED'.
+
+        Args:
+            trade_id: The ID of the original 'buy' trade to close.
+            sell_result: The result from trader.execute_sell(), containing the
+                         actual price, quantity, and usd_value of the sale.
+            realized_pnl: The calculated profit or loss for this trade.
         """
         logger.info(f"Force closing position {trade_id} with PnL: ${realized_pnl:.2f}")
 
@@ -348,17 +370,29 @@ class StateManager:
 
         # 1. Create a new 'sell' record
         sell_trade_id = str(uuid.uuid4())
+        
+        # Explicitly construct the dictionary to ensure type safety and handle the timestamp correctly.
+        # The 'timestamp' from the trader response is an integer, but TradeLogger expects a datetime object.
         sell_data = {
-            **sell_result,
             'run_id': self.bot_id,
+            'environment': self.mode,
+            'strategy_name': original_trade.strategy_name,
+            'symbol': original_trade.symbol,
             'trade_id': sell_trade_id,
-            'linked_trade_id': trade_id, # Link back to the original buy
+            'linked_trade_id': trade_id,
+            'exchange': original_trade.exchange,
             'status': 'CLOSED',
             'order_type': 'sell',
+            'price': Decimal(str(sell_result['price'])),
+            'quantity': Decimal(str(sell_result['quantity'])),
+            'usd_value': Decimal(str(sell_result['usd_value'])),
+            'commission': Decimal(str(sell_result.get('commission', '0'))),
+            'commission_asset': sell_result.get('commission_asset'),
+            'timestamp': datetime.fromtimestamp(sell_result['timestamp'] / 1000, tz=timezone.utc),
+            'exchange_order_id': sell_result.get('exchange_order_id'),
+            'binance_trade_id': sell_result.get('binance_trade_id'),
+            'decision_context': sell_result.get('decision_context'),
             'realized_pnl_usd': realized_pnl,
-            'strategy_name': original_trade.strategy_name,
-            'environment': self.mode,
-            'exchange': original_trade.exchange,
         }
 
         self.trade_logger.log_trade(sell_data)

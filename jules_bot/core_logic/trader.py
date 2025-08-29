@@ -332,6 +332,10 @@ class Trader:
         limit = 1000  # Max limit per request for myTrades endpoint
 
         logger.info(f"Fetching all historical trades for {symbol} from Binance...")
+        logger.warning(
+            "Please be aware that the Binance API may only return trades from the last 7 days. "
+            "If you have open positions from trades older than that, they may not be synchronized."
+        )
         
         while True:
             try:
