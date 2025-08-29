@@ -191,7 +191,12 @@ class TUIApp(App):
     def run_script_worker(self, command: list[str], message_type: type[Message]) -> None:
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
         try:
-            docker_command = SUDO_PREFIX + ["docker", "run", "--rm", "--network", f"{PROJECT_NAME}-btc_default", "--env-file", ".env", "-e", f"BOT_NAME={self.bot_name}", "-v", f"{project_root}:/app", f"{PROJECT_NAME}-app"] + command
+            # FIX: Use the network name passed from run.py, with a fallback for safety.
+            project_name = "gcsbot-btc" # This is used for the image name
+            docker_image_name = f"{project_name}-app"
+            docker_network_name = os.getenv("DOCKER_NETWORK_NAME", f"{project_name}_default")
+
+            docker_command = SUDO_PREFIX + ["docker", "run", "--rm", "--network", docker_network_name, "--env-file", ".env", "-e", f"BOT_NAME={self.bot_name}", "-v", f"{project_root}:/app", docker_image_name] + command
             process = subprocess.run(docker_command, capture_output=True, text=True, check=False, encoding='utf-8', errors='replace')
             output = process.stdout.strip() if process.returncode == 0 else process.stderr.strip()
             success = process.returncode == 0
