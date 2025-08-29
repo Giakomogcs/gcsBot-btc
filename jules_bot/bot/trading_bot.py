@@ -177,15 +177,35 @@ class TradingBot:
                         os.remove(filepath) # Remove invalid command
                         continue
 
-                    logger.info(f"Force selling {percentage}% of trade {trade_id}.")
+                    logger.info(f"Processing force sell for {percentage}% of trade {trade_id}.")
                     quantity_to_sell = Decimal(str(position.quantity)) * (percentage / Decimal("100"))
 
-                    # Ensure the quantity to sell is not zero or negative
+                    # Pre-flight check 1: Ensure quantity is positive
                     if quantity_to_sell <= 0:
                         logger.error(f"Calculated quantity to sell for trade {trade_id} is zero or less. Aborting.")
-                        os.remove(filepath) # Remove invalid command
+                        os.remove(filepath)
                         continue
 
+                    # Pre-flight check 2: Notional value check
+                    # We need the current price to perform this check
+                    current_price_str = self.trader.get_current_price(self.symbol)
+                    if current_price_str:
+                        current_price = Decimal(current_price_str)
+                        notional_value = quantity_to_sell * current_price
+                        min_notional_value = self.trader.min_notional
+
+                        if notional_value < min_notional_value:
+                            logger.error(
+                                f"Force sell command for trade {trade_id} aborted. "
+                                f"Notional value (${notional_value:,.2f}) is below the minimum required "
+                                f"by the exchange (${min_notional_value:,.2f})."
+                            )
+                            os.remove(filepath) # Remove the command to prevent retries
+                            continue
+                    else:
+                        logger.warning("Could not fetch current price to validate notional value. Skipping check.")
+
+                    logger.info(f"Executing force sell for trade {trade_id}, quantity: {quantity_to_sell:.8f}")
                     sell_position_data = position.to_dict()
                     sell_position_data['quantity'] = quantity_to_sell
 
@@ -344,13 +364,17 @@ class TradingBot:
                     available_balance = Decimal(self.trader.get_account_balance(asset=base_asset))
 
                     if total_sell_quantity > available_balance:
-                        logger.warning(f"INSUFFICIENT BALANCE: Bot state is out of sync. Attempting to sell {total_sell_quantity:.8f} {base_asset}, but only {available_balance:.8f} is available.")
-                        logger.info("Triggering state reconciliation with exchange balance.")
-                        state_manager.reconcile_holdings(self.symbol, self.trader)
+                        logger.critical(
+                            f"INSUFFICIENT BALANCE & STATE DESYNC: Attempting to sell {total_sell_quantity:.8f} {base_asset}, "
+                            f"but only {available_balance:.8f} is available on the exchange. "
+                            "This indicates a significant discrepancy between the bot's state and the exchange's reality. "
+                            "The bot will NOT proceed with the sell and will wait for the next sync cycle to correct the state."
+                        )
                     else:
                         for position in positions_to_sell:
                             trade_id = position.trade_id
                             original_quantity = Decimal(str(position.quantity))
+                            # sell_factor determines what percentage of the position to sell
                             sell_quantity = original_quantity * strategy_rules.sell_factor
                             hodl_asset_amount = original_quantity - sell_quantity
 
@@ -361,15 +385,23 @@ class TradingBot:
                             if success:
                                 buy_price = Decimal(str(position.price))
                                 sell_price = Decimal(str(sell_result.get('price')))
+                                # PnL is calculated based on the quantity *actually* sold
                                 realized_pnl_usd = strategy_rules.calculate_realized_pnl(buy_price, sell_price, sell_quantity)
                                 hodl_asset_value_at_sell = hodl_asset_amount * current_price
                                 commission_usd = Decimal(str(sell_result.get('commission', '0')))
+
                                 sell_result.update({
-                                    "commission_usd": commission_usd, "realized_pnl_usd": realized_pnl_usd,
-                                    "hodl_asset_amount": hodl_asset_amount, "hodl_asset_value_at_sell": hodl_asset_value_at_sell
+                                    "commission_usd": commission_usd,
+                                    "realized_pnl_usd": realized_pnl_usd,
+                                    "hodl_asset_amount": hodl_asset_amount,
+                                    "hodl_asset_value_at_sell": hodl_asset_value_at_sell
                                 })
+
+                                # The new logic handles partial sells correctly
                                 state_manager.record_partial_sell(
-                                    original_trade_id=trade_id, remaining_quantity=hodl_asset_amount, sell_data=sell_result
+                                    original_trade_id=trade_id,
+                                    remaining_quantity=hodl_asset_amount,
+                                    sell_data=sell_result
                                 )
                                 live_portfolio_manager.get_total_portfolio_value(current_price, force_recalculation=True)
                             else:
@@ -467,6 +499,9 @@ class TradingBot:
                 logger.info("--- Cycle complete. Waiting 30 seconds...")
                 time.sleep(30)
 
+            except NameError as e:
+                logger.critical(f"❌ A 'NameError' occurred in the main loop. This is often a typo in a variable name or an uninitialized variable.", exc_info=True)
+                time.sleep(60) # Sleep for a bit to avoid spamming logs if the error is persistent
             except KeyboardInterrupt:
                 self.is_running = False
                 logger.info("\n[SHUTDOWN] Ctrl+C detected.")

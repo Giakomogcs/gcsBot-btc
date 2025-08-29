@@ -177,7 +177,7 @@ class TUIApp(App):
 
         history_table = self.query_one("#history_table", DataTable)
         history_table.cursor_type = "row"
-        history_table.add_columns("Timestamp", "Symbol", "Type", "Status", "Price", "Quantity", "USD Value", "PnL (USD)")
+        history_table.add_columns("Timestamp", "Symbol", "Type", "Status", "Price", "Quantity", "USD Value", "PnL (USD)", "Trade ID")
 
         # Start background workers
         self.update_dashboard()
@@ -199,7 +199,7 @@ class TUIApp(App):
             return
         self.log_display.write(f"Streaming logs from container [yellow]{self.container_id[:12]}[/]")
         try:
-            process = subprocess.Popen(["docker", "logs", "-f", self.container_id], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace')
+            process = subprocess.Popen(["sudo", "docker", "logs", "-f", self.container_id], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace')
             worker = get_current_worker()
             while not worker.is_cancelled:
                 line = process.stdout.readline()
@@ -227,7 +227,7 @@ class TUIApp(App):
 
         try:
             docker_command = [
-                "docker", "run", "--rm", "--network", DOCKER_NETWORK_NAME,
+                "sudo", "docker", "run", "--rm", "--network", DOCKER_NETWORK_NAME,
                 "--env-file", ".env", "-e", f"BOT_NAME={self.bot_name}",
                 "-v", f"{project_root}:/app", DOCKER_IMAGE_NAME,
             ] + command
@@ -315,13 +315,29 @@ class TUIApp(App):
             return
         for trade in message.data:
             pnl = trade.get('realized_pnl_usd')
+            order_type = trade.get('order_type', 'N/A')
+
+            # --- Cell Formatting ---
             pnl_str = f"${Decimal(pnl):,.2f}" if pnl is not None else "N/A"
             pnl_color = "green" if pnl is not None and Decimal(pnl) >= 0 else "red"
+            pnl_cell = f"[{pnl_color}]{pnl_str}[/]" if order_type == 'sell' else "N/A"
+
+            type_color = "green" if order_type == 'buy' else "red"
+            type_cell = f"[{type_color}]{order_type.upper()}[/]"
+
             timestamp = datetime.fromisoformat(trade['timestamp']).strftime('%Y-%m-%d %H:%M')
+            trade_id_short = trade.get('trade_id', 'N/A').split('-')[0]
+
             table.add_row(
-                timestamp, trade.get('symbol'), trade.get('order_type'), trade.get('status'),
-                f"${Decimal(trade.get('price', 0)):,.2f}", f"{Decimal(trade.get('quantity', 0)):.8f}",
-                f"${Decimal(trade.get('usd_value', 0)):,.2f}", f"[{pnl_color}]{pnl_str}[/]",
+                timestamp,
+                trade.get('symbol'),
+                type_cell,
+                trade.get('status'),
+                f"${Decimal(trade.get('price', 0)):,.2f}",
+                f"{Decimal(trade.get('quantity', 0)):.8f}",
+                f"${Decimal(trade.get('usd_value', 0)):,.2f}",
+                pnl_cell,
+                trade_id_short,
                 key=trade.get('trade_id')
             )
 

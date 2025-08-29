@@ -35,6 +35,7 @@ class Trade(Base):
     strategy_name = Column(String, nullable=False)
     symbol = Column(String, nullable=False)
     trade_id = Column(String, nullable=False, unique=True)
+    linked_trade_id = Column(String, nullable=True, index=True) # Used to link a SELL back to a BUY
     exchange = Column(String, nullable=False)
     status = Column(String, nullable=False)
     order_type = Column(String, nullable=False)

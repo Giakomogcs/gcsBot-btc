@@ -147,7 +147,7 @@ class StatusService:
             total_realized_pnl = sum(
                 Decimal(str(trade.realized_pnl_usd))
                 for trade in full_trade_history
-                if trade.status == 'CLOSED' and trade.realized_pnl_usd is not None
+                if trade.order_type == 'sell' and trade.realized_pnl_usd is not None
             )
 
             trade_history_dicts = [trade.to_dict() for trade in full_trade_history]
@@ -178,7 +178,8 @@ class StatusService:
                     "buy_target_percentage_drop": buy_target_percentage_drop
                 },
                 "trade_history": trade_history_dicts,
-                "wallet_balances": wallet_balances
+                "wallet_balances": wallet_balances,
+                "total_realized_pnl": total_realized_pnl
             }
         except OperationalError as e:
             logger.error(f"Database connection error in StatusService: {e}", exc_info=True)
