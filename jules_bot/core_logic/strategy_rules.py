@@ -172,19 +172,28 @@ class StrategyRules:
             logger.error(f"Error calculating realized PnL: {e}", exc_info=True)
             return Decimal('0.0')
 
-    def calculate_net_unrealized_pnl(self, entry_price: Decimal, current_price: Decimal, total_quantity: Decimal) -> Decimal:
+    def calculate_net_unrealized_pnl(self, entry_price: Decimal, current_price: Decimal, total_quantity: Decimal, buy_commission_usd: Decimal) -> Decimal:
         """
-        Calculates the net unrealized PnL for an open position using Decimal.
+        Calculates the net unrealized PnL for an open position, accounting for buy
+        commission and estimated sell commission.
         """
-        entry_price = Decimal(entry_price)
-        current_price = Decimal(current_price)
-        total_quantity = Decimal(total_quantity)
+        try:
+            entry_price = Decimal(entry_price)
+            current_price = Decimal(current_price)
+            total_quantity = Decimal(total_quantity)
+            buy_commission_usd = Decimal(buy_commission_usd) if buy_commission_usd is not None else Decimal('0')
 
-        quantity_to_sell = total_quantity * self.sell_factor
-        
-        net_unrealized_pnl = self.calculate_realized_pnl(
-            buy_price=entry_price,
-            sell_price=current_price,
-            quantity_sold=quantity_to_sell
-        )
-        return net_unrealized_pnl
+            # Gross PnL is the change in value of the asset
+            gross_pnl = (current_price - entry_price) * total_quantity
+
+            # Estimate the commission for selling the asset at the current price
+            estimated_sell_value = current_price * total_quantity
+            estimated_sell_commission = estimated_sell_value * self.commission_rate
+
+            # Net PnL subtracts the already-paid buy commission and the estimated sell commission
+            net_pnl = gross_pnl - buy_commission_usd - estimated_sell_commission
+
+            return net_pnl
+        except (TypeError, InvalidOperation) as e:
+            logger.error(f"Error calculating unrealized PnL: {e}", exc_info=True)
+            return Decimal('0.0')

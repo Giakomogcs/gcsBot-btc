@@ -36,6 +36,8 @@ matplotlib
 seaborn
 textual
 textual-plotext
+textual-timepiece
+whenever
 
 # --- Testing ---
 pytest

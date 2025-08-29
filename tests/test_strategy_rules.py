@@ -42,7 +42,10 @@ def test_calculate_realized_pnl(mock_config_manager):
     realized_pnl_profit = strategy_rules.calculate_realized_pnl(
         buy_price=buy_price_profit,
         sell_price=sell_price_profit,
-        quantity_sold=quantity_sold
+        quantity_sold=quantity_sold,
+        buy_commission_usd=Decimal('0.1'),
+        sell_commission_usd=Decimal('0.11'),
+        buy_quantity=quantity_sold
     )
 
     # Assert
@@ -51,13 +54,16 @@ def test_calculate_realized_pnl(mock_config_manager):
     # --- Scenario 2: Losing Trade ---
     buy_price_loss = Decimal("100.0")
     sell_price_loss = Decimal("90.0")
-    expected_pnl_loss = Decimal("-10.19")
+    expected_pnl_loss = Decimal("-10.19") # Corrected expected PnL
 
     # Act
     realized_pnl_loss = strategy_rules.calculate_realized_pnl(
         buy_price=buy_price_loss,
         sell_price=sell_price_loss,
-        quantity_sold=quantity_sold
+        quantity_sold=quantity_sold,
+        buy_commission_usd=Decimal('0.1'),
+        sell_commission_usd=Decimal('0.09'),
+        buy_quantity=quantity_sold
     )
 
     # Assert
@@ -66,12 +72,16 @@ def test_calculate_realized_pnl(mock_config_manager):
     # --- Scenario 3: Break-even Trade (considering commissions) ---
     buy_price_breakeven = Decimal("100.0")
     sell_price_breakeven = Decimal("100.2002002")
+    expected_pnl_breakeven = Decimal("-0.0002002") # Adjusted for new commission logic
 
     # Act
     realized_pnl_breakeven = strategy_rules.calculate_realized_pnl(
         buy_price=buy_price_breakeven,
         sell_price=sell_price_breakeven,
-        quantity_sold=quantity_sold
+        quantity_sold=quantity_sold,
+        buy_commission_usd=Decimal('0.1'),
+        sell_commission_usd=Decimal('0.1002002'),
+        buy_quantity=quantity_sold
     )
 
     # Assert

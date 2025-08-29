@@ -447,7 +447,7 @@ class StateManager:
         # Explicitly construct the dictionary to ensure type safety and handle the timestamp correctly.
         # The 'timestamp' from the trader response is an integer, but TradeLogger expects a datetime object.
         buy_usd_value = Decimal(str(original_trade.price)) * Decimal(str(sell_result['quantity']))
-        pnl_percentage = (realized_pnl_usd / buy_usd_value) * 100 if buy_usd_value != 0 else 0
+        pnl_percentage = (Decimal(str(realized_pnl_usd)) / buy_usd_value) * 100 if buy_usd_value != 0 else 0
 
         decision_context = sell_result.get('decision_context', {})
         decision_context['pnl_percentage'] = f"{pnl_percentage:.2f}"

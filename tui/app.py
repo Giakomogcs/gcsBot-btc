@@ -14,7 +14,10 @@ from textual.worker import Worker, get_current_worker
 from textual import work
 from textual.message import Message
 from textual.reactive import reactive
+from textual.screen import Screen
 from textual_plotext import PlotextPlot
+from textual_timepiece.pickers import DatePicker
+from whenever import Date
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 SUDO_PREFIX = ["sudo"] if os.name != "nt" else []
@@ -67,6 +70,20 @@ class CustomHeader(Static):
         with Horizontal():
             yield Label("GCS Trading Bot Dashboard", id="header_title")
             yield StatusIndicator(id="status_indicator")
+
+class DatePickerModal(Screen[Date]):
+    """A modal screen for the date picker."""
+    def compose(self) -> ComposeResult:
+        yield Vertical(
+            DatePicker(id="date_picker"),
+            id="date_picker_dialog",
+        )
+
+    def on_mount(self) -> None:
+        self.query_one(DatePicker).focus()
+
+    def on_date_picker_date_changed(self, event: DatePicker.DateChanged) -> None:
+        self.dismiss(event.date)
 
 class TUIApp(App):
     BINDINGS = [("d", "toggle_dark", "Toggle Dark Mode"), ("q", "quit", "Quit")]
@@ -131,13 +148,16 @@ class TUIApp(App):
                                 yield DataTable(id="wallet_table")
                         with Vertical(id="open_positions"):
                             yield Static("Open Positions", classes="title")
+                            yield Label("Summary: N/A", id="positions_summary_label")
                             yield DataTable(id="positions_table")
             with TabPane("Trade History", id="history"):
                 with Vertical():
                     with Horizontal(id="history_filter_bar"):
                         yield Input(placeholder="Start Date (YYYY-MM-DD)", id="start_date_input")
                         yield Input(placeholder="End Date (YYYY-MM-DD)", id="end_date_input")
+                        yield Button("Calendar", id="calendar_button")
                         yield Button("Filter", id="filter_history_button")
+                    yield Label("Summary: N/A", id="history_summary_label")
                     yield DataTable(id="history_table", classes="history_table")
                     with Vertical(id="portfolio_chart_container"):
                         yield Static("Portfolio Value History", classes="title", id="portfolio_title")
@@ -149,7 +169,7 @@ class TUIApp(App):
         self.log_display.write(f"[bold green]TUI Initialized for {self.bot_name}.[/bold green]")
         positions_table = self.query_one("#positions_table", DataTable)
         positions_table.cursor_type = "row"
-        positions_table.add_columns("ID", "Entry", "Value", "PnL", "Target", "To Target ($)", "Progress")
+        positions_table.add_columns("ID", "Entry", "Value", "Unrealized PnL", "PnL %", "Target", "Target PnL", "Progress")
         wallet_table = self.query_one("#wallet_table", DataTable)
         wallet_table.add_columns("Asset", "Available", "Total", "USD Value")
         history_table = self.query_one("#history_table", DataTable)
@@ -264,6 +284,15 @@ class TUIApp(App):
         table = self.query_one("#history_table", DataTable)
         scroll_y, cursor_row = table.scroll_y, table.cursor_row
         table.clear()
+
+        # Update Summary Label
+        total_trades = len(self.trade_history_data)
+        closed_sells = [t for t in self.trade_history_data if t.get('order_type') == 'sell' and t.get('status') == 'CLOSED']
+        total_realized_pnl = sum(Decimal(t.get('realized_pnl_usd', 0)) for t in closed_sells if t.get('realized_pnl_usd') is not None)
+        pnl_color = "green" if total_realized_pnl >= 0 else "red"
+        summary_text = f"Total Trades: {total_trades} | Realized PnL: [{pnl_color}]${total_realized_pnl:,.2f}[/]"
+        self.query_one("#history_summary_label").update(summary_text)
+
         if not self.trade_history_data:
             table.add_row("No trade history found.")
             return
@@ -298,7 +327,8 @@ class TUIApp(App):
                 except InvalidOperation: pnl_pct_cell = "err"
             table.add_row(timestamp, trade.get('symbol'), type_cell, trade.get('status'), buy_price, sell_price, f"{Decimal(trade.get('quantity', 0)):.8f}", f"${Decimal(trade.get('usd_value', 0)):,.2f}", pnl_cell, pnl_pct_cell if order_type == 'sell' else "N/A", trade_id_short, key=trade.get('trade_id'))
         table.scroll_y = scroll_y
-        if cursor_row < len(table.rows): table.scroll_to_row(cursor_row, animate=False)
+        if cursor_row < len(table.rows):
+            table.move_cursor(row=cursor_row, animate=False)
 
     def on_command_output(self, message: CommandOutput) -> None:
         if message.success: self.log_display.write(f"[green]Command success:[/green] {message.output}")
@@ -342,24 +372,62 @@ class TUIApp(App):
         pos_table = self.query_one("#positions_table", DataTable)
         scroll_y, cursor_row = pos_table.scroll_y, pos_table.cursor_row
         pos_table.clear()
+
+        # Update Summary Label
+        open_positions_count = len(self.open_positions_data)
+        total_unrealized_pnl = sum(Decimal(p.get('unrealized_pnl', 0)) for p in self.open_positions_data)
+        pnl_color = "green" if total_unrealized_pnl >= 0 else "red"
+        summary_text = f"Open: {open_positions_count} | Total Unrealized PnL: [{pnl_color}]${total_unrealized_pnl:,.2f}[/]"
+        self.query_one("#positions_summary_label").update(summary_text)
+
         if not self.open_positions_data:
             pos_table.add_row("No open positions.")
             return
-        sort_key_map = {"ID": "trade_id", "Entry": "entry_price", "Value": "current_value", "PnL": "unrealized_pnl", "Target": "sell_target_price"}
+
+        sort_key_map = {
+            "ID": "trade_id", "Entry": "entry_price", "Value": "current_value",
+            "Unrealized PnL": "unrealized_pnl", "PnL %": "unrealized_pnl_pct",
+            "Target": "sell_target_price", "Target PnL": "target_pnl"
+        }
         sort_key = sort_key_map.get(self.positions_sort_column, "trade_id")
+
         for pos in self.open_positions_data:
             pos['current_value'] = Decimal(pos.get('quantity', 0)) * Decimal(pos.get('current_price', 0))
-        sorted_positions = sorted(self.open_positions_data, key=lambda p: Decimal(p.get(sort_key, 0)), reverse=self.positions_sort_reverse)
+
+        sorted_positions = sorted(self.open_positions_data, key=lambda p: Decimal(p.get(sort_key, 0) or 0), reverse=self.positions_sort_reverse)
+
         for pos in sorted_positions:
             pnl = Decimal(pos.get("unrealized_pnl", 0))
             pnl_color = "green" if pnl >= 0 else "red"
+
+            pnl_pct = Decimal(pos.get("unrealized_pnl_pct", 0))
+            pnl_pct_color = "green" if pnl_pct >= 0 else "red"
+            pnl_pct_str = f"[{pnl_pct_color}]{pnl_pct:,.2f}%[/]"
+
+            target_pnl = Decimal(pos.get("target_pnl", 0))
+            target_pnl_color = "green" if target_pnl >= 0 else "red"
+            target_pnl_str = f"[{target_pnl_color}]${target_pnl:,.2f}[/]"
+
             progress = float(pos.get('progress_to_sell_target_pct', 0))
             progress_bar = "█" * int(progress / 10) + "░" * (10 - int(progress / 10))
             progress_str = f"[{progress_bar}] {progress:.1f}%"
-            current_value = Decimal(pos.get('quantity', 0)) * Decimal(pos.get('current_price', 0))
-            pos_table.add_row(pos.get("trade_id", "N/A").split('-')[0], f"${Decimal(pos.get('entry_price', 0)):,.2f}", f"${current_value:,.2f}", f"[{pnl_color}]${pnl:,.2f}[/]", f"${Decimal(pos.get('sell_target_price', 0)):,.2f}", f"${Decimal(pos.get('usd_to_target', 0)):,.2f}", progress_str, key=pos.get("trade_id"))
+            current_value = pos['current_value']
+
+            pos_table.add_row(
+                pos.get("trade_id", "N/A").split('-')[0],
+                f"${Decimal(pos.get('entry_price', 0)):,.2f}",
+                f"${current_value:,.2f}",
+                f"[{pnl_color}]${pnl:,.2f}[/]",
+                pnl_pct_str,
+                f"${Decimal(pos.get('sell_target_price', 0)):,.2f}",
+                target_pnl_str,
+                progress_str,
+                key=pos.get("trade_id")
+            )
+
         pos_table.scroll_y = scroll_y
-        if cursor_row < len(pos_table.rows): pos_table.scroll_to_row(cursor_row, animate=False)
+        if cursor_row < len(pos_table.rows):
+            pos_table.move_cursor(row=cursor_row, animate=False)
 
     def update_portfolio_chart(self, history: list):
         chart = self.query_one("#portfolio_chart", PlotextPlot)
@@ -400,6 +468,20 @@ class TUIApp(App):
             self.selected_trade_id = None
         elif event.button.id == "filter_history_button":
             self.update_trade_history()
+        elif event.button.id == "calendar_button":
+            self.action_open_calendar()
+
+    def action_open_calendar(self) -> None:
+        """Pushes the date picker modal screen."""
+        def set_date(selected_date: Date) -> None:
+            """Callback to set the date in the input field."""
+            if selected_date:
+                # For simplicity, we're setting the start date.
+                # A more complex implementation could handle start/end dates.
+                self.query_one("#start_date_input").value = selected_date.strftime("%Y-%m-%d")
+                self.update_trade_history()
+
+        self.push_screen(DatePickerModal(), set_date)
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         if event.control.id == "positions_table":

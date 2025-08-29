@@ -108,10 +108,14 @@ class Backtester:
                         buy_price = position['price']
                         sell_price = sell_result['price']
                         
+                        sell_commission_usd = self.mock_trader.get_commission(sell_result['usd_value'])
                         realized_pnl_usd = strategy_rules.calculate_realized_pnl(
                             buy_price=buy_price,
                             sell_price=sell_price,
-                            quantity_sold=sell_result['quantity']
+                            quantity_sold=sell_result['quantity'],
+                            buy_commission_usd=position['commission'],
+                            sell_commission_usd=sell_commission_usd,
+                            buy_quantity=position['quantity']
                         )
                         commission_usd = sell_result['commission']
                         hodl_asset_amount = original_quantity - sell_quantity
@@ -216,10 +220,11 @@ class Backtester:
         # Correctly calculate unrealized PnL by reusing the fee-aware pnl calculation method.
         # This simulates closing all open positions at the current market price.
         unrealized_pnl = sum(
-            self.strategy_rules.calculate_realized_pnl(
-                buy_price=pos['price'],
-                sell_price=self.mock_trader.get_current_price(),
-                quantity_sold=pos['quantity']
+            self.strategy_rules.calculate_net_unrealized_pnl(
+                entry_price=pos['price'],
+                current_price=self.mock_trader.get_current_price(),
+                total_quantity=pos['quantity'],
+                buy_commission_usd=pos.get('commission', Decimal('0'))
             ) for pos in open_positions.values()
         )
 

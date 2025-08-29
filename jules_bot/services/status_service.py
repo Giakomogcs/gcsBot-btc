@@ -255,8 +255,26 @@ class StatusService:
             entry_price = Decimal(trade.price)
             quantity = Decimal(trade.quantity)
             sell_target_price = Decimal(trade.sell_target_price)
+            buy_commission_usd = Decimal(trade.commission_usd) if trade.commission_usd is not None else Decimal('0')
 
-            unrealized_pnl = self.strategy.calculate_net_unrealized_pnl(entry_price, current_price, quantity)
+            unrealized_pnl = self.strategy.calculate_net_unrealized_pnl(entry_price, current_price, quantity, buy_commission_usd)
+
+            # Calculate PnL Percentage
+            entry_value = entry_price * quantity
+            unrealized_pnl_pct = (unrealized_pnl / entry_value) * 100 if entry_value > 0 else Decimal('0')
+
+            # Calculate Potential PnL at target
+            sell_value_at_target = sell_target_price * quantity
+            sell_commission_at_target = sell_value_at_target * self.strategy.commission_rate
+            target_pnl = self.strategy.calculate_realized_pnl(
+                buy_price=entry_price,
+                sell_price=sell_target_price,
+                quantity_sold=quantity,
+                buy_commission_usd=buy_commission_usd,
+                sell_commission_usd=sell_commission_at_target,
+                buy_quantity=quantity
+            )
+
             progress_pct = _calculate_progress_pct(current_price, entry_price, sell_target_price)
             price_to_target = sell_target_price - current_price
             usd_to_target = price_to_target * quantity
@@ -268,6 +286,8 @@ class StatusService:
                 "current_price": current_price,
                 "quantity": quantity,
                 "unrealized_pnl": unrealized_pnl,
+                "unrealized_pnl_pct": unrealized_pnl_pct,
+                "target_pnl": target_pnl,
                 "sell_target_price": sell_target_price,
                 "progress_to_sell_target_pct": progress_pct,
                 "price_to_target": price_to_target,
