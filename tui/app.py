@@ -131,6 +131,7 @@ class TUIApp(App):
                                     yield Static("Symbol: N/A", id="status_symbol")
                                     yield Static("Price: N/A", id="status_price")
                                     yield Static("Wallet Value: N/A", id="status_wallet_usd")
+                                    yield Static("Total PnL: N/A", id="status_total_pnl")
 
                                 yield Static("Strategy Status", classes="title")
                                 with Static(id="strategy_container"):
@@ -283,7 +284,14 @@ class TUIApp(App):
         self.query_one("#status_symbol").update(f"Symbol: {data.get('symbol', 'N/A')}")
         self.query_one("#status_price").update(f"Price: ${price:,.2f}")
         self.query_one("#status_open_positions").update(f"Open Positions: {data.get('open_positions_count', 0)}")
-        self.query_one("#status_wallet_usd").update(f"Wallet Value: ${Decimal(data.get('total_wallet_usd_value', 0)):,.2f}")
+
+        wallet_value = Decimal(data.get('total_wallet_usd_value', 0))
+        self.query_one("#status_wallet_usd").update(f"Wallet Value: ${wallet_value:,.2f}")
+
+        # Update Total PnL
+        total_pnl = Decimal(data.get("total_realized_pnl", 0))
+        pnl_color = "green" if total_pnl >= 0 else "red"
+        self.query_one("#status_total_pnl").update(f"Total PnL: [{pnl_color}]${total_pnl:,.2f}[/]")
 
         self.update_strategy_panel(data.get("buy_signal_status", {}), price)
         self.update_wallet_table(data.get("wallet_balances", []))

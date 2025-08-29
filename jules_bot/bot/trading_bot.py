@@ -165,32 +165,49 @@ class TradingBot:
                 elif cmd_type == "force_sell":
                     trade_id = command.get("trade_id")
                     percentage = Decimal(command.get("percentage", "100.0"))
-                    if trade_id:
-                        position = next((p for p in state_manager.get_open_positions() if p.trade_id == trade_id), None)
-                        if position:
-                            logger.info(f"Force selling {percentage}% of trade {trade_id}.")
-                            # This is a simplified sell logic for manual override.
-                            # A more robust implementation would check available balance.
-                            quantity_to_sell = Decimal(position.quantity) * (percentage / Decimal("100"))
+                    if not trade_id:
+                        logger.error("Invalid 'force_sell' command: 'trade_id' is missing.")
+                        os.remove(filepath) # Remove invalid command
+                        continue
 
-                            # Create mock sell_position_data
-                            sell_position_data = position.to_dict()
-                            sell_position_data['quantity'] = quantity_to_sell
+                    position = next((p for p in state_manager.get_open_positions() if p.trade_id == trade_id), None)
 
-                            success, sell_result = trader.execute_sell(sell_position_data, self.run_id, {"reason": "manual_force_sell"})
-                            if success:
-                                # Calculate PnL for the sold portion
-                                buy_price = Decimal(str(position.price))
-                                sell_price = Decimal(str(sell_result.get('price')))
-                                realized_pnl = strategy_rules.calculate_realized_pnl(buy_price, sell_price, quantity_to_sell)
+                    if not position:
+                        logger.error(f"Cannot force sell: Trade with ID '{trade_id}' not found in open positions.")
+                        os.remove(filepath) # Remove invalid command
+                        continue
 
-                                # Close the position correctly instead of just reconciling
-                                state_manager.close_forced_position(trade_id, sell_result, realized_pnl)
-                                logger.info(f"Successfully closed trade {trade_id} via force sell with PnL ${realized_pnl:.2f}.")
-                            else:
-                                logger.error(f"Manual sell for trade {trade_id} failed. See trader logs for details.")
+                    logger.info(f"Force selling {percentage}% of trade {trade_id}.")
+                    quantity_to_sell = Decimal(str(position.quantity)) * (percentage / Decimal("100"))
 
-                os.remove(filepath)
+                    # Ensure the quantity to sell is not zero or negative
+                    if quantity_to_sell <= 0:
+                        logger.error(f"Calculated quantity to sell for trade {trade_id} is zero or less. Aborting.")
+                        os.remove(filepath) # Remove invalid command
+                        continue
+
+                    sell_position_data = position.to_dict()
+                    sell_position_data['quantity'] = quantity_to_sell
+
+                    success, sell_result = trader.execute_sell(sell_position_data, self.run_id, {"reason": "manual_force_sell"})
+
+                    if success:
+                        logger.info(f"Force sell for trade {trade_id} executed successfully on the exchange.")
+                        buy_price = Decimal(str(position.price))
+                        sell_price = Decimal(str(sell_result.get('price')))
+                        realized_pnl = strategy_rules.calculate_realized_pnl(buy_price, sell_price, quantity_to_sell)
+
+                        state_manager.close_forced_position(trade_id, sell_result, realized_pnl)
+                        logger.info(f"Successfully closed trade {trade_id} via force sell with PnL ${realized_pnl:.2f}.")
+                        os.remove(filepath) # Command succeeded, remove it.
+                    else:
+                        # If the sell fails, we DO NOT remove the command file.
+                        # This allows the bot to retry on the next cycle, making the feature more robust.
+                        logger.error(f"Manual sell for trade {trade_id} failed. See trader logs. The command will be retried.")
+
+                else:
+                    # For any other command type, we assume it's processed instantly and should be removed.
+                    os.remove(filepath)
             except Exception as e:
                 logger.error(f"Error processing command file {filename}: {e}", exc_info=True)
 
@@ -250,6 +267,12 @@ class TradingBot:
             return
 
         state_manager.sync_holdings_with_binance(account_manager, strategy_rules, self.trader)
+
+        # Perform an initial target recalculation after sync and before starting the main loop
+        logger.info("Performing initial recalculation of sell targets before starting main loop...")
+        state_manager.recalculate_open_position_targets(strategy_rules, sa_instance, dynamic_params)
+        logger.info("Initial recalculation complete.")
+
         logger.info(f"🚀 --- TRADING BOT STARTED --- BOT NAME: {self.bot_name} --- RUN ID: {self.run_id} --- SYMBOL: {self.symbol} --- MODE: {self.mode.upper()} --- 🚀")
 
         while self.is_running:

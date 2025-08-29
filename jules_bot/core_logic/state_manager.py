@@ -98,59 +98,95 @@ class StateManager:
 
     def sync_holdings_with_binance(self, account_manager: AccountManager, strategy_rules: StrategyRules, trader):
         """
-        Synchronizes the database with current Binance trades. It ensures that every
-        buy trade on Binance is represented as an 'OPEN' or 'CLOSED' position in the
-        local database, preventing duplicates.
+        Synchronizes the database with Binance trades, properly calculating PnL for sells.
+        This new logic processes buys first, then processes sells using a FIFO strategy
+        to ensure accurate PnL calculation and state management.
         """
-        logger.info("--- Starting trade synchronization with Binance ---")
+        logger.info("--- Starting trade synchronization with Binance (V2 Logic) ---")
         try:
             symbol = config_manager.get('APP', 'symbol')
             if not symbol:
                 logger.error("No symbol configured in APP section. Cannot perform sync.")
                 return
 
-            # 1. Fetch all trades from Binance for the given symbol
+            # 1. Fetch all trades from Binance and the local DB
             binance_trades = trader.get_all_my_trades(symbol=symbol)
             if not binance_trades:
                 logger.info(f"No trades found on Binance for {symbol}. Sync complete.")
                 return
 
-            # 2. Fetch all trades from the local DB for the same symbol and environment
             db_trades = self.db_manager.get_all_trades_in_range(mode=self.mode, symbol=symbol)
-            existing_binance_trade_ids = {t.binance_trade_id for t in db_trades if t.binance_trade_id}
-            logger.info(f"Found {len(existing_binance_trade_ids)} existing trades in the database for {symbol}.")
+            db_trades_by_binance_id = {t.binance_trade_id for t in db_trades if t.binance_trade_id}
+            logger.info(f"Found {len(db_trades)} trades in the database and {len(binance_trades)} trades on Binance for {symbol}.")
 
-            # 3. Reconcile: Iterate through Binance trades and create/update local records
-            new_trades_synced = 0
-            updated_trades = 0
+            # 2. Process BUY trades first to ensure all buys are recorded
+            new_buys_synced = 0
             for b_trade in binance_trades:
-                if b_trade['id'] in existing_binance_trade_ids:
-                    continue
-
-                # If the trade is not in our DB by binance_trade_id, check by exchange_order_id
-                # This handles the case where the trade was logged before the binance_trade_id was available
-                local_trade = self.db_manager.get_trade_by_exchange_order_id(str(b_trade['orderId']))
-
-                if local_trade and local_trade.binance_trade_id is None:
-                    # Found a match! Update the existing record with the binance_trade_id
-                    logger.info(f"Found matching local trade ({local_trade.trade_id}) for Binance trade ID {b_trade['id']} by matching order ID. Updating.")
-                    self.db_manager.update_trade_binance_id(local_trade.trade_id, b_trade['id'])
-                    # Add the newly linked ID to the set to prevent duplicates in the same run
-                    existing_binance_trade_ids.add(b_trade['id'])
-                    updated_trades += 1
-                    continue
-
-                if b_trade['isBuyer']:
+                if b_trade['isBuyer'] and b_trade['id'] not in db_trades_by_binance_id:
                     logger.info(f"Found new BUY trade on Binance (ID: {b_trade['id']}). Creating local position.")
                     self._create_position_from_trade(b_trade, strategy_rules)
-                    new_trades_synced += 1
+                    new_buys_synced += 1
 
-            if new_trades_synced > 0 or updated_trades > 0:
-                logger.info(f"Sync complete. New trades created: {new_trades_synced}. Trades updated: {updated_trades}.")
-                # After syncing, reconcile the total position with the actual balance
-                self.reconcile_holdings(symbol, trader)
+            if new_buys_synced > 0:
+                logger.info(f"Synced {new_buys_synced} new buy trades. Refetching DB state before processing sells.")
+                db_trades = self.db_manager.get_all_trades_in_range(mode=self.mode, symbol=symbol)
+
+            # 3. Process SELL trades using FIFO logic
+            open_positions_fifo = sorted([t for t in db_trades if t.status == 'OPEN'], key=lambda p: p.timestamp)
+            processed_sell_binance_ids = {t.binance_trade_id for t in db_trades if t.status == 'CLOSED' and t.order_type == 'sell'}
+
+            sells_to_process = [st for st in binance_trades if not st['isBuyer'] and st['id'] not in processed_sell_binance_ids]
+
+            if not sells_to_process:
+                logger.info("No new sell trades from Binance to process.")
             else:
-                logger.info("Database is already in sync with Binance. No new trades to add or update.")
+                logger.info(f"Found {len(sells_to_process)} new sell trades to process from Binance.")
+
+            for sell_trade in sells_to_process:
+                sell_price = Decimal(str(sell_trade['price']))
+                sell_quantity_remaining = Decimal(str(sell_trade['qty']))
+                logger.info(f"Processing Binance sell trade ID {sell_trade['id']} for {sell_quantity_remaining} units at ${sell_price:,.2f}.")
+
+                for open_pos in open_positions_fifo:
+                    if sell_quantity_remaining <= Decimal('0'):
+                        break
+                    if open_pos.status != 'OPEN':
+                        continue
+
+                    open_pos_quantity = Decimal(str(open_pos.quantity))
+                    quantity_to_sell_from_pos = min(open_pos_quantity, sell_quantity_remaining)
+
+                    if quantity_to_sell_from_pos <= 0:
+                        continue
+
+                    buy_price = Decimal(str(open_pos.price))
+                    realized_pnl = strategy_rules.calculate_realized_pnl(buy_price, sell_price, quantity_to_sell_from_pos)
+
+                    sell_data_for_db = {
+                        "price": sell_price, "quantity": quantity_to_sell_from_pos,
+                        "usd_value": sell_price * quantity_to_sell_from_pos,
+                        "commission": Decimal(str(sell_trade['commission'])),
+                        "commission_asset": sell_trade['commissionAsset'],
+                        "exchange_order_id": str(sell_trade['orderId']),
+                        "binance_trade_id": int(sell_trade['id']),
+                        "timestamp": pd.to_datetime(sell_trade['time'], unit='ms', tz='UTC'),
+                        "decision_context": {"reason": "sync_from_binance_sell"},
+                        "realized_pnl_usd": realized_pnl
+                    }
+
+                    remaining_quantity_in_pos = open_pos_quantity - quantity_to_sell_from_pos
+
+                    # Mark the original position as 'CLOSED' in our in-memory list for this sync session
+                    open_pos.status = 'CLOSED'
+
+                    self.db_manager.update_trade_on_sell(open_pos.trade_id, sell_data_for_db)
+                    logger.info(f"Applied sell to trade {open_pos.trade_id}, closing {quantity_to_sell_from_pos} units. PnL: ${realized_pnl:.2f}")
+
+                    if remaining_quantity_in_pos > Decimal('1e-8'): # Use tolerance for float comparison
+                        logger.info(f"Position {open_pos.trade_id} was partially closed. Creating new OPEN position for remaining {remaining_quantity_in_pos} units.")
+                        self._create_remainder_position(open_pos, remaining_quantity_in_pos)
+
+                    sell_quantity_remaining -= quantity_to_sell_from_pos
 
             logger.info("--- Trade synchronization finished ---")
 
@@ -163,24 +199,17 @@ class StateManager:
             purchase_price = Decimal(str(binance_trade['price']))
             quantity = Decimal(str(binance_trade['qty']))
             
-            # Create a new, unique internal trade_id
             internal_trade_id = str(uuid.uuid4())
-
-            # We pass `params=None` because, during a sync, we don't know what the dynamic
-            # parameters were at the time of the historical trade. The function will use a default.
             sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price, params=None)
 
             buy_result = {
-                "trade_id": internal_trade_id,
-                "symbol": binance_trade['symbol'],
-                "price": purchase_price,
-                "quantity": quantity,
-                "usd_value": purchase_price * quantity,
+                "trade_id": internal_trade_id, "symbol": binance_trade['symbol'],
+                "price": purchase_price, "quantity": quantity, "usd_value": purchase_price * quantity,
                 "commission": Decimal(str(binance_trade['commission'])),
                 "commission_asset": binance_trade['commissionAsset'],
                 "exchange_order_id": str(binance_trade['orderId']),
                 "binance_trade_id": int(binance_trade['id']),
-                "timestamp": pd.to_datetime(binance_trade['time'], unit='ms', utc=True),
+                "timestamp": pd.to_datetime(binance_trade['time'], unit='ms', tz='UTC'),
                 "decision_context": {"reason": "sync_from_binance_trade"},
                 "environment": self.mode,
             }
@@ -190,6 +219,30 @@ class StateManager:
 
         except Exception as e:
             logger.error(f"Failed to create position from trade {binance_trade.get('id')}: {e}", exc_info=True)
+
+    def _create_remainder_position(self, original_pos, remaining_quantity: Decimal):
+        """Creates a new 'OPEN' position for the remainder of a partially closed trade."""
+        try:
+            new_trade_id = str(uuid.uuid4())
+            buy_price = Decimal(str(original_pos.price))
+
+            remainder_data = {
+                'run_id': original_pos.run_id, 'environment': self.mode,
+                'strategy_name': original_pos.strategy_name, 'symbol': original_pos.symbol,
+                'trade_id': new_trade_id, 'exchange': original_pos.exchange,
+                'status': 'OPEN', 'order_type': 'buy', 'price': buy_price,
+                'quantity': remaining_quantity, 'usd_value': remaining_quantity * buy_price,
+                'timestamp': pd.to_datetime(original_pos.timestamp).tz_localize('UTC'),
+                'decision_context': {
+                    'source': 'remainder_from_partial_sync_sell',
+                    'original_trade_id': original_pos.trade_id
+                },
+                'sell_target_price': original_pos.sell_target_price
+            }
+            self.trade_logger.log_trade(remainder_data)
+            logger.info(f"Created new remainder position {new_trade_id} for {remaining_quantity} units.")
+        except Exception as e:
+            logger.error(f"Failed to create remainder position for original trade {original_pos.trade_id}: {e}", exc_info=True)
 
     def reconcile_holdings(self, symbol: str, trader):
         """

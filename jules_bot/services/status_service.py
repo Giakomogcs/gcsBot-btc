@@ -142,6 +142,14 @@ class StatusService:
             # This second call is to get the full history for the TUI display.
             # The one above is just for the recent history for the capital manager.
             full_trade_history = self.db_manager.get_all_trades_in_range(mode=environment, bot_id=bot_id) or []
+
+            # --- PnL Calculation ---
+            total_realized_pnl = sum(
+                Decimal(str(trade.realized_pnl_usd))
+                for trade in full_trade_history
+                if trade.status == 'CLOSED' and trade.realized_pnl_usd is not None
+            )
+
             trade_history_dicts = [trade.to_dict() for trade in full_trade_history]
 
             # Determine high-level bot status
