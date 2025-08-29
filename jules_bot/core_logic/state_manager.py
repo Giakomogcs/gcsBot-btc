@@ -200,7 +200,7 @@ class StateManager:
                 "commission_asset": binance_trade['commissionAsset'],
                 "exchange_order_id": str(binance_trade['orderId']),
                 "binance_trade_id": int(binance_trade['id']),
-                "timestamp": datetime.fromtimestamp(binance_trade['time'] / 1000, tz=timezone.utc),
+                "timestamp": datetime.utcfromtimestamp(binance_trade['time'] / 1000).replace(tzinfo=timezone.utc),
                 "decision_context": {"reason": "sync_from_binance_buy"},
                 "environment": self.mode, "status": "OPEN", "order_type": "buy",
                 "sell_target_price": sell_target_price
@@ -225,14 +225,14 @@ class StateManager:
                 'usd_value': sell_price * quantity_sold,
                 'commission': Decimal(str(binance_sell_trade['commission'])),
                 'commission_asset': binance_sell_trade['commissionAsset'],
-                'timestamp': datetime.fromtimestamp(binance_sell_trade['time'] / 1000, tz=timezone.utc),
+                'timestamp': datetime.utcfromtimestamp(binance_sell_trade['time'] / 1000).replace(tzinfo=timezone.utc),
                 'exchange_order_id': str(binance_sell_trade['orderId']),
                 'binance_trade_id': int(binance_sell_trade['id']),
                 'decision_context': {'reason': 'sync_from_binance_sell'},
                 'realized_pnl_usd': realized_pnl
             }
             self.trade_logger.log_trade(sell_data)
-            logger.info(f"Created SELL record {sell_trade_id} linked to BUY {original_buy_trade.trade_id}")
+            logger.info(f"Created SELL record {sell_trade_id} linked to BUY {original_buy_trade.trade_id} with PnL ${realized_pnl:.2f}")
         except Exception as e:
             logger.error(f"Failed to create sell record from sync: {e}", exc_info=True)
 
@@ -321,7 +321,7 @@ class StateManager:
             'usd_value': Decimal(str(sell_data['usd_value'])),
             'commission': Decimal(str(sell_data.get('commission', '0'))),
             'commission_asset': sell_data.get('commission_asset'),
-            'timestamp': datetime.fromtimestamp(sell_data['timestamp'] / 1000, tz=timezone.utc),
+            'timestamp': datetime.utcfromtimestamp(sell_data['timestamp'] / 1000).replace(tzinfo=timezone.utc),
             'exchange_order_id': sell_data.get('exchange_order_id'),
             'binance_trade_id': sell_data.get('binance_trade_id'),
             'decision_context': sell_data.get('decision_context'),
@@ -331,7 +331,7 @@ class StateManager:
         }
 
         self.trade_logger.log_trade(sell_record_data)
-        logger.info(f"Created new SELL record {sell_trade_id} for partial sell of {original_trade_id}.")
+        logger.info(f"Created new SELL record {sell_trade_id} for partial sell of {original_trade_id} with PnL: ${sell_record_data.get('realized_pnl_usd', 0):.2f}.")
 
         # 2. Update the original 'buy' trade's quantity to reflect the remainder
         if remaining_quantity > Decimal('1e-8'): # Use tolerance
@@ -388,7 +388,7 @@ class StateManager:
             'usd_value': Decimal(str(sell_result['usd_value'])),
             'commission': Decimal(str(sell_result.get('commission', '0'))),
             'commission_asset': sell_result.get('commission_asset'),
-            'timestamp': datetime.fromtimestamp(sell_result['timestamp'] / 1000, tz=timezone.utc),
+            'timestamp': datetime.utcfromtimestamp(sell_result['timestamp'] / 1000).replace(tzinfo=timezone.utc),
             'exchange_order_id': sell_result.get('exchange_order_id'),
             'binance_trade_id': sell_result.get('binance_trade_id'),
             'decision_context': sell_result.get('decision_context'),
@@ -396,7 +396,7 @@ class StateManager:
         }
 
         self.trade_logger.log_trade(sell_data)
-        logger.info(f"Created new SELL record {sell_trade_id} for forced sell of {trade_id}.")
+        logger.info(f"Created new SELL record {sell_trade_id} for forced sell of {trade_id} with PnL: ${realized_pnl:.2f}.")
 
         # 2. Update the original 'buy' trade to be closed
         self.db_manager.update_trade_status(trade_id, 'CLOSED')

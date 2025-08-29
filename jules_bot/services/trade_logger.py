@@ -91,7 +91,7 @@ class TradeLogger:
             return datetime.datetime.now(datetime.timezone.utc)
         if isinstance(ts, int):
             # Assume it's a Unix timestamp in MILLISECONDS and convert to datetime
-            return datetime.datetime.fromtimestamp(ts / 1000, tz=datetime.timezone.utc)
+            return datetime.datetime.utcfromtimestamp(ts / 1000).replace(tzinfo=datetime.timezone.utc)
         if isinstance(ts, datetime.datetime):
             # If it's already a datetime object, ensure it's timezone-aware
             return ts.astimezone(datetime.timezone.utc) if ts.tzinfo else ts.replace(tzinfo=datetime.timezone.utc)
