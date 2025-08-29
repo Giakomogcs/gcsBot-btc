@@ -26,6 +26,14 @@ class TradeLogger:
         all data types are correct. This is for CREATING new trades.
         """
         try:
+            # FIX: Intercept and correct the malformed 'realized_pnl' key before it propagates.
+            # This is the single point of entry for trade logging, making it the ideal place for this fix.
+            if 'realized_pnl' in trade_data:
+                logger.warning(
+                    "Correcting malformed trade data: Found 'realized_pnl' key, renaming to 'realized_pnl_usd'."
+                )
+                trade_data['realized_pnl_usd'] = trade_data.pop('realized_pnl')
+
             trade_point = self._create_trade_point(trade_data)
             self.db_manager.log_trade(trade_point)
             logger.info(f"Successfully logged '{trade_point.order_type}' trade for trade_id: {trade_point.trade_id}")

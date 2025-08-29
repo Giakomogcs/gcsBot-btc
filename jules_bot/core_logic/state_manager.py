@@ -101,9 +101,6 @@ class StateManager:
         trade_data.pop('sell_usd_value', None)
 
         # Defensive coding: ensure no rogue PnL keys are present for a BUY trade.
-        trade_data.pop('realized_pnl', None)
-        trade_data.pop('realized_pnl_usd', None)
-
         self.trade_logger.log_trade(trade_data)
 
     def sync_holdings_with_binance(self, account_manager: AccountManager, strategy_rules: StrategyRules, trader):
@@ -170,6 +167,8 @@ class StateManager:
                     # Create a new SELL record for this part of the transaction
                     buy_price = Decimal(str(open_pos.price))
                     logger.info(f"MATCH: Matched sell trade {sell_trade['id']} (Qty: {quantity_to_sell_from_pos}) with buy trade {open_pos.trade_id} (Buy Price: ${buy_price:,.2f}).")
+
+                    # CRITICAL CALCULATION: Determine the realized profit or loss for this sell event.
                     realized_pnl_usd = strategy_rules.calculate_realized_pnl(buy_price, sell_price, quantity_to_sell_from_pos)
                     logger.info(f"CALC PNL: Realized PnL for this portion is ${realized_pnl_usd:,.2f}.")
 
@@ -217,9 +216,6 @@ class StateManager:
             }
             
             # Defensive coding: ensure no rogue PnL keys are present for a BUY trade.
-            buy_result.pop('realized_pnl', None)
-            buy_result.pop('realized_pnl_usd', None)
-
             self.trade_logger.log_trade(buy_result)
         except Exception as e:
             logger.error(f"Failed to create position from trade {binance_trade.get('id')}: {e}", exc_info=True)
@@ -230,6 +226,18 @@ class StateManager:
             sell_price = Decimal(str(binance_sell_trade['price']))
             sell_trade_id = str(uuid.uuid4())
             sell_usd_value = sell_price * quantity_sold
+            commission = Decimal(str(binance_sell_trade['commission']))
+            commission_asset = binance_sell_trade['commissionAsset']
+
+            # TODO: This is a simplification. A robust solution would fetch the
+            # historical price of the commission asset at the time of the trade.
+            # For now, we assume the commission currency is the quote currency (USDT).
+            commission_usd = commission
+            if commission_asset != 'USDT':
+                logger.warning(
+                    f"Commission asset is {commission_asset}, not USDT. "
+                    f"The recorded 'commission_usd' of {commission_usd} may be inaccurate."
+                )
 
             sell_data = {
                 'run_id': original_buy_trade.run_id, 'environment': self.mode,
@@ -240,8 +248,9 @@ class StateManager:
                 'usd_value': original_buy_trade.price * quantity_sold,
                 'sell_price': sell_price,
                 'sell_usd_value': sell_usd_value,
-                'commission': Decimal(str(binance_sell_trade['commission'])),
-                'commission_asset': binance_sell_trade['commissionAsset'],
+                'commission': commission,
+                'commission_asset': commission_asset,
+                'commission_usd': commission_usd,
                 'timestamp': datetime.utcfromtimestamp(binance_sell_trade['time'] / 1000).replace(tzinfo=timezone.utc),
                 'exchange_order_id': str(binance_sell_trade['orderId']),
                 'binance_trade_id': int(binance_sell_trade['id']),

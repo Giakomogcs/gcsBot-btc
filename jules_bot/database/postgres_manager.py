@@ -187,11 +187,6 @@ class PostgresManager:
                     logger.info(f"Creating new trade record for trade_id: {trade_point.trade_id}")
                     logger.debug(f"Data for new Trade model: {trade_data_for_db}")
                     
-                    # Final aggressive fix: Unconditionally remove the invalid key before object creation.
-                    # This will work even if the 'in' check fails for some reason, by attempting to pop the key
-                    # and ignoring the error if it doesn't exist.
-                    trade_data_for_db.pop('realized_pnl', None)
-
                     new_trade = Trade(**trade_data_for_db)
                     db.add(new_trade)
 
