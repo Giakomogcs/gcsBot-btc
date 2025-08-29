@@ -106,33 +106,22 @@ class StatusService:
             wallet_balances, total_wallet_usd_value = self._process_wallet_balances(exchange_manager, current_price)
             
             # --- LIVE STRATEGY EVALUATION ---
-            # This section replicates the bot's decision-making process for the TUI
-            # to provide a real-time status view, independent of the bot's last saved state.
-
-            # 1. Determine Market Regime
             current_regime = -1
             try:
                 sa_instance = SituationalAwareness()
                 historical_data = self.feature_calculator.get_historical_data_with_features()
                 if historical_data is not None and not historical_data.empty:
-                    # Transform the historical data to get regimes for all points
                     regime_df = sa_instance.transform(historical_data)
                     if not regime_df.empty and 'market_regime' in regime_df.columns:
-                        # Get the latest market regime from the series
                         current_regime = regime_df['market_regime'].iloc[-1]
             except Exception as e:
                 logger.warning(f"Could not determine market regime for status: {e}")
 
-            # 2. Get Dynamic Parameters
             dynamic_params = DynamicParameters(self.config_manager)
             dynamic_params.update_parameters(current_regime)
             current_params = dynamic_params.parameters
 
-            # 3. Evaluate Buy Condition
             cash_balance = next((bal['free'] for bal in wallet_balances if bal['asset'] == 'USDT'), Decimal('0'))
-
-            # The regime is returned but not used in the TUI status, so we can ignore it with `_`
-            # FIX: Fetch recent trade history to correctly calculate difficulty factor for the live status
             end_date = datetime.utcnow()
             start_date = end_date - timedelta(hours=self.capital_manager.difficulty_reset_timeout_hours)
             trade_history = self.db_manager.get_all_trades_in_range(
@@ -144,13 +133,12 @@ class StatusService:
             buy_amount_usdt, operating_mode, reason, _ = self.capital_manager.get_buy_order_details(
                 market_data=market_data,
                 open_positions=open_positions_db,
-                portfolio_value=total_wallet_usd_value, # Using wallet value as proxy
+                portfolio_value=total_wallet_usd_value,
                 free_cash=cash_balance,
                 params=current_params,
                 trade_history=trade_history
             )
 
-            # 4. Calculate Buy Progress
             should_buy = buy_amount_usdt > 0
             condition_target, condition_progress, condition_label = self._calculate_buy_condition_details(
                 reason, market_data, current_params, should_buy
@@ -165,27 +153,23 @@ class StatusService:
                 except InvalidOperation:
                     pass
 
-            should_buy = buy_amount_usdt > 0
-
-            # This second call is to get the full history for the TUI display.
-            # The one above is just for the recent history for the capital manager.
             full_trade_history = self.db_manager.get_all_trades_in_range(mode=environment, bot_id=bot_id) or []
 
-            # --- PnL Calculation ---
+            # --- PnL and Count Calculation ---
             total_realized_pnl = sum(
                 Decimal(str(trade.realized_pnl_usd))
                 for trade in full_trade_history
                 if trade.order_type == 'sell' and trade.realized_pnl_usd is not None
             )
-
+            total_unrealized_pnl = sum(
+                pos['unrealized_pnl'] for pos in positions_status
+            )
+            net_total_pnl = total_realized_pnl + total_unrealized_pnl
             trade_history_dicts = [trade.to_dict() for trade in full_trade_history]
+            total_trades_count = len(trade_history_dicts)
 
-            # Determine high-level bot status
             bot_status_db = self.db_manager.get_bot_status(bot_id)
-            if bot_status_db and bot_status_db.is_running:
-                bot_status_str = "RUNNING"
-            else:
-                bot_status_str = "STOPPED"
+            bot_status_str = "RUNNING" if bot_status_db and bot_status_db.is_running else "STOPPED"
 
             return {
                 "bot_status": bot_status_str,
@@ -194,6 +178,7 @@ class StatusService:
                 "current_btc_price": current_price,
                 "total_wallet_usd_value": total_wallet_usd_value,
                 "open_positions_count": open_positions_count,
+                "total_trades_count": total_trades_count,
                 "open_positions_status": positions_status,
                 "buy_signal_status": {
                     "should_buy": should_buy,
@@ -207,7 +192,9 @@ class StatusService:
                 },
                 "trade_history": trade_history_dicts,
                 "wallet_balances": wallet_balances,
-                "total_realized_pnl": total_realized_pnl
+                "total_realized_pnl": total_realized_pnl,
+                "total_unrealized_pnl": total_unrealized_pnl,
+                "net_total_pnl": net_total_pnl
             }
         except OperationalError as e:
             logger.error(f"Database connection error in StatusService: {e}", exc_info=True)
@@ -217,23 +204,15 @@ class StatusService:
             return {"error": str(e), "bot_status": "ERROR"}
 
     def _calculate_buy_condition_details(self, reason: str, market_data: dict, current_params: dict, should_buy: bool) -> tuple[str, Decimal, str]:
-        """
-        Parses the 'reason' string from the buy signal evaluation to determine
-        the actual condition the bot is waiting for and calculates the progress towards it.
-        """
-        # If a buy signal is definitively active, we don't need to parse the reason.
         if should_buy:
             return "Met", Decimal('100'), "Signal Active"
 
         current_price = Decimal(str(market_data.get('close')))
         high_price = Decimal(str(market_data.get('high', current_price)))
-
-        # Default values
         target_value_str = "N/A"
         progress_pct = Decimal('0')
         label = "Buy Condition"
 
-        # Pattern 1: Waiting for price to drop to a Bollinger Band
         bbl_match = re.search(r"Buy target: \$([\d,\.]+)", reason)
         if bbl_match:
             try:
@@ -245,7 +224,6 @@ class StatusService:
             except (InvalidOperation, IndexError):
                 pass
 
-        # Pattern 2: Waiting for price to drop below EMA20 in an uptrend
         ema_match = re.search(r"below EMA20 \$([\d,\.]+)", reason)
         if ema_match:
             try:
@@ -257,7 +235,6 @@ class StatusService:
             except (InvalidOperation, IndexError):
                 pass
 
-        # Pattern 3: Waiting for a general dip buy signal (handles "no pullback" and other dip scenarios)
         if "dip buy" in reason.lower() or "no pullback" in reason.lower():
             try:
                 buy_dip_percentage = current_params.get('buy_dip_percentage', Decimal('0.02'))
@@ -269,8 +246,6 @@ class StatusService:
             except InvalidOperation:
                 pass
 
-        # If no specific target was parsed, return the generic status.
-        # This signals to the TUI to simplify the display.
         return reason, Decimal('0'), "INFO"
 
 
@@ -319,10 +294,9 @@ class StatusService:
                 locked = Decimal(bal.get('locked', '0'))
                 total = free + locked
 
-                # Correctly calculate USD value for both assets
                 if asset == 'BTC':
                     usd_value = total * current_price
-                else: # For USDT, the value is the total amount
+                else:
                     usd_value = total
 
                 processed_balances.append({

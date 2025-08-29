@@ -271,13 +271,17 @@ class StateManager:
             commission = Decimal(str(binance_sell_trade['commission']))
             commission_asset = binance_sell_trade['commissionAsset']
 
+            buy_usd_value = original_buy_trade.price * quantity_sold
+            pnl_percentage = (realized_pnl_usd / buy_usd_value) * 100 if buy_usd_value != 0 else 0
+            decision_context = {'reason': 'sync_from_binance_sell', 'pnl_percentage': f"{pnl_percentage:.2f}"}
+
             sell_data = {
                 'run_id': original_buy_trade.run_id, 'environment': self.mode,
                 'strategy_name': original_buy_trade.strategy_name, 'symbol': original_buy_trade.symbol,
                 'trade_id': sell_trade_id, 'linked_trade_id': original_buy_trade.trade_id,
                 'exchange': original_buy_trade.exchange, 'status': 'CLOSED', 'order_type': 'sell',
                 'price': original_buy_trade.price, 'quantity': quantity_sold,
-                'usd_value': original_buy_trade.price * quantity_sold,
+                'usd_value': buy_usd_value,
                 'sell_price': sell_price,
                 'sell_usd_value': sell_usd_value,
                 'commission': commission,
@@ -286,7 +290,7 @@ class StateManager:
                 'timestamp': datetime.utcfromtimestamp(binance_sell_trade['time'] / 1000).replace(tzinfo=timezone.utc),
                 'exchange_order_id': str(binance_sell_trade['orderId']),
                 'binance_trade_id': int(binance_sell_trade['id']),
-                'decision_context': {'reason': 'sync_from_binance_sell'},
+                'decision_context': decision_context,
                 'realized_pnl_usd': realized_pnl_usd
             }
             logger.debug(f"Passing this data to TradeLogger for a SELL record: {sell_data}")
@@ -365,6 +369,14 @@ class StateManager:
         sell_trade_id = str(uuid.uuid4())
         
         # Explicitly construct the dictionary to ensure type safety and handle the timestamp correctly.
+        # Calculate PnL percentage
+        buy_usd_value = original_trade.price * Decimal(str(sell_data['quantity']))
+        pnl_percentage = (sell_data.get('realized_pnl_usd', 0) / buy_usd_value) * 100 if buy_usd_value != 0 else 0
+
+        decision_context = sell_data.get('decision_context', {})
+        decision_context['pnl_percentage'] = f"{pnl_percentage:.2f}"
+
+        # Explicitly construct the dictionary to ensure type safety and handle the timestamp correctly.
         sell_record_data = {
             'run_id': self.bot_id,
             'environment': self.mode,
@@ -377,7 +389,7 @@ class StateManager:
             'order_type': 'sell',
             'price': original_trade.price,
             'quantity': Decimal(str(sell_data['quantity'])),
-            'usd_value': original_trade.price * Decimal(str(sell_data['quantity'])),
+            'usd_value': buy_usd_value,
             'sell_price': Decimal(str(sell_data['price'])),
             'sell_usd_value': Decimal(str(sell_data['usd_value'])),
             'commission': Decimal(str(sell_data.get('commission', '0'))),
@@ -385,7 +397,7 @@ class StateManager:
             'timestamp': datetime.utcfromtimestamp(sell_data['timestamp'] / 1000).replace(tzinfo=timezone.utc),
             'exchange_order_id': sell_data.get('exchange_order_id'),
             'binance_trade_id': sell_data.get('binance_trade_id'),
-            'decision_context': sell_data.get('decision_context'),
+            'decision_context': decision_context,
             'realized_pnl_usd': sell_data.get('realized_pnl_usd'),
             'hodl_asset_amount': sell_data.get('hodl_asset_amount'),
             'hodl_asset_value_at_sell': sell_data.get('hodl_asset_value_at_sell'),
@@ -434,6 +446,12 @@ class StateManager:
         
         # Explicitly construct the dictionary to ensure type safety and handle the timestamp correctly.
         # The 'timestamp' from the trader response is an integer, but TradeLogger expects a datetime object.
+        buy_usd_value = Decimal(str(original_trade.price)) * Decimal(str(sell_result['quantity']))
+        pnl_percentage = (realized_pnl_usd / buy_usd_value) * 100 if buy_usd_value != 0 else 0
+
+        decision_context = sell_result.get('decision_context', {})
+        decision_context['pnl_percentage'] = f"{pnl_percentage:.2f}"
+
         sell_data = {
             'run_id': self.bot_id,
             'environment': self.mode,
@@ -446,7 +464,7 @@ class StateManager:
             'order_type': 'sell',
             'price': original_trade.price,
             'quantity': Decimal(str(sell_result['quantity'])),
-            'usd_value': Decimal(str(original_trade.price)) * Decimal(str(sell_result['quantity'])),
+            'usd_value': buy_usd_value,
             'sell_price': Decimal(str(sell_result['price'])),
             'sell_usd_value': Decimal(str(sell_result['usd_value'])),
             'commission': Decimal(str(sell_result.get('commission', '0'))),
@@ -454,7 +472,7 @@ class StateManager:
             'timestamp': datetime.utcfromtimestamp(sell_result['timestamp'] / 1000).replace(tzinfo=timezone.utc),
             'exchange_order_id': sell_result.get('exchange_order_id'),
             'binance_trade_id': sell_result.get('binance_trade_id'),
-            'decision_context': sell_result.get('decision_context'),
+            'decision_context': decision_context,
             'realized_pnl_usd': realized_pnl_usd,
         }
 

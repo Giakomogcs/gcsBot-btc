@@ -1,6 +1,8 @@
 import json
 import sys
 import os
+import typer
+from typing import Optional
 
 # Add project root to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -8,42 +10,36 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.database.postgres_manager import PostgresManager
 
-def get_trade_history():
+def main(
+    bot_name: str = typer.Argument(..., help="The name of the bot to get history for."),
+    start_date: Optional[str] = typer.Option(None, "--start-date", help="Start date in YYYY-MM-DD format."),
+    end_date: Optional[str] = typer.Option(None, "--end-date", help="End date in YYYY-MM-DD format.")
+):
     """
-    Fetches the complete trade history for a given bot and prints it as JSON.
-    The bot name is taken from command-line arguments or the BOT_NAME env var.
+    Fetches the trade history for a given bot and prints it as JSON.
+    Supports filtering by date range.
     """
-    bot_name = None
-    if len(sys.argv) > 1:
-        bot_name = sys.argv[1]
-    else:
-        bot_name = os.getenv("BOT_NAME")
-
     if not bot_name:
-        print(json.dumps({"error": "Bot name not provided. Pass it as a command-line argument or set the BOT_NAME environment variable."}), file=sys.stderr)
-        sys.exit(1)
+        print(json.dumps({"error": "Bot name not provided."}), file=sys.stderr)
+        raise typer.Exit(1)
 
     try:
-        # Initialize the config manager with the bot name to ensure we connect
-        # to the correct database schema.
         config_manager.initialize(bot_name)
-
         db_manager = PostgresManager()
 
-        # Fetch all trades. For a TUI, fetching all trades is generally acceptable.
-        # If performance becomes an issue, pagination could be added here.
-        all_trades = db_manager.get_all_trades_in_range(start_date=None, end_date=None)
+        # Use the provided date filters, or None if not provided.
+        # The db_manager handles None as "no filter".
+        all_trades = db_manager.get_all_trades_in_range(
+            start_date=start_date,
+            end_date=end_date
+        )
 
-        # Serialize the list of Trade objects into a list of dictionaries
         history_list = [trade.to_dict() for trade in all_trades]
-
-        # Print the JSON output
-        print(json.dumps(history_list, indent=4))
+        print(json.dumps(history_list, indent=4, default=str))
 
     except Exception as e:
-        # It's crucial to output a JSON error message for the TUI to parse
         print(json.dumps({"error": f"Failed to get trade history: {e}"}), file=sys.stderr)
-        sys.exit(1)
+        raise typer.Exit(1)
 
 if __name__ == "__main__":
-    get_trade_history()
+    typer.run(main)
