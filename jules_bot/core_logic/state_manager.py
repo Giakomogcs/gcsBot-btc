@@ -100,6 +100,10 @@ class StateManager:
         trade_data.pop('sell_price', None)
         trade_data.pop('sell_usd_value', None)
 
+        # Defensive coding: ensure no rogue PnL keys are present for a BUY trade.
+        trade_data.pop('realized_pnl', None)
+        trade_data.pop('realized_pnl_usd', None)
+
         self.trade_logger.log_trade(trade_data)
 
     def sync_holdings_with_binance(self, account_manager: AccountManager, strategy_rules: StrategyRules, trader):
@@ -166,10 +170,10 @@ class StateManager:
                     # Create a new SELL record for this part of the transaction
                     buy_price = Decimal(str(open_pos.price))
                     logger.info(f"MATCH: Matched sell trade {sell_trade['id']} (Qty: {quantity_to_sell_from_pos}) with buy trade {open_pos.trade_id} (Buy Price: ${buy_price:,.2f}).")
-                    realized_pnl = strategy_rules.calculate_realized_pnl(buy_price, sell_price, quantity_to_sell_from_pos)
-                    logger.info(f"CALC PNL: Realized PnL for this portion is ${realized_pnl:,.2f}.")
+                    realized_pnl_usd = strategy_rules.calculate_realized_pnl(buy_price, sell_price, quantity_to_sell_from_pos)
+                    logger.info(f"CALC PNL: Realized PnL for this portion is ${realized_pnl_usd:,.2f}.")
 
-                    self._create_sell_record_from_sync(open_pos, sell_trade, quantity_to_sell_from_pos, realized_pnl)
+                    self._create_sell_record_from_sync(open_pos, sell_trade, quantity_to_sell_from_pos, realized_pnl_usd)
 
                     # Update the original BUY position's quantity
                     remaining_quantity_in_pos = open_pos_quantity - quantity_to_sell_from_pos
@@ -212,11 +216,15 @@ class StateManager:
                 "sell_target_price": sell_target_price
             }
             
+            # Defensive coding: ensure no rogue PnL keys are present for a BUY trade.
+            buy_result.pop('realized_pnl', None)
+            buy_result.pop('realized_pnl_usd', None)
+
             self.trade_logger.log_trade(buy_result)
         except Exception as e:
             logger.error(f"Failed to create position from trade {binance_trade.get('id')}: {e}", exc_info=True)
 
-    def _create_sell_record_from_sync(self, original_buy_trade: Trade, binance_sell_trade: dict, quantity_sold: Decimal, realized_pnl: Decimal):
+    def _create_sell_record_from_sync(self, original_buy_trade: Trade, binance_sell_trade: dict, quantity_sold: Decimal, realized_pnl_usd: Decimal):
         """Helper to create a new SELL record during synchronization."""
         try:
             sell_price = Decimal(str(binance_sell_trade['price']))
@@ -238,10 +246,10 @@ class StateManager:
                 'exchange_order_id': str(binance_sell_trade['orderId']),
                 'binance_trade_id': int(binance_sell_trade['id']),
                 'decision_context': {'reason': 'sync_from_binance_sell'},
-                'realized_pnl_usd': realized_pnl
+                'realized_pnl_usd': realized_pnl_usd
             }
             self.trade_logger.log_trade(sell_data)
-            logger.info(f"Created SELL record {sell_trade_id} linked to BUY {original_buy_trade.trade_id} with PnL ${realized_pnl:.2f}")
+            logger.info(f"Created SELL record {sell_trade_id} linked to BUY {original_buy_trade.trade_id} with PnL ${realized_pnl_usd:.2f}")
         except Exception as e:
             logger.error(f"Failed to create sell record from sync: {e}", exc_info=True)
 
@@ -361,7 +369,7 @@ class StateManager:
             logger.info(f"Remaining quantity for {original_trade_id} is zero. Marking as CLOSED.")
             self.db_manager.update_trade_status(original_trade_id, 'CLOSED')
 
-    def close_forced_position(self, trade_id: str, sell_result: dict, realized_pnl: Decimal):
+    def close_forced_position(self, trade_id: str, sell_result: dict, realized_pnl_usd: Decimal):
         """
         Records a new 'sell' trade to close a position after a forced sell,
         and updates the original 'buy' trade's status to 'CLOSED'.
@@ -370,9 +378,9 @@ class StateManager:
             trade_id: The ID of the original 'buy' trade to close.
             sell_result: The result from trader.execute_sell(), containing the
                          actual price, quantity, and usd_value of the sale.
-            realized_pnl: The calculated profit or loss for this trade.
+            realized_pnl_usd: The calculated profit or loss for this trade.
         """
-        logger.info(f"Force closing position {trade_id} with PnL: ${realized_pnl:.2f}")
+        logger.info(f"Force closing position {trade_id} with PnL: ${realized_pnl_usd:.2f}")
 
         original_trade = self.db_manager.get_trade_by_trade_id(trade_id)
         if not original_trade:
@@ -405,11 +413,11 @@ class StateManager:
             'exchange_order_id': sell_result.get('exchange_order_id'),
             'binance_trade_id': sell_result.get('binance_trade_id'),
             'decision_context': sell_result.get('decision_context'),
-            'realized_pnl_usd': realized_pnl,
+            'realized_pnl_usd': realized_pnl_usd,
         }
 
         self.trade_logger.log_trade(sell_data)
-        logger.info(f"Created new SELL record {sell_trade_id} for forced sell of {trade_id} with PnL: ${realized_pnl:.2f}.")
+        logger.info(f"Created new SELL record {sell_trade_id} for forced sell of {trade_id} with PnL: ${realized_pnl_usd:.2f}.")
 
         # 2. Update the original 'buy' trade to be closed
         self.db_manager.update_trade_status(trade_id, 'CLOSED')

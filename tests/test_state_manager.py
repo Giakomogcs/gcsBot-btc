@@ -69,7 +69,7 @@ def test_close_forced_position_logs_trade(state_manager):
     """
     # Arrange
     trade_id = "test-buy-trade-123"
-    realized_pnl = 10.0
+    realized_pnl_usd = 10.0
     sell_result = {
         'price': 110.0,
         'quantity': 1.0,
@@ -92,7 +92,7 @@ def test_close_forced_position_logs_trade(state_manager):
     state_manager.db_manager.get_trade_by_trade_id.return_value = mock_original_trade
 
     # Act
-    state_manager.close_forced_position(trade_id, sell_result, realized_pnl)
+    state_manager.close_forced_position(trade_id, sell_result, realized_pnl_usd)
 
     # Assert
     state_manager.trade_logger.log_trade.assert_called_once()
@@ -106,7 +106,7 @@ def test_close_forced_position_logs_trade(state_manager):
     assert logged_data['sell_price'] == 110.0 # The actual sell price
     assert logged_data['order_type'] == 'sell'
     assert logged_data['status'] == 'CLOSED'
-    assert logged_data['realized_pnl_usd'] == realized_pnl
+    assert logged_data['realized_pnl_usd'] == realized_pnl_usd
 
 def test_get_last_purchase_price_with_open_positions(state_manager):
     """

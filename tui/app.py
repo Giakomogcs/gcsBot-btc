@@ -299,9 +299,9 @@ class TUIApp(App):
         self.query_one("#status_total_pnl").update(f"Total PnL: [{pnl_color}]${total_pnl:,.2f}[/]")
 
         # Update Realized PnL
-        realized_pnl = Decimal(data.get("total_realized_pnl", 0))
-        realized_pnl_color = "green" if realized_pnl >= 0 else "red"
-        self.query_one("#status_realized_pnl").update(f"Realized PnL: [{realized_pnl_color}]${realized_pnl:,.2f}[/]")
+        realized_pnl_usd = Decimal(data.get("total_realized_pnl", 0))
+        realized_pnl_color = "green" if realized_pnl_usd >= 0 else "red"
+        self.query_one("#status_realized_pnl").update(f"Realized PnL: [{realized_pnl_color}]${realized_pnl_usd:,.2f}[/]")
 
         self.update_strategy_panel(data.get("buy_signal_status", {}), price)
         self.update_wallet_table(data.get("wallet_balances", []))

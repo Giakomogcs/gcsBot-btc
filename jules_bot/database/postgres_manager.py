@@ -17,6 +17,8 @@ from jules_bot.database.portfolio_models import PortfolioSnapshot, FinancialMove
 from jules_bot.utils.logger import logger
 from jules_bot.utils.config_manager import config_manager
 
+logger.critical("--- RUNNING MODIFIED postgres_manager.py ---")
+
 class PostgresManager:
     def __init__(self):
         # The config_manager MUST be initialized before this class is instantiated.
@@ -184,6 +186,12 @@ class PostgresManager:
                     # Create new trade
                     logger.info(f"Creating new trade record for trade_id: {trade_point.trade_id}")
                     logger.debug(f"Data for new Trade model: {trade_data_for_db}")
+                    
+                    # Final aggressive fix: Unconditionally remove the invalid key before object creation.
+                    # This will work even if the 'in' check fails for some reason, by attempting to pop the key
+                    # and ignoring the error if it doesn't exist.
+                    trade_data_for_db.pop('realized_pnl', None)
+
                     new_trade = Trade(**trade_data_for_db)
                     db.add(new_trade)
 

@@ -215,10 +215,10 @@ class TradingBot:
                         logger.info(f"Force sell for trade {trade_id} executed successfully on the exchange.")
                         buy_price = Decimal(str(position.price))
                         sell_price = Decimal(str(sell_result.get('price')))
-                        realized_pnl = strategy_rules.calculate_realized_pnl(buy_price, sell_price, quantity_to_sell)
+                        realized_pnl_usd = strategy_rules.calculate_realized_pnl(buy_price, sell_price, quantity_to_sell)
 
-                        state_manager.close_forced_position(trade_id, sell_result, realized_pnl)
-                        logger.info(f"Successfully closed trade {trade_id} via force sell with PnL ${realized_pnl:.2f}.")
+                        state_manager.close_forced_position(trade_id, sell_result, realized_pnl_usd)
+                        logger.info(f"Successfully closed trade {trade_id} via force sell with PnL ${realized_pnl_usd:.2f}.")
                         os.remove(filepath) # Command succeeded, remove it.
                     else:
                         # If the sell fails, we DO NOT remove the command file.

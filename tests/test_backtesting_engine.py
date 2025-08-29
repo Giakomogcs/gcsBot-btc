@@ -98,7 +98,7 @@ def test_backtester_pnl_calculation(mock_add_all_features, mock_summary, mock_co
         assert len(update_calls) == 1, "Expected one sell trade to be updated"
         
         sell_trade_data = update_calls[0][1][0]
-        realized_pnl = sell_trade_data.get('realized_pnl_usd')
+        realized_pnl_usd = sell_trade_data.get('realized_pnl_usd')
 
         # Manually calculate the expected PnL using Decimal
         buy_price = Decimal("101.0")
@@ -115,4 +115,4 @@ def test_backtester_pnl_calculation(mock_add_all_features, mock_summary, mock_co
 
         expected_pnl = (sell_price * (one - commission_rate) - buy_price * (one + commission_rate)) * quantity_sold
         
-        assert realized_pnl == pytest.approx(expected_pnl)
+        assert realized_pnl_usd == pytest.approx(expected_pnl)

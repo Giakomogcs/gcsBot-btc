@@ -146,8 +146,8 @@ class StrategyRules:
         net_cost_per_unit = buy_price * (one + self.commission_rate)
         
         profit_per_unit = net_revenue_per_unit - net_cost_per_unit
-        realized_pnl = profit_per_unit * quantity_sold
-        return realized_pnl
+        realized_pnl_usd = profit_per_unit * quantity_sold
+        return realized_pnl_usd
 
     def calculate_net_unrealized_pnl(self, entry_price: Decimal, current_price: Decimal, total_quantity: Decimal) -> Decimal:
         """
