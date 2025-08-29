@@ -82,7 +82,8 @@ class DatePickerModal(Screen[Date]):
     def on_mount(self) -> None:
         self.query_one(DatePicker).focus()
 
-    def on_date_picker_date_changed(self, event: DatePicker.DateChanged) -> None:
+    def on_date_picker_date_changed(self, event) -> None:
+        """Called when the date is changed in the date picker."""
         self.dismiss(event.date)
 
 class TUIApp(App):
@@ -101,7 +102,7 @@ class TUIApp(App):
         self.log_filter = ""
         self.open_positions_data = []
         self.trade_history_data = []
-        self.positions_sort_column = "PnL"
+        self.positions_sort_column = "Unrealized PnL"
         self.positions_sort_reverse = True
         self.history_sort_column = "Timestamp"
         self.history_sort_reverse = True
@@ -178,9 +179,9 @@ class TUIApp(App):
         self.update_dashboard()
         self.set_interval(15.0, self.update_dashboard)
         self.update_portfolio_dashboard()
-        self.set_interval(15.0, self.update_portfolio_dashboard)
+        self.set_interval(60.0, self.update_portfolio_dashboard)
         self.update_trade_history()
-        self.set_interval(15.0, self.update_trade_history)
+        self.set_interval(60.0, self.update_trade_history)
         self.query_one("#manual_buy_input").focus()
         self.stream_docker_logs()
 
@@ -287,10 +288,28 @@ class TUIApp(App):
 
         # Update Summary Label
         total_trades = len(self.trade_history_data)
-        closed_sells = [t for t in self.trade_history_data if t.get('order_type') == 'sell' and t.get('status') == 'CLOSED']
-        total_realized_pnl = sum(Decimal(t.get('realized_pnl_usd', 0)) for t in closed_sells if t.get('realized_pnl_usd') is not None)
-        pnl_color = "green" if total_realized_pnl >= 0 else "red"
-        summary_text = f"Total Trades: {total_trades} | Realized PnL: [{pnl_color}]${total_realized_pnl:,.2f}[/]"
+        if total_trades > 0:
+            buy_trades = [t for t in self.trade_history_data if t.get('order_type') == 'buy']
+            closed_sells = [t for t in self.trade_history_data if t.get('order_type') == 'sell' and t.get('status') == 'CLOSED']
+            
+            total_invested = sum(Decimal(t.get('usd_value', 0)) for t in buy_trades if t.get('usd_value') is not None)
+            total_returned = sum(Decimal(t.get('sell_price', 0)) * Decimal(t.get('quantity', 0)) for t in closed_sells if t.get('sell_price') is not None and t.get('quantity') is not None)
+            total_realized_pnl = sum(Decimal(t.get('realized_pnl_usd', 0)) for t in closed_sells if t.get('realized_pnl_usd') is not None)
+            
+            roi_pct = (total_realized_pnl / total_invested * 100) if total_invested > 0 else 0
+            
+            pnl_color = "green" if total_realized_pnl >= 0 else "red"
+            roi_color = "green" if roi_pct >= 0 else "red"
+
+            summary_text = (
+                f"Total Trades: {total_trades} (Buys: {len(buy_trades)}, Sells: {len(closed_sells)})\n\n"
+                f"  Total Invested: ${total_invested:,.2f}\n"
+                f"  Total Returned: ${total_returned:,.2f}\n"
+                f"  Realized PnL:   [{pnl_color}]${total_realized_pnl:,.2f}[/]\n"
+                f"  ROI:            [{roi_color}]{roi_pct:.2f}%[/]"
+            )
+        else:
+            summary_text = "No trade history."
         self.query_one("#history_summary_label").update(summary_text)
 
         if not self.trade_history_data:
@@ -373,11 +392,26 @@ class TUIApp(App):
         scroll_y, cursor_row = pos_table.scroll_y, pos_table.cursor_row
         pos_table.clear()
 
+        # Pre-calculate current_value for all positions
+        for pos in self.open_positions_data:
+            pos['current_value'] = Decimal(pos.get('quantity', 0)) * Decimal(pos.get('current_price', 0))
+
         # Update Summary Label
         open_positions_count = len(self.open_positions_data)
-        total_unrealized_pnl = sum(Decimal(p.get('unrealized_pnl', 0)) for p in self.open_positions_data)
-        pnl_color = "green" if total_unrealized_pnl >= 0 else "red"
-        summary_text = f"Open: {open_positions_count} | Total Unrealized PnL: [{pnl_color}]${total_unrealized_pnl:,.2f}[/]"
+        if open_positions_count > 0:
+            total_invested = sum(Decimal(p.get('entry_price', 0)) * Decimal(p.get('quantity', 0)) for p in self.open_positions_data)
+            current_market_value = sum(p['current_value'] for p in self.open_positions_data)
+            total_unrealized_pnl = sum(Decimal(p.get('unrealized_pnl', 0)) for p in self.open_positions_data)
+            pnl_color = "green" if total_unrealized_pnl >= 0 else "red"
+            
+            summary_text = (
+                f"Open Positions: {open_positions_count}\n\n"
+                f"  Total Invested: ${total_invested:,.2f}\n"
+                f"  Market Value:   ${current_market_value:,.2f}\n"
+                f"  Unrealized PnL: [{pnl_color}]${total_unrealized_pnl:,.2f}[/]"
+            )
+        else:
+            summary_text = "No open positions."
         self.query_one("#positions_summary_label").update(summary_text)
 
         if not self.open_positions_data:
@@ -387,14 +421,23 @@ class TUIApp(App):
         sort_key_map = {
             "ID": "trade_id", "Entry": "entry_price", "Value": "current_value",
             "Unrealized PnL": "unrealized_pnl", "PnL %": "unrealized_pnl_pct",
-            "Target": "sell_target_price", "Target PnL": "target_pnl"
+            "Target": "sell_target_price", "Target PnL": "target_pnl",
+            "Progress": "progress_to_sell_target_pct"
         }
-        sort_key = sort_key_map.get(self.positions_sort_column, "trade_id")
+        sort_key = sort_key_map.get(self.positions_sort_column, "unrealized_pnl")
 
-        for pos in self.open_positions_data:
-            pos['current_value'] = Decimal(pos.get('quantity', 0)) * Decimal(pos.get('current_price', 0))
+        def sort_func(p):
+            val = p.get(sort_key)
+            if val is None:
+                return -float('inf') if self.positions_sort_reverse else float('inf')
+            if sort_key == 'trade_id':
+                return val
+            try:
+                return Decimal(val)
+            except (InvalidOperation, TypeError):
+                return -float('inf') if self.positions_sort_reverse else float('inf')
 
-        sorted_positions = sorted(self.open_positions_data, key=lambda p: Decimal(p.get(sort_key, 0) or 0), reverse=self.positions_sort_reverse)
+        sorted_positions = sorted(self.open_positions_data, key=sort_func, reverse=self.positions_sort_reverse)
 
         for pos in sorted_positions:
             pnl = Decimal(pos.get("unrealized_pnl", 0))
