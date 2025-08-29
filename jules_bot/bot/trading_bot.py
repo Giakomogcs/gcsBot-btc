@@ -215,7 +215,16 @@ class TradingBot:
                         logger.info(f"Force sell for trade {trade_id} executed successfully on the exchange.")
                         buy_price = Decimal(str(position.price))
                         sell_price = Decimal(str(sell_result.get('price')))
-                        realized_pnl_usd = strategy_rules.calculate_realized_pnl(buy_price, sell_price, quantity_to_sell)
+                        sell_commission_usd = Decimal(str(sell_result.get('commission_usd', '0')))
+
+                        realized_pnl_usd = strategy_rules.calculate_realized_pnl(
+                            buy_price=buy_price,
+                            sell_price=sell_price,
+                            quantity_sold=quantity_to_sell,
+                            buy_commission_usd=Decimal(str(position.commission_usd)),
+                            sell_commission_usd=sell_commission_usd,
+                            buy_quantity=Decimal(str(position.quantity))
+                        )
 
                         state_manager.close_forced_position(trade_id, sell_result, realized_pnl_usd)
                         logger.info(f"Successfully closed trade {trade_id} via force sell with PnL ${realized_pnl_usd:.2f}.")
@@ -395,13 +404,20 @@ class TradingBot:
                                 if success:
                                     buy_price = Decimal(str(position.price))
                                     sell_price = Decimal(str(sell_result.get('price')))
+                                    sell_commission_usd = Decimal(str(sell_result.get('commission_usd', '0')))
+
                                     # PnL is calculated based on the quantity *actually* sold
-                                    realized_pnl_usd = strategy_rules.calculate_realized_pnl(buy_price, sell_price, sell_quantity)
+                                    realized_pnl_usd = strategy_rules.calculate_realized_pnl(
+                                        buy_price=buy_price,
+                                        sell_price=sell_price,
+                                        quantity_sold=sell_quantity,
+                                        buy_commission_usd=Decimal(str(position.commission_usd)),
+                                        sell_commission_usd=sell_commission_usd,
+                                        buy_quantity=Decimal(str(position.quantity))
+                                    )
                                     hodl_asset_value_at_sell = hodl_asset_amount * current_price
-                                    commission_usd = Decimal(str(sell_result.get('commission', '0')))
 
                                     sell_result.update({
-                                        "commission_usd": commission_usd,
                                         "realized_pnl_usd": realized_pnl_usd,
                                         "hodl_asset_amount": hodl_asset_amount,
                                         "hodl_asset_value_at_sell": hodl_asset_value_at_sell

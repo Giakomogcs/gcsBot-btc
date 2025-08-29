@@ -162,6 +162,25 @@ class Trader:
         commission = sum(float(f.get('commission', 0.0)) for f in order['fills'])
         commission_asset = order['fills'][0].get('commissionAsset', 'N/A') if order['fills'] else 'N/A'
 
+        # --- Calculate Commission in USD ---
+        commission_usd = 0.0
+        if commission > 0:
+            if commission_asset == 'USDT':
+                commission_usd = commission
+            # If commission is in the base asset (e.g., BTC), its value is commission * price
+            elif commission_asset == self.symbol.replace('USDT', ''):
+                 commission_usd = commission * price
+            else:
+                # Fetch price for other commission assets like BNB
+                try:
+                    asset_price = self.get_current_price(f"{commission_asset}USDT")
+                    if asset_price:
+                        commission_usd = commission * asset_price
+                    else:
+                        logger.warning(f"Could not determine price for commission asset '{commission_asset}'. commission_usd will be 0.")
+                except Exception as e:
+                    logger.error(f"Error fetching price for commission asset '{commission_asset}': {e}")
+
         # Return a standardized dictionary
         binance_trade_id = order['fills'][0]['tradeId'] if order.get('fills') else None
 
@@ -173,6 +192,7 @@ class Trader:
             "usd_value": cummulative_quote_qty,
             "commission": commission,
             "commission_asset": commission_asset,
+            "commission_usd": commission_usd,
             "exchange_order_id": str(order.get('orderId')),
             "binance_trade_id": binance_trade_id,
             "timestamp": order.get('transactTime'),

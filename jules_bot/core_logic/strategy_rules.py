@@ -133,21 +133,44 @@ class StrategyRules:
         sell_target_price = break_even_price * (one + sell_rise_percentage)
         return sell_target_price
 
-    def calculate_realized_pnl(self, buy_price: Decimal, sell_price: Decimal, quantity_sold: Decimal) -> Decimal:
+    def calculate_realized_pnl(
+        self,
+        buy_price: Decimal,
+        sell_price: Decimal,
+        quantity_sold: Decimal,
+        buy_commission_usd: Decimal,
+        sell_commission_usd: Decimal,
+        buy_quantity: Decimal
+    ) -> Decimal:
         """
-        Calculates the realized profit or loss from a trade using Decimal.
+        Calculates the net realized profit or loss from a trade in USD,
+        accounting for pro-rata buy commissions and sell commissions.
         """
-        buy_price = Decimal(buy_price)
-        sell_price = Decimal(sell_price)
-        quantity_sold = Decimal(quantity_sold)
-        one = Decimal('1')
+        if any(v is None for v in [buy_price, sell_price, quantity_sold, buy_commission_usd, sell_commission_usd, buy_quantity]):
+            logger.warning(f"Cannot calculate PnL with missing values.")
+            return Decimal('0.0')
 
-        net_revenue_per_unit = sell_price * (one - self.commission_rate)
-        net_cost_per_unit = buy_price * (one + self.commission_rate)
-        
-        profit_per_unit = net_revenue_per_unit - net_cost_per_unit
-        realized_pnl_usd = profit_per_unit * quantity_sold
-        return realized_pnl_usd
+        try:
+            buy_price = Decimal(buy_price)
+            sell_price = Decimal(sell_price)
+            quantity_sold = Decimal(quantity_sold)
+            buy_commission_usd = Decimal(buy_commission_usd)
+            sell_commission_usd = Decimal(sell_commission_usd)
+            buy_quantity = Decimal(buy_quantity)
+
+            # Calculate the gross profit from the price difference
+            gross_pnl = (sell_price - buy_price) * quantity_sold
+
+            # Calculate the portion of the original buy commission that applies to this partial sell
+            buy_commission_prorated = (quantity_sold / buy_quantity) * buy_commission_usd if buy_quantity > 0 else Decimal('0')
+
+            # Subtract both buy and sell commissions to get the net PnL
+            net_pnl = gross_pnl - buy_commission_prorated - sell_commission_usd
+
+            return net_pnl
+        except (TypeError, InvalidOperation) as e:
+            logger.error(f"Error calculating realized PnL: {e}", exc_info=True)
+            return Decimal('0.0')
 
     def calculate_net_unrealized_pnl(self, entry_price: Decimal, current_price: Decimal, total_quantity: Decimal) -> Decimal:
         """

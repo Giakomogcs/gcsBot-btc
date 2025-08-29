@@ -115,11 +115,14 @@ class StateManager:
                 logger.error("No symbol configured in APP section. Cannot perform sync.")
                 return
 
-            # 1. Fetch all trades from Binance and the local DB
+            # 1. Fetch all trades and current prices from Binance and the local DB
             binance_trades = trader.get_all_my_trades(symbol=symbol)
             if not binance_trades:
                 logger.info(f"No trades found on Binance for {symbol}. Sync complete.")
                 return
+
+            # Fetch all prices once to avoid multiple API calls
+            all_prices = trader.get_all_prices()
 
             db_trades = self.db_manager.get_all_trades_in_range(mode=self.mode, symbol=symbol)
             db_binance_trade_ids = {t.binance_trade_id for t in db_trades if t.binance_trade_id}
@@ -130,7 +133,7 @@ class StateManager:
             for b_trade in binance_trades:
                 if b_trade['isBuyer'] and b_trade['id'] not in db_binance_trade_ids:
                     logger.info(f"Found new BUY trade on Binance (ID: {b_trade['id']}). Creating local BUY record.")
-                    self._create_position_from_binance_trade(b_trade, strategy_rules)
+                    self._create_position_from_binance_trade(b_trade, strategy_rules, all_prices)
                     new_buys_synced += 1
 
             if new_buys_synced > 0:
@@ -167,12 +170,33 @@ class StateManager:
                     # Create a new SELL record for this part of the transaction
                     buy_price = Decimal(str(open_pos.price))
                     logger.info(f"MATCH: Matched sell trade {sell_trade['id']} (Qty: {quantity_to_sell_from_pos}) with buy trade {open_pos.trade_id} (Buy Price: ${buy_price:,.2f}).")
-                    
+
                     # CRITICAL CALCULATION: Determine the realized profit or loss for this sell event.
-                    realized_pnl_usd = strategy_rules.calculate_realized_pnl(buy_price, sell_price, quantity_to_sell_from_pos)
+                    # First, calculate the commission in USD for the sell trade.
+                    sell_commission = Decimal(str(sell_trade.get('commission', '0')))
+                    sell_commission_asset = sell_trade.get('commissionAsset')
+                    sell_commission_usd = Decimal('0.0')
+                    if sell_commission > 0:
+                        if sell_commission_asset == 'USDT':
+                            sell_commission_usd = sell_commission
+                        elif sell_commission_asset == symbol.replace('USDT', ''):
+                            sell_commission_usd = sell_commission * sell_price
+                        else:
+                            asset_price = all_prices.get(f"{sell_commission_asset}USDT")
+                            if asset_price:
+                                sell_commission_usd = sell_commission * Decimal(str(asset_price))
+
+                    realized_pnl_usd = strategy_rules.calculate_realized_pnl(
+                        buy_price=buy_price,
+                        sell_price=sell_price,
+                        quantity_sold=quantity_to_sell_from_pos,
+                        buy_commission_usd=Decimal(str(open_pos.commission_usd)),
+                        sell_commission_usd=sell_commission_usd,
+                        buy_quantity=Decimal(str(open_pos.quantity))
+                    )
                     logger.info(f"CALC PNL: Realized PnL for this portion is ${realized_pnl_usd:,.2f}.")
 
-                    self._create_sell_record_from_sync(open_pos, sell_trade, quantity_to_sell_from_pos, realized_pnl_usd)
+                    self._create_sell_record_from_sync(open_pos, sell_trade, quantity_to_sell_from_pos, realized_pnl_usd, sell_commission_usd)
 
                     # Update the original BUY position's quantity
                     remaining_quantity_in_pos = open_pos_quantity - quantity_to_sell_from_pos
@@ -192,21 +216,40 @@ class StateManager:
         except Exception as e:
             logger.error(f"An error occurred during trade synchronization: {e}", exc_info=True)
 
-    def _create_position_from_binance_trade(self, binance_trade: dict, strategy_rules: StrategyRules):
+    def _create_position_from_binance_trade(self, binance_trade: dict, strategy_rules: StrategyRules, all_prices: dict):
         """Helper to create a new DB BUY position from a single Binance trade record."""
         try:
             purchase_price = Decimal(str(binance_trade['price']))
             quantity = Decimal(str(binance_trade['qty']))
+            commission = Decimal(str(binance_trade['commission']))
+            commission_asset = binance_trade['commissionAsset']
+            symbol = binance_trade['symbol']
+
+            # --- Calculate Commission in USD ---
+            commission_usd = Decimal('0.0')
+            if commission > 0:
+                if commission_asset == 'USDT':
+                    commission_usd = commission
+                elif commission_asset == symbol.replace('USDT', ''):
+                    commission_usd = commission * purchase_price
+                else:
+                    asset_price_symbol = f"{commission_asset}USDT"
+                    asset_price = all_prices.get(asset_price_symbol)
+                    if asset_price:
+                        commission_usd = commission * Decimal(str(asset_price))
+                    else:
+                        logger.warning(f"Could not find price for commission asset '{commission_asset}' during sync. commission_usd will be 0.")
             
             internal_trade_id = str(uuid.uuid4())
             sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price, params=None)
 
             buy_result = {
-                "run_id": self.bot_id,  # Add the missing run_id
-                "trade_id": internal_trade_id, "symbol": binance_trade['symbol'],
+                "run_id": self.bot_id,
+                "trade_id": internal_trade_id, "symbol": symbol,
                 "price": purchase_price, "quantity": quantity, "usd_value": purchase_price * quantity,
-                "commission": Decimal(str(binance_trade['commission'])),
-                "commission_asset": binance_trade['commissionAsset'],
+                "commission": commission,
+                "commission_asset": commission_asset,
+                "commission_usd": commission_usd,
                 "exchange_order_id": str(binance_trade['orderId']),
                 "binance_trade_id": int(binance_trade['id']),
                 "timestamp": datetime.utcfromtimestamp(binance_trade['time'] / 1000).replace(tzinfo=timezone.utc),
@@ -215,12 +258,11 @@ class StateManager:
                 "sell_target_price": sell_target_price
             }
             
-            # Defensive coding: ensure no rogue PnL keys are present for a BUY trade.
             self.trade_logger.log_trade(buy_result)
         except Exception as e:
             logger.error(f"Failed to create position from trade {binance_trade.get('id')}: {e}", exc_info=True)
 
-    def _create_sell_record_from_sync(self, original_buy_trade: Trade, binance_sell_trade: dict, quantity_sold: Decimal, realized_pnl_usd: Decimal):
+    def _create_sell_record_from_sync(self, original_buy_trade: Trade, binance_sell_trade: dict, quantity_sold: Decimal, realized_pnl_usd: Decimal, sell_commission_usd: Decimal):
         """Helper to create a new SELL record during synchronization."""
         try:
             sell_price = Decimal(str(binance_sell_trade['price']))
@@ -228,16 +270,6 @@ class StateManager:
             sell_usd_value = sell_price * quantity_sold
             commission = Decimal(str(binance_sell_trade['commission']))
             commission_asset = binance_sell_trade['commissionAsset']
-
-            # TODO: This is a simplification. A robust solution would fetch the
-            # historical price of the commission asset at the time of the trade.
-            # For now, we assume the commission currency is the quote currency (USDT).
-            commission_usd = commission
-            if commission_asset != 'USDT':
-                logger.warning(
-                    f"Commission asset is {commission_asset}, not USDT. "
-                    f"The recorded 'commission_usd' of {commission_usd} may be inaccurate."
-                )
 
             sell_data = {
                 'run_id': original_buy_trade.run_id, 'environment': self.mode,
@@ -250,7 +282,7 @@ class StateManager:
                 'sell_usd_value': sell_usd_value,
                 'commission': commission,
                 'commission_asset': commission_asset,
-                'commission_usd': commission_usd,
+                'commission_usd': sell_commission_usd,
                 'timestamp': datetime.utcfromtimestamp(binance_sell_trade['time'] / 1000).replace(tzinfo=timezone.utc),
                 'exchange_order_id': str(binance_sell_trade['orderId']),
                 'binance_trade_id': int(binance_sell_trade['id']),

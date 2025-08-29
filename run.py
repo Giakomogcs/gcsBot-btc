@@ -96,7 +96,7 @@ def _ensure_env_is_running():
         base_command = get_docker_compose_command()
         check_command = base_command + ["ps", "-q", "postgres"]
         result = subprocess.run(check_command, capture_output=True, text=True, check=False)
-        
+
         # If stdout is empty, the container is not running.
         if not result.stdout.strip():
             print("🚀 Ambiente Docker não detectado. Iniciando serviços de suporte (PostgreSQL, etc.)...")
