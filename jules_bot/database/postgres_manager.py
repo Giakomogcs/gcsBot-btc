@@ -167,19 +167,24 @@ class PostgresManager:
         """
         with self.get_db() as db:
             try:
+                # Sanitize the input data to only include keys that correspond to Trade model columns
+                valid_columns = {c.name for c in Trade.__table__.columns}
+                trade_data_for_db = {k: v for k, v in trade_point.__dict__.items() if k in valid_columns}
+
                 # Check if a trade with this trade_id already exists
                 existing_trade = db.query(Trade).filter(Trade.trade_id == trade_point.trade_id).first()
 
                 if existing_trade:
                     # Update existing trade
                     logger.info(f"Updating existing trade record for trade_id: {trade_point.trade_id}")
-                    for key, value in trade_point.__dict__.items():
+                    for key, value in trade_data_for_db.items():
                         if value is not None:
                             setattr(existing_trade, key, value)
                 else:
                     # Create new trade
                     logger.info(f"Creating new trade record for trade_id: {trade_point.trade_id}")
-                    new_trade = Trade(**trade_point.__dict__)
+                    logger.debug(f"Data for new Trade model: {trade_data_for_db}")
+                    new_trade = Trade(**trade_data_for_db)
                     db.add(new_trade)
 
                 db.commit()

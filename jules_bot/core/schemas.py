@@ -60,5 +60,4 @@ class TradePoint:
 
     # --- Legacy Fields (to be deprecated) ---
     backtest_id: Optional[str] = None
-    held_quantity: Optional[float] = None
 
