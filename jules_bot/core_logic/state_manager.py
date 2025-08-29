@@ -95,6 +95,11 @@ class StateManager:
             'exchange': buy_result.get('exchange', 'binance')
         }
 
+        # A new 'buy' position should never have a 'sell_price'.
+        # This defensively removes the key if it was accidentally included in buy_result.
+        trade_data.pop('sell_price', None)
+        trade_data.pop('sell_usd_value', None)
+
         self.trade_logger.log_trade(trade_data)
 
     def sync_holdings_with_binance(self, account_manager: AccountManager, strategy_rules: StrategyRules, trader):
@@ -194,6 +199,7 @@ class StateManager:
             sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price, params=None)
 
             buy_result = {
+                "run_id": self.bot_id,  # Add the missing run_id
                 "trade_id": internal_trade_id, "symbol": binance_trade['symbol'],
                 "price": purchase_price, "quantity": quantity, "usd_value": purchase_price * quantity,
                 "commission": Decimal(str(binance_trade['commission'])),
@@ -390,7 +396,7 @@ class StateManager:
             'order_type': 'sell',
             'price': original_trade.price,
             'quantity': Decimal(str(sell_result['quantity'])),
-            'usd_value': original_trade.price * Decimal(str(sell_result['quantity'])),
+            'usd_value': Decimal(str(original_trade.price)) * Decimal(str(sell_result['quantity'])),
             'sell_price': Decimal(str(sell_result['price'])),
             'sell_usd_value': Decimal(str(sell_result['usd_value'])),
             'commission': Decimal(str(sell_result.get('commission', '0'))),

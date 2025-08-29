@@ -14,7 +14,7 @@ ENV PYTHONPATH=/app
 COPY requirements.txt .
 
 # Second, install the dependencies. This step uses the cache from above.
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt
 
 # Third, now that dependencies are cached, copy the rest of your application code.
 COPY . .

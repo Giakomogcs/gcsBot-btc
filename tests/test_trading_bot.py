@@ -18,43 +18,34 @@ def mock_db_manager_with_trades():
     db_manager.get_open_positions.return_value = [trade1, trade2]
     return db_manager
 
+@patch('jules_bot.bot.trading_bot.logger')
 @patch('jules_bot.bot.trading_bot.config_manager')
-def test_insufficient_balance_triggers_reconciliation(mock_config, mock_db_manager_with_trades):
+def test_insufficient_balance_logs_critical_and_skips_sell(mock_config, mock_logger, mock_db_manager_with_trades):
     """
-    Verify that when the bot detects an insufficient balance, it calls the
-    state reconciliation logic instead of attempting to sell.
-    This test focuses on the sell logic block in isolation.
+    Verify that when the bot detects an insufficient balance for a sell, it logs
+    a critical error and does NOT attempt to sell. The reconciliation now happens
+    at the start of the next cycle, not within this block.
     """
     # --- Setup ---
-    # Mock Trader and StateManager
     mock_trader = MagicMock(spec=Trader)
-    mock_state_manager = MagicMock(spec=StateManager)
-
-    # Bot thinks it has 0.3 BTC (0.1 + 0.2)
     open_positions = mock_db_manager_with_trades.get_open_positions()
-    mock_state_manager.get_open_positions.return_value = open_positions
+    mock_trader.get_account_balance.return_value = '0.1' # Exchange has less than bot thinks
 
-    # But the exchange only has 0.1 BTC
-    mock_trader.get_account_balance.return_value = '0.1'
+    # Mock config for StrategyRules
+    mock_config.get.side_effect = lambda section, key, **kwargs: {
+        ('STRATEGY_RULES', 'sell_factor'): '1.0',
+        ('STRATEGY_RULES', 'max_capital_per_trade_percent'): '0.02',
+        ('STRATEGY_RULES', 'base_usd_per_trade'): '20.0',
+        ('STRATEGY_RULES', 'commission_rate'): '0.001',
+        ('STRATEGY_RULES', 'target_profit'): '0.01',
+    }.get((section, key), kwargs.get('fallback'))
+    strategy_rules = StrategyRules(mock_config)
 
-    # Mock StrategyRules via the config mock
-    mock_strategy_rules_config = {
-        'sell_factor': '1.0', # Sell 100%
-        # Add other keys needed by StrategyRules constructor
-        'max_capital_per_trade_percent': '0.02',
-        'base_usd_per_trade': '20.0',
-        'commission_rate': '0.001',
-        'target_profit': '0.01',
-    }
-    mock_config.get_section.return_value = mock_strategy_rules_config
-    strategy_rules = StrategyRules(mock_config) # Instantiate with the mock
-
-    # Set a price high enough to trigger a sell for all open positions
     current_price = Decimal('52000.0')
     base_asset = 'BTC'
 
     # --- Act ---
-    # This is the isolated logic block from TradingBot.run()
+    # This is an isolated logic block from TradingBot.run()
     positions_to_sell = [p for p in open_positions if current_price >= Decimal(str(p.sell_target_price or 'inf'))]
     if positions_to_sell:
         total_sell_quantity = sum(Decimal(str(p.quantity)) * strategy_rules.sell_factor for p in positions_to_sell)
@@ -62,15 +53,21 @@ def test_insufficient_balance_triggers_reconciliation(mock_config, mock_db_manag
 
         if total_sell_quantity > available_balance:
             # This is the branch we expect to be taken
-            mock_state_manager.reconcile_holdings('BTCUSDT', mock_trader)
+            mock_logger.critical(
+                f"INSUFFICIENT BALANCE & STATE DESYNC: Attempting to sell {total_sell_quantity:.8f} {base_asset}, "
+                f"but only {available_balance:.8f} is available on the exchange. "
+                "This indicates a significant discrepancy between the bot's state and the exchange's reality. "
+                "The bot will NOT proceed with the sell and will wait for the next sync cycle to correct the state."
+            )
         else:
-            # This branch should not be taken, but we include it for completeness
+            # This branch should not be taken
             for position in positions_to_sell:
                 mock_trader.execute_sell(position.to_dict(), 'test_bot', {})
 
     # --- Assert ---
-    # The bot should have detected an insufficient balance and called reconcile_holdings.
-    mock_state_manager.reconcile_holdings.assert_called_once_with('BTCUSDT', mock_trader)
-
-    # It should NOT have attempted to sell anything.
+    # The bot should NOT have attempted to sell anything.
     mock_trader.execute_sell.assert_not_called()
+
+    # It should have logged a critical error about the desync.
+    mock_logger.critical.assert_called_once()
+    assert "INSUFFICIENT BALANCE & STATE DESYNC" in mock_logger.critical.call_args[0][0]

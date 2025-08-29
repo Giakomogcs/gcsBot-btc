@@ -65,6 +65,14 @@ def run_docker_compose_command(command_args: list, **kwargs):
         # Ensure output is captured for debugging
         kwargs.setdefault('capture_output', True)
         kwargs.setdefault('text', True)
+
+        # On Windows, the default encoding for subprocesses can be a 'charmap'
+        # which fails on special characters from docker-compose logs.
+        # We enforce UTF-8 for consistency and to prevent UnicodeDecodeError.
+        if kwargs.get('text'):
+            kwargs['encoding'] = 'utf-8'
+            kwargs['errors'] = 'ignore'
+
         result = subprocess.run(full_command, check=True, **kwargs)
         return True
     except subprocess.CalledProcessError as e:

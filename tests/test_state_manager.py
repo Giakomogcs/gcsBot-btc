@@ -17,34 +17,19 @@ def mock_db_manager():
 @pytest.fixture
 def state_manager(mock_db_manager):
     """
-    Provides a StateManager instance with a mocked PostgresManager.
-    This fixture ensures that the real PostgresManager is not used during tests.
+    Provides a StateManager instance with a mocked PostgresManager and a mocked TradeLogger.
     """
     mock_feature_calculator = Mock()
-    # We use patch to mock the TradeLogger that StateManager instantiates.
     with patch('jules_bot.core_logic.state_manager.TradeLogger') as MockTradeLogger:
-        # Provide the mocked db_manager directly to the constructor.
         sm = StateManager(mode="test", bot_id="test_bot", db_manager=mock_db_manager, feature_calculator=mock_feature_calculator)
-        
-        # For tests that assert log_trade, we need to ensure the mock is correctly configured.
-        # The StateManager passes its db_manager to TradeLogger, so the mock setup is simpler.
-        # We can mock the instance of TradeLogger created inside StateManager.
+        # Replace the instance of TradeLogger with our mock
         sm.trade_logger = MockTradeLogger()
-        
-        # The tests are written to assert on db_manager.log_trade.
-        # To avoid rewriting them all, we'll redirect the call from the mock trade_logger
-        # to the mock_db_manager. This is a test-specific workaround.
-        def redirect_log(*args, **kwargs):
-            mock_db_manager.log_trade(*args, **kwargs)
-
-        sm.trade_logger.log_trade.side_effect = redirect_log
         yield sm
 
-from jules_bot.core.schemas import TradePoint
 
-def test_create_new_position_logs_trade(state_manager, mock_db_manager):
+def test_create_new_position_logs_trade(state_manager):
     """
-    Verify that `create_new_position` calls `log_trade` with a TradePoint object.
+    Verify that `create_new_position` calls `log_trade` with a dictionary.
     """
     # Arrange
     buy_result = {
@@ -66,49 +51,62 @@ def test_create_new_position_logs_trade(state_manager, mock_db_manager):
     state_manager.create_new_position(buy_result, sell_target_price=101.0)
 
     # Assert
-    # The new implementation uses TradeLogger, which is mocked.
-    # The fixture redirects the call to the mock_db_manager for compatibility.
-    mock_db_manager.log_trade.assert_called_once()
-    call_args = mock_db_manager.log_trade.call_args[0]
+    state_manager.trade_logger.log_trade.assert_called_once()
+    call_args = state_manager.trade_logger.log_trade.call_args[0]
     assert len(call_args) == 1
     logged_data = call_args[0]
 
-    # StateManager now passes a dict to TradeLogger, not a TradePoint object.
     assert isinstance(logged_data, dict)
     assert logged_data['trade_id'] == 'test-trade-123'
     assert logged_data['price'] == 100.0
     assert logged_data['order_type'] == 'buy'
+    assert logged_data['status'] == 'OPEN'
 
 
-def test_close_position_logs_trade(state_manager, mock_db_manager):
+def test_close_forced_position_logs_trade(state_manager):
     """
-    Verify that `close_position` calls `log_trade` with a TradePoint object.
+    Verify that `close_forced_position` calls `log_trade` with the correct sell data.
     """
     # Arrange
-    trade_id = "test-trade-123"
-    exit_data = {
+    trade_id = "test-buy-trade-123"
+    realized_pnl = 10.0
+    sell_result = {
         'price': 110.0,
         'quantity': 1.0,
         'usd_value': 110.0,
         'symbol': 'BTCUSDT',
         'order_type': 'sell',
-        'realized_pnl': 10.0
+        'timestamp': 1672531200000, # 2023-01-01
+        'exchange_order_id': 'order-2',
+        'commission': 0.1,
+        'commission_asset': 'USDT',
+        'binance_trade_id': 54321
     }
 
+    # Mock the original trade that is fetched from the DB
+    mock_original_trade = Mock()
+    mock_original_trade.strategy_name = 'default'
+    mock_original_trade.symbol = 'BTCUSDT'
+    mock_original_trade.exchange = 'binance'
+    mock_original_trade.price = 100.0 # Original buy price
+    state_manager.db_manager.get_trade_by_trade_id.return_value = mock_original_trade
+
     # Act
-    state_manager.close_position(trade_id, exit_data)
+    state_manager.close_forced_position(trade_id, sell_result, realized_pnl)
 
     # Assert
-    mock_db_manager.log_trade.assert_called_once()
-    call_args = mock_db_manager.log_trade.call_args[0]
+    state_manager.trade_logger.log_trade.assert_called_once()
+    call_args = state_manager.trade_logger.log_trade.call_args[0]
     assert len(call_args) == 1
     logged_data = call_args[0]
 
     assert isinstance(logged_data, dict)
-    assert logged_data['trade_id'] == trade_id
-    assert logged_data['price'] == 110.0
+    assert logged_data['linked_trade_id'] == trade_id
+    assert logged_data['price'] == 100.0 # Should be the original buy price
+    assert logged_data['sell_price'] == 110.0 # The actual sell price
     assert logged_data['order_type'] == 'sell'
-    assert logged_data['realized_pnl'] == 10.0
+    assert logged_data['status'] == 'CLOSED'
+    assert logged_data['realized_pnl_usd'] == realized_pnl
 
 def test_get_last_purchase_price_with_open_positions(state_manager):
     """
