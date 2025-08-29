@@ -19,6 +19,10 @@ from textual_plotext import PlotextPlot
 # Add project root to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+# --- OS-Specific Configuration ---
+# Use 'sudo' on non-Windows platforms for Docker commands
+SUDO_PREFIX = ["sudo"] if os.name != "nt" else []
+
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.utils.logger import logger
 
@@ -199,7 +203,7 @@ class TUIApp(App):
             return
         self.log_display.write(f"Streaming logs from container [yellow]{self.container_id[:12]}[/]")
         try:
-            process = subprocess.Popen(["sudo", "docker", "logs", "-f", self.container_id], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace')
+            process = subprocess.Popen(SUDO_PREFIX + ["docker", "logs", "-f", self.container_id], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace')
             worker = get_current_worker()
             while not worker.is_cancelled:
                 line = process.stdout.readline()
@@ -226,8 +230,8 @@ class TUIApp(App):
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
         try:
-            docker_command = [
-                "sudo", "docker", "run", "--rm", "--network", DOCKER_NETWORK_NAME,
+            docker_command = SUDO_PREFIX + [
+                "docker", "run", "--rm", "--network", DOCKER_NETWORK_NAME,
                 "--env-file", ".env", "-e", f"BOT_NAME={self.bot_name}",
                 "-v", f"{project_root}:/app", DOCKER_IMAGE_NAME,
             ] + command

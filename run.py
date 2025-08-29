@@ -21,6 +21,10 @@ PROJECT_NAME = "gcsbot-btc"
 DOCKER_IMAGE_NAME = f"{PROJECT_NAME}-app"
 DOCKER_NETWORK_NAME = f"{PROJECT_NAME}_default"
 
+# --- OS-Specific Configuration ---
+# Use 'sudo' on non-Windows platforms for Docker commands
+SUDO_PREFIX = ["sudo"] if os.name != "nt" else []
+
 
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
 app = typer.Typer(context_settings=CONTEXT_SETTINGS)
@@ -42,12 +46,12 @@ def get_docker_compose_command():
     Prefixo 'sudo' é adicionado para contornar problemas de permissão do Docker.
     """
     if shutil.which("docker-compose"):
-        return ["sudo", "docker-compose"]
+        return SUDO_PREFIX + ["docker-compose"]
     elif shutil.which("docker"):
         try:
             # Não precisamos do resultado, apenas verificamos se o comando é válido
-            subprocess.run(["docker", "compose", "--version"], capture_output=True, text=True, check=True)
-            return ["sudo", "docker", "compose"]
+            subprocess.run(SUDO_PREFIX + ["docker", "compose", "--version"], capture_output=True, text=True, check=True)
+            return SUDO_PREFIX + ["docker", "compose"]
         except (subprocess.CalledProcessError, FileNotFoundError):
             pass
     raise FileNotFoundError("Could not find a valid 'docker-compose' or 'docker compose' command.")
@@ -89,8 +93,8 @@ def stop_env():
         print("   Parando containers de bot em execução...")
         for bot in running_bots:
             try:
-                subprocess.run(["sudo", "docker", "stop", bot.container_id], capture_output=True, check=False)
-                subprocess.run(["sudo", "docker", "rm", bot.container_id], capture_output=True, check=False)
+                subprocess.run(SUDO_PREFIX + ["docker", "stop", bot.container_id], capture_output=True, check=False)
+                subprocess.run(SUDO_PREFIX + ["docker", "rm", bot.container_id], capture_output=True, check=False)
                 process_manager.remove_running_bot(bot.bot_name)
             except Exception:
                 pass # Ignore errors if container is already gone
@@ -116,13 +120,13 @@ def run_bot_in_container(bot_name: str, mode: str) -> Optional[str]:
     # Primeiro, verifique se um container com este nome já existe e pare/remova-o.
     try:
         print(f"   Verificando container existente '{container_name}'...")
-        subprocess.run(["sudo", "docker", "stop", container_name], capture_output=True, text=True, check=False)
-        subprocess.run(["sudo", "docker", "rm", container_name], capture_output=True, text=True, check=False)
+        subprocess.run(SUDO_PREFIX + ["docker", "stop", container_name], capture_output=True, text=True, check=False)
+        subprocess.run(SUDO_PREFIX + ["docker", "rm", container_name], capture_output=True, text=True, check=False)
     except Exception:
         pass # Ignora erros, o container provavelmente não existia
 
-    command = [
-        "sudo", "docker", "run",
+    command = SUDO_PREFIX + [
+        "docker", "run",
         "--detach",
         "--name", container_name,
         "--network", DOCKER_NETWORK_NAME,
@@ -157,8 +161,8 @@ def run_command_in_container(command: list, bot_name: str, interactive: bool = F
     """
     Executa um comando one-off (como scripts ou testes) dentro de um container temporário.
     """
-    run_command = [
-        "sudo", "docker", "run",
+    run_command = SUDO_PREFIX + [
+        "docker", "run",
         "--rm", # Remove o container após a execução
         "--network", DOCKER_NETWORK_NAME,
         "--env-file", ".env",
@@ -308,8 +312,8 @@ def stop_bot(bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", he
 
     print(f"🛑 Parando e removendo o container do bot '{bot_to_stop.bot_name}'...")
     try:
-        subprocess.run(["sudo", "docker", "stop", bot_to_stop.container_id], check=True, capture_output=True)
-        subprocess.run(["sudo", "docker", "rm", bot_to_stop.container_id], check=True, capture_output=True)
+        subprocess.run(SUDO_PREFIX + ["docker", "stop", bot_to_stop.container_id], check=True, capture_output=True)
+        subprocess.run(SUDO_PREFIX + ["docker", "rm", bot_to_stop.container_id], check=True, capture_output=True)
         process_manager.remove_running_bot(bot_to_stop.bot_name)
         print(f"✅ Bot '{bot_to_stop.bot_name}' parado com sucesso.")
     except subprocess.CalledProcessError as e:
@@ -346,7 +350,7 @@ def logs(bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="
     print(f"📄 Acompanhando logs do bot '{bot_to_log.bot_name}' (Container: {bot_to_log.container_id[:12]})...")
     print("   (Pressione Ctrl+C para parar)")
     try:
-        subprocess.run(["sudo", "docker", "logs", "-f", bot_to_log.container_id])
+        subprocess.run(SUDO_PREFIX + ["docker", "logs", "-f", bot_to_log.container_id])
     except KeyboardInterrupt:
         print("\n🛑 Acompanhamento de logs interrompido.")
     except Exception as e:
