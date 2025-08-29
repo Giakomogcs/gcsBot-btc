@@ -167,7 +167,7 @@ class StateManager:
                     # Create a new SELL record for this part of the transaction
                     buy_price = Decimal(str(open_pos.price))
                     logger.info(f"MATCH: Matched sell trade {sell_trade['id']} (Qty: {quantity_to_sell_from_pos}) with buy trade {open_pos.trade_id} (Buy Price: ${buy_price:,.2f}).")
-
+                    
                     # CRITICAL CALCULATION: Determine the realized profit or loss for this sell event.
                     realized_pnl_usd = strategy_rules.calculate_realized_pnl(buy_price, sell_price, quantity_to_sell_from_pos)
                     logger.info(f"CALC PNL: Realized PnL for this portion is ${realized_pnl_usd:,.2f}.")
@@ -257,6 +257,7 @@ class StateManager:
                 'decision_context': {'reason': 'sync_from_binance_sell'},
                 'realized_pnl_usd': realized_pnl_usd
             }
+            logger.debug(f"Passing this data to TradeLogger for a SELL record: {sell_data}")
             self.trade_logger.log_trade(sell_data)
             logger.info(f"Created SELL record {sell_trade_id} linked to BUY {original_buy_trade.trade_id} with PnL ${realized_pnl_usd:.2f}")
         except Exception as e:

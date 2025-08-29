@@ -1,1 +1,8 @@
-[]
+[
+    {
+        "bot_name": "gcs-bot",
+        "container_id": "b3e1719dba2593e44f1207a68d32ba48da6f87b0381bafa225dcb208a4a5b995",
+        "bot_mode": "test",
+        "start_time": "2025-08-29T16:03:58.242667"
+    }
+]

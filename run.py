@@ -83,13 +83,39 @@ def run_docker_compose_command(command_args: list, **kwargs):
         print(f"❌ Erro inesperado ao executar comando docker-compose: {e}")
     return False
 
+def _ensure_env_is_running():
+    """
+    Ensures that the docker-compose services (like postgres) are running.
+    This is a lightweight check and startup.
+    """
+    # We check the status of the 'postgres' container specifically.
+    # The '-q' flag gives us the container ID if it's running, or empty if not.
+    # We don't use run_docker_compose_command here because we want to handle
+    # the case where the command "fails" (returns non-zero) because no containers are up.
+    try:
+        base_command = get_docker_compose_command()
+        check_command = base_command + ["ps", "-q", "postgres"]
+        result = subprocess.run(check_command, capture_output=True, text=True, check=False)
+        
+        # If stdout is empty, the container is not running.
+        if not result.stdout.strip():
+            print("🚀 Ambiente Docker não detectado. Iniciando serviços de suporte (PostgreSQL, etc.)...")
+            if not run_docker_compose_command(["up", "-d", "--build"], capture_output=True):
+                print("❌ Falha ao iniciar o ambiente Docker. Verifique a sua instalação do Docker.")
+                return False
+            print("✅ Serviços de ambiente iniciados com sucesso.")
+    except Exception as e:
+        print(f"❌ Erro inesperado ao verificar o ambiente Docker: {e}")
+        return False
+    return True
+
+
 @app.command("start-env")
 def start_env():
     """Constrói as imagens e inicia os serviços de suporte (ex: postgres)."""
-    print("🚀 Iniciando serviços de ambiente Docker (PostgreSQL, etc.)...")
-    if run_docker_compose_command(["up", "-d", "--build"], capture_output=True):
-        print("✅ Serviços de ambiente iniciados com sucesso.")
-        print("   Use `python run.py trade` ou `test` para iniciar os bots.")
+    if not _ensure_env_is_running():
+        raise typer.Exit(1)
+    print("✅ Ambiente Docker já está em execução ou foi iniciado com sucesso.")
 
 @app.command("stop-env")
 def stop_env():
@@ -222,6 +248,9 @@ def trade(
     detached: Optional[bool] = typer.Option(None, "--detached", "-d", help="Executa em segundo plano. Se não for especificado, será perguntado.")
 ):
     """Inicia o bot em modo de negociação (live)."""
+    if not _ensure_env_is_running():
+        raise typer.Exit(1)
+
     was_interactive = bot_name is None
     final_bot_name = _setup_bot_run(bot_name)
     mode = "trade"
@@ -253,6 +282,9 @@ def test(
     detached: Optional[bool] = typer.Option(None, "--detached", "-d", help="Executa em segundo plano. Se não for especificado, será perguntado.")
 ):
     """Inicia o bot em modo de teste (testnet)."""
+    if not _ensure_env_is_running():
+        raise typer.Exit(1)
+
     was_interactive = bot_name is None
     final_bot_name = _setup_bot_run(bot_name)
     mode = "test"
