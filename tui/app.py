@@ -45,18 +45,6 @@ class CommandOutput(Message):
         self.success = success
         super().__init__()
 
-class PortfolioData(Message):
-    def __init__(self, data: dict | str, success: bool) -> None:
-        self.data = data
-        self.success = success
-        super().__init__()
-
-class TradeHistoryData(Message):
-    def __init__(self, data: list | dict, success: bool) -> None:
-        self.data = data
-        self.success = success
-        super().__init__()
-
 class StatusIndicator(Static):
     status = reactive("OFF")
     def render(self) -> str:
@@ -178,12 +166,11 @@ class TUIApp(App):
         history_table = self.query_one("#history_table", DataTable)
         history_table.cursor_type = "row"
         history_table.add_columns("Timestamp", "Symbol", "Type", "Status", "Buy Price", "Sell Price", "Quantity", "USD Value", "PnL (USD)", "PnL (%)", "Trade ID")
-        self.update_dashboard()
-        self.set_interval(15.0, self.update_dashboard)
-        self.update_portfolio_dashboard()
-        self.set_interval(60.0, self.update_portfolio_dashboard)
-        self.update_trade_history()
-        self.set_interval(60.0, self.update_trade_history)
+        
+        # Start the new, unified update worker
+        self.update_from_status_file()
+        self.set_interval(2.0, self.update_from_status_file)
+
         self.query_one("#manual_buy_input").focus()
         self.stream_docker_logs()
 
@@ -211,50 +198,66 @@ class TUIApp(App):
             self.call_from_thread(self.log_display.write, f"[bold red]Error streaming logs: {e}[/]")
 
     @work(thread=True)
-    def run_script_worker(self, command: list[str], message_type: type[Message]) -> None:
+    def run_command_worker(self, command: list[str]) -> None:
+        """Runs a one-off command in a Docker container, e.g., force_buy/sell."""
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
         try:
             project_name = os.getenv("PROJECT_NAME", "gcsbot-btc")
             docker_image_name = f"{project_name}-app"
             docker_network_name = os.getenv("DOCKER_NETWORK_NAME", f"{project_name}_default")
 
-            self.call_from_thread(self.log_display.write, f"[dim]TUI worker using network: {docker_network_name}[/dim]")
-
             docker_command = SUDO_PREFIX + ["docker", "run", "--rm", "--network", docker_network_name, "--env-file", ".env", "-e", f"BOT_NAME={self.bot_name}", "-e", f"BOT_MODE={self.mode}", "-v", f"{project_root}:/app", docker_image_name] + command
             process = subprocess.run(docker_command, capture_output=True, text=True, check=False, encoding='utf-8', errors='replace')
+            
             output = process.stdout.strip() if process.returncode == 0 else process.stderr.strip()
             success = process.returncode == 0
             if not success:
                 self.call_from_thread(self.log_display.write, f"[bold red]Script Error ({' '.join(command)}):[/] {output}")
-            try:
-                data = json.loads(process.stdout.strip())
-                self.post_message(message_type(data, success))
-            except (json.JSONDecodeError, TypeError):
-                self.post_message(message_type(output, success))
+            
+            self.post_message(CommandOutput(output, success))
         except FileNotFoundError:
-            self.post_message(message_type("Docker not found", False))
+            self.post_message(CommandOutput("Docker not found. Is it installed and in your PATH?", False))
         except Exception as e:
-            self.post_message(message_type(f"Worker error: {e}", False))
+            self.post_message(CommandOutput(f"Worker error: {e}", False))
 
-    def update_dashboard(self) -> None:
-        self.run_script_worker(["python", "scripts/get_bot_data.py", self.mode], DashboardData)
-    def update_portfolio_dashboard(self) -> None:
-        self.run_script_worker(["python", "scripts/get_portfolio_data.py"], PortfolioData)
-    def update_trade_history(self) -> None:
-        start_date = self.query_one("#start_date_input", Input).value
-        end_date = self.query_one("#end_date_input", Input).value
-        command = ["python", "scripts/get_trade_history.py", self.bot_name]
-        if start_date: command.extend(["--start-date", start_date])
-        if end_date: command.extend(["--end-date", end_date])
-        self.run_script_worker(command, TradeHistoryData)
+    @work(thread=True)
+    def read_status_file_worker(self) -> None:
+        """Worker to read the bot status from the JSON file."""
+        status_file_path = f".bot_status_{self.bot_name}.json"
+        try:
+            if os.path.exists(status_file_path):
+                with open(status_file_path, "r") as f:
+                    # Handle empty file during bot startup
+                    content = f.read()
+                    if not content:
+                        self.post_message(DashboardData("Bot starting...", success=False))
+                        return
+                    data = json.loads(content)
+                self.post_message(DashboardData(data, success=True))
+            else:
+                self.post_message(DashboardData(f"Status file not found for bot '{self.bot_name}'. Is it running?", success=False))
+        except json.JSONDecodeError:
+            self.post_message(DashboardData("Error decoding status file. It might be corrupted or being written.", success=False))
+        except Exception as e:
+            self.post_message(DashboardData(f"Error reading status file: {e}", success=False))
+
+    def update_from_status_file(self) -> None:
+        """Triggers the worker to read the status file."""
+        self.read_status_file_worker()
 
     def on_dashboard_data(self, message: DashboardData) -> None:
+        """The single entry point for all data updates from the live status file."""
         if not message.success or not isinstance(message.data, dict):
+            # Display a generic error or status message if data loading fails
             self.query_one(StatusIndicator).status = "ERROR"
+            # You might want to display the error message from message.data somewhere in the UI
             return
+
         data = message.data
         self.query_one(StatusIndicator).status = data.get("bot_status", "OFF")
         self.query_one("#header_title").update(f"GCS Trading Bot Dashboard - {self.bot_name}")
+
+        # --- Main Status Panel ---
         price = Decimal(data.get("current_btc_price", 0))
         self.query_one("#status_symbol").update(f"Symbol: {data.get('symbol', 'N/A')}")
         self.query_one("#status_price").update(f"Price: ${price:,.2f}")
@@ -269,40 +272,39 @@ class TUIApp(App):
         total_color = "green" if net_total_pnl >= 0 else "red"
         self.query_one("#status_realized_pnl").update(f"Realized PnL: [{realized_color}]${realized_pnl:,.2f}[/]")
         self.query_one("#status_total_pnl").update(f"Total PnL: [{total_color}]${net_total_pnl:,.2f}[/]")
+
+        # --- Update All UI Components from the Single Data Source ---
         self.update_strategy_panel(data.get("buy_signal_status", {}), price)
         self.update_wallet_table(data.get("wallet_balances", []))
+
+        # Update open positions
         self.open_positions_data = data.get("open_positions_status", [])
         self.update_positions_table()
 
-    def on_portfolio_data(self, message: PortfolioData) -> None:
-        if not message.success or not isinstance(message.data, dict): return
-        self.update_portfolio_chart(message.data.get("history", []))
-
-    def on_trade_history_data(self, message: TradeHistoryData) -> None:
-        if not message.success or not isinstance(message.data, list): return
-        self.trade_history_data = message.data
+        # Update trade history
+        self.trade_history_data = data.get("trade_history", [])
         self.update_history_table()
+
+        # Update portfolio chart
+        # Note: The status service doesn't provide portfolio history for the chart.
+        # This functionality might need to be re-evaluated or sourced differently.
+        # For now, we'll leave it blank or find a compatible data point.
+        # self.update_portfolio_chart(data.get("portfolio_history", []))
 
     def update_history_table(self):
         table = self.query_one("#history_table", DataTable)
-        scroll_y, cursor_row = table.scroll_y, table.cursor_row
-        table.clear()
 
-        # Update Summary Label
+        # --- Update Summary Label ---
         total_trades = len(self.trade_history_data)
         if total_trades > 0:
             buy_trades = [t for t in self.trade_history_data if t.get('order_type') == 'buy']
             closed_sells = [t for t in self.trade_history_data if t.get('order_type') == 'sell' and t.get('status') == 'CLOSED']
-            
             total_invested = sum(Decimal(t.get('usd_value', 0)) for t in buy_trades if t.get('usd_value') is not None)
             total_returned = sum(Decimal(t.get('sell_price', 0)) * Decimal(t.get('quantity', 0)) for t in closed_sells if t.get('sell_price') is not None and t.get('quantity') is not None)
             total_realized_pnl = sum(Decimal(t.get('realized_pnl_usd', 0)) for t in closed_sells if t.get('realized_pnl_usd') is not None)
-            
             roi_pct = (total_realized_pnl / total_invested * 100) if total_invested > 0 else 0
-            
             pnl_color = "green" if total_realized_pnl >= 0 else "red"
             roi_color = "green" if roi_pct >= 0 else "red"
-
             summary_text = (
                 f"Total Trades: {total_trades} (Buys: {len(buy_trades)}, Sells: {len(closed_sells)})\n\n"
                 f"  Total Invested: ${total_invested:,.2f}\n"
@@ -314,9 +316,14 @@ class TUIApp(App):
             summary_text = "No trade history."
         self.query_one("#history_summary_label").update(summary_text)
 
-        if not self.trade_history_data:
-            table.add_row("No trade history found.")
-            return
+        # --- Incremental Update Logic ---
+        existing_rows_keys = set(table.rows.keys())
+        new_data_keys = {t.get("trade_id") for t in self.trade_history_data}
+
+        rows_to_remove = existing_rows_keys - new_data_keys
+        for key in rows_to_remove:
+            table.remove_row(key)
+
         sort_key_map = {"Timestamp": "timestamp", "Buy Price": "price", "Sell Price": "sell_price", "PnL (USD)": "realized_pnl_usd", "PnL (%)": "pnl_percentage"}
         sort_key = sort_key_map.get(self.history_sort_column, "timestamp")
         def sort_func(trade):
@@ -325,8 +332,13 @@ class TUIApp(App):
             if sort_key == "timestamp": return val
             try: return Decimal(val)
             except (InvalidOperation, TypeError): return -float('inf') if self.history_sort_reverse else float('inf')
+        
         sorted_history = sorted(self.trade_history_data, key=sort_func, reverse=self.history_sort_reverse)
-        for trade in sorted_history:
+        
+        for index, trade in enumerate(sorted_history):
+            trade_id = trade.get("trade_id")
+            if not trade_id: continue
+
             pnl = trade.get('realized_pnl_usd')
             order_type = trade.get('order_type', 'N/A')
             pnl_str = f"${Decimal(pnl):,.2f}" if pnl is not None else "N/A"
@@ -335,7 +347,7 @@ class TUIApp(App):
             type_color = "green" if order_type == 'buy' else "red"
             type_cell = f"[{type_color}]{order_type.upper()}[/]"
             timestamp = datetime.fromisoformat(trade['timestamp']).strftime('%Y-%m-%d %H:%M')
-            trade_id_short = trade.get('trade_id', 'N/A').split('-')[0]
+            trade_id_short = trade_id.split('-')[0]
             buy_price = f"${Decimal(trade.get('price', 0)):,.2f}"
             sell_price = f"${Decimal(trade.get('sell_price', 0)):,.2f}" if trade.get('sell_price') else "N/A"
             pnl_pct_str = trade.get('decision_context', {}).get('pnl_percentage', 'N/A')
@@ -346,16 +358,32 @@ class TUIApp(App):
                     pct_color = "green" if pnl_pct_val >= 0 else "red"
                     pnl_pct_cell = f"[{pct_color}]{pnl_pct_val:.2f}%[/]"
                 except InvalidOperation: pnl_pct_cell = "err"
-            table.add_row(timestamp, trade.get('symbol'), type_cell, trade.get('status'), buy_price, sell_price, f"{Decimal(trade.get('quantity', 0)):.8f}", f"${Decimal(trade.get('usd_value', 0)):,.2f}", pnl_cell, pnl_pct_cell if order_type == 'sell' else "N/A", trade_id_short, key=trade.get('trade_id'))
-        table.scroll_y = scroll_y
-        if cursor_row < len(table.rows):
-            table.move_cursor(row=cursor_row, animate=False)
+            
+            row_data = (
+                timestamp, trade.get('symbol'), type_cell, trade.get('status'), buy_price, sell_price, 
+                f"{Decimal(trade.get('quantity', 0)):.8f}", f"${Decimal(trade.get('usd_value', 0)):,.2f}", 
+                pnl_cell, pnl_pct_cell if order_type == 'sell' else "N/A", trade_id_short
+            )
+
+            if trade_id in existing_rows_keys:
+                for col_idx, cell_data in enumerate(row_data):
+                    table.update_cell_at(table.get_row_index(trade_id), col_idx, cell_data)
+            else:
+                table.add_row(*row_data, key=trade_id)
+
+        # Handle placeholder for empty table
+        has_placeholder = "placeholder_history" in table.rows
+        if not self.trade_history_data:
+            if not has_placeholder and len(table.rows) == 0:
+                table.add_row("No trade history found.", key="placeholder_history")
+        elif has_placeholder:
+            table.remove_row("placeholder_history")
 
     def on_command_output(self, message: CommandOutput) -> None:
         if message.success: self.log_display.write(f"[green]Command success:[/green] {message.output}")
         else: self.log_display.write(f"[bold red]Command failed:[/bold red] {message.output}")
-        self.update_dashboard()
-        self.update_trade_history()
+        # Trigger a manual refresh to see the result of the command immediately
+        self.update_from_status_file()
 
     def update_strategy_panel(self, status: dict, current_price: Decimal):
         operating_mode, market_regime, reason, condition_target_str = status.get("operating_mode", "N/A"), status.get("market_regime", -1), status.get("reason", "N/A"), status.get("condition_target", "N/A")
@@ -378,34 +406,59 @@ class TUIApp(App):
 
     def update_wallet_table(self, balances: list):
         wallet_table = self.query_one("#wallet_table", DataTable)
-        scroll_y = wallet_table.scroll_y
-        wallet_table.clear()
-        if not balances:
-            wallet_table.add_row("No balance data.")
-            return
+        
+        existing_assets = set(wallet_table.rows.keys())
+        new_assets = {bal.get('asset') for bal in balances}
+
+        # Remove assets no longer in the balance list
+        for asset in existing_assets - new_assets:
+            wallet_table.remove_row(asset)
+
+        # Add or update assets
         for bal in balances:
-            asset, free, total, usd_value = bal.get('asset'), Decimal(bal.get('free','0')), Decimal(bal.get('total','0')), Decimal(bal.get('usd_value','0'))
+            asset = bal.get('asset')
+            if not asset: continue
+
+            free, total, usd_value = Decimal(bal.get('free','0')), Decimal(bal.get('total','0')), Decimal(bal.get('usd_value','0'))
             row_format = "{:,.8f}" if asset == 'BTC' else "{:,.2f}"
-            wallet_table.add_row(asset, row_format.format(free), row_format.format(total), f"${usd_value:,.2f}")
-        wallet_table.scroll_y = scroll_y
+            
+            row_data = (
+                asset, 
+                row_format.format(free), 
+                row_format.format(total), 
+                f"${usd_value:,.2f}"
+            )
+
+            if asset in existing_assets:
+                # Update existing row - note we update all cells for simplicity
+                row_index = wallet_table.get_row_index(asset)
+                for i, cell_value in enumerate(row_data):
+                    wallet_table.update_cell_at(row_index, i, cell_value)
+            else:
+                # Add new row
+                wallet_table.add_row(*row_data, key=asset)
+
+        # Handle placeholder for empty table
+        has_placeholder = "placeholder_wallet" in wallet_table.rows
+        if not balances:
+            if not has_placeholder and len(wallet_table.rows) == 0:
+                wallet_table.add_row("No balance data.", key="placeholder_wallet")
+        elif has_placeholder:
+            wallet_table.remove_row("placeholder_wallet")
 
     def update_positions_table(self):
         pos_table = self.query_one("#positions_table", DataTable)
-        scroll_y, cursor_row = pos_table.scroll_y, pos_table.cursor_row
-        pos_table.clear()
-
-        # Pre-calculate current_value for all positions
+        
+        # --- Update Summary Label (this can be done every time) ---
         for pos in self.open_positions_data:
             pos['current_value'] = Decimal(pos.get('quantity', 0)) * Decimal(pos.get('current_price', 0))
-
-        # Update Summary Label
+        
         open_positions_count = len(self.open_positions_data)
         if open_positions_count > 0:
             total_invested = sum(Decimal(p.get('entry_price', 0)) * Decimal(p.get('quantity', 0)) for p in self.open_positions_data)
             current_market_value = sum(p['current_value'] for p in self.open_positions_data)
             total_unrealized_pnl = sum(Decimal(p.get('unrealized_pnl', 0)) for p in self.open_positions_data)
             pnl_color = "green" if total_unrealized_pnl >= 0 else "red"
-            
             summary_text = (
                 f"Open Positions: {open_positions_count}\n\n"
                 f"  Total Invested: ${total_invested:,.2f}\n"
@@ -416,10 +469,18 @@ class TUIApp(App):
             summary_text = "No open positions."
         self.query_one("#positions_summary_label").update(summary_text)
 
-        if not self.open_positions_data:
-            pos_table.add_row("No open positions.")
-            return
+        # --- Incremental Table Update Logic ---
+        
+        # 1. Get current state of the table
+        existing_rows_keys = set(pos_table.rows.keys())
+        new_data_keys = {pos.get("trade_id") for pos in self.open_positions_data}
 
+        # 2. Identify rows to remove
+        rows_to_remove = existing_rows_keys - new_data_keys
+        for key in rows_to_remove:
+            pos_table.remove_row(key)
+        
+        # 3. Sort new data for ordered insertion/update
         sort_key_map = {
             "ID": "trade_id", "Entry": "entry_price", "Value": "current_value",
             "Unrealized PnL": "unrealized_pnl", "PnL %": "unrealized_pnl_pct",
@@ -427,39 +488,36 @@ class TUIApp(App):
             "Progress": "progress_to_sell_target_pct"
         }
         sort_key = sort_key_map.get(self.positions_sort_column, "unrealized_pnl")
-
         def sort_func(p):
             val = p.get(sort_key)
-            if val is None:
-                return -float('inf') if self.positions_sort_reverse else float('inf')
-            if sort_key == 'trade_id':
-                return val
-            try:
-                return Decimal(val)
-            except (InvalidOperation, TypeError):
-                return -float('inf') if self.positions_sort_reverse else float('inf')
-
+            if val is None: return -float('inf') if self.positions_sort_reverse else float('inf')
+            if sort_key == 'trade_id': return val
+            try: return Decimal(val)
+            except (InvalidOperation, TypeError): return -float('inf') if self.positions_sort_reverse else float('inf')
+        
         sorted_positions = sorted(self.open_positions_data, key=sort_func, reverse=self.positions_sort_reverse)
 
-        for pos in sorted_positions:
+        # 4. Add new rows and update existing ones
+        for index, pos in enumerate(sorted_positions):
+            trade_id = pos.get("trade_id")
+            if trade_id is None: continue
+
+            # Format data for display
             pnl = Decimal(pos.get("unrealized_pnl", 0))
             pnl_color = "green" if pnl >= 0 else "red"
-
             pnl_pct = Decimal(pos.get("unrealized_pnl_pct", 0))
             pnl_pct_color = "green" if pnl_pct >= 0 else "red"
             pnl_pct_str = f"[{pnl_pct_color}]{pnl_pct:,.2f}%[/]"
-
             target_pnl = Decimal(pos.get("target_pnl", 0))
             target_pnl_color = "green" if target_pnl >= 0 else "red"
             target_pnl_str = f"[{target_pnl_color}]${target_pnl:,.2f}[/]"
-
             progress = float(pos.get('progress_to_sell_target_pct', 0))
             progress_bar = "█" * int(progress / 10) + "░" * (10 - int(progress / 10))
             progress_str = f"[{progress_bar}] {progress:.1f}%"
             current_value = pos['current_value']
 
-            pos_table.add_row(
-                pos.get("trade_id", "N/A").split('-')[0],
+            row_data = (
+                trade_id.split('-')[0],
                 f"${Decimal(pos.get('entry_price', 0)):,.2f}",
                 f"${current_value:,.2f}",
                 f"[{pnl_color}]${pnl:,.2f}[/]",
@@ -467,12 +525,23 @@ class TUIApp(App):
                 f"${Decimal(pos.get('sell_target_price', 0)):,.2f}",
                 target_pnl_str,
                 progress_str,
-                key=pos.get("trade_id")
             )
 
-        pos_table.scroll_y = scroll_y
-        if cursor_row < len(pos_table.rows):
-            pos_table.move_cursor(row=cursor_row, animate=False)
+            if trade_id in existing_rows_keys:
+                # Update existing row cells
+                for col_idx, cell_data in enumerate(row_data):
+                    pos_table.update_cell_at(pos_table.get_row_index(trade_id), col_idx, cell_data)
+            else:
+                # Add new row
+                pos_table.add_row(*row_data, key=trade_id)
+
+        # Handle placeholder for empty table
+        has_placeholder = "placeholder_positions" in pos_table.rows
+        if not self.open_positions_data:
+            if not has_placeholder and len(pos_table.rows) == 0:
+                pos_table.add_row("No open positions.", key="placeholder_positions")
+        elif has_placeholder:
+            pos_table.remove_row("placeholder_positions")
 
     def update_portfolio_chart(self, history: list):
         chart = self.query_one("#portfolio_chart", PlotextPlot)
@@ -504,15 +573,16 @@ class TUIApp(App):
         if event.button.id == "force_buy_button":
             input_widget = self.query_one("#manual_buy_input", Input)
             if input_widget.is_valid:
-                self.run_script_worker(["python", "scripts/force_buy.py", input_widget.value], CommandOutput)
+                self.run_command_worker(["python", "scripts/force_buy.py", input_widget.value])
                 input_widget.value = ""
             else: self.log_display.write("[bold red]Invalid buy amount.[/bold red]")
         elif event.button.id == "force_sell_button" and self.selected_trade_id:
-            self.run_script_worker(["python", "scripts/force_sell.py", self.selected_trade_id, "100"], CommandOutput)
+            self.run_command_worker(["python", "scripts/force_sell.py", self.selected_trade_id, "100"])
             self.query_one("#force_sell_button").disabled = True
             self.selected_trade_id = None
         elif event.button.id == "filter_history_button":
-            self.update_trade_history()
+            # This button is now disabled in the UI, but we can log a message if it's somehow pressed.
+            self.log_display.write("[yellow]Date filtering is not available with the new live update system.[/yellow]")
         elif event.button.id == "calendar_button":
             self.action_open_calendar()
 
@@ -524,7 +594,7 @@ class TUIApp(App):
                 # For simplicity, we're setting the start date.
                 # A more complex implementation could handle start/end dates.
                 self.query_one("#start_date_input").value = selected_date.strftime("%Y-%m-%d")
-                self.update_trade_history()
+                # self.update_trade_history() # This is now handled by the main update loop
 
         self.push_screen(DatePickerModal(), set_date)
 

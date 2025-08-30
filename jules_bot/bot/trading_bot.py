@@ -522,6 +522,22 @@ class TradingBot:
                         buy_progress=buy_progress
                     )
 
+                    # --- Live Status File for TUI ---
+                    try:
+                        # Use a dedicated file for each bot instance to avoid conflicts
+                        status_file_path = f".bot_status_{self.bot_name}.json"
+                        # Fetch the comprehensive data payload
+                        status_data = self.status_service.get_extended_status(self.mode, self.bot_name)
+                        
+                        # Write atomically to prevent TUI from reading a partial file
+                        temp_path = status_file_path + ".tmp"
+                        with open(temp_path, "w") as f:
+                            json.dump(status_data, f, default=str)
+                        os.rename(temp_path, status_file_path)
+                    except Exception as e:
+                        logger.error(f"Failed to write status file for TUI: {e}", exc_info=True)
+
+
                     logger.info("--- Cycle complete. Waiting 30 seconds...")
                     time.sleep(30)
 

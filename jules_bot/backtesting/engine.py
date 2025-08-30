@@ -103,21 +103,24 @@ class Backtester:
                     original_quantity = position['quantity']
                     sell_quantity = original_quantity * strategy_rules.sell_factor
 
-                    success, sell_result = self.mock_trader.execute_sell({'quantity': sell_quantity})
+                    decision_context_sell = candle.to_dict()
+                    success, sell_result = self.mock_trader.execute_sell(
+                        {'quantity': sell_quantity}, self.run_id, decision_context_sell
+                    )
                     if success:
                         buy_price = position['price']
                         sell_price = sell_result['price']
                         
-                        sell_commission_usd = self.mock_trader.get_commission(sell_result['usd_value'])
+                        sell_commission_usd = sell_result.get('commission_usd', Decimal('0'))
                         realized_pnl_usd = strategy_rules.calculate_realized_pnl(
                             buy_price=buy_price,
                             sell_price=sell_price,
                             quantity_sold=sell_result['quantity'],
-                            buy_commission_usd=position['commission'],
+                            buy_commission_usd=position['commission_usd'],
                             sell_commission_usd=sell_commission_usd,
                             buy_quantity=position['quantity']
                         )
-                        commission_usd = sell_result['commission']
+                        commission_usd = sell_result.get('commission_usd', Decimal('0'))
                         hodl_asset_amount = original_quantity - sell_quantity
                         hodl_asset_value_at_sell = hodl_asset_amount * sell_result['price']
 
@@ -165,7 +168,13 @@ class Backtester:
             )
 
             if buy_amount_usdt > 0 and cash_balance >= min_trade_size:
-                success, buy_result = self.mock_trader.execute_buy(buy_amount_usdt)
+                decision_context_buy = candle.to_dict()
+                decision_context_buy['operating_mode'] = operating_mode
+                decision_context_buy['buy_trigger_reason'] = reason
+                decision_context_buy['market_regime'] = current_regime
+                success, buy_result = self.mock_trader.execute_buy(
+                    buy_amount_usdt, self.run_id, decision_context_buy
+                )
                 if success:
                     new_trade_id = str(uuid.uuid4())
                     buy_price = buy_result['price']
@@ -173,7 +182,8 @@ class Backtester:
 
                     open_positions[new_trade_id] = {
                         'price': buy_price, 'quantity': buy_result['quantity'],
-                        'usd_value': buy_result['usd_value'], 'sell_target_price': sell_target_price
+                        'usd_value': buy_result['usd_value'], 'sell_target_price': sell_target_price,
+                        'commission_usd': buy_result.get('commission_usd', Decimal('0'))
                     }
 
                     decision_context = candle.to_dict()
@@ -186,10 +196,10 @@ class Backtester:
                         'run_id': self.run_id, 'strategy_name': strategy_name, 'symbol': symbol,
                         'trade_id': new_trade_id, 'exchange': "backtest_engine", 'order_type': "buy",
                         'status': "OPEN", 'price': buy_price, 'quantity': buy_result['quantity'],
-                        'usd_value': buy_result['usd_value'], 'commission': buy_result['commission'],
+                        'usd_value': buy_result['usd_value'], 'commission': buy_result.get('commission_usd', Decimal('0')),
                         'commission_asset': "USDT", 'timestamp': current_time,
                         'decision_context': decision_context, 'sell_target_price': sell_target_price,
-                        'commission_usd': buy_result['commission']
+                        'commission_usd': buy_result.get('commission_usd', Decimal('0'))
                     }
                     self.trade_logger.log_trade(trade_data)
                     logger.info(f"BUY EXECUTED: TradeID: {new_trade_id} | Price: ${buy_price:,.2f} | Qty: {buy_result['quantity']:.8f} | Regime: {current_regime}")

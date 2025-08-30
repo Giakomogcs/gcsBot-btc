@@ -114,13 +114,17 @@ def status():
 
 def run_bot_in_container(bot_name: str, mode: str) -> Optional[str]:
     container_name = f"{PROJECT_NAME}-instance-{bot_name}-{mode}"
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '.'))
     try:
         print(f"   Verificando container existente '{container_name}'...")
         subprocess.run(SUDO_PREFIX + ["docker", "stop", container_name], capture_output=True, text=True, check=False)
         subprocess.run(SUDO_PREFIX + ["docker", "rm", container_name], capture_output=True, text=True, check=False)
     except Exception:
         pass
-    command = SUDO_PREFIX + ["docker", "run", "--detach", "--name", container_name, "--network", DOCKER_NETWORK_NAME, "--env-file", ".env", "-e", f"BOT_NAME={bot_name}", "-e", f"BOT_MODE={mode}", "-e", "JULES_BOT_SCRIPT_MODE=1", DOCKER_IMAGE_NAME, "python", "jules_bot/main.py"]
+    
+    # Adicionando o volume mount (-v) para que o arquivo de status seja visível no host
+    command = SUDO_PREFIX + ["docker", "run", "--detach", "--name", container_name, "--network", DOCKER_NETWORK_NAME, "--env-file", ".env", "-e", f"BOT_NAME={bot_name}", "-e", f"BOT_MODE={mode}", "-e", "JULES_BOT_SCRIPT_MODE=1", "-v", f"{project_root}:/app", DOCKER_IMAGE_NAME, "python", "jules_bot/main.py"]
+    
     print(f"   (executando: `{' '.join(command)}`)")
     try:
         result = subprocess.run(command, capture_output=True, text=True, check=True)
@@ -468,6 +472,53 @@ def backtest(bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", he
         print("❌ Falha na execução do backtest.")
         return
     print("\n✅ Backtest finalizado com sucesso.")
+
+@app.command("clean")
+def clean():
+    """
+    Limpa o projeto de arquivos de cache do Python (__pycache__, .pyc).
+    """
+    print("🧹 Limpando arquivos de cache do Python...")
+    count_files = 0
+    count_dirs = 0
+    # Adicionado um .gitignore global para __pycache__ para evitar que o problema se repita
+    gitignore_path = ".gitignore"
+    pycache_ignored = False
+    if os.path.exists(gitignore_path):
+        with open(gitignore_path, "r") as f:
+            if any("__pycache__" in line for line in f):
+                pycache_ignored = True
+    
+    if not pycache_ignored:
+        print("   -> Adicionando '__pycache__/' ao .gitignore para prevenir futuros problemas...")
+        with open(gitignore_path, "a") as f:
+            f.write("\n\n# Python cache files\n__pycache__/\n")
+
+    for root, dirs, files in os.walk("."):
+        # Remove .pyc files
+        for file in files:
+            if file.endswith(".pyc"):
+                full_path = os.path.join(root, file)
+                try:
+                    os.remove(full_path)
+                    count_files += 1
+                except OSError as e:
+                    print(f"❌ Erro ao remover o arquivo {full_path}: {e}")
+
+        # Remove __pycache__ directories
+        if "__pycache__" in dirs:
+            full_path = os.path.join(root, "__pycache__")
+            try:
+                # Usar shutil.rmtree para remover o diretório e seu conteúdo
+                shutil.rmtree(full_path)
+                count_dirs += 1
+                # É preciso remover o __pycache__ da lista de `dirs` para que o os.walk não tente entrar nele
+                dirs.remove('__pycache__')
+            except OSError as e:
+                print(f"❌ Erro ao remover o diretório {full_path}: {e}")
+    
+    print(f"✅ Limpeza concluída. Removidos {count_files} arquivos .pyc e {count_dirs} diretórios __pycache__.")
+
 
 if __name__ == "__main__":
     app()
