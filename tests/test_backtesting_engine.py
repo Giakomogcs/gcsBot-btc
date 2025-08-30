@@ -100,19 +100,25 @@ def test_backtester_pnl_calculation(mock_add_all_features, mock_summary, mock_co
         sell_trade_data = update_calls[0][1][0]
         realized_pnl_usd = sell_trade_data.get('realized_pnl_usd')
 
-        # Manually calculate the expected PnL using Decimal
+        # Manually calculate the expected PnL using the same logic as the application
         buy_price = Decimal("101.0")
         sell_price = Decimal("110.0")
-        
         buy_amount_usdt = Decimal("100.0")
+        commission_rate = Decimal("0.001")
+
+        # Buy side
         quantity_bought = buy_amount_usdt / buy_price
-        
+        buy_commission_usd = buy_amount_usdt * commission_rate
+
+        # Sell side
         sell_factor = Decimal("0.9")
         quantity_sold = quantity_bought * sell_factor
+        sell_value_gross = quantity_sold * sell_price
+        sell_commission_usd = sell_value_gross * commission_rate
 
-        commission_rate = Decimal("0.001")
-        one = Decimal("1")
+        # PnL Calculation (mirroring the logic in StrategyRules.calculate_realized_pnl)
+        gross_pnl = (sell_price - buy_price) * quantity_sold
+        buy_commission_prorated = (quantity_sold / quantity_bought) * buy_commission_usd if quantity_bought > 0 else Decimal('0')
+        expected_pnl = gross_pnl - buy_commission_prorated - sell_commission_usd
 
-        expected_pnl = (sell_price * (one - commission_rate) - buy_price * (one + commission_rate)) * quantity_sold
-        
-        assert realized_pnl_usd == pytest.approx(expected_pnl)
+        assert realized_pnl_usd == pytest.approx(expected_pnl, rel=1e-9)

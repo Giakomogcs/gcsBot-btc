@@ -12,6 +12,7 @@ from textual.widgets import Footer, DataTable, Input, Button, Label, Static, Ric
 from textual.validation import Validator, ValidationResult
 from textual.worker import Worker, get_current_worker
 from textual import work
+from textual.coordinate import Coordinate
 from textual.message import Message
 from textual.reactive import reactive
 from textual.screen import Screen
@@ -366,8 +367,9 @@ class TUIApp(App):
             )
 
             if trade_id in existing_rows_keys:
+                row_index = table.get_row_index(trade_id)
                 for col_idx, cell_data in enumerate(row_data):
-                    table.update_cell_at(table.get_row_index(trade_id), col_idx, cell_data)
+                    table.update_cell_at(Coordinate(row_index, col_idx), cell_data)
             else:
                 table.add_row(*row_data, key=trade_id)
 
@@ -433,7 +435,7 @@ class TUIApp(App):
                 # Update existing row - note we update all cells for simplicity
                 row_index = wallet_table.get_row_index(asset)
                 for i, cell_value in enumerate(row_data):
-                    wallet_table.update_cell_at(row_index, i, cell_value)
+                    wallet_table.update_cell_at(Coordinate(row_index, i), cell_value)
             else:
                 # Add new row
                 wallet_table.add_row(*row_data, key=asset)
@@ -529,8 +531,9 @@ class TUIApp(App):
 
             if trade_id in existing_rows_keys:
                 # Update existing row cells
+                row_index = pos_table.get_row_index(trade_id)
                 for col_idx, cell_data in enumerate(row_data):
-                    pos_table.update_cell_at(pos_table.get_row_index(trade_id), col_idx, cell_data)
+                    pos_table.update_cell_at(Coordinate(row_index, col_idx), cell_data)
             else:
                 # Add new row
                 pos_table.add_row(*row_data, key=trade_id)
