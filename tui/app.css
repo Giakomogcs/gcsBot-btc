@@ -58,6 +58,12 @@
   max-height: 25;
 }
 
+#history_filter_bar {
+  height: 10%;
+  align: right middle;
+  margin-top: 1;
+}
+
 #history_table {
   width: 70%;
   height: 100%;
