@@ -424,8 +424,10 @@ class PostgresManager:
                     filters.append(Trade.environment == mode)
                 if symbol:
                     filters.append(Trade.symbol == symbol)
-                if bot_id:
-                    filters.append(Trade.run_id == bot_id)
+                # NOTE: The bot_id filter (run_id) is intentionally removed for the TUI use case.
+                # The TUI passes the bot_name, which does not match the unique run_id of individual trades.
+                # The database connection is already scoped to the bot's schema, which correctly
+                # isolates the data. This change mirrors the fix previously applied to get_open_positions.
 
                 # Handle start_date
                 if start_date:
@@ -529,6 +531,36 @@ class PostgresManager:
             except Exception as e:
                 db.rollback()
                 logger.error(f"Failed to update quantity and context for trade_id '{trade_id}': {e}", exc_info=True)
+                raise
+
+    def update_trade(self, trade_id: str, update_data: dict):
+        """
+        Dynamically updates a trade record in the database using a dictionary of fields.
+        """
+        with self.get_db() as db:
+            try:
+                trade_to_update = db.query(Trade).filter(Trade.trade_id == trade_id).first()
+
+                if not trade_to_update:
+                    logger.error(f"Could not find trade with trade_id '{trade_id}' to update.")
+                    return
+
+                logger.info(f"Updating trade {trade_id} with data: {list(update_data.keys())}")
+                
+                valid_columns = {c.name for c in Trade.__table__.columns}
+                
+                for key, value in update_data.items():
+                    if key in valid_columns:
+                        setattr(trade_to_update, key, value)
+                    else:
+                        logger.warning(f"'{key}' is not a valid column in the 'trades' table. Skipping.")
+
+                db.commit()
+                logger.info(f"Successfully updated trade {trade_id}.")
+
+            except Exception as e:
+                db.rollback()
+                logger.error(f"Failed to perform dynamic update for trade_id '{trade_id}': {e}", exc_info=True)
                 raise
 
     def clear_all_tables(self):

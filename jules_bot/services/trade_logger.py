@@ -45,6 +45,48 @@ class TradeLogger:
             logger.error(f"TradeLogger: An unexpected error occurred while logging trade: {e}", exc_info=True)
             return False
 
+    def update_trade(self, trade_data: Dict[str, Any]):
+        """
+        Prepares and sends a request to update an existing trade in the database.
+        This acts as a safeguard, ensuring that data from various sources (like the backtester)
+        is correctly formatted before being passed to the database manager.
+        """
+        try:
+            trade_id = trade_data.get('trade_id')
+            if not trade_id:
+                raise ValueError("'trade_id' is required to update a trade.")
+
+            # Create a mutable copy for manipulation
+            update_payload = trade_data.copy()
+
+            # The backtester sends sell data using generic keys like 'price'.
+            # We must map these to the correct database columns for a sell update.
+            if update_payload.get('order_type') == 'sell':
+                if 'price' in update_payload:
+                    update_payload['sell_price'] = update_payload.pop('price')
+                if 'usd_value' in update_payload:
+                    update_payload['sell_usd_value'] = update_payload.pop('usd_value')
+                # The 'quantity' in a sell update from the backtester refers to the
+                # amount sold, not the original position size. Do not update the quantity.
+                update_payload.pop('quantity', None)
+
+            # Ensure timestamp is a timezone-aware datetime object
+            if 'timestamp' in update_payload:
+                update_payload['timestamp'] = self._convert_timestamp(update_payload['timestamp'])
+
+            # Remove identifiers that should not be updated
+            update_payload.pop('trade_id', None)
+            
+            self.db_manager.update_trade(trade_id, update_payload)
+            logger.info(f"Successfully requested update for trade_id: {trade_id}")
+            return True
+        except (KeyError, ValueError, TypeError) as e:
+            logger.error(f"TradeLogger: Failed to prepare trade update. Error: {e}", exc_info=True)
+            return False
+        except Exception as e:
+            logger.error(f"TradeLogger: An unexpected error occurred while updating trade: {e}", exc_info=True)
+            return False
+
     def _create_trade_point(self, trade_data: Dict[str, Any]) -> TradePoint:
         """Helper to create and validate a TradePoint from a dictionary."""
         return TradePoint(

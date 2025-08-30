@@ -108,7 +108,16 @@ class ExchangeManager:
             ]
             return balances
         except Exception as e:
-            logging.error(f"CRITICAL_ERROR: Failed to fetch account balance from Binance API. This is likely due to incorrect API keys or permissions. Error: {e}", exc_info=True)
+            logging.error(
+                "CRITICAL_ERROR: Failed to fetch account balance from Binance API. "
+                "This is a critical error and will result in a reported wallet value of $0.00. "
+                "The most common causes are:\n"
+                "  1. Incorrect API Key or Secret in your .env file for the current mode ('" + self.mode + "').\n"
+                "  2. API key permissions do not allow 'Spot & Margin Trading' or 'Enable Reading'.\n"
+                "  3. IP address restrictions on the API key.\n"
+                f"Please check your configuration. Original error: {e}",
+                exc_info=True
+            )
             return []
 
     def get_open_orders(self, symbol: str) -> list:
