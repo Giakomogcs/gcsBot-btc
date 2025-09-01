@@ -266,10 +266,10 @@ class Backtester:
                 win_rate = (len(winning_trades) / sell_trades_count) * 100
             
             if len(winning_trades) > 0:
-                avg_gain = winning_trades['realized_pnl_usd'].mean()
+                avg_gain = Decimal(str(winning_trades['realized_pnl_usd'].mean()))
             
             if len(losing_trades) > 0:
-                avg_loss = abs(losing_trades['realized_pnl_usd'].mean())
+                avg_loss = Decimal(str(abs(losing_trades['realized_pnl_usd'].mean())))
             
             if avg_loss > 0:
                 payoff_ratio = avg_gain / avg_loss

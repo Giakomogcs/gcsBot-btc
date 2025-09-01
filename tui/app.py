@@ -96,6 +96,7 @@ class TUIApp(App):
         self.positions_sort_reverse = True
         self.history_sort_column = "Timestamp"
         self.history_sort_reverse = True
+        self.history_filter = "all"
 
     def compose(self) -> ComposeResult:
         yield CustomHeader()
@@ -150,10 +151,12 @@ class TUIApp(App):
             with TabPane("Trade History", id="history"):
                 with Vertical():
                     with Horizontal(id="history_filter_bar"):
-                        yield Input(placeholder="Start Date (YYYY-MM-DD)", id="start_date_input")
-                        yield Input(placeholder="End Date (YYYY-MM-DD)", id="end_date_input")
-                        yield Button("Calendar", id="calendar_button")
-                        yield Button("Filter", id="filter_history_button")
+                        yield Button("All", id="filter_all_button", variant="primary")
+                        yield Button("Open", id="filter_open_button")
+                        yield Button("Closed", id="filter_closed_button")
+                        yield Input(placeholder="Start (YYYY-MM-DD)", id="start_date_input", classes="date_input")
+                        yield Input(placeholder="End (YYYY-MM-DD)", id="end_date_input", classes="date_input")
+                        yield Button("Filter", id="filter_date_button")
                     yield Label("Summary: N/A", id="history_summary_label")
                     with Horizontal():
                         yield DataTable(id="history_table", classes="history_table")
@@ -167,7 +170,7 @@ class TUIApp(App):
         self.log_display.write(f"[bold green]TUI Initialized for {self.bot_name}.[/bold green]")
         positions_table = self.query_one("#positions_table", DataTable)
         positions_table.cursor_type = "row"
-        positions_table.add_columns("ID", "Entry", "Value", "Unrealized PnL", "PnL %", "Target", "Target PnL", "Progress")
+        positions_table.add_columns("ID", "Date", "Entry", "Value", "Unrealized PnL", "PnL %", "Target", "Target PnL", "Progress")
         wallet_table = self.query_one("#wallet_table", DataTable)
         wallet_table.add_columns("Asset", "Available", "Total", "USD Value")
         history_table = self.query_one("#history_table", DataTable)
@@ -300,11 +303,39 @@ class TUIApp(App):
     def update_history_table(self):
         table = self.query_one("#history_table", DataTable)
 
+        # --- Combined Filtering Logic ---
+        
+        # 1. Status Filter
+        if self.history_filter == 'open':
+            status_filtered_trades = [t for t in self.trade_history_data if t.get('order_type') == 'buy' and t.get('status') == 'OPEN']
+        elif self.history_filter == 'closed':
+            status_filtered_trades = [t for t in self.trade_history_data if t.get('order_type') == 'sell']
+        else:
+            status_filtered_trades = self.trade_history_data
+
+        # 2. Date Filter
+        start_date_str = self.query_one("#start_date_input", Input).value
+        end_date_str = self.query_one("#end_date_input", Input).value
+        final_filtered_history = []
+        try:
+            start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date() if start_date_str else None
+            end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date() if end_date_str else None
+
+            for trade in status_filtered_trades:
+                trade_date = datetime.fromisoformat(trade['timestamp']).date()
+                if (start_date and trade_date < start_date) or (end_date and trade_date > end_date):
+                    continue
+                final_filtered_history.append(trade)
+        except ValueError:
+            # Handle invalid date format gracefully
+            self.log_display.write("[bold red]Invalid date format. Please use YYYY-MM-DD.[/bold red]")
+            final_filtered_history = status_filtered_trades # Or show no data
+
         # --- Update Summary Label ---
-        total_trades = len(self.trade_history_data)
+        total_trades = len(final_filtered_history)
         if total_trades > 0:
-            buy_trades = [t for t in self.trade_history_data if t.get('order_type') == 'buy']
-            closed_sells = [t for t in self.trade_history_data if t.get('order_type') == 'sell' and t.get('status') == 'CLOSED']
+            buy_trades = [t for t in final_filtered_history if t.get('order_type') == 'buy']
+            closed_sells = [t for t in final_filtered_history if t.get('order_type') == 'sell' and t.get('status') == 'CLOSED']
             total_invested = sum(Decimal(t.get('usd_value', 0)) for t in buy_trades if t.get('usd_value') is not None)
             total_returned = sum(Decimal(t.get('sell_price', 0)) * Decimal(t.get('quantity', 0)) for t in closed_sells if t.get('sell_price') is not None and t.get('quantity') is not None)
             total_realized_pnl = sum(Decimal(t.get('realized_pnl_usd', 0)) for t in closed_sells if t.get('realized_pnl_usd') is not None)
@@ -312,19 +343,19 @@ class TUIApp(App):
             pnl_color = "green" if total_realized_pnl >= 0 else "red"
             roi_color = "green" if roi_pct >= 0 else "red"
             summary_text = (
-                f"Total Trades: {total_trades} (Buys: {len(buy_trades)}, Sells: {len(closed_sells)})\n\n"
-                f"  Total Invested: ${total_invested:,.2f}\n"
-                f"  Total Returned: ${total_returned:,.2f}\n"
-                f"  Realized PnL:   [{pnl_color}]${total_realized_pnl:,.2f}[/]\n"
-                f"  ROI:            [{roi_color}]{roi_pct:.2f}%[/]"
+                f"Filtered Trades: {total_trades} (Buys: {len(buy_trades)}, Sells: {len(closed_sells)})\n\n"
+                f"  Total Invested (in view): ${total_invested:,.2f}\n"
+                f"  Total Returned (in view): ${total_returned:,.2f}\n"
+                f"  Realized PnL (in view):   [{pnl_color}]${total_realized_pnl:,.2f}[/]\n"
+                f"  ROI (of closed in view):  [{roi_color}]{roi_pct:.2f}%[/]"
             )
         else:
-            summary_text = "No trade history."
+            summary_text = "No trades match the current filter."
         self.query_one("#history_summary_label").update(summary_text)
 
         # --- Incremental Update Logic ---
         existing_rows_keys = set(table.rows.keys())
-        new_data_keys = {t.get("trade_id") for t in self.trade_history_data}
+        new_data_keys = {t.get("trade_id") for t in final_filtered_history}
 
         rows_to_remove = existing_rows_keys - new_data_keys
         for key in rows_to_remove:
@@ -339,7 +370,7 @@ class TUIApp(App):
             try: return Decimal(val)
             except (InvalidOperation, TypeError): return -float('inf') if self.history_sort_reverse else float('inf')
         
-        sorted_history = sorted(self.trade_history_data, key=sort_func, reverse=self.history_sort_reverse)
+        sorted_history = sorted(final_filtered_history, key=sort_func, reverse=self.history_sort_reverse)
         
         for index, trade in enumerate(sorted_history):
             trade_id = trade.get("trade_id")
@@ -380,9 +411,9 @@ class TUIApp(App):
 
         # Handle placeholder for empty table
         has_placeholder = "placeholder_history" in table.rows
-        if not self.trade_history_data:
+        if not final_filtered_history:
             if not has_placeholder and len(table.rows) == 0:
-                table.add_row("No trade history found.", key="placeholder_history")
+                table.add_row("No trades match the current filter.", key="placeholder_history")
         elif has_placeholder:
             table.remove_row("placeholder_history")
 
@@ -507,7 +538,7 @@ class TUIApp(App):
         
         # 3. Sort new data for ordered insertion/update
         sort_key_map = {
-            "ID": "trade_id", "Entry": "entry_price", "Value": "current_value",
+            "ID": "trade_id", "Date": "timestamp", "Entry": "entry_price", "Value": "current_value",
             "Unrealized PnL": "unrealized_pnl", "PnL %": "unrealized_pnl_pct",
             "Target": "sell_target_price", "Target PnL": "target_pnl",
             "Progress": "progress_to_sell_target_pct"
@@ -516,7 +547,7 @@ class TUIApp(App):
         def sort_func(p):
             val = p.get(sort_key)
             if val is None: return -float('inf') if self.positions_sort_reverse else float('inf')
-            if sort_key == 'trade_id': return val
+            if sort_key in ['trade_id', 'timestamp']: return val
             try: return Decimal(val)
             except (InvalidOperation, TypeError): return -float('inf') if self.positions_sort_reverse else float('inf')
         
@@ -540,9 +571,11 @@ class TUIApp(App):
             progress_bar = "█" * int(progress / 10) + "░" * (10 - int(progress / 10))
             progress_str = f"[{progress_bar}] {progress:.1f}%"
             current_value = pos['current_value']
+            timestamp = datetime.fromisoformat(pos['timestamp']).strftime('%Y-%m-%d %H:%M')
 
             row_data = (
                 trade_id.split('-')[0],
+                timestamp,
                 f"${Decimal(pos.get('entry_price', 0)):,.2f}",
                 f"${current_value:,.2f}",
                 f"[{pnl_color}]${pnl:,.2f}[/]",
@@ -601,34 +634,26 @@ class TUIApp(App):
             if input_widget.is_valid:
                 self.run_command_worker(["python", "scripts/force_buy.py", input_widget.value, "--container-id", self.container_id])
                 input_widget.value = ""
-            else: self.log_display.write("[bold red]Invalid buy amount.[/bold red]")
+            else:
+                self.log_display.write("[bold red]Invalid buy amount.[/bold red]")
         elif event.button.id == "force_sell_button" and self.selected_trade_id:
-            # Immediately disable the button to prevent multiple clicks
             event.button.disabled = True
             self.log_display.write(f"[yellow]Initiating force sell for trade ID: {self.selected_trade_id}...[/]")
-            
             self.run_command_worker(["python", "scripts/force_sell.py", self.selected_trade_id, "100"])
-            
-            # Clear the selected trade ID. The button will be re-enabled
-            # when a new row is selected in the positions table.
             self.selected_trade_id = None
-        elif event.button.id == "filter_history_button":
-            # This button is now disabled in the UI, but we can log a message if it's somehow pressed.
-            self.log_display.write("[yellow]Date filtering is not available with the new live update system.[/yellow]")
-        elif event.button.id == "calendar_button":
-            self.action_open_calendar()
+        elif event.button.id in ["filter_all_button", "filter_open_button", "filter_closed_button"]:
+            # Update filter state
+            self.history_filter = event.button.id.split('_')[1] # e.g., "all", "open", "closed"
 
-    def action_open_calendar(self) -> None:
-        """Pushes the date picker modal screen."""
-        def set_date(selected_date: Date) -> None:
-            """Callback to set the date in the input field."""
-            if selected_date:
-                # For simplicity, we're setting the start date.
-                # A more complex implementation could handle start/end dates.
-                self.query_one("#start_date_input").value = selected_date.strftime("%Y-%m-%d")
-                # self.update_trade_history() # This is now handled by the main update loop
-
-        self.push_screen(DatePickerModal(), set_date)
+            # Update button variants for visual feedback
+            self.query_one("#filter_all_button", Button).variant = "primary" if self.history_filter == "all" else "default"
+            self.query_one("#filter_open_button", Button).variant = "primary" if self.history_filter == "open" else "default"
+            self.query_one("#filter_closed_button", Button).variant = "primary" if self.history_filter == "closed" else "default"
+            
+            # Refresh the table
+            self.update_history_table()
+        elif event.button.id == "filter_date_button":
+            self.update_history_table()
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         if event.control.id == "positions_table":
