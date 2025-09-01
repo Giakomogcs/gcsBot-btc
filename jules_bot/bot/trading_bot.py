@@ -633,7 +633,8 @@ class TradingBot:
 
             # 7. Write the live status file
             status_dir = "/app/.tui_files"
-            os.makedirs(status_dir, exist_ok=True)
+            # Ensure the directory exists and has permissions that allow writing from different users (e.g., inside and outside Docker)
+            os.makedirs(status_dir, mode=0o777, exist_ok=True)
             status_file_path = os.path.join(status_dir, f".bot_status_{self.bot_name}.json")
             status_data = self.status_service.get_extended_status(self.mode, self.bot_name)
             portfolio_history = self.db_manager.get_portfolio_history(self.bot_name)

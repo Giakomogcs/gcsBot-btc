@@ -195,6 +195,16 @@ class PostgresManager:
                     if isinstance(value, float):
                         trade_data_for_db[key] = Decimal(str(value))
 
+                # If timestamp is provided as a Unix timestamp (int), convert it to datetime
+                if 'timestamp' in trade_data_for_db and isinstance(trade_data_for_db['timestamp'], int):
+                    from datetime import datetime
+                    # Timestamps can be in seconds or milliseconds. We'll check the magnitude to decide.
+                    timestamp_val = trade_data_for_db['timestamp']
+                    if timestamp_val > 10**12:  # Likely milliseconds
+                        trade_data_for_db['timestamp'] = datetime.fromtimestamp(timestamp_val / 1000)
+                    else:  # Likely seconds
+                        trade_data_for_db['timestamp'] = datetime.fromtimestamp(timestamp_val)
+
                 # Check if a trade with this trade_id already exists
                 existing_trade = db.query(Trade).filter(Trade.trade_id == trade_point.trade_id).first()
 
@@ -602,6 +612,16 @@ class PostgresManager:
                     return
 
                 logger.info(f"Updating trade {trade_id} with data: {list(update_data.keys())}")
+
+                # If timestamp is provided as a Unix timestamp (int), convert it to datetime
+                if 'timestamp' in update_data and isinstance(update_data['timestamp'], int):
+                    from datetime import datetime
+                    # Timestamps can be in seconds or milliseconds. We'll check the magnitude to decide.
+                    timestamp_val = update_data['timestamp']
+                    if timestamp_val > 10**12:  # Likely milliseconds
+                        update_data['timestamp'] = datetime.fromtimestamp(timestamp_val / 1000)
+                    else:  # Likely seconds
+                        update_data['timestamp'] = datetime.fromtimestamp(timestamp_val)
                 
                 valid_columns = {c.name for c in Trade.__table__.columns}
                 

@@ -387,9 +387,16 @@ class TUIApp(App):
             table.remove_row("placeholder_history")
 
     def on_command_output(self, message: CommandOutput) -> None:
-        if message.success: self.log_display.write(f"[green]Command success:[/green] {message.output}")
-        else: self.log_display.write(f"[bold red]Command failed:[/bold red] {message.output}")
-        # Trigger a manual refresh to see the result of the command immediately
+        if message.success:
+            self.log_display.write(f"[green]Command success:[/green] {message.output}")
+            self.log_display.write("[yellow]Command sent. Forcing UI refresh in 1, 2, and 3 seconds...[/yellow]")
+            # Trigger multiple refreshes to catch the state update from the bot
+            self.set_timer(1.0, self.update_from_status_file)
+            self.set_timer(2.0, self.update_from_status_file)
+            self.set_timer(3.0, self.update_from_status_file)
+        else:
+            self.log_display.write(f"[bold red]Command failed:[/bold red] {message.output}")
+        # Also trigger one immediate refresh just in case
         self.update_from_status_file()
 
     def update_capital_panel(self, capital: dict, strategy: dict):
