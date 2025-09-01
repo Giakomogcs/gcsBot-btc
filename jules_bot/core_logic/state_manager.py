@@ -190,7 +190,7 @@ class StateManager:
                         buy_price=buy_price,
                         sell_price=sell_price,
                         quantity_sold=quantity_to_sell_from_pos,
-                        buy_commission_usd=Decimal(str(open_pos.commission_usd)),
+                        buy_commission_usd=Decimal(str(open_pos.commission_usd or '0')),
                         sell_commission_usd=sell_commission_usd,
                         buy_quantity=Decimal(str(open_pos.quantity))
                     )
@@ -333,7 +333,14 @@ class StateManager:
         for position in open_positions:
             try:
                 purchase_price = Decimal(str(position.price))
-                current_target = Decimal(str(position.sell_target_price))
+                
+                # Defensively handle invalid or missing current_target
+                current_target = Decimal('0') # Default value
+                if position.sell_target_price is not None:
+                    try:
+                        current_target = Decimal(str(position.sell_target_price))
+                    except Exception:
+                        logger.warning(f"Could not parse current sell target '{position.sell_target_price}' for trade {position.trade_id}. Defaulting to 0.")
 
                 new_target = strategy_rules.calculate_sell_target_price(purchase_price, params=current_params)
 

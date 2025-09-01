@@ -46,6 +46,7 @@ class CapitalManager:
         self.use_dynamic_capital = self.config_manager.getboolean('STRATEGY_RULES', 'use_dynamic_capital', fallback=False)
         self.use_percentage_sizing = self.config_manager.getboolean('STRATEGY_RULES', 'use_percentage_based_sizing', fallback=False)
         self.use_formula_sizing = self.config_manager.getboolean('STRATEGY_RULES', 'use_formula_sizing', fallback=False)
+        self.working_capital_percentage = self._safe_get_decimal('STRATEGY_RULES', 'working_capital_percentage', '0.5') # Default to 50%
 
         try:
             consecutive_buys_str = self.config_manager.get('STRATEGY_RULES', 'consecutive_buys_threshold', fallback='5')
@@ -185,3 +186,26 @@ class CapitalManager:
             return 1
 
         return 0
+
+    def get_capital_allocation(self, portfolio_value: Decimal, open_positions: list) -> dict:
+        """
+        Calculates the allocation of capital into Working Capital and Strategic Reserve.
+        """
+        working_capital_total = portfolio_value * self.working_capital_percentage
+        
+        used_capital = sum(Decimal(pos.usd_value) for pos in open_positions)
+
+        free_capital = working_capital_total - used_capital
+        if free_capital < 0:
+            free_capital = Decimal('0')
+
+        strategic_reserve = portfolio_value - working_capital_total
+        if strategic_reserve < 0:
+            strategic_reserve = Decimal('0')
+
+        return {
+            "working_capital_total": working_capital_total,
+            "working_capital_used": used_capital,
+            "working_capital_free": free_capital,
+            "strategic_reserve": strategic_reserve
+        }

@@ -221,7 +221,7 @@ class TradingBot:
                             buy_price=buy_price,
                             sell_price=sell_price,
                             quantity_sold=quantity_to_sell,
-                            buy_commission_usd=Decimal(str(position.commission_usd)),
+                            buy_commission_usd=Decimal(str(position.commission_usd or '0')),
                             sell_commission_usd=sell_commission_usd,
                             buy_quantity=Decimal(str(position.quantity))
                         )
@@ -411,7 +411,7 @@ class TradingBot:
                                         buy_price=buy_price,
                                         sell_price=sell_price,
                                         quantity_sold=sell_quantity,
-                                        buy_commission_usd=Decimal(str(position.commission_usd)),
+                                        buy_commission_usd=Decimal(str(position.commission_usd or '0')),
                                         sell_commission_usd=sell_commission_usd,
                                         buy_quantity=Decimal(str(position.quantity))
                                     )

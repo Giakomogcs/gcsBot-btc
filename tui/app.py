@@ -133,6 +133,11 @@ class TUIApp(App):
                                     yield Static("Next Buy Target: N/A", id="strategy_buy_target")
                                     yield Static("Drop Needed: N/A", id="strategy_buy_target_percentage")
                                     yield Static("Buy Progress: N/A", id="strategy_buy_progress")
+                                yield Static("Capital Allocation", classes="title")
+                                with Static(id="capital_container"):
+                                    yield Static("Working Capital: $0 | Used: $0 | Free: $0", id="info_working_capital")
+                                    yield Static("Strategic Reserve: $0", id="info_strategic_reserve")
+                                    yield Static("Operating Mode: N/A", id="info_operating_mode")
                             with VerticalScroll(id="portfolio_and_positions"):
                                 yield Static("Wallet Balances", classes="title")
                                 yield DataTable(id="wallet_table")
@@ -276,6 +281,7 @@ class TUIApp(App):
 
         # --- Update All UI Components from the Single Data Source ---
         self.update_strategy_panel(data.get("buy_signal_status", {}), price)
+        self.update_capital_panel(data.get("capital_allocation", {}), data.get("buy_signal_status", {}))
         self.update_wallet_table(data.get("wallet_balances", []))
 
         # Update open positions
@@ -386,6 +392,17 @@ class TUIApp(App):
         else: self.log_display.write(f"[bold red]Command failed:[/bold red] {message.output}")
         # Trigger a manual refresh to see the result of the command immediately
         self.update_from_status_file()
+
+    def update_capital_panel(self, capital: dict, strategy: dict):
+        wc_total = Decimal(capital.get("working_capital_total", 0))
+        wc_used = Decimal(capital.get("working_capital_used", 0))
+        wc_free = Decimal(capital.get("working_capital_free", 0))
+        sr_total = Decimal(capital.get("strategic_reserve", 0))
+        op_mode = strategy.get("operating_mode", "N/A")
+
+        self.query_one("#info_working_capital").update(f"Working Capital: ${wc_total:,.0f} | Used: ${wc_used:,.0f} | Free: ${wc_free:,.0f}")
+        self.query_one("#info_strategic_reserve").update(f"Strategic Reserve: ${sr_total:,.0f}")
+        self.query_one("#info_operating_mode").update(f"Operating Mode: {op_mode}")
 
     def update_strategy_panel(self, status: dict, current_price: Decimal):
         operating_mode, market_regime, reason, condition_target_str = status.get("operating_mode", "N/A"), status.get("market_regime", -1), status.get("reason", "N/A"), status.get("condition_target", "N/A")
@@ -613,7 +630,7 @@ class TUIApp(App):
             self.log_display.write("[bold green]Log filter applied. Tailing new logs...[/bold green]")
 
     def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
-        table_id, column_label = event.control.id, event.column_label.plain
+        table_id, column_label = event.control.id, event.label
         if table_id == "positions_table":
             if self.positions_sort_column == column_label: self.positions_sort_reverse = not self.positions_sort_reverse
             else: self.positions_sort_column, self.positions_sort_reverse = column_label, True

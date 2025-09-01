@@ -153,7 +153,7 @@ class StatusService:
                 except InvalidOperation:
                     pass
 
-            full_trade_history = self.db_manager.get_all_trades_in_range(mode=environment, bot_id=bot_id) or []
+            full_trade_history = self.db_manager.get_all_trades_in_range(mode=environment, bot_id=bot_id, start_date=None) or []
 
             # --- PnL and Count Calculation ---
             total_realized_pnl = sum(
@@ -167,6 +167,12 @@ class StatusService:
             net_total_pnl = total_realized_pnl + total_unrealized_pnl
             trade_history_dicts = [trade.to_dict() for trade in full_trade_history]
             total_trades_count = len(trade_history_dicts)
+
+            # --- Capital Allocation Calculation ---
+            capital_allocation = self.capital_manager.get_capital_allocation(
+                portfolio_value=total_wallet_usd_value,
+                open_positions=open_positions_db
+            )
 
             bot_status_db = self.db_manager.get_bot_status(bot_id)
             bot_status_str = "RUNNING" if bot_status_db and bot_status_db.is_running else "STOPPED"
@@ -194,7 +200,8 @@ class StatusService:
                 "wallet_balances": wallet_balances,
                 "total_realized_pnl": total_realized_pnl,
                 "total_unrealized_pnl": total_unrealized_pnl,
-                "net_total_pnl": net_total_pnl
+                "net_total_pnl": net_total_pnl,
+                "capital_allocation": capital_allocation
             }
         except OperationalError as e:
             logger.error(f"Database connection error in StatusService: {e}", exc_info=True)
@@ -252,9 +259,9 @@ class StatusService:
     def _process_open_positions(self, open_positions_db, current_price):
         positions_status = []
         for trade in open_positions_db:
-            entry_price = Decimal(trade.price)
-            quantity = Decimal(trade.quantity)
-            sell_target_price = Decimal(trade.sell_target_price)
+            entry_price = Decimal(trade.price) if trade.price is not None else Decimal('0')
+            quantity = Decimal(trade.quantity) if trade.quantity is not None else Decimal('0')
+            sell_target_price = Decimal(trade.sell_target_price) if trade.sell_target_price is not None else Decimal('0')
             buy_commission_usd = Decimal(trade.commission_usd) if trade.commission_usd is not None else Decimal('0')
 
             unrealized_pnl = self.strategy.calculate_net_unrealized_pnl(entry_price, current_price, quantity, buy_commission_usd)
