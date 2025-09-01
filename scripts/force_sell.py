@@ -37,6 +37,7 @@ def main(
 
     mode = os.getenv("BOT_MODE", "test")
     logger.info(f"Initializing force_sell script for bot '{bot_name}' in '{mode}' mode.")
+    logger.info(f"Received arguments: trade_id='{trade_id}', percentage='{percentage}%'")
 
     try:
         config_manager.initialize(bot_name)
@@ -62,6 +63,8 @@ def main(
             print(f"❌ Error: No open trade found with ID '{trade_id}'.")
             raise typer.Exit(code=1)
         
+        logger.info(f"Found original trade: {original_trade.trade_id}, Status: {original_trade.status}, Quantity: {original_trade.quantity}")
+
         if original_trade.status != "OPEN":
             logger.warning(f"Trade {trade_id} is not OPEN. Current status: {original_trade.status}.")
             print(f"⚠️ Warning: Trade {trade_id} is not OPEN (Status: {original_trade.status}). Cannot sell.")
@@ -69,6 +72,7 @@ def main(
 
         # 2. Prepare data for the sell order
         quantity_to_sell = (Decimal(str(original_trade.quantity)) * Decimal(str(percentage))) / Decimal('100')
+        logger.info(f"Calculated quantity to sell: {quantity_to_sell} (Percentage: {percentage}%)")
         
         # This dict mimics the data structure the main bot loop would prepare
         position_data = {
@@ -81,6 +85,7 @@ def main(
         run_id = f"manual_tui_{uuid.uuid4()}"
         decision_context = {"source": "tui_force_sell", "original_trade_id": trade_id, "sell_percentage": percentage}
 
+        logger.info(f"Executing sell via trader for trade_id: {trade_id}, run_id: {run_id}")
         success, sell_result = trader.execute_sell(
             position_data=position_data,
             run_id=run_id,
@@ -88,6 +93,7 @@ def main(
         )
 
         if success and sell_result:
+            logger.info(f"Trader executed sell successfully. Result: {sell_result}")
             # 4. The trade was successful, now update the database
             
             # Calculate PnL
@@ -95,6 +101,7 @@ def main(
             sell_price = Decimal(str(sell_result.get('price', 0)))
             quantity_sold = Decimal(str(sell_result.get('quantity', 0)))
             realized_pnl = (sell_price - entry_price) * quantity_sold
+            logger.info(f"Calculated PnL: ${realized_pnl:.2f} (Entry: ${entry_price}, Exit: ${sell_price}, Qty: {quantity_sold})")
             
             # Create the sell trade record
             sell_trade_data = sell_result.copy()
@@ -102,8 +109,8 @@ def main(
                 'order_type': 'sell',
                 'status': 'CLOSED',
                 'run_id': run_id,
-                'bot_name': bot_name,
                 'strategy_name': trader.strategy_name,
+                'exchange': 'binance',
                 'realized_pnl_usd': realized_pnl,
                 'price': sell_price, # Ensure price is Decimal
                 'quantity': quantity_sold, # Ensure quantity is Decimal
@@ -112,12 +119,14 @@ def main(
             
             sell_trade_point = TradePoint(**sell_trade_data)
             db_manager.log_trade(sell_trade_point)
+            logger.info(f"Logged sell trade record to database. Sell Trade ID: {sell_trade_point.trade_id}")
             
             # Mark the original buy trade as CLOSED
             # Note: This assumes a 100% sell. Partial sells would require updating quantity.
             # For this implementation, we'll assume 100% as per the UI button's typical function.
             if percentage == 100:
                 db_manager.update_trade_status(trade_id, "CLOSED")
+                logger.info(f"Updated original trade {trade_id} status to CLOSED.")
             else:
                 # Handle partial sell logic if necessary in the future
                 # For now, just log a warning.
