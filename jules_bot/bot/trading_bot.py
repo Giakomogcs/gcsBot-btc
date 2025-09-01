@@ -113,6 +113,22 @@ class TradingBot:
         # -- Load Core Strategy Configuration --
         self.min_trade_size = Decimal(config_manager.get('TRADING_STRATEGY', 'min_trade_size_usdt', fallback='10.0'))
 
+        # --- Initialize Core Components ---
+        # These are initialized here to be accessible throughout the bot's lifecycle (e.g., for status updates)
+        self.feature_calculator = LiveFeatureCalculator(self.db_manager, mode=self.mode)
+        self.status_service = StatusService(self.db_manager, config_manager, self.feature_calculator)
+        self.state_manager = StateManager(mode=self.mode, bot_id=self.run_id, db_manager=self.db_manager, feature_calculator=self.feature_calculator)
+        self.account_manager = AccountManager(self.trader.client)
+        self.strategy_rules = StrategyRules(config_manager)
+        self.capital_manager = CapitalManager(config_manager, self.strategy_rules)
+
+        equity_recalc_interval = int(config_manager.get('APP', 'equity_recalculation_interval', fallback=300))
+        quote_asset = "USDT"
+        self.live_portfolio_manager = LivePortfolioManager(self.trader, self.state_manager, self.db_manager, quote_asset, equity_recalc_interval)
+
+        self.dynamic_params = DynamicParameters(config_manager)
+        self.sa_instance = SituationalAwareness()
+
 
     def _write_state_to_file(self, open_positions: list, current_price: Decimal, wallet_balances: list, trade_history: list, portfolio_value: Decimal):
         serializable_trade_history = [t.to_dict() for t in trade_history]
@@ -283,32 +299,35 @@ class TradingBot:
         except (InvalidOperation, TypeError):
             return Decimal('0'), Decimal('0')
 
+    def _check_and_handle_refresh_signal(self):
+        """Checks for a TUI-initiated refresh signal and triggers a status update if found."""
+        signal_file_path = os.path.join("/app/.tui_files", f".force_refresh_{self.bot_name}")
+        if os.path.exists(signal_file_path):
+            logger.info(f"Force refresh signal detected at '{signal_file_path}'. Updating status file now.")
+            try:
+                # Call the self-contained update function
+                self._update_status_file()
+                # Clean up the signal file
+                os.remove(signal_file_path)
+                logger.info("Force refresh complete and signal file removed.")
+            except Exception as e:
+                logger.error(f"Error during forced refresh: {e}", exc_info=True)
+                # Still try to remove the file to prevent getting stuck in a loop
+                try:
+                    os.remove(signal_file_path)
+                except OSError:
+                    pass
+
     def run(self):
         if self.mode not in ['trade', 'test']:
             logger.error(f"The 'run' method cannot be called in '{self.mode}' mode.")
             return
 
-        quote_asset = "USDT"
-        base_asset = self.symbol.replace(quote_asset, "")
-
-        # --- Load Strategy Configuration ---
-        equity_recalc_interval = int(config_manager.get('APP', 'equity_recalculation_interval', fallback=300))
+        base_asset = self.symbol.replace("USDT", "")
 
         # Reversal strategy specific configs
         self.reversal_buy_threshold_percent = Decimal(config_manager.get('STRATEGY_RULES', 'reversal_buy_threshold_percent', fallback='0.005'))
         self.reversal_monitoring_timeout_seconds = int(config_manager.get('STRATEGY_RULES', 'reversal_monitoring_timeout_seconds', fallback='300'))
-
-        feature_calculator = LiveFeatureCalculator(self.db_manager, mode=self.mode)
-        self.status_service = StatusService(self.db_manager, config_manager, feature_calculator)
-        state_manager = StateManager(mode=self.mode, bot_id=self.run_id, db_manager=self.db_manager, feature_calculator=feature_calculator)
-        account_manager = AccountManager(self.trader.client)
-        strategy_rules = StrategyRules(config_manager)
-        capital_manager = CapitalManager(config_manager, strategy_rules)
-        live_portfolio_manager = LivePortfolioManager(self.trader, state_manager, self.db_manager, quote_asset, equity_recalc_interval)
-
-        # --- Dynamic Strategy Components ---
-        dynamic_params = DynamicParameters(config_manager)
-        sa_instance = SituationalAwareness()
 
         # The SituationalAwareness model is rule-based and doesn't require a separate training step.
         # Its transform method calculates regimes dynamically based on the data provided.
@@ -319,11 +338,11 @@ class TradingBot:
             self.shutdown()
             return
 
-        state_manager.sync_holdings_with_binance(account_manager, strategy_rules, self.trader)
+        self.state_manager.sync_holdings_with_binance(self.account_manager, self.strategy_rules, self.trader)
 
         # Perform an initial target recalculation after sync and before starting the main loop
         logger.info("Performing initial recalculation of sell targets before starting main loop...")
-        state_manager.recalculate_open_position_targets(strategy_rules, sa_instance, dynamic_params)
+        self.state_manager.recalculate_open_position_targets(self.strategy_rules, self.sa_instance, self.dynamic_params)
         logger.info("Initial recalculation complete.")
 
         # Now that initialization is complete, set the status to RUNNING
@@ -333,11 +352,13 @@ class TradingBot:
         try:
             while self.is_running:
                 try:
+                    self._check_and_handle_refresh_signal()
+                    
                     logger.info("--- Starting new trading cycle ---")
-                    state_manager.recalculate_open_position_targets(strategy_rules, sa_instance, dynamic_params)
-                    self._handle_ui_commands(self.trader, state_manager, strategy_rules)
+                    self.state_manager.recalculate_open_position_targets(self.strategy_rules, self.sa_instance, self.dynamic_params)
+                    self._handle_ui_commands(self.trader, self.state_manager, self.strategy_rules)
 
-                    features_df = feature_calculator.get_features_dataframe()
+                    features_df = self.feature_calculator.get_features_dataframe()
                     if features_df.empty:
                         logger.warning("Could not get features dataframe. Skipping cycle.")
                         time.sleep(10)
@@ -354,10 +375,10 @@ class TradingBot:
 
                     # --- DYNAMIC STRATEGY LOGIC ---
                     current_regime = -1 # Default to fallback
-                    if sa_instance:
+                    if self.sa_instance:
                         try:
                             # Pass the full dataframe to transform
-                            regime_df = sa_instance.transform(features_df)
+                            regime_df = self.sa_instance.transform(features_df)
                             if not regime_df.empty:
                                 # Get the regime from the last row
                                 current_regime = int(regime_df['market_regime'].iloc[-1])
@@ -367,20 +388,20 @@ class TradingBot:
                         except Exception as e:
                             logger.error(f"Error getting market regime: {e}", exc_info=True)
 
-                    dynamic_params.update_parameters(current_regime)
-                    current_params = dynamic_params.parameters
+                    self.dynamic_params.update_parameters(current_regime)
+                    current_params = self.dynamic_params.parameters
                     logger.info(f"Using strategy parameters for Regime {current_regime}: {current_params}")
 
                     current_price = Decimal(final_candle['close'])
-                    open_positions = state_manager.get_open_positions()
-                    total_portfolio_value = live_portfolio_manager.get_total_portfolio_value(current_price)
+                    open_positions = self.state_manager.get_open_positions()
+                    total_portfolio_value = self.live_portfolio_manager.get_total_portfolio_value(current_price)
 
                     all_prices = self.trader.get_all_prices()
-                    wallet_balances = account_manager.get_all_account_balances(all_prices)
+                    wallet_balances = self.account_manager.get_all_account_balances(all_prices)
 
                     # Fetch recent trades for difficulty calculation
                     end_date = datetime.utcnow()
-                    start_date = end_date - timedelta(hours=capital_manager.difficulty_reset_timeout_hours)
+                    start_date = end_date - timedelta(hours=self.capital_manager.difficulty_reset_timeout_hours)
                     trade_history = self.db_manager.get_all_trades_in_range(
                         mode=self.mode,
                         start_date=start_date,
@@ -388,7 +409,7 @@ class TradingBot:
                     )
 
                     # For the state file, we might still want the full history
-                    full_trade_history = state_manager.get_trade_history_for_run()
+                    full_trade_history = self.state_manager.get_trade_history_for_run()
                     self._write_state_to_file(open_positions, current_price, wallet_balances, full_trade_history, total_portfolio_value)
 
                     # --- SELL LOGIC ---
@@ -396,7 +417,7 @@ class TradingBot:
                     if positions_to_sell:
                         logger.info(f"Found {len(positions_to_sell)} positions meeting sell criteria.")
                         # ... (rest of sell logic is unchanged)
-                        total_sell_quantity = sum(Decimal(str(p.quantity)) * strategy_rules.sell_factor for p in positions_to_sell)
+                        total_sell_quantity = sum(Decimal(str(p.quantity)) * self.strategy_rules.sell_factor for p in positions_to_sell)
                         available_balance = Decimal(self.trader.get_account_balance(asset=base_asset))
 
                         if total_sell_quantity > available_balance:
@@ -411,7 +432,7 @@ class TradingBot:
                                 trade_id = position.trade_id
                                 original_quantity = Decimal(str(position.quantity))
                                 # sell_factor determines what percentage of the position to sell
-                                sell_quantity = original_quantity * strategy_rules.sell_factor
+                                sell_quantity = original_quantity * self.strategy_rules.sell_factor
                                 hodl_asset_amount = original_quantity - sell_quantity
 
                                 sell_position_data = position.to_dict()
@@ -440,7 +461,7 @@ class TradingBot:
                                     # --- End Robust Decimal Conversion ---
 
                                     # PnL is calculated based on the quantity *actually* sold
-                                    realized_pnl_usd = strategy_rules.calculate_realized_pnl(
+                                    realized_pnl_usd = self.strategy_rules.calculate_realized_pnl(
                                         buy_price=buy_price,
                                         sell_price=sell_price,
                                         quantity_sold=sell_quantity,
@@ -457,18 +478,18 @@ class TradingBot:
                                     })
 
                                     # The new logic handles partial sells correctly
-                                    state_manager.record_partial_sell(
+                                    self.state_manager.record_partial_sell(
                                         original_trade_id=trade_id,
                                         remaining_quantity=hodl_asset_amount,
                                         sell_data=sell_result
                                     )
-                                    live_portfolio_manager.get_total_portfolio_value(current_price, force_recalculation=True)
+                                    self.live_portfolio_manager.get_total_portfolio_value(current_price, force_recalculation=True)
                                 else:
                                     logger.error(f"Sell execution failed for position {trade_id}.")
 
                     # --- BUY LOGIC ---
                     market_data = final_candle.to_dict()
-                    cash_balance = Decimal(self.trader.get_account_balance(asset=quote_asset))
+                    cash_balance = Decimal(self.trader.get_account_balance("USDT"))
                     buy_from_reversal = False
 
                     if self.is_monitoring_for_reversal:
@@ -499,7 +520,7 @@ class TradingBot:
                             continue
 
                     # Determine buy amount and operating mode
-                    buy_amount_usdt, operating_mode, reason, regime = capital_manager.get_buy_order_details(
+                    buy_amount_usdt, operating_mode, reason, regime = self.capital_manager.get_buy_order_details(
                         market_data=market_data,
                         open_positions=open_positions,
                         portfolio_value=total_portfolio_value,
@@ -532,52 +553,16 @@ class TradingBot:
                             if success:
                                 logger.info("Buy successful. Creating new position.")
                                 purchase_price = Decimal(buy_result.get('price'))
-                                sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price, params=current_params)
+                                sell_target_price = self.strategy_rules.calculate_sell_target_price(purchase_price, params=current_params)
                                 logger.info(f"Calculated sell target for strategy buy. Purchase price: ${purchase_price:,.2f}, Target price: ${sell_target_price:,.2f}, Params: {current_params}")
-                                state_manager.create_new_position(buy_result, sell_target_price)
-                                live_portfolio_manager.get_total_portfolio_value(purchase_price, force_recalculation=True)
+                                self.state_manager.create_new_position(buy_result, sell_target_price)
+                                self.live_portfolio_manager.get_total_portfolio_value(purchase_price, force_recalculation=True)
                     else:
                         logger.info(f"[{operating_mode}] No buy signal: {reason}")
 
-                    # Calculate buy progress for TUI display
-                    buy_target, buy_progress = self._calculate_buy_progress(market_data, len(open_positions), current_params)
-
-                    # Persist the latest status to the database for the TUI
-                    self.status_service.update_bot_status(
-                        bot_id=self.bot_name, # Use the persistent bot_name as the key
-                        mode=self.mode,
-                        reason=reason,
-                        open_positions=len(open_positions),
-                        portfolio_value=total_portfolio_value,
-                        market_regime=current_regime,
-                        operating_mode=operating_mode,
-                        buy_target=buy_target,
-                        buy_progress=buy_progress
-                    )
-
-                    # --- Live Status File for TUI ---
-                    try:
-                        # O diretório /app/.tui_files é montado a partir do host via Docker
-                        status_dir = "/app/.tui_files"
-                        os.makedirs(status_dir, exist_ok=True)
-                        status_file_path = os.path.join(status_dir, f".bot_status_{self.bot_name}.json")
-                        
-                        # Fetch the comprehensive data payload
-                        status_data = self.status_service.get_extended_status(self.mode, self.bot_name)
-                        
-                        # Adiciona o histórico do portfólio aos dados de status
-                        portfolio_history = self.db_manager.get_portfolio_history(self.bot_name)
-                        status_data['portfolio_history'] = [p.to_dict() for p in portfolio_history]
-
-                        # Write atomically to prevent TUI from reading a partial file
-                        temp_path = status_file_path + ".tmp"
-                        with open(temp_path, "w") as f:
-                            json.dump(status_data, f, default=str)
-                        os.rename(temp_path, status_file_path)
-                    except Exception as e:
-                        logger.error(f"Failed to write status file for TUI: {e}", exc_info=True)
-
-
+                    # Update the status file at the end of the regular cycle
+                    self._update_status_file()
+                    
                     logger.info("--- Cycle complete. Waiting 30 seconds...")
                     time.sleep(30)
 
@@ -592,6 +577,76 @@ class TradingBot:
                     time.sleep(300)
         finally:
             self.shutdown()
+
+    def _update_status_file(self):
+        """
+        Gathers the bot's current state by re-running calculations and writes it to the JSON file for the TUI.
+        This is a self-contained method that can be called at any time to refresh the status.
+        """
+        logger.info("Starting status file update...")
+        try:
+            # 1. Get latest market data
+            features_df = self.feature_calculator.get_features_dataframe()
+            if features_df.empty:
+                logger.warning("Could not get features dataframe for status update.")
+                return
+            final_candle = features_df.iloc[-1]
+            if final_candle.isnull().any():
+                logger.warning("Final candle contains NaN values during status update.")
+                return
+            market_data = final_candle.to_dict()
+            current_price = Decimal(final_candle['close'])
+
+            # 2. Get latest positions and portfolio value
+            open_positions = self.state_manager.get_open_positions()
+            total_portfolio_value = self.live_portfolio_manager.get_total_portfolio_value(current_price, force_recalculation=True)
+            cash_balance = Decimal(self.trader.get_account_balance("USDT"))
+
+            # 3. Get latest regime and parameters
+            current_regime = -1
+            if self.sa_instance:
+                regime_df = self.sa_instance.transform(features_df)
+                if not regime_df.empty:
+                    current_regime = int(regime_df['market_regime'].iloc[-1])
+            self.dynamic_params.update_parameters(current_regime)
+            current_params = self.dynamic_params.parameters
+
+            # 4. Determine current "reason" text by re-evaluating capital manager logic
+            end_date = datetime.utcnow()
+            start_date = end_date - timedelta(hours=self.capital_manager.difficulty_reset_timeout_hours)
+            trade_history = self.db_manager.get_all_trades_in_range(mode=self.mode, start_date=start_date, end_date=end_date)
+            
+            _, operating_mode, reason, _ = self.capital_manager.get_buy_order_details(
+                market_data=market_data, open_positions=open_positions, portfolio_value=total_portfolio_value,
+                free_cash=cash_balance, params=current_params, trade_history=trade_history
+            )
+
+            # 5. Calculate buy progress
+            buy_target, buy_progress = self._calculate_buy_progress(market_data, len(open_positions), current_params)
+
+            # 6. Persist the latest status to the database for the TUI
+            self.status_service.update_bot_status(
+                bot_id=self.bot_name, mode=self.mode, reason=reason, open_positions=len(open_positions),
+                portfolio_value=total_portfolio_value, market_regime=current_regime, operating_mode=operating_mode,
+                buy_target=buy_target, buy_progress=buy_progress
+            )
+
+            # 7. Write the live status file
+            status_dir = "/app/.tui_files"
+            os.makedirs(status_dir, exist_ok=True)
+            status_file_path = os.path.join(status_dir, f".bot_status_{self.bot_name}.json")
+            status_data = self.status_service.get_extended_status(self.mode, self.bot_name)
+            portfolio_history = self.db_manager.get_portfolio_history(self.bot_name)
+            status_data['portfolio_history'] = [p.to_dict() for p in portfolio_history]
+            
+            temp_path = status_file_path + ".tmp"
+            with open(temp_path, "w") as f:
+                json.dump(status_data, f, default=str)
+            os.rename(temp_path, status_file_path)
+            logger.info("Status file update complete.")
+
+        except Exception as e:
+            logger.error(f"Failed to write status file for TUI during update: {e}", exc_info=True)
 
     def shutdown(self):
         logger.info("[SHUTDOWN] Initiating graceful shutdown...")

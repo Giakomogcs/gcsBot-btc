@@ -92,8 +92,20 @@ def main(
 
             buy_trade_point = TradePoint(**filtered_trade_data)
             db_manager.log_trade(buy_trade_point)
-            
-            logger.info(f"Successfully executed and logged manual buy. Trade ID: {buy_result.get('trade_id')}")
+            logger.info(f"Successfully logged manual buy to database. Trade ID: {buy_result.get('trade_id')}")
+
+            # --- Signal the main bot to refresh ---
+            try:
+                signal_dir = "/app/.tui_files"
+                os.makedirs(signal_dir, exist_ok=True)
+                signal_file_path = os.path.join(signal_dir, f".force_refresh_{bot_name}")
+                with open(signal_file_path, "w") as f:
+                    pass  # Create an empty file
+                logger.info(f"Created signal file at {signal_file_path} to trigger TUI refresh.")
+            except Exception as e:
+                # Log an error but don't fail the entire script, as the trade itself was successful.
+                logger.error(f"Could not create signal file for TUI refresh: {e}", exc_info=True)
+
             print(f"✅ Successfully executed buy of {buy_result.get('quantity')} of {buy_result.get('symbol')} for ${buy_result.get('usd_value'):.2f}.")
             print(f"   Trade ID: {buy_result.get('trade_id')}")
         else:

@@ -121,4 +121,4 @@ def test_backtester_pnl_calculation(mock_add_all_features, mock_summary, mock_co
         buy_commission_prorated = (quantity_sold / quantity_bought) * buy_commission_usd if quantity_bought > 0 else Decimal('0')
         expected_pnl = gross_pnl - buy_commission_prorated - sell_commission_usd
 
-        assert realized_pnl_usd == pytest.approx(expected_pnl, rel=1e-9)
+        assert float(realized_pnl_usd) == pytest.approx(float(expected_pnl), rel=1e-9)

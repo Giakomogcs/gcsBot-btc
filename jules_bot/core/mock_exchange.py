@@ -7,12 +7,12 @@ from jules_bot.core_logic.trader import Trader
 getcontext().prec = 28
 
 class MockTrader(Trader):
-    def __init__(self, initial_balance_usd: Decimal, commission_fee_percent: Decimal, symbol: str):
+    def __init__(self, initial_balance_usd: Decimal, commission_fee_rate: Decimal, symbol: str):
         self.symbol = symbol
         self.initial_balance = Decimal(initial_balance_usd)
         self.usd_balance = Decimal(initial_balance_usd)
         self.btc_balance = Decimal('0.0')
-        self.commission_rate = Decimal(commission_fee_percent) / Decimal('100.0')
+        self.commission_rate = Decimal(commission_fee_rate)
 
         self._current_price = Decimal('0.0')
         self._current_timestamp = pd.Timestamp.now(tz='UTC')
@@ -38,15 +38,17 @@ class MockTrader(Trader):
             return False, {"error": "Invalid price."}
 
         amount_usdt = Decimal(amount_usdt)
-        quantity_bought = amount_usdt / price
         commission_usd = amount_usdt * self.commission_rate
-        total_cost = amount_usdt # In a mock scenario, total_cost is just the amount, commission is tracked separately
+        total_cost = amount_usdt + commission_usd
 
-        if self.usd_balance < amount_usdt:
-            logging.warning(f"Insufficient funds. Required: ${amount_usdt:,.2f}, Available: ${self.usd_balance:,.2f}.")
+        if self.usd_balance < total_cost:
+            logging.warning(f"Insufficient funds. Required: ${total_cost:,.2f}, Available: ${self.usd_balance:,.2f}.")
             return False, {"error": "Insufficient USD balance."}
 
-        self.usd_balance -= amount_usdt
+        # The quantity of crypto received is based on the amount spent on the asset itself, not the total cost including fee.
+        quantity_bought = amount_usdt / price
+
+        self.usd_balance -= total_cost
         self.btc_balance += quantity_bought
 
         trade_data = {
