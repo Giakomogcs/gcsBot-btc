@@ -2,6 +2,7 @@ import json
 import subprocess
 import sys
 import os
+import tempfile
 from decimal import Decimal, InvalidOperation
 import time
 from datetime import datetime
@@ -229,7 +230,8 @@ class TUIApp(App):
     @work(thread=True)
     def read_status_file_worker(self) -> None:
         """Worker to read the bot status from the JSON file."""
-        status_file_path = f".bot_status_{self.bot_name}.json"
+        temp_dir = tempfile.gettempdir()
+        status_file_path = os.path.join(temp_dir, f".bot_status_{self.bot_name}.json")
         try:
             if os.path.exists(status_file_path):
                 with open(status_file_path, "r") as f:

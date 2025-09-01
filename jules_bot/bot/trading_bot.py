@@ -2,6 +2,7 @@ import time
 import uuid
 import json
 import os
+import tempfile
 from datetime import datetime, timedelta
 from decimal import Decimal, getcontext, InvalidOperation
 from jules_bot.utils.logger import logger
@@ -214,8 +215,24 @@ class TradingBot:
                     if success:
                         logger.info(f"Force sell for trade {trade_id} executed successfully on the exchange.")
                         buy_price = Decimal(str(position.price))
-                        sell_price = Decimal(str(sell_result.get('price')))
-                        sell_commission_usd = Decimal(str(sell_result.get('commission_usd', '0')))
+
+                        # --- Robust Decimal Conversion ---
+                        # Validate sell_price before conversion
+                        sell_price_raw = sell_result.get('price')
+                        if sell_price_raw is None or str(sell_price_raw).strip() == '':
+                            logger.error(f"Force sell price for trade {trade_id} was missing or empty. Using 0.0 as fallback for PnL.")
+                            sell_price = Decimal('0.0')
+                        else:
+                            sell_price = Decimal(str(sell_price_raw))
+
+                        # Validate sell_commission_usd before conversion
+                        sell_commission_raw = sell_result.get('commission_usd')
+                        if sell_commission_raw is None or str(sell_commission_raw).strip() == '':
+                            logger.warning(f"Force sell commission for trade {trade_id} was missing or empty. Using 0.0 as fallback.")
+                            sell_commission_usd = Decimal('0.0')
+                        else:
+                            sell_commission_usd = Decimal(str(sell_commission_raw))
+                        # --- End Robust Decimal Conversion ---
 
                         realized_pnl_usd = strategy_rules.calculate_realized_pnl(
                             buy_price=buy_price,
@@ -403,8 +420,24 @@ class TradingBot:
                                 success, sell_result = self.trader.execute_sell(sell_position_data, self.run_id, final_candle.to_dict())
                                 if success:
                                     buy_price = Decimal(str(position.price))
-                                    sell_price = Decimal(str(sell_result.get('price')))
-                                    sell_commission_usd = Decimal(str(sell_result.get('commission_usd', '0')))
+                                    
+                                    # --- Robust Decimal Conversion ---
+                                    # Validate sell_price before conversion
+                                    sell_price_raw = sell_result.get('price')
+                                    if sell_price_raw is None or str(sell_price_raw).strip() == '':
+                                        logger.error(f"Sell price for trade {trade_id} was missing or empty in the exchange response. Using 0.0 as fallback for PnL calculation.")
+                                        sell_price = Decimal('0.0')
+                                    else:
+                                        sell_price = Decimal(str(sell_price_raw))
+
+                                    # Validate sell_commission_usd before conversion
+                                    sell_commission_raw = sell_result.get('commission_usd')
+                                    if sell_commission_raw is None or str(sell_commission_raw).strip() == '':
+                                        logger.warning(f"Sell commission for trade {trade_id} was missing or empty. Using 0.0 as fallback.")
+                                        sell_commission_usd = Decimal('0.0')
+                                    else:
+                                        sell_commission_usd = Decimal(str(sell_commission_raw))
+                                    # --- End Robust Decimal Conversion ---
 
                                     # PnL is calculated based on the quantity *actually* sold
                                     realized_pnl_usd = strategy_rules.calculate_realized_pnl(
@@ -525,7 +558,8 @@ class TradingBot:
                     # --- Live Status File for TUI ---
                     try:
                         # Use a dedicated file for each bot instance to avoid conflicts
-                        status_file_path = f".bot_status_{self.bot_name}.json"
+                        temp_dir = tempfile.gettempdir()
+                        status_file_path = os.path.join(temp_dir, f".bot_status_{self.bot_name}.json")
                         # Fetch the comprehensive data payload
                         status_data = self.status_service.get_extended_status(self.mode, self.bot_name)
                         

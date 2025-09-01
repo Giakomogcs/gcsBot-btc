@@ -130,26 +130,25 @@ class StatusService:
                 end_date=end_date
             )
 
-            buy_amount_usdt, operating_mode, reason, _ = self.capital_manager.get_buy_order_details(
-                market_data=market_data,
-                open_positions=open_positions_db,
-                portfolio_value=total_wallet_usd_value,
-                free_cash=cash_balance,
-                params=current_params,
-                trade_history=trade_history
-            )
+            bot_status_db = self.db_manager.get_bot_status(bot_id)
+            bot_status_str = "RUNNING" if bot_status_db and bot_status_db.is_running else "STOPPED"
 
-            should_buy = buy_amount_usdt > 0
-            condition_target, condition_progress, condition_label = self._calculate_buy_condition_details(
-                reason, market_data, current_params, should_buy
-            )
+            # Use the status from the database as the source of truth
+            reason = bot_status_db.last_buy_condition if bot_status_db else "N/A"
+            operating_mode = bot_status_db.operating_mode if bot_status_db else "N/A"
+            condition_target_price = bot_status_db.buy_target if bot_status_db else Decimal('0')
+            condition_progress = bot_status_db.buy_progress if bot_status_db else Decimal('0')
+            
+            should_buy = condition_progress >= 100
+
+            # Format the target price for display
+            condition_target = f"${condition_target_price:,.2f}" if condition_target_price > 0 else "N/A"
 
             buy_target_percentage_drop = Decimal('0')
-            if 'N/A' not in condition_target and current_price > 0:
+            if condition_target_price > 0 and current_price > 0:
                 try:
-                    target_price = Decimal(condition_target.replace('$', '').replace(',', ''))
-                    if current_price > target_price:
-                        buy_target_percentage_drop = ((current_price - target_price) / current_price) * 100
+                    if current_price > condition_target_price:
+                        buy_target_percentage_drop = ((current_price - condition_target_price) / current_price) * 100
                 except InvalidOperation:
                     pass
 
@@ -193,7 +192,6 @@ class StatusService:
                     "operating_mode": operating_mode,
                     "condition_target": condition_target,
                     "condition_progress": condition_progress,
-                    "condition_label": condition_label,
                     "buy_target_percentage_drop": buy_target_percentage_drop
                 },
                 "trade_history": trade_history_dicts,
@@ -252,9 +250,6 @@ class StatusService:
                 return target_value_str, progress_pct, label
             except InvalidOperation:
                 pass
-
-        return reason, Decimal('0'), "INFO"
-
 
     def _process_open_positions(self, open_positions_db, current_price):
         positions_status = []
