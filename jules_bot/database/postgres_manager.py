@@ -162,6 +162,21 @@ class PostgresManager:
                 logger.error(f"Failed to get bot status for {bot_id}: {e}", exc_info=True)
                 return None
 
+    def get_portfolio_history(self, bot_name: str, limit: int = 100) -> list[PortfolioSnapshot]:
+        """
+        Fetches the recent portfolio history for a given bot.
+        Note: This queries within the schema of the currently configured bot.
+        """
+        with self.get_db() as db:
+            try:
+                # This query will implicitly use the bot's schema defined in the engine's search_path
+                query = db.query(PortfolioSnapshot).order_by(desc(PortfolioSnapshot.timestamp)).limit(limit)
+                snapshots = query.all()
+                return snapshots
+            except Exception as e:
+                logger.error(f"Failed to get portfolio history for bot '{bot_name}': {e}", exc_info=True)
+                return []
+
     def log_trade(self, trade_point: TradePoint):
         """
         Logs a trade to the database. It can handle both creating a new trade

@@ -557,12 +557,18 @@ class TradingBot:
 
                     # --- Live Status File for TUI ---
                     try:
-                        # Use a dedicated file for each bot instance to avoid conflicts
-                        temp_dir = tempfile.gettempdir()
-                        status_file_path = os.path.join(temp_dir, f".bot_status_{self.bot_name}.json")
+                        # O diretório /app/.tui_files é montado a partir do host via Docker
+                        status_dir = "/app/.tui_files"
+                        os.makedirs(status_dir, exist_ok=True)
+                        status_file_path = os.path.join(status_dir, f".bot_status_{self.bot_name}.json")
+                        
                         # Fetch the comprehensive data payload
                         status_data = self.status_service.get_extended_status(self.mode, self.bot_name)
                         
+                        # Adiciona o histórico do portfólio aos dados de status
+                        portfolio_history = self.db_manager.get_portfolio_history(self.bot_name)
+                        status_data['portfolio_history'] = [p.to_dict() for p in portfolio_history]
+
                         # Write atomically to prevent TUI from reading a partial file
                         temp_path = status_file_path + ".tmp"
                         with open(temp_path, "w") as f:

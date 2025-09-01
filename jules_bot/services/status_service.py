@@ -192,7 +192,8 @@ class StatusService:
                     "operating_mode": operating_mode,
                     "condition_target": condition_target,
                     "condition_progress": condition_progress,
-                    "buy_target_percentage_drop": buy_target_percentage_drop
+                    "buy_target_percentage_drop": buy_target_percentage_drop,
+                    "condition_label": "N/A"
                 },
                 "trade_history": trade_history_dicts,
                 "wallet_balances": wallet_balances,

@@ -123,7 +123,11 @@ def run_bot_in_container(bot_name: str, mode: str) -> Optional[str]:
         pass
     
     # Adicionando o volume mount (-v) para que o arquivo de status seja visível no host
-    command = SUDO_PREFIX + ["docker", "run", "--detach", "--name", container_name, "--network", DOCKER_NETWORK_NAME, "--env-file", ".env", "-e", f"BOT_NAME={bot_name}", "-e", f"BOT_MODE={mode}", "-e", "JULES_BOT_SCRIPT_MODE=1", "-v", f"{project_root}:/app", DOCKER_IMAGE_NAME, "python", "jules_bot/main.py"]
+    # Garante que o diretório de arquivos da TUI exista no host
+    tui_files_dir = os.path.join(project_root, ".tui_files")
+    os.makedirs(tui_files_dir, exist_ok=True)
+
+    command = SUDO_PREFIX + ["docker", "run", "--detach", "--name", container_name, "--network", DOCKER_NETWORK_NAME, "--env-file", ".env", "-e", f"BOT_NAME={bot_name}", "-e", f"BOT_MODE={mode}", "-e", "JULES_BOT_SCRIPT_MODE=1", "-v", f"{project_root}:/app", "-v", f"{tui_files_dir}:/app/.tui_files", DOCKER_IMAGE_NAME, "python", "jules_bot/main.py"]
     
     print(f"   (executando: `{' '.join(command)}`)")
     try:

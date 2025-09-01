@@ -57,8 +57,8 @@ class TestStatusService(unittest.TestCase):
         # Arrange: Mock DB results for open positions
         from datetime import datetime, timezone
         now = datetime.now(timezone.utc)
-        trade1 = Trade(trade_id="open-trade-1", price=50000, quantity=0.1, sell_target_price=55000, timestamp=now)
-        trade2 = Trade(trade_id="open-trade-2", price=48000, quantity=0.2, sell_target_price=50000, timestamp=now)
+        trade1 = Trade(trade_id="open-trade-1", price=50000, quantity=0.1, sell_target_price=55000, timestamp=now, usd_value=Decimal("5000.0"))
+        trade2 = Trade(trade_id="open-trade-2", price=48000, quantity=0.2, sell_target_price=50000, timestamp=now, usd_value=Decimal("9600.0"))
         self.db_manager.get_open_positions.return_value = [trade1, trade2]
         self.db_manager.get_all_trades_in_range.return_value = [] # Not the focus of this test
 

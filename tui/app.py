@@ -230,20 +230,20 @@ class TUIApp(App):
     @work(thread=True)
     def read_status_file_worker(self) -> None:
         """Worker to read the bot status from the JSON file."""
-        temp_dir = tempfile.gettempdir()
-        status_file_path = os.path.join(temp_dir, f".bot_status_{self.bot_name}.json")
+        # O arquivo de status agora está em um diretório compartilhado via volume do Docker
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        status_file_path = os.path.join(project_root, ".tui_files", f".bot_status_{self.bot_name}.json")
         try:
             if os.path.exists(status_file_path):
                 with open(status_file_path, "r") as f:
-                    # Handle empty file during bot startup
                     content = f.read()
                     if not content:
-                        self.post_message(DashboardData("Bot starting...", success=False))
+                        self.post_message(DashboardData("Bot is starting, waiting for status file...", success=False))
                         return
                     data = json.loads(content)
                 self.post_message(DashboardData(data, success=True))
             else:
-                self.post_message(DashboardData(f"Status file not found for bot '{self.bot_name}'. Is it running?", success=False))
+                self.post_message(DashboardData(f"Status file not found for bot '{self.bot_name}'. Is the bot running?", success=False))
         except json.JSONDecodeError:
             self.post_message(DashboardData("Error decoding status file. It might be corrupted or being written.", success=False))
         except Exception as e:
@@ -295,10 +295,7 @@ class TUIApp(App):
         self.update_history_table()
 
         # Update portfolio chart
-        # Note: The status service doesn't provide portfolio history for the chart.
-        # This functionality might need to be re-evaluated or sourced differently.
-        # For now, we'll leave it blank or find a compatible data point.
-        # self.update_portfolio_chart(data.get("portfolio_history", []))
+        self.update_portfolio_chart(data.get("portfolio_history", []))
 
     def update_history_table(self):
         table = self.query_one("#history_table", DataTable)
