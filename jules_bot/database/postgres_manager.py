@@ -166,12 +166,19 @@ class PostgresManager:
         """
         Logs a trade to the database. It can handle both creating a new trade
         and updating an existing one based on the 'trade_id'.
+        It also robustly converts float values from TradePoint to Decimal for the DB model.
         """
         with self.get_db() as db:
             try:
                 # Sanitize the input data to only include keys that correspond to Trade model columns
                 valid_columns = {c.name for c in Trade.__table__.columns}
                 trade_data_for_db = {k: v for k, v in trade_point.__dict__.items() if k in valid_columns}
+
+                # Convert any float values to Decimal to ensure type safety with the database model.
+                # This is the bridge between the float-based TradePoint and the Decimal-based Trade model.
+                for key, value in trade_data_for_db.items():
+                    if isinstance(value, float):
+                        trade_data_for_db[key] = Decimal(str(value))
 
                 # Check if a trade with this trade_id already exists
                 existing_trade = db.query(Trade).filter(Trade.trade_id == trade_point.trade_id).first()
