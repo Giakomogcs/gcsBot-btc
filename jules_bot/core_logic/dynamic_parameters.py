@@ -51,14 +51,15 @@ class DynamicParameters:
             logger.warning(f"Config section '{section_name}' not found. Falling back to 'STRATEGY_RULES'.")
             section_name = 'STRATEGY_RULES'
 
-        # The fallback for sell_rise_percentage should be the same as target_profit
-        # from the default section for consistency, as target_profit is a legacy name for the same concept.
-        default_sell_rise = self._safe_get_decimal('STRATEGY_RULES', 'target_profit', '0.01')
+        # Correctly load sell_rise_percentage, falling back to target_profit within the same section.
+        # This ensures regime-specific profit targets from config.ini are respected.
+        # The fallback value for `sell_rise_percentage` is the value of `target_profit` from the same section.
+        sell_rise_fallback = self.config_manager.get(section_name, 'target_profit', fallback='0.01')
 
         # Load parameters using the safe getter method for robustness
         self.parameters = {
             'buy_dip_percentage': self._safe_get_decimal(section_name, 'buy_dip_percentage', '0.02'),
-            'sell_rise_percentage': self._safe_get_decimal(section_name, 'sell_rise_percentage', str(default_sell_rise)),
+            'sell_rise_percentage': self._safe_get_decimal(section_name, 'sell_rise_percentage', sell_rise_fallback),
             'order_size_usd': self._safe_get_decimal(section_name, 'order_size_usd', '20.0'),
         }
 

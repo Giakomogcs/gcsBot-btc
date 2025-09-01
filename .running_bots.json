@@ -4,5 +4,11 @@
         "container_id": "f0c79d09f95a46007781adb45d5a6d5676b3f24b0b2cb23943ff4f5b08502088",
         "bot_mode": "test",
         "start_time": "2025-09-01T18:43:53.714824"
+    },
+    {
+        "bot_name": "marcos-bot",
+        "container_id": "02b58975cc46878348adf1ba811fddb2343743c1b990cb83263ab602cef39821",
+        "bot_mode": "test",
+        "start_time": "2025-09-01T19:33:24.318560"
     }
 ]
