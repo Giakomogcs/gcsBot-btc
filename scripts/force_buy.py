@@ -76,6 +76,7 @@ def main(
             # We just need to ensure the types are correct for the DB schema.
             buy_trade_data = buy_result.copy()
             buy_trade_data.update({
+                'run_id': run_id,
                 'order_type': 'buy',
                 'status': 'OPEN',
                 'price': Decimal(str(buy_result.get('price'))),
