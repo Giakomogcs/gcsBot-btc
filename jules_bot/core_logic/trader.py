@@ -21,6 +21,7 @@ class Trader:
         self.symbol = config_manager.get('APP', 'symbol')
         self.strategy_name = config_manager.get('APP', 'strategy_name', fallback='default_strategy')
         self.step_size = None
+        self.min_qty = None
         self.min_notional = Decimal('5.0') # Default value, will be updated from exchange info
         self._fetch_exchange_info()
 
@@ -252,7 +253,8 @@ class Trader:
             for f in info['filters']:
                 if f['filterType'] == 'LOT_SIZE':
                     self.step_size = f['stepSize']
-                    logger.info(f"LOT_SIZE filter for {self.symbol}: stepSize is {self.step_size}")
+                    self.min_qty = Decimal(f['minQty'])
+                    logger.info(f"LOT_SIZE filter for {self.symbol}: stepSize is {self.step_size}, minQty is {self.min_qty}")
                 elif f['filterType'] == 'MIN_NOTIONAL':
                     self.min_notional = Decimal(f['minNotional'])
                     logger.info(f"MIN_NOTIONAL filter for {self.symbol}: minNotional is {self.min_notional}")
@@ -312,8 +314,15 @@ class Trader:
             return False, None
 
         try:
-            quantity_to_sell = position_data.get('quantity')
+            quantity_to_sell = Decimal(str(position_data.get('quantity')))
             
+            # Check if the quantity is sufficient to sell
+            if self.min_qty is not None and quantity_to_sell < self.min_qty:
+                logger.warning(
+                    f"SELL ABORTED (Trade ID: {trade_id}): Quantity {quantity_to_sell} is less than the minimum required quantity {self.min_qty} for {self.symbol}."
+                )
+                return False, {"error": "Quantity is less than the minimum required."}
+
             # Format the quantity to comply with exchange filters
             formatted_quantity = self._format_quantity(quantity_to_sell)
             

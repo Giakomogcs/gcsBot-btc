@@ -345,6 +345,40 @@ class PostgresManager:
                 logger.error(f"Failed to update trade status for trade_id '{trade_id}': {e}", exc_info=True)
                 raise
 
+    def atomically_set_trade_status(self, trade_id: str, current_status: str, new_status: str) -> bool:
+        """
+        Atomically updates the status of a trade from current_status to new_status.
+        This is a race-condition-safe operation.
+        Returns True if the update was successful (1 row affected), False otherwise.
+        """
+        with self.get_db() as db:
+            try:
+                # The update is performed directly on the query object
+                # The WHERE clause ensures we only update if the status is the one we expect
+                result = db.query(Trade).filter(
+                    Trade.trade_id == trade_id,
+                    Trade.status == current_status
+                ).update({Trade.status: new_status}, synchronize_session=False)
+
+                db.commit()
+
+                # The 'result' is the number of rows affected.
+                # If it's 1, the update was successful.
+                # If it's 0, it means the trade wasn't in the 'current_status' (it was likely already changed by another process).
+                if result == 1:
+                    logger.info(f"Atomically updated status for trade {trade_id} from '{current_status}' to '{new_status}'.")
+                    return True
+                else:
+                    logger.warning(f"Atomic update failed for trade {trade_id}. Expected status '{current_status}', but it was not found or already changed.")
+                    db.rollback() # Rollback to be safe, though no change was committed
+                    return False
+
+            except Exception as e:
+                db.rollback()
+                logger.error(f"Failed to atomically update trade status for trade_id '{trade_id}': {e}", exc_info=True)
+                # We re-raise the exception because this is an unexpected error (e.g., DB connection lost)
+                raise
+
     def update_trade_status_and_context(self, trade_id: str, new_status: str, context_update: dict):
         """Updates the status and merges new data into the decision_context of a specific trade."""
         with self.get_db() as db:

@@ -592,12 +592,18 @@ class TUIApp(App):
         if event.button.id == "force_buy_button":
             input_widget = self.query_one("#manual_buy_input", Input)
             if input_widget.is_valid:
-                self.run_command_worker(["python", "scripts/force_buy.py", input_widget.value])
+                self.run_command_worker(["python", "scripts/force_buy.py", input_widget.value, "--container-id", self.container_id])
                 input_widget.value = ""
             else: self.log_display.write("[bold red]Invalid buy amount.[/bold red]")
         elif event.button.id == "force_sell_button" and self.selected_trade_id:
+            # Immediately disable the button to prevent multiple clicks
+            event.button.disabled = True
+            self.log_display.write(f"[yellow]Initiating force sell for trade ID: {self.selected_trade_id}...[/]")
+            
             self.run_command_worker(["python", "scripts/force_sell.py", self.selected_trade_id, "100"])
-            self.query_one("#force_sell_button").disabled = True
+            
+            # Clear the selected trade ID. The button will be re-enabled
+            # when a new row is selected in the positions table.
             self.selected_trade_id = None
         elif event.button.id == "filter_history_button":
             # This button is now disabled in the UI, but we can log a message if it's somehow pressed.
