@@ -108,7 +108,7 @@ class StrategyRules:
         
         return False, "unknown", reason or "No signal"
 
-    def calculate_sell_target_price(self, purchase_price: Decimal, quantity: Decimal, params: Dict[str, Decimal] = None) -> Decimal:
+    def calculate_sell_target_price(self, purchase_price: Decimal, quantity: "Decimal | None" = None, params: "Dict[str, Decimal] | None" = None) -> Decimal:
         """
         Calculates the target sell price using dynamic sell_rise_percentage.
         Handles cases where params might be None.

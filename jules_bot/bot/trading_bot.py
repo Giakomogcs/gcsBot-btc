@@ -139,52 +139,25 @@ class TradingBot:
         self.api_app.state.bot = self  # Make bot instance available to endpoints
         self.api_app.include_router(api_router, prefix="/api")
 
-    def _parse_trade_fills(self, buy_result: dict) -> tuple[Optional[Decimal], Optional[Decimal]]:
-        """
-        Parses the 'fills' array from a Binance trade execution to calculate
-        the volume-weighted average price and total executed quantity.
-        """
-        fills = buy_result.get('fills', [])
-        if not fills:
-            logger.error("Trade result is missing 'fills' array. Cannot determine execution details.")
-            return None, None
-
-        try:
-            total_qty = sum(Decimal(f['qty']) for f in fills)
-            total_cost = sum(Decimal(f['qty']) * Decimal(f['price']) for f in fills)
-            
-            if total_qty <= 0:
-                logger.error("Total quantity from fills is zero or less. Cannot calculate price.")
-                return None, None
-
-            avg_price = total_cost / total_qty
-            return avg_price, total_qty
-        except (InvalidOperation, TypeError, KeyError) as e:
-            logger.error(f"Error parsing fills data: {e}. Fills data: {fills}", exc_info=True)
-            return None, None
-
     def process_force_buy(self, amount_usd: float):
         """Processes a force buy command received from the API."""
-        logger.info(f"API command received: Force buy for ${amount_usd:.2f}")
+        logger.info(f"▶️ API command received: Force buy for ${amount_usd:.2f}")
         # Basic validation
         if Decimal(amount_usd) < self.min_trade_size:
             logger.error(f"Manual buy for ${amount_usd:.2f} is below min trade size ${self.min_trade_size:.2f}.")
             return {"status": "error", "message": "Amount is below minimum trade size."}
 
-        success, buy_result = self.trader.execute_buy(amount_usd, self.run_id, {"reason": "manual_api_override"})
+        logger.info("▶️ Sending force buy command...")
+        success, buy_result = self.trader.execute_buy(float(amount_usd), self.run_id, {"reason": "manual_api_override"})
         if success:
-            logger.info("Force buy successful. Parsing execution details...")
-            purchase_price, quantity_bought = self._parse_trade_fills(buy_result)
+            purchase_price = Decimal(str(buy_result.get('price', '0')))
+            quantity_bought = Decimal(str(buy_result.get('quantity', '0')))
 
-            if purchase_price is None or quantity_bought is None:
-                logger.critical("Could not parse force_buy execution details. Position will not be created.")
-                return {"status": "error", "message": "Could not parse trade execution details from exchange."}
+            if purchase_price <= 0 or quantity_bought <= 0:
+                logger.critical(f"Could not execute force_buy. Invalid trade data received: price={purchase_price}, quantity={quantity_bought}")
+                return {"status": "error", "message": "Invalid trade data received from exchange."}
 
-            logger.info(f"Force buy parsed: Qty={quantity_bought:.8f}, AvgPrice=${purchase_price:,.2f}")
-
-            # Update the buy_result with the accurate price and quantity BEFORE it's used by other functions
-            buy_result['price'] = str(purchase_price)
-            buy_result['quantity'] = str(quantity_bought)
+            logger.info(f"✅ Force buy successful: Qty={quantity_bought:.8f}, AvgPrice=${purchase_price:,.2f}")
 
             # Use default params for sell target calculation on manual override
             sell_target_price = self.strategy_rules.calculate_sell_target_price(purchase_price, quantity_bought, params=None)
@@ -198,7 +171,7 @@ class TradingBot:
 
     def process_force_sell(self, trade_id: str, percentage: float):
         """Processes a force sell command received from the API."""
-        logger.info(f"API command received: Force sell for {percentage}% of trade {trade_id}")
+        logger.info(f"▶️ API command received: Force sell for {percentage}% of trade {trade_id}")
         position = next((p for p in self.state_manager.get_open_positions() if p.trade_id == trade_id), None)
 
         if not position:
@@ -220,9 +193,11 @@ class TradingBot:
         sell_position_data = position.to_dict()
         sell_position_data['quantity'] = quantity_to_sell
 
+        logger.info("▶️ Sending force sell command...")
         success, sell_result = self.trader.execute_sell(sell_position_data, self.run_id, {"reason": "manual_api_force_sell"})
 
         if success:
+            logger.info("✅ Force sell successful. Calculating PnL...")
             buy_price = Decimal(str(position.price))
             sell_price = Decimal(str(sell_result.get('price', '0')))
             sell_commission_usd = Decimal(str(sell_result.get('commission_usd', '0')))
@@ -367,7 +342,7 @@ class TradingBot:
                             if not regime_df.empty:
                                 # Get the regime from the last row
                                 current_regime = int(regime_df['market_regime'].iloc[-1])
-                                logger.info(f"Current market regime detected: {current_regime}")
+                                logger.debug(f"Current market regime detected: {current_regime}")
                             else:
                                 logger.warning("Could not determine market regime from candle.")
                         except Exception as e:
@@ -375,7 +350,7 @@ class TradingBot:
 
                     self.dynamic_params.update_parameters(current_regime)
                     current_params = self.dynamic_params.parameters
-                    logger.info(f"Using strategy parameters for Regime {current_regime}: {current_params}")
+                    logger.debug(f"Using strategy parameters for Regime {current_regime}: {current_params}")
 
                     current_price = Decimal(final_candle['close'])
                     open_positions = self.state_manager.get_open_positions()
@@ -403,11 +378,18 @@ class TradingBot:
                         # Ensure sell_target_price is a Decimal, handle None
                         sell_target_price = Decimal(str(position.sell_target_price)) if position.sell_target_price is not None else Decimal('inf')
 
-                        # 1. Check if a position has hit its target and should be sold
+                        # 1. Check if the take-profit target has been reached to ACTIVATE trailing
                         if not position.is_trailing and current_price >= sell_target_price:
-                            logger.info(f"Position {position.trade_id} hit target ${sell_target_price:,.2f}. Marking for immediate sale.")
-                            positions_to_sell_now.append(position)
-                            # Continue to the next position to check others, do not activate trailing.
+                            logger.info(f"Position {position.trade_id} hit target ${sell_target_price:,.2f}. Activating trailing stop.")
+                            self.state_manager.update_trade_trailing_state(
+                                trade_id=position.trade_id,
+                                is_trailing=True,
+                                highest_price=current_price
+                            )
+                            # Update the in-memory object for the current cycle
+                            position.is_trailing = True
+                            position.highest_price_since_breach = current_price
+                            # Do not sell yet, let the trailing logic handle it from now on
                             continue
 
 
@@ -520,7 +502,7 @@ class TradingBot:
                     
                     # If a sell happened, refetch history to ensure difficulty factor is reset in the same cycle
                     if sell_executed_in_cycle:
-                        logger.info("Re-fetching trade history after sell to update difficulty factor.")
+                        logger.debug("Re-fetching trade history after sell to update difficulty factor.")
                         end_date = datetime.utcnow()
                         start_date = end_date - timedelta(hours=self.capital_manager.difficulty_reset_timeout_hours)
                         trade_history = self.db_manager.get_all_trades_in_range(
@@ -594,25 +576,21 @@ class TradingBot:
                             success, buy_result = self.trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
 
                             if success:
-                                logger.info("Buy successful. Parsing execution details...")
-                                purchase_price, quantity_bought = self._parse_trade_fills(buy_result)
+                                purchase_price = Decimal(str(buy_result.get('price', '0')))
+                                quantity_bought = Decimal(str(buy_result.get('quantity', '0')))
 
-                                if purchase_price is None or quantity_bought is None:
-                                    logger.critical("Could not parse buy execution details. Position will not be created.")
+                                if purchase_price <= 0 or quantity_bought <= 0:
+                                    logger.critical(f"Could not execute buy. Invalid trade data received: price={purchase_price}, quantity={quantity_bought}")
                                     continue
-
-                                logger.info(f"Buy parsed: Qty={quantity_bought:.8f}, AvgPrice=${purchase_price:,.2f}")
                                 
-                                # Update the buy_result with the accurate price and quantity for logging
-                                buy_result['price'] = str(purchase_price)
-                                buy_result['quantity'] = str(quantity_bought)
+                                logger.info(f"Buy successful: Qty={quantity_bought:.8f}, AvgPrice=${purchase_price:,.2f}")
 
                                 sell_target_price = self.strategy_rules.calculate_sell_target_price(purchase_price, quantity_bought, params=current_params)
                                 logger.info(f"Calculated sell target for strategy buy. Purchase price: ${purchase_price:,.2f}, Target price: ${sell_target_price:,.2f}, Params: {current_params}")
                                 self.state_manager.create_new_position(buy_result, sell_target_price)
                                 self.live_portfolio_manager.get_total_portfolio_value(purchase_price, force_recalculation=True)
                     else:
-                        logger.info(f"[{operating_mode}] No buy signal: {reason}")
+                        logger.debug(f"[{operating_mode}] No buy signal: {reason}")
 
                     # Update the status file at the end of the regular cycle
                     self._update_status_file()

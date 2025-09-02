@@ -149,7 +149,7 @@ class Trader:
                 "trade_id": trade_id, "symbol": self.symbol, "price": 0.0, "quantity": 0.0,
                 "usd_value": 0.0, "commission": 0.0, "commission_asset": "N/A",
                 "exchange_order_id": str(order.get('orderId')), "timestamp": order.get('transactTime'),
-                "decision_context": decision_context, "environment": self.environment
+                "decision_context": decision_context, "environment": self.environment, "fills": []
             }
 
         executed_qty = float(order['executedQty'])
@@ -198,7 +198,8 @@ class Trader:
             "binance_trade_id": binance_trade_id,
             "timestamp": order.get('transactTime'),
             "decision_context": decision_context,
-            "environment": self.environment
+            "environment": self.environment,
+            "fills": order.get('fills', [])
         }
 
 
