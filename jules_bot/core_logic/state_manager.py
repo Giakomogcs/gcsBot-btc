@@ -2,6 +2,7 @@ import pandas as pd
 from decimal import Decimal
 import math
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 from jules_bot.utils.logger import logger
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.database.models import Trade
@@ -421,7 +422,7 @@ class StateManager:
 
         logger.info("--- Finished recalculating sell targets ---")
 
-    def update_trade_trailing_state(self, trade_id: str, is_trailing: bool, highest_price: Decimal):
+    def update_trade_trailing_state(self, trade_id: str, is_trailing: bool, highest_price: Optional[Decimal]):
         """
         Updates the trailing state fields for a specific trade.
         """
