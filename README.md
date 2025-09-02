@@ -21,6 +21,27 @@
 
 O **Robô de Automação Jules** é um sistema de trading automatizado, robusto e flexível, projetado para operar no mercado de criptomoedas da Binance. Sua arquitetura é centrada em Docker, permitindo que cada bot opere em um contêiner isolado, garantindo estabilidade e escalabilidade. O sistema é controlado por uma poderosa interface de linha de comando (`run.py`) que gerencia todo o ciclo de vida dos bots, desde a criação e configuração até a execução e monitoramento em tempo real.
 
+## Estratégias de Trading Implementadas
+
+As seguintes estratégias foram implementadas para tornar o robô mais inteligente e adaptável às condições de mercado.
+
+### Fator de Dificuldade de Compra Incremental
+
+Para evitar a exaustão de capital durante tendências de baixa prolongadas, o robô emprega um fator de dificuldade de compra que se torna progressivamente mais rigoroso.
+
+- **Como Funciona:** Após um número configurável de compras consecutivas (definido por `STRATEGY_RULES_CONSECUTIVE_BUYS_THRESHOLD`), o robô aumenta a exigência para novas compras. Em vez de comprar após uma queda de X%, ele passará a exigir uma queda de X+1, X+2, e assim por diante.
+- **Reset da Dificuldade:** A dificuldade é zerada se ocorrer uma venda ou se não houver novas compras dentro de um período de tempo configurável (`STRATEGY_RULES_DIFFICULTY_RESET_TIMEOUT_HOURS`).
+
+### Trailing Take-Profit (Venda com Rastreamento de Lucro)
+
+Em vez de vender a um preço-alvo fixo, o robô utiliza uma estratégia de "trailing take-profit" para maximizar os ganhos.
+
+- **Como Funciona:**
+  1.  Quando uma posição atinge seu alvo de lucro inicial (`sell_target_price`), a venda não é executada imediatamente. Em vez disso, o modo "trailing" é ativado.
+  2.  O robô começa a rastrear o preço mais alto (`highest_price_since_breach`) que a posição atinge a partir daquele ponto.
+  3.  A venda só é acionada se o preço recuar uma porcentagem configurável (`STRATEGY_RULES_TRAILING_STOP_PERCENT`) a partir desse pico.
+- **Benefício:** Esta abordagem permite que o robô "surfe" as tendências de alta, capturando lucros muito maiores do que um alvo fixo permitiria, ao mesmo tempo em que garante um lucro mínimo caso o mercado reverta.
+
 ## Pré-requisitos
 
 Para executar este projeto, você precisará ter os seguintes softwares instalados em sua máquina:
@@ -89,6 +110,7 @@ O projeto utiliza um arquivo `.env` para gerenciar segredos e configurações.
 | `BINANCE_API_SECRET`         | Seu segredo de API para a conta de produção da Binance.        | `1a2b3c4d5e6f7g8h9i0j1k2l3m4n...` |
 | `BINANCE_TESTNET_API_KEY`    | Sua chave de API para a conta de teste (Testnet) da Binance.   | `...`                             |
 | `BINANCE_TESTNET_API_SECRET` | Seu segredo de API para a conta de teste (Testnet) da Binance. | `...`                             |
+| `STRATEGY_RULES_TRAILING_STOP_PERCENT` | Define a porcentagem de recuo a partir do preço máximo para acionar a venda na estratégia de Trailing Take-Profit. | `0.005` (para 0.5%) |
 
 ## Guia de Uso e Comandos
 
