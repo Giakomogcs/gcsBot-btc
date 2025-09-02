@@ -334,7 +334,8 @@ class StateManager:
         for position in open_positions:
             try:
                 purchase_price = Decimal(str(position.price))
-                
+                quantity = Decimal(str(position.quantity))
+
                 # Defensively handle invalid or missing current_target
                 current_target = Decimal('0') # Default value
                 if position.sell_target_price is not None:
@@ -343,7 +344,7 @@ class StateManager:
                     except Exception:
                         logger.warning(f"Could not parse current sell target '{position.sell_target_price}' for trade {position.trade_id}. Defaulting to 0.")
 
-                new_target = strategy_rules.calculate_sell_target_price(purchase_price, params=current_params)
+                new_target = strategy_rules.calculate_sell_target_price(purchase_price, quantity, params=current_params)
 
                 # Use a small tolerance for comparison to avoid floating point issues
                 if not math.isclose(new_target, current_target, rel_tol=1e-9):

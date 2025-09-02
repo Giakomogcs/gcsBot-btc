@@ -168,9 +168,21 @@ class StatusService:
             total_trades_count = len(trade_history_dicts)
 
             # --- Capital Allocation Calculation ---
+            # Create a simple class to mimic the structure CapitalManager expects,
+            # as it requires objects with a 'usd_value' attribute.
+            class PositionForCapitalManager:
+                def __init__(self, usd_value):
+                    self.usd_value = usd_value
+
+            # Create a list of these objects using the *current market value* of positions,
+            # not their historical entry cost from the database.
+            positions_for_cm = [
+                PositionForCapitalManager(pos['current_value']) for pos in positions_status
+            ]
+
             capital_allocation = self.capital_manager.get_capital_allocation(
                 portfolio_value=total_wallet_usd_value,
-                open_positions=open_positions_db
+                open_positions=positions_for_cm  # Use the corrected list with current values
             )
 
             bot_status_db = self.db_manager.get_bot_status(bot_id)
@@ -281,6 +293,7 @@ class StatusService:
             progress_pct = _calculate_progress_pct(current_price, entry_price, sell_target_price)
             price_to_target = sell_target_price - current_price
             usd_to_target = price_to_target * quantity
+            current_value = quantity * current_price
 
             positions_status.append({
                 "trade_id": trade.trade_id,
@@ -288,6 +301,7 @@ class StatusService:
                 "entry_price": entry_price,
                 "current_price": current_price,
                 "quantity": quantity,
+                "current_value": current_value,
                 "unrealized_pnl": unrealized_pnl,
                 "unrealized_pnl_pct": unrealized_pnl_pct,
                 "target_pnl": target_pnl,

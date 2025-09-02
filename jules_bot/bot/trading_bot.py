@@ -172,8 +172,9 @@ class TradingBot:
                         else:
                             success, buy_result = trader.execute_buy(amount_usd, self.run_id, {"reason": "manual_override"})
                             if success:
-                                purchase_price = Decimal(buy_result.get('price'))
-                                sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
+                                purchase_price = Decimal(str(buy_result.get('price')))
+                                quantity = Decimal(str(buy_result.get('quantity')))
+                                sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price, quantity)
                                 logger.info(f"Calculated sell target for manual buy. Purchase price: ${purchase_price:,.2f}, Target price: ${sell_target_price:,.2f}")
                                 state_manager.create_new_position(buy_result, sell_target_price)
                             else:
@@ -582,8 +583,9 @@ class TradingBot:
 
                             if success:
                                 logger.info("Buy successful. Creating new position.")
-                                purchase_price = Decimal(buy_result.get('price'))
-                                sell_target_price = self.strategy_rules.calculate_sell_target_price(purchase_price, params=current_params)
+                                purchase_price = Decimal(str(buy_result.get('price')))
+                                quantity = Decimal(str(buy_result.get('quantity')))
+                                sell_target_price = self.strategy_rules.calculate_sell_target_price(purchase_price, quantity, params=current_params)
                                 logger.info(f"Calculated sell target for strategy buy. Purchase price: ${purchase_price:,.2f}, Target price: ${sell_target_price:,.2f}, Params: {current_params}")
                                 self.state_manager.create_new_position(buy_result, sell_target_price)
                                 self.live_portfolio_manager.get_total_portfolio_value(purchase_price, force_recalculation=True)

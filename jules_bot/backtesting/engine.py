@@ -178,7 +178,8 @@ class Backtester:
                 if success:
                     new_trade_id = str(uuid.uuid4())
                     buy_price = buy_result['price']
-                    sell_target_price = strategy_rules.calculate_sell_target_price(buy_price, params=current_params)
+                    quantity = buy_result['quantity']
+                    sell_target_price = strategy_rules.calculate_sell_target_price(buy_price, quantity, params=current_params)
 
                     open_positions[new_trade_id] = {
                         'price': buy_price, 'quantity': buy_result['quantity'],
