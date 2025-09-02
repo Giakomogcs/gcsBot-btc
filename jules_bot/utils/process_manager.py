@@ -90,6 +90,12 @@ def get_active_docker_container_ids() -> List[str]:
     except (subprocess.CalledProcessError, FileNotFoundError):
         return []
 
+def clear_all_running_bots():
+    """
+    Clears all bots from the tracking file by saving an empty list.
+    """
+    save_running_bots([])
+
 def sync_and_get_running_bots() -> List[BotProcess]:
     """
     Reads the list of bots, checks which ones are still running in Docker,
