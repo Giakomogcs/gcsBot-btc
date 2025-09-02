@@ -151,7 +151,8 @@ class TradingBot:
     def _handle_ui_commands(self, trader, state_manager, strategy_rules):
         # This function deals with external data, which can be kept as strings/floats
         # and converted to Decimal only when passed to financial calculations.
-        command_dir = os.path.join("commands", self.bot_name)
+        # Use an absolute path to prevent ambiguity with the current working directory.
+        command_dir = os.path.join("/app", "commands", self.bot_name)
         if not os.path.exists(command_dir): return
 
         for filename in os.listdir(command_dir):
