@@ -67,15 +67,20 @@ def _ensure_env_is_running():
         if not result.stdout.strip():
             print("🚀 Ambiente Docker não detectado. Iniciando serviços de suporte (PostgreSQL, etc.)...")
             
-            print("   -> Etapa 1: Construindo a imagem da aplicação (isso pode levar um momento)...")
+            print("   -> Etapa 1: Baixando as imagens base (Postgres, etc.)...")
+            if not run_docker_compose_command(["pull"], capture_output=False):
+                print("❌ Falha ao baixar imagens Docker. Verifique sua conexão ou o limite de pulls do Docker Hub.")
+                return False
+
+            print("\n   -> Etapa 2: Construindo a imagem da aplicação (isso pode levar um momento)...")
             # Run build with streaming output for better user feedback by setting capture_output=False
             if not run_docker_compose_command(["build"], capture_output=False):
                 print("❌ Falha ao construir a imagem Docker. Verifique a sua instalação do Docker e o Dockerfile.")
                 return False
 
-            print("\n   -> Etapa 2: Iniciando os containers em background...")
-            # Run 'up' without build, as it's already done. Add --no-pull to prevent rate limiting issues.
-            if not run_docker_compose_command(["up", "-d", "--no-pull"], capture_output=True):
+            print("\n   -> Etapa 3: Iniciando os containers em background...")
+            # Run 'up' without build, as it's already done
+            if not run_docker_compose_command(["up", "-d"], capture_output=True):
                 print("❌ Falha ao iniciar os containers Docker. Verifique a sua instalação do Docker.")
                 return False
             
@@ -93,45 +98,19 @@ def start_env():
 
 @app.command("stop-env")
 def stop_env():
-    """Stops all docker services, including detached bot containers."""
-    print("🛑 Parando todos os serviços Docker do projeto...")
-
-    # 1. Find and stop all bot containers directly from Docker based on naming convention
-    container_pattern = f"name={PROJECT_NAME}-instance-"
-    try:
-        cmd = SUDO_PREFIX + ["docker", "ps", "-a", "-q", "--filter", container_pattern]
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        container_ids = result.stdout.strip().split()
-
-        if container_ids:
-            print(f"   -> Encontrados {len(container_ids)} container(s) de bot para parar...")
-            # Use docker stop with a space-separated list of IDs
-            stop_cmd = SUDO_PREFIX + ["docker", "stop"] + container_ids
-            subprocess.run(stop_cmd, capture_output=True, check=False)
-
-            # Use docker rm with a space-separated list of IDs
-            rm_cmd = SUDO_PREFIX + ["docker", "rm"] + container_ids
-            subprocess.run(rm_cmd, capture_output=True, check=False)
-            print("      ... containers parados e removidos.")
-        else:
-            print("   -> Nenhum container de bot individual encontrado.")
-
-    except Exception as e:
-        print(f"   ⚠️ Erro ao buscar ou parar containers de bot no Docker: {e}")
-
-    # 2. Clear the bot tracking file to prevent stale state
-    try:
-        process_manager.clear_all_running_bots()
-        print("   -> Arquivo de rastreamento de bots limpo.")
-    except Exception as e:
-        print(f"   ⚠️ Erro ao limpar o arquivo de rastreamento de bots: {e}")
-
-    # 3. Stop the docker-compose environment
-    print("   -> Parando serviços do docker-compose (Postgres, etc.)...")
-    if run_docker_compose_command(["down", "--volumes", "--remove-orphans"], capture_output=True):
+    print("🛑 Parando todos os serviços Docker...")
+    running_bots = process_manager.sync_and_get_running_bots()
+    if running_bots:
+        print("   Parando containers de bot em execução...")
+        for bot in running_bots:
+            try:
+                subprocess.run(SUDO_PREFIX + ["docker", "stop", bot.container_id], capture_output=True, check=False)
+                subprocess.run(SUDO_PREFIX + ["docker", "rm", bot.container_id], capture_output=True, check=False)
+                process_manager.remove_running_bot(bot.bot_name)
+            except Exception:
+                pass
+    if run_docker_compose_command(["down", "-v"], capture_output=True):
         print("✅ Ambiente Docker parado com sucesso.")
-    else:
-        print("❌ Falha ao parar o ambiente docker-compose. Tente rodar `docker-compose down -v` manualmente.")
 
 @app.command("status")
 def status():
