@@ -106,7 +106,9 @@ class TUIApp(App):
         config_manager.initialize(self.bot_name)
         self.log_filter = ""
         self.open_positions_data = []
+        self._last_positions_data: str | None = None
         self.trade_history_data = []
+        self._last_history_data: str | None = None
         self.positions_sort_column = "Unrealized PnL"
         self.positions_sort_reverse = True
         self.history_sort_column = "Timestamp"
@@ -150,16 +152,17 @@ class TUIApp(App):
                                     yield Static("Next Buy Target: N/A", id="strategy_buy_target")
                                     yield Static("Drop Needed: N/A", id="strategy_buy_target_percentage")
                                     yield Static("Buy Progress: N/A", id="strategy_buy_progress")
-                                yield Static("Capital Allocation", classes="title")
-                                with Static(id="capital_container"):
-                                    yield Static("Working Capital: $0 | Used: $0 | Free: $0", id="info_working_capital")
-                                    yield Static("Strategic Reserve: $0", id="info_strategic_reserve")
-                                    yield Static("Operating Mode: N/A", id="info_operating_mode")
+                               
                             with VerticalScroll(id="portfolio_and_positions"):
                                 yield Static("Wallet Balances", classes="title")
                                 yield DataTable(id="wallet_table")
                                 yield Static("Positions Summary", classes="title")
                                 yield Label("Summary: N/A", id="positions_summary_label")
+                                yield Static("Capital Allocation", classes="title")
+                                with Static(id="capital_container"):
+                                    yield Static("Working Capital: $0 | Used: $0 | Free: $0", id="info_working_capital")
+                                    yield Static("Strategic Reserve: $0", id="info_strategic_reserve")
+                                    yield Static("Operating Mode: N/A", id="info_operating_mode")
                         with Vertical(id="open_positions"):
                             yield Static("Open Positions", classes="title")
                             yield DataTable(id="positions_table")
@@ -194,7 +197,7 @@ class TUIApp(App):
         
         # Start the new, unified update worker
         self.update_from_status_file()
-        self.set_interval(2.0, self.update_from_status_file)
+        self.set_interval(5.0, self.update_from_status_file)
 
         self.query_one("#manual_buy_input").focus()
         self.stream_docker_logs()
@@ -423,11 +426,21 @@ class TUIApp(App):
         self.update_wallet_table(data.get("wallet_balances", []))
 
         # --- Trigger background workers to process and render table data ---
-        self.open_positions_data = data.get("open_positions_status", [])
-        self.process_positions_worker(self.open_positions_data, self.positions_sort_column, self.positions_sort_reverse)
-        
-        self.trade_history_data = data.get("trade_history", [])
-        self.update_history_table() # This will call the worker
+        new_positions_data = data.get("open_positions_status", [])
+        new_positions_str = json.dumps(new_positions_data)
+        if new_positions_str != self._last_positions_data:
+            self.log_display.write("Change in positions data detected, updating table...")
+            self._last_positions_data = new_positions_str
+            self.open_positions_data = new_positions_data
+            self.process_positions_worker(self.open_positions_data, self.positions_sort_column, self.positions_sort_reverse)
+
+        new_history_data = data.get("trade_history", [])
+        new_history_str = json.dumps(new_history_data)
+        if new_history_str != self._last_history_data:
+            self.log_display.write("Change in history data detected, updating table...")
+            self._last_history_data = new_history_str
+            self.trade_history_data = new_history_data
+            self.update_history_table() # This will call the worker
 
         # Update portfolio chart
         self.update_portfolio_chart(data.get("portfolio_history", []))
