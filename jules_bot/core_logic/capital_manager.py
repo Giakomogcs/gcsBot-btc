@@ -182,8 +182,9 @@ class CapitalManager:
                 break  # Streak is broken by a sell
 
         if consecutive_buys > self.consecutive_buys_threshold:
-            logger.info(f"Difficulty factor of 1 applied due to {consecutive_buys} consecutive buys.")
-            return 1
+            difficulty = consecutive_buys - self.consecutive_buys_threshold
+            logger.info(f"Difficulty factor of {difficulty} applied due to {consecutive_buys} consecutive buys (threshold is {self.consecutive_buys_threshold}).")
+            return difficulty
 
         return 0
 

@@ -92,6 +92,14 @@ class PostgresManager:
                         logger.info(f"Running migration: Adding missing column 'binance_trade_id' to table '{self.bot_name}.trades'")
                         with connection.begin():
                             connection.execute(text(f'ALTER TABLE {self.bot_name}.trades ADD COLUMN binance_trade_id INTEGER'))
+                    if 'profit_target_breached' not in trade_columns:
+                        logger.info(f"Running migration: Adding 'profit_target_breached' to '{self.bot_name}.trades'")
+                        with connection.begin():
+                            connection.execute(text(f'ALTER TABLE {self.bot_name}.trades ADD COLUMN profit_target_breached BOOLEAN DEFAULT FALSE NOT NULL'))
+                    if 'highest_price_since_breach' not in trade_columns:
+                        logger.info(f"Running migration: Adding 'highest_price_since_breach' to '{self.bot_name}.trades'")
+                        with connection.begin():
+                            connection.execute(text(f'ALTER TABLE {self.bot_name}.trades ADD COLUMN highest_price_since_breach NUMERIC(20, 8)'))
 
                 # Migration for 'bot_status' table
                 if inspector.has_table("bot_status", schema=self.bot_name):

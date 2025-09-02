@@ -412,11 +412,41 @@ class TradingBot:
                     full_trade_history = self.state_manager.get_trade_history_for_run()
                     self._write_state_to_file(open_positions, current_price, wallet_balances, full_trade_history, total_portfolio_value)
 
-                    # --- SELL LOGIC ---
-                    positions_to_sell = [p for p in open_positions if current_price >= Decimal(str(p.sell_target_price or 'inf'))]
+                    # --- SELL LOGIC (Trailing Take-Profit) ---
+                    positions_to_sell = []
+                    for position in open_positions:
+                        # Ensure sell_target_price is a Decimal
+                        sell_target_price = Decimal(str(position.sell_target_price or 'inf'))
+
+                        # 1. Check if the initial profit target has been breached
+                        if not position.profit_target_breached and current_price >= sell_target_price:
+                            logger.info(f"Trailing Stop Activated for trade {position.trade_id}. Initial target ${sell_target_price:,.2f} breached at price ${current_price:,.2f}.")
+                            update_data = {
+                                "profit_target_breached": True,
+                                "highest_price_since_breach": current_price
+                            }
+                            self.db_manager.update_trade(position.trade_id, update_data)
+                            # Update the in-memory object as well
+                            position.profit_target_breached = True
+                            position.highest_price_since_breach = current_price
+
+                        # 2. If trailing is active, manage the high-water mark and check for stop loss
+                        elif position.profit_target_breached:
+                            highest_price = Decimal(str(position.highest_price_since_breach))
+                            if current_price > highest_price:
+                                logger.info(f"Trailing Stop for trade {position.trade_id}: New high price reached ${current_price:,.2f} (old: ${highest_price:,.2f}).")
+                                self.db_manager.update_trade(position.trade_id, {"highest_price_since_breach": current_price})
+                                # Update in-memory object
+                                position.highest_price_since_breach = current_price
+                            else:
+                                trailing_stop_price = highest_price * (Decimal('1') - self.strategy_rules.trailing_stop_percent)
+                                logger.info(f"Checking trailing stop for {position.trade_id}: Current ${current_price:,.2f}, High ${highest_price:,.2f}, Stop Trigger ${trailing_stop_price:,.2f}")
+                                if current_price <= trailing_stop_price:
+                                    logger.info(f"Trailing Stop Triggered for trade {position.trade_id}. Selling.")
+                                    positions_to_sell.append(position)
+
                     if positions_to_sell:
-                        logger.info(f"Found {len(positions_to_sell)} positions meeting sell criteria.")
-                        # ... (rest of sell logic is unchanged)
+                        logger.info(f"Found {len(positions_to_sell)} positions meeting sell criteria based on trailing stop.")
                         total_sell_quantity = sum(Decimal(str(p.quantity)) * self.strategy_rules.sell_factor for p in positions_to_sell)
                         available_balance = Decimal(self.trader.get_account_balance(asset=base_asset))
 
