@@ -421,6 +421,17 @@ class StateManager:
 
         logger.info("--- Finished recalculating sell targets ---")
 
+    def update_trade_trailing_state(self, trade_id: str, is_trailing: bool, highest_price: Decimal):
+        """
+        Updates the trailing state fields for a specific trade.
+        """
+        logger.info(f"Updating trailing state for trade {trade_id}: is_trailing={is_trailing}, highest_price={highest_price}")
+        update_data = {
+            "is_trailing": is_trailing,
+            "highest_price_since_breach": highest_price
+        }
+        # The underlying db_manager.update_trade is prepared to handle this dictionary
+        self.db_manager.update_trade(trade_id, update_data)
 
     def record_partial_sell(self, original_trade_id: str, remaining_quantity: Decimal, sell_data: dict):
         """

@@ -413,26 +413,66 @@ class TradingBot:
                     full_trade_history = self.state_manager.get_trade_history_for_run()
                     self._write_state_to_file(open_positions, current_price, wallet_balances, full_trade_history, total_portfolio_value)
 
-                    # --- SELL LOGIC ---
-                    positions_to_sell = [p for p in open_positions if current_price >= Decimal(str(p.sell_target_price or 'inf'))]
-                    if positions_to_sell:
-                        logger.info(f"Found {len(positions_to_sell)} positions meeting sell criteria.")
-                        # ... (rest of sell logic is unchanged)
-                        total_sell_quantity = sum(Decimal(str(p.quantity)) * self.strategy_rules.sell_factor for p in positions_to_sell)
+                    # --- SELL LOGIC (with Trailing Take-Profit) ---
+                    positions_to_sell_now = []
+                    for position in open_positions:
+                        # Ensure sell_target_price is a Decimal, handle None
+                        sell_target_price = Decimal(str(position.sell_target_price)) if position.sell_target_price is not None else Decimal('inf')
+
+                        # 1. Check if a position should start trailing
+                        if not position.is_trailing and current_price >= sell_target_price:
+                            logger.info(f"Position {position.trade_id} hit target ${sell_target_price:,.2f}. Activating trailing stop.")
+                            self.state_manager.update_trade_trailing_state(
+                                trade_id=position.trade_id,
+                                is_trailing=True,
+                                highest_price=current_price
+                            )
+                            # We update the state and continue to the next cycle. The sell logic will be handled below.
+                            position.is_trailing = True # Update in-memory object for this cycle
+                            position.highest_price_since_breach = current_price
+
+
+                        # 2. Handle positions that are already trailing
+                        if position.is_trailing:
+                            # Ensure highest_price_since_breach is a Decimal
+                            highest_price = Decimal(str(position.highest_price_since_breach)) if position.highest_price_since_breach is not None else current_price
+
+                            # Update the highest price if a new peak is reached
+                            if current_price > highest_price:
+                                logger.info(f"Trailing position {position.trade_id} reached new peak: ${current_price:,.2f}")
+                                self.state_manager.update_trade_trailing_state(
+                                    trade_id=position.trade_id,
+                                    is_trailing=True,
+                                    highest_price=current_price
+                                )
+                                highest_price = current_price # Update in-memory object
+
+                            # Calculate the stop-loss price
+                            trailing_stop_price = highest_price * (Decimal('1') - self.strategy_rules.trailing_stop_percent)
+
+                            logger.debug(f"Position {position.trade_id}: Highest Price=${highest_price:,.2f}, Stop Price=${trailing_stop_price:,.2f}, Current Price=${current_price:,.2f}")
+
+                            # Check if the stop-loss is triggered
+                            if current_price <= trailing_stop_price:
+                                logger.info(f"Trailing stop triggered for position {position.trade_id}. Price ${current_price:,.2f} <= Stop ${trailing_stop_price:,.2f}. Marking for sale.")
+                                positions_to_sell_now.append(position)
+
+                    # 3. Execute sales for triggered positions
+                    if positions_to_sell_now:
+                        logger.info(f"Found {len(positions_to_sell_now)} positions meeting sell criteria.")
+                        total_sell_quantity = sum(Decimal(str(p.quantity)) * self.strategy_rules.sell_factor for p in positions_to_sell_now)
                         available_balance = Decimal(self.trader.get_account_balance(asset=base_asset))
 
                         if total_sell_quantity > available_balance:
                             logger.critical(
                                 f"INSUFFICIENT BALANCE & STATE DESYNC: Attempting to sell {total_sell_quantity:.8f} {base_asset}, "
                                 f"but only {available_balance:.8f} is available on the exchange. "
-                                "This indicates a significant discrepancy between the bot's state and the exchange's reality. "
-                                "The bot will NOT proceed with the sell and will wait for the next sync cycle to correct the state."
+                                "This indicates a significant discrepancy. Waiting for the next sync cycle."
                             )
                         else:
-                            for position in positions_to_sell:
+                            for position in positions_to_sell_now:
                                 trade_id = position.trade_id
                                 original_quantity = Decimal(str(position.quantity))
-                                # sell_factor determines what percentage of the position to sell
                                 sell_quantity = original_quantity * self.strategy_rules.sell_factor
                                 hodl_asset_amount = original_quantity - sell_quantity
 
@@ -442,26 +482,11 @@ class TradingBot:
                                 success, sell_result = self.trader.execute_sell(sell_position_data, self.run_id, final_candle.to_dict())
                                 if success:
                                     buy_price = Decimal(str(position.price))
-                                    
-                                    # --- Robust Decimal Conversion ---
-                                    # Validate sell_price before conversion
                                     sell_price_raw = sell_result.get('price')
-                                    if sell_price_raw is None or str(sell_price_raw).strip() == '':
-                                        logger.error(f"Sell price for trade {trade_id} was missing or empty in the exchange response. Using 0.0 as fallback for PnL calculation.")
-                                        sell_price = Decimal('0.0')
-                                    else:
-                                        sell_price = Decimal(str(sell_price_raw))
-
-                                    # Validate sell_commission_usd before conversion
+                                    sell_price = Decimal(str(sell_price_raw)) if sell_price_raw is not None else Decimal('0.0')
                                     sell_commission_raw = sell_result.get('commission_usd')
-                                    if sell_commission_raw is None or str(sell_commission_raw).strip() == '':
-                                        logger.warning(f"Sell commission for trade {trade_id} was missing or empty. Using 0.0 as fallback.")
-                                        sell_commission_usd = Decimal('0.0')
-                                    else:
-                                        sell_commission_usd = Decimal(str(sell_commission_raw))
-                                    # --- End Robust Decimal Conversion ---
+                                    sell_commission_usd = Decimal(str(sell_commission_raw)) if sell_commission_raw is not None else Decimal('0.0')
 
-                                    # PnL is calculated based on the quantity *actually* sold
                                     realized_pnl_usd = self.strategy_rules.calculate_realized_pnl(
                                         buy_price=buy_price,
                                         sell_price=sell_price,
@@ -478,7 +503,6 @@ class TradingBot:
                                         "hodl_asset_value_at_sell": hodl_asset_value_at_sell
                                     })
 
-                                    # The new logic handles partial sells correctly
                                     self.state_manager.record_partial_sell(
                                         original_trade_id=trade_id,
                                         remaining_quantity=hodl_asset_amount,

@@ -57,6 +57,10 @@ class Trade(Base):
     hodl_asset_value_at_sell = Column(Numeric(20, 8))
     backtest_id = Column(String)
 
+    # Fields for Trailing Take-Profit
+    is_trailing = Column(Boolean, default=False, nullable=False)
+    highest_price_since_breach = Column(Numeric(20, 8), nullable=True)
+
 class BotStatus(Base):
     __tablename__ = 'bot_status'
     id = Column(Integer, primary_key=True)
