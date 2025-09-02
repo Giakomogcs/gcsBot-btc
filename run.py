@@ -74,8 +74,8 @@ def _ensure_env_is_running():
                 return False
 
             print("\n   -> Etapa 2: Iniciando os containers em background...")
-            # Run 'up' without build, as it's already done
-            if not run_docker_compose_command(["up", "-d"], capture_output=True):
+            # Run 'up' without build, as it's already done. Add --no-pull to prevent rate limiting issues.
+            if not run_docker_compose_command(["up", "-d", "--no-pull"], capture_output=True):
                 print("❌ Falha ao iniciar os containers Docker. Verifique a sua instalação do Docker.")
                 return False
             
