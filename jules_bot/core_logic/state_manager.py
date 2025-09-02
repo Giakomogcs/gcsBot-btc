@@ -105,156 +105,217 @@ class StateManager:
 
     def sync_holdings_with_binance(self, account_manager: AccountManager, strategy_rules: StrategyRules, trader):
         """
-        Synchronizes the database with Binance trade history using a robust,
-        stateful FIFO approach. Creates separate BUY and SELL records.
+        Synchronizes the local database with the full Binance trade history for the
+        configured symbol. This function is idempotent and reconstructs the state
+        by pairing buys and sells to ensure data integrity.
         """
-        logger.info("--- Starting trade synchronization with Binance (V3 Logic) ---")
+        logger.info("--- Starting Full State Trade Synchronization (v4 Logic) ---")
         try:
             symbol = config_manager.get('APP', 'symbol')
             if not symbol:
                 logger.error("No symbol configured in APP section. Cannot perform sync.")
                 return
 
-            # 1. Fetch all trades and current prices from Binance and the local DB
-            binance_trades = trader.get_all_my_trades(symbol=symbol)
-            if not binance_trades:
+            # 1. Fetch ALL data from Binance and DB
+            all_binance_trades = trader.get_all_my_trades(symbol=symbol)
+            if not all_binance_trades:
                 logger.info(f"No trades found on Binance for {symbol}. Sync complete.")
                 return
 
-            # Fetch all prices once to avoid multiple API calls
-            all_prices = trader.get_all_prices()
-
             db_trades = self.db_manager.get_all_trades_in_range(mode=self.mode, symbol=symbol)
-            db_binance_trade_ids = {t.binance_trade_id for t in db_trades if t.binance_trade_id}
-            logger.info(f"Found {len(db_trades)} trades in DB and {len(binance_trades)} on Binance for {symbol}.")
+            db_trades_map = {t.binance_trade_id: t for t in db_trades if t.binance_trade_id}
 
-            # 2. Sync all BUY trades from Binance that are not in our DB
-            new_buys_synced = 0
-            for b_trade in binance_trades:
-                if b_trade['isBuyer'] and b_trade['id'] not in db_binance_trade_ids:
-                    logger.info(f"Found new BUY trade on Binance (ID: {b_trade['id']}). Creating local BUY record.")
-                    self._create_position_from_binance_trade(b_trade, strategy_rules, all_prices)
-                    new_buys_synced += 1
+            logger.info(f"Found {len(all_binance_trades)} trades on Binance and {len(db_trades_map)} in local DB for {symbol}.")
 
-            if new_buys_synced > 0:
-                logger.info(f"Synced {new_buys_synced} new buy trades. Refetching DB state before processing sells.")
-                db_trades = self.db_manager.get_all_trades_in_range(mode=self.mode, symbol=symbol)
+            # 2. Simulate trade history to determine correct state
+            # Create in-memory representations for matching
+            buys_pool = [
+                {
+                    **trade,
+                    'qty': Decimal(str(trade['qty'])),
+                    'price': Decimal(str(trade['price'])),
+                    'commission': Decimal(str(trade['commission'])),
+                    'remaining_qty': Decimal(str(trade['qty']))
+                }
+                for trade in all_binance_trades if trade['isBuyer']
+            ]
+            sells = [
+                {
+                    **trade,
+                    'qty': Decimal(str(trade['qty'])),
+                    'price': Decimal(str(trade['price'])),
+                    'commission': Decimal(str(trade['commission']))
+                }
+                for trade in all_binance_trades if not trade['isBuyer']
+            ]
 
-            # 3. Process SELL trades using FIFO logic
-            open_positions_fifo = sorted([t for t in db_trades if t.status == 'OPEN' and t.order_type == 'buy'], key=lambda p: p.timestamp)
+            # This map will hold the results of the matching
+            sell_to_buy_matches = {} # {sell_id: [{'buy_id': X, 'matched_qty': Y, ...}]}
 
-            # Get sell trades from Binance that haven't been processed yet
-            sells_to_process = [st for st in binance_trades if not st['isBuyer'] and st['id'] not in db_binance_trade_ids]
+            for sell_trade in sells:
+                sell_id = sell_trade['id']
+                sell_to_buy_matches[sell_id] = []
+                sell_qty_to_match = sell_trade['qty']
 
-            if not sells_to_process:
-                logger.info("No new sell trades from Binance to process.")
-            else:
-                logger.info(f"Found {len(sells_to_process)} new sell trades to process from Binance.")
+                for buy_trade in buys_pool:
+                    if sell_qty_to_match <= Decimal('0'):
+                        break
+                    if buy_trade['remaining_qty'] <= Decimal('0'):
+                        continue
 
-            for sell_trade in sells_to_process:
-                sell_price = Decimal(str(sell_trade['price']))
-                sell_quantity_remaining = Decimal(str(sell_trade['qty']))
-                logger.info(f"Processing Binance sell trade ID {sell_trade['id']} for {sell_quantity_remaining} units at ${sell_price:,.2f}.")
+                    matched_qty = min(sell_qty_to_match, buy_trade['remaining_qty'])
 
-                # This loop will continue until the entire sell quantity is accounted for
-                # by matching it against open buy positions.
-                for open_pos in open_positions_fifo:
-                    if sell_quantity_remaining <= Decimal('1e-9'): break # Sell is fully accounted for
-                    if open_pos.status != 'OPEN': continue # Skip already closed positions
+                    buy_trade['remaining_qty'] -= matched_qty
+                    sell_qty_to_match -= matched_qty
 
-                    open_pos_quantity = Decimal(str(open_pos.quantity))
-                    quantity_to_sell_from_pos = min(open_pos_quantity, sell_quantity_remaining)
+                    sell_to_buy_matches[sell_id].append({
+                        'buy_id': buy_trade['id'],
+                        'matched_qty': matched_qty,
+                        'buy_price': buy_trade['price'],
+                        'buy_commission': buy_trade['commission'],
+                        'buy_commission_asset': buy_trade['commissionAsset'],
+                        'original_buy_qty': buy_trade['qty']
+                    })
 
-                    if quantity_to_sell_from_pos <= Decimal('1e-9'): continue
+            # 3. Reconcile the DB with the simulated state
+            all_prices = trader.get_all_prices() # Fetch prices for commission calculation
 
-                    # Create a new SELL record for this part of the transaction
-                    buy_price = Decimal(str(open_pos.price))
-                    logger.info(f"MATCH: Matched sell trade {sell_trade['id']} (Qty: {quantity_to_sell_from_pos}) with buy trade {open_pos.trade_id} (Buy Price: ${buy_price:,.2f}).")
+            # Process BUYs first to ensure they exist before SELLs are linked
+            for buy_trade_state in buys_pool:
+                binance_id = buy_trade_state['id']
+                is_open = buy_trade_state['remaining_qty'] > Decimal('1e-9')
+                final_status = "OPEN" if is_open else "CLOSED"
 
-                    # CRITICAL CALCULATION: Determine the realized profit or loss for this sell event.
-                    # First, calculate the commission in USD for the sell trade.
-                    sell_commission = Decimal(str(sell_trade.get('commission', '0')))
-                    sell_commission_asset = sell_trade.get('commissionAsset')
-                    sell_commission_usd = Decimal('0.0')
-                    if sell_commission > 0:
-                        if sell_commission_asset == 'USDT':
-                            sell_commission_usd = sell_commission
-                        elif sell_commission_asset == symbol.replace('USDT', ''):
-                            sell_commission_usd = sell_commission * sell_price
-                        else:
-                            asset_price = all_prices.get(f"{sell_commission_asset}USDT")
-                            if asset_price:
-                                sell_commission_usd = sell_commission * Decimal(str(asset_price))
+                if binance_id in db_trades_map:
+                    # UPDATE existing trade
+                    db_trade = db_trades_map[binance_id]
+                    if db_trade.status != final_status or not math.isclose(db_trade.quantity, float(buy_trade_state['remaining_qty'])):
+                        logger.info(f"Updating BUY {binance_id}: Status {db_trade.status}->{final_status}, Qty {db_trade.quantity}->{buy_trade_state['remaining_qty']:.8f}")
+                        self.db_manager.update_trade_status_and_quantity(
+                            trade_id=db_trade.trade_id,
+                            new_status=final_status,
+                            new_quantity=float(buy_trade_state['remaining_qty'])
+                        )
+                else:
+                    # INSERT new trade
+                    logger.info(f"Creating new BUY record for Binance ID {binance_id} with status {final_status}.")
+                    self._create_position_from_binance_trade(buy_trade_state, strategy_rules, all_prices, final_status)
 
-                    realized_pnl_usd = strategy_rules.calculate_realized_pnl(
-                        buy_price=buy_price,
-                        sell_price=sell_price,
-                        quantity_sold=quantity_to_sell_from_pos,
-                        buy_commission_usd=Decimal(str(open_pos.commission_usd or '0')),
-                        sell_commission_usd=sell_commission_usd,
-                        buy_quantity=Decimal(str(open_pos.quantity))
+            # Must refetch the map to include newly created buys
+            db_trades = self.db_manager.get_all_trades_in_range(mode=self.mode, symbol=symbol)
+            db_trades_map = {t.binance_trade_id: t for t in db_trades if t.binance_trade_id}
+
+            # Process SELLs
+            for sell_trade in sells:
+                binance_id = sell_trade['id']
+                if binance_id in db_trades_map:
+                    continue # Skip sells already in DB
+
+                matches = sell_to_buy_matches.get(binance_id, [])
+                if not matches:
+                    logger.warning(f"Could not find any BUY matches for SELL with Binance ID {binance_id}. This might indicate a manual sell or data issue. Logging as unlinked.")
+                    # Optionally, log the sell without a link
+                    continue
+
+                total_pnl_for_sell = Decimal('0')
+
+                # In case one sell closes multiple buys, we create one sell record and sum the PnL
+                # The linking in the DB will be to the first buy matched.
+                first_matched_buy_id = matches[0]['buy_id']
+                original_buy_trade_db = db_trades_map.get(first_matched_buy_id)
+
+                if not original_buy_trade_db:
+                    logger.error(f"CRITICAL: DB record for BUY {first_matched_buy_id} not found, but it was matched with SELL {binance_id}. Skipping sell record creation.")
+                    continue
+
+                for match in matches:
+                    buy_commission_usd = self._calculate_commission_in_usd(
+                        match['buy_commission'], match['buy_commission_asset'], match['buy_price'], symbol, all_prices
                     )
-                    logger.info(f"CALC PNL: Realized PnL for this portion is ${realized_pnl_usd:,.2f}.")
+                    sell_commission_usd = self._calculate_commission_in_usd(
+                        sell_trade['commission'], sell_trade['commissionAsset'], sell_trade['price'], symbol, all_prices
+                    )
 
-                    self._create_sell_record_from_sync(open_pos, sell_trade, quantity_to_sell_from_pos, realized_pnl_usd, sell_commission_usd)
+                    pnl_for_match = strategy_rules.calculate_realized_pnl(
+                        buy_price=match['buy_price'],
+                        sell_price=sell_trade['price'],
+                        quantity_sold=match['matched_qty'],
+                        buy_commission_usd=buy_commission_usd,
+                        sell_commission_usd=sell_commission_usd,
+                        buy_quantity=match['original_buy_qty']
+                    )
+                    total_pnl_for_sell += pnl_for_match
 
-                    # Update the original BUY position's quantity
-                    remaining_quantity_in_pos = open_pos_quantity - quantity_to_sell_from_pos
-                    open_pos.quantity = remaining_quantity_in_pos # Update in-memory object for this session
+                logger.info(f"Creating new SELL record for Binance ID {binance_id} with total realized PnL ${total_pnl_for_sell:.4f}")
+                self._create_sell_record_from_sync(
+                    original_buy_trade=original_buy_trade_db,
+                    binance_sell_trade=sell_trade,
+                    quantity_sold=sell_trade['qty'],
+                    realized_pnl_usd=total_pnl_for_sell,
+                    sell_commission_usd=sell_commission_usd # Commission for the whole sell trade
+                )
 
-                    if remaining_quantity_in_pos <= Decimal('1e-9'):
-                        self.db_manager.update_trade_status(open_pos.trade_id, 'CLOSED')
-                        open_pos.status = 'CLOSED' # Update in-memory object
-                        logger.info(f"BUY trade {open_pos.trade_id} fully closed.")
-                    else:
-                        self.db_manager.update_trade_quantity(open_pos.trade_id, float(remaining_quantity_in_pos))
-                        logger.info(f"BUY trade {open_pos.trade_id} partially closed. Remaining qty: {remaining_quantity_in_pos}")
-
-                    sell_quantity_remaining -= quantity_to_sell_from_pos
-
-            logger.info("--- Trade synchronization finished ---")
+            logger.info("--- Full State Trade Synchronization Finished ---")
         except Exception as e:
-            logger.error(f"An error occurred during trade synchronization: {e}", exc_info=True)
+            logger.error(f"An error occurred during the new trade synchronization: {e}", exc_info=True)
 
-    def _create_position_from_binance_trade(self, binance_trade: dict, strategy_rules: StrategyRules, all_prices: dict):
-        """Helper to create a new DB BUY position from a single Binance trade record."""
+    def _calculate_commission_in_usd(self, commission: Decimal, asset: str, price: Decimal, symbol: str, all_prices: dict) -> Decimal:
+        """Helper to calculate commission value in USD."""
+        if commission <= 0:
+            return Decimal('0')
+
+        if asset == 'USDT':
+            return commission
+        elif asset == symbol.replace('USDT', ''):
+            return commission * price
+        else:
+            asset_price_symbol = f"{asset}USDT"
+            asset_price = all_prices.get(asset_price_symbol)
+            if asset_price:
+                return commission * Decimal(str(asset_price))
+            else:
+                logger.warning(f"Could not find price for commission asset '{asset}'. Commission calculation may be inaccurate.")
+                return Decimal('0')
+
+    def _create_position_from_binance_trade(self, binance_trade: dict, strategy_rules: StrategyRules, all_prices: dict, final_status: str):
+        """
+        Helper to create a new DB BUY position from a single Binance trade record,
+        using the final status and quantity determined by the sync simulation.
+        """
         try:
-            purchase_price = Decimal(str(binance_trade['price']))
-            quantity = Decimal(str(binance_trade['qty']))
-            commission = Decimal(str(binance_trade['commission']))
+            # The binance_trade dict comes from the simulation, so it has 'remaining_qty'
+            purchase_price = binance_trade['price']
+            original_quantity = binance_trade['qty']
+            final_quantity = binance_trade['remaining_qty']
+            commission = binance_trade['commission']
             commission_asset = binance_trade['commissionAsset']
             symbol = binance_trade['symbol']
 
-            # --- Calculate Commission in USD ---
-            commission_usd = Decimal('0.0')
-            if commission > 0:
-                if commission_asset == 'USDT':
-                    commission_usd = commission
-                elif commission_asset == symbol.replace('USDT', ''):
-                    commission_usd = commission * purchase_price
-                else:
-                    asset_price_symbol = f"{commission_asset}USDT"
-                    asset_price = all_prices.get(asset_price_symbol)
-                    if asset_price:
-                        commission_usd = commission * Decimal(str(asset_price))
-                    else:
-                        logger.warning(f"Could not find price for commission asset '{commission_asset}' during sync. commission_usd will be 0.")
+            commission_usd = self._calculate_commission_in_usd(
+                commission, commission_asset, purchase_price, symbol, all_prices
+            )
             
             internal_trade_id = str(uuid.uuid4())
-            sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price, params=None)
+            # Pass original_quantity for an accurate sell target calculation if it depends on the full size
+            sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price, original_quantity, params=None)
 
             buy_result = {
                 "run_id": self.bot_id,
-                "trade_id": internal_trade_id, "symbol": symbol,
-                "price": purchase_price, "quantity": quantity, "usd_value": purchase_price * quantity,
+                "trade_id": internal_trade_id,
+                "symbol": symbol,
+                "price": purchase_price,
+                "quantity": final_quantity, # Log the remaining quantity
+                "usd_value": purchase_price * original_quantity, # Log the original value
                 "commission": commission,
                 "commission_asset": commission_asset,
                 "commission_usd": commission_usd,
                 "exchange_order_id": str(binance_trade['orderId']),
                 "binance_trade_id": int(binance_trade['id']),
-                "timestamp": datetime.utcfromtimestamp(binance_trade['time'] / 1000).replace(tzinfo=timezone.utc),
-                "decision_context": {"reason": "sync_from_binance_buy"},
-                "environment": self.mode, "status": "OPEN", "order_type": "buy",
+                "timestamp": datetime.fromtimestamp(binance_trade['time'] / 1000, tz=datetime.timezone.utc),
+                "decision_context": {"reason": "sync_from_binance_buy", "original_qty": float(original_quantity)},
+                "environment": self.mode,
+                "status": final_status, # Use the status from the simulation
+                "order_type": "buy",
                 "sell_target_price": sell_target_price
             }
             
@@ -342,7 +403,8 @@ class StateManager:
                     except Exception:
                         logger.warning(f"Could not parse current sell target '{position.sell_target_price}' for trade {position.trade_id}. Defaulting to 0.")
 
-                new_target = strategy_rules.calculate_sell_target_price(purchase_price, params=current_params)
+                quantity = Decimal(str(position.quantity))
+                new_target = strategy_rules.calculate_sell_target_price(purchase_price, quantity, params=current_params)
 
                 # Use a small tolerance for comparison to avoid floating point issues
                 if not math.isclose(new_target, current_target, rel_tol=1e-9):

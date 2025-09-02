@@ -563,8 +563,9 @@ class TradingBot:
                     # Update the status file at the end of the regular cycle
                     self._update_status_file()
                     
-                    logger.info("--- Cycle complete. Waiting 30 seconds...")
-                    time.sleep(30)
+                    # Reduced sleep time to improve responsiveness to sell targets
+                    logger.info("--- Cycle complete. Waiting 5 seconds...")
+                    time.sleep(5)
 
                 except NameError as e:
                     logger.critical(f"❌ A 'NameError' occurred in the main loop. This is often a typo in a variable name or an uninitialized variable.", exc_info=True)
