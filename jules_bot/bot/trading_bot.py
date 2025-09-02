@@ -20,6 +20,8 @@ from jules_bot.database.portfolio_manager import PortfolioManager as DbPortfolio
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
 from jules_bot.services.status_service import StatusService
 from jules_bot.utils.helpers import _calculate_progress_pct
+from jules_bot.bot.api_server import ApiServer
+import threading
 
 getcontext().prec = 28
 
@@ -129,6 +131,15 @@ class TradingBot:
         self.dynamic_params = DynamicParameters(config_manager)
         self.sa_instance = SituationalAwareness()
 
+        # --- API Server ---
+        self.api_server = ApiServer(
+            trader=self.trader,
+            state_manager=self.state_manager,
+            strategy_rules=self.strategy_rules,
+            bot_id=self.run_id,
+            min_trade_size=self.min_trade_size
+        )
+
 
     def _write_state_to_file(self, open_positions: list, current_price: Decimal, wallet_balances: list, trade_history: list, portfolio_value: Decimal):
         serializable_trade_history = [t.to_dict() for t in trade_history]
@@ -148,137 +159,6 @@ class TradingBot:
         except (IOError, OSError) as e:
             logger.error(f"Could not write to state file {self.state_file_path}: {e}")
 
-    def _handle_ui_commands(self, trader, state_manager, strategy_rules):
-        # This function deals with external data, which can be kept as strings/floats
-        # and converted to Decimal only when passed to financial calculations.
-        # Use an absolute path to prevent ambiguity with the current working directory.
-        command_dir = os.path.join("/app", "commands", self.bot_name)
-        if not os.path.exists(command_dir): return
-
-        for filename in os.listdir(command_dir):
-            if not filename.endswith(".json"): continue
-            filepath = os.path.join(command_dir, filename)
-            try:
-                with open(filepath, "r") as f:
-                    command = json.load(f)
-
-                cmd_type = command.get("type")
-                logger.info(f"Processing UI command: {command}")
-
-                if cmd_type == "force_buy":
-                    amount_usd = Decimal(command.get("amount_usd", "0"))
-                    if amount_usd > 0:
-                        if amount_usd < self.min_trade_size:
-                            logger.error(f"Manual buy command for ${amount_usd:.2f} is below the minimum trade size of ${self.min_trade_size:.2f}. Aborting.")
-                        else:
-                            success, buy_result = trader.execute_buy(amount_usd, self.run_id, {"reason": "manual_override"})
-                            if success:
-                                purchase_price = Decimal(buy_result.get('price'))
-                                sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price)
-                                logger.info(f"Calculated sell target for manual buy. Purchase price: ${purchase_price:,.2f}, Target price: ${sell_target_price:,.2f}")
-                                state_manager.create_new_position(buy_result, sell_target_price)
-                            else:
-                                logger.error(f"Manual buy for ${amount_usd:.2f} failed. See trader logs for details (e.g., insufficient funds).")
-
-                elif cmd_type == "force_sell":
-                    trade_id = command.get("trade_id")
-                    percentage = Decimal(command.get("percentage", "100.0"))
-                    if not trade_id:
-                        logger.error("Invalid 'force_sell' command: 'trade_id' is missing.")
-                        os.remove(filepath) # Remove invalid command
-                        continue
-
-                    position = next((p for p in state_manager.get_open_positions() if p.trade_id == trade_id), None)
-
-                    if not position:
-                        logger.error(f"Cannot force sell: Trade with ID '{trade_id}' not found in open positions.")
-                        os.remove(filepath) # Remove invalid command
-                        continue
-
-                    logger.info(f"Processing force sell for {percentage}% of trade {trade_id}.")
-                    quantity_to_sell = Decimal(str(position.quantity)) * (percentage / Decimal("100"))
-
-                    # Pre-flight check 1: Ensure quantity is positive
-                    if quantity_to_sell <= 0:
-                        logger.error(f"Calculated quantity to sell for trade {trade_id} is zero or less. Aborting.")
-                        os.remove(filepath)
-                        continue
-
-                    # Pre-flight check 2: Notional value check
-                    # We need the current price to perform this check
-                    current_price_str = self.trader.get_current_price(self.symbol)
-                    if current_price_str:
-                        current_price = Decimal(current_price_str)
-                        notional_value = quantity_to_sell * current_price
-                        min_notional_value = self.trader.min_notional
-
-                        if notional_value < min_notional_value:
-                            logger.error(
-                                f"Force sell command for trade {trade_id} aborted. "
-                                f"Notional value (${notional_value:,.2f}) is below the minimum required "
-                                f"by the exchange (${min_notional_value:,.2f})."
-                            )
-                            os.remove(filepath) # Remove the command to prevent retries
-                            continue
-                    else:
-                        logger.warning("Could not fetch current price to validate notional value. Skipping check.")
-
-                    logger.info(f"Executing force sell for trade {trade_id}, quantity: {quantity_to_sell:.8f}")
-                    sell_position_data = position.to_dict()
-                    sell_position_data['quantity'] = quantity_to_sell
-
-                    success, sell_result = trader.execute_sell(sell_position_data, self.run_id, {"reason": "manual_force_sell"})
-
-                    if success:
-                        logger.info(f"Force sell for trade {trade_id} executed successfully on the exchange.")
-                        buy_price = Decimal(str(position.price))
-
-                        # --- Robust Decimal Conversion ---
-                        # Validate sell_price before conversion
-                        sell_price_raw = sell_result.get('price')
-                        if sell_price_raw is None or str(sell_price_raw).strip() == '':
-                            logger.error(f"Force sell price for trade {trade_id} was missing or empty. Using 0.0 as fallback for PnL.")
-                            sell_price = Decimal('0.0')
-                        else:
-                            sell_price = Decimal(str(sell_price_raw))
-
-                        # Validate sell_commission_usd before conversion
-                        sell_commission_raw = sell_result.get('commission_usd')
-                        if sell_commission_raw is None or str(sell_commission_raw).strip() == '':
-                            logger.warning(f"Force sell commission for trade {trade_id} was missing or empty. Using 0.0 as fallback.")
-                            sell_commission_usd = Decimal('0.0')
-                        else:
-                            sell_commission_usd = Decimal(str(sell_commission_raw))
-                        # --- End Robust Decimal Conversion ---
-
-                        realized_pnl_usd = strategy_rules.calculate_realized_pnl(
-                            buy_price=buy_price,
-                            sell_price=sell_price,
-                            quantity_sold=quantity_to_sell,
-                            buy_commission_usd=Decimal(str(position.commission_usd or '0')),
-                            sell_commission_usd=sell_commission_usd,
-                            buy_quantity=Decimal(str(position.quantity))
-                        )
-
-                        state_manager.close_forced_position(trade_id, sell_result, realized_pnl_usd)
-                        logger.info(f"Successfully closed trade {trade_id} via force sell with PnL ${realized_pnl_usd:.2f}.")
-                        os.remove(filepath) # Command succeeded, remove it.
-                    else:
-                        # If the sell fails, we DO NOT remove the command file.
-                        # This allows the bot to retry on the next cycle, making the feature more robust.
-                        logger.error(f"Manual sell for trade {trade_id} failed. See trader logs. The command will be retried.")
-
-                else:
-                    # For any other command type, we assume it's processed instantly and should be removed.
-                    os.remove(filepath)
-            except Exception as e:
-                logger.error(f"Error processing command file {filename}: {e}", exc_info=True)
-                # Attempt to remove the problematic file to prevent loop
-                try:
-                    os.remove(filepath)
-                    logger.warning(f"Removed problematic command file {filepath} to prevent command loop.")
-                except OSError as a:
-                    logger.error(f"Could not remove problematic command file {filepath}: {a}")
 
     def _calculate_buy_progress(self, market_data: dict, open_positions_count: int, current_params: dict) -> tuple[Decimal, Decimal]:
         """
@@ -348,6 +228,10 @@ class TradingBot:
 
         # Now that initialization is complete, set the status to RUNNING
         self.status_service.set_bot_running(self.bot_name, self.mode)
+
+        # Start the API server in a background thread
+        self.api_server.start_server_in_thread()
+
         logger.info(f"🚀 --- TRADING BOT STARTED --- BOT NAME: {self.bot_name} --- RUN ID: {self.run_id} --- SYMBOL: {self.symbol} --- MODE: {self.mode.upper()} --- 🚀")
 
         try:
@@ -357,7 +241,6 @@ class TradingBot:
                     
                     logger.info("--- Starting new trading cycle ---")
                     self.state_manager.recalculate_open_position_targets(self.strategy_rules, self.sa_instance, self.dynamic_params)
-                    self._handle_ui_commands(self.trader, self.state_manager, self.strategy_rules)
 
                     features_df = self.feature_calculator.get_features_dataframe()
                     if features_df.empty:

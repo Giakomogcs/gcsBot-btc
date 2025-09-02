@@ -42,9 +42,10 @@ class DashboardData(Message):
         self.success = success
         super().__init__()
 
-class CommandOutput(Message):
-    def __init__(self, output: str, success: bool) -> None:
-        self.output = output
+class ApiOutput(Message):
+    """Carries the result of an API call from the worker."""
+    def __init__(self, response_data: dict, success: bool) -> None:
+        self.response_data = response_data
         self.success = success
         super().__init__()
 
@@ -226,27 +227,31 @@ class TUIApp(App):
             self.call_from_thread(self.log_display.write, f"[bold red]Error streaming logs: {e}[/]")
 
     @work(thread=True)
-    def run_command_worker(self, command: list[str]) -> None:
-        """Runs a one-off command in a Docker container, e.g., force_buy/sell."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    def call_api_worker(self, endpoint: str, payload: dict) -> None:
+        """Calls the bot's API in a background thread."""
+        # The bot's container should be addressable by its service name in docker-compose
+        # The default bot name is 'jules_bot', which corresponds to the service name.
+        # The API server runs on port 5001.
+        bot_hostname = os.getenv("BOT_HOSTNAME", "app")
+        api_url = f"http://{bot_hostname}:5001/{endpoint}"
         try:
-            project_name = os.getenv("PROJECT_NAME", "gcsbot-btc")
-            docker_image_name = f"{project_name}-app"
-            docker_network_name = os.getenv("DOCKER_NETWORK_NAME", f"{project_name}_default")
+            import httpx
+            # Increased timeout to handle potentially long-running trade executions
+            with httpx.Client(timeout=30.0) as client:
+                response = client.post(api_url, json=payload)
+            
+            response.raise_for_status() # Raises an exception for 4xx or 5xx status codes
+            self.post_message(ApiOutput(response.json(), success=True))
 
-            docker_command = SUDO_PREFIX + ["docker", "run", "--rm", "--network", docker_network_name, "--env-file", ".env", "-e", f"BOT_NAME={self.bot_name}", "-e", f"BOT_MODE={self.mode}", "-v", f"{project_root}:/app", docker_image_name] + command
-            process = subprocess.run(docker_command, capture_output=True, text=True, check=False, encoding='utf-8', errors='replace')
-            
-            output = process.stdout.strip() if process.returncode == 0 else process.stderr.strip()
-            success = process.returncode == 0
-            if not success:
-                self.call_from_thread(self.log_display.write, f"[bold red]Script Error ({' '.join(command)}):[/] {output}")
-            
-            self.post_message(CommandOutput(output, success))
-        except FileNotFoundError:
-            self.post_message(CommandOutput("Docker not found. Is it installed and in your PATH?", False))
+        except ImportError:
+            self.post_message(ApiOutput({"message": "httpx is not installed."}, success=False))
+        except httpx.RequestError as e:
+            error_message = f"API request failed: {e}. Is the bot container running and accessible at '{api_url}'?"
+            self.post_message(ApiOutput({"message": error_message}, success=False))
         except Exception as e:
-            self.post_message(CommandOutput(f"Worker error: {e}", False))
+            # This will catch JSONDecodeError if the response is not valid JSON, or any other unexpected error.
+            error_message = f"An unexpected error occurred during API call: {e}"
+            self.post_message(ApiOutput({"message": error_message}, success=False))
 
     @work(thread=True)
     def process_positions_worker(self, positions_data: list, sort_column: str, sort_reverse: bool) -> None:
@@ -508,17 +513,19 @@ class TUIApp(App):
         if rows_to_add:
             table.add_rows(rows_to_add)
 
-    def on_command_output(self, message: CommandOutput) -> None:
+    def on_api_output(self, message: ApiOutput) -> None:
+        """Handles the response from the bot's API."""
+        response_message = message.response_data.get("message", "No message provided.")
         if message.success:
-            self.log_display.write(f"[green]Command success:[/green] {message.output}")
-            self.log_display.write("[yellow]Command sent. Forcing UI refresh in 1, 2, and 3 seconds...[/yellow]")
-            # Trigger multiple refreshes to catch the state update from the bot
+            self.log_display.write(f"[green]API Success:[/green] {response_message}")
+            # Trigger a refresh to see the new state
+            self.log_display.write("[yellow]Forcing UI refresh in 1 and 3 seconds...[/yellow]")
             self.set_timer(1.0, self.update_from_status_file)
-            self.set_timer(2.0, self.update_from_status_file)
             self.set_timer(3.0, self.update_from_status_file)
         else:
-            self.log_display.write(f"[bold red]Command failed:[/bold red] {message.output}")
-        # Also trigger one immediate refresh just in case
+            self.log_display.write(f"[bold red]API Error:[/bold red] {response_message}")
+
+        # Always trigger one immediate refresh
         self.update_from_status_file()
 
     def update_capital_panel(self, capital: dict, strategy: dict):
@@ -669,17 +676,20 @@ class TUIApp(App):
         if event.button.id == "force_buy_button":
             input_widget = self.query_one("#manual_buy_input", Input)
             if input_widget.is_valid:
-                # The scripts now only need the core arguments.
-                self.run_command_worker(["python", "scripts/force_buy.py", input_widget.value])
+                payload = {"amount_usd": input_widget.value}
+                self.log_display.write(f"[yellow]Sending force_buy request for ${input_widget.value}...[/]")
+                self.call_api_worker("force_buy", payload)
                 input_widget.value = ""
             else:
                 self.log_display.write("[bold red]Invalid buy amount.[/bold red]")
+
         elif event.button.id == "force_sell_button" and self.selected_trade_id:
             event.button.disabled = True
-            self.log_display.write(f"[yellow]Initiating force sell for trade ID: {self.selected_trade_id}...[/]")
-            # The scripts now only need the core arguments.
-            self.run_command_worker(["python", "scripts/force_sell.py", self.selected_trade_id, "100"])
+            payload = {"trade_id": self.selected_trade_id}
+            self.log_display.write(f"[yellow]Sending force_sell request for trade ID: {self.selected_trade_id}...[/]")
+            self.call_api_worker("force_sell", payload)
             self.selected_trade_id = None
+
         elif event.button.id in ["filter_all_button", "filter_open_button", "filter_closed_button"]:
             # Update filter state
             self.history_filter = event.button.id.split('_')[1] # e.g., "all", "open", "closed"

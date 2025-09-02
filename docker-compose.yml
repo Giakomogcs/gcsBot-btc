@@ -43,6 +43,7 @@ services:
       - .:/app
     ports:
       - "8765:8765"
+      - "5001:5001"
     command: tail -f /dev/null
 
 volumes:

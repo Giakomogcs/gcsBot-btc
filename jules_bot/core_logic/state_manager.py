@@ -39,6 +39,16 @@ class StateManager:
         
         return self.db_manager.get_open_positions(environment=self.mode, bot_id=bot_id_to_filter)
 
+    def get_position_by_id(self, trade_id: str):
+        """
+        Finds a single open position by its internal trade_id.
+        """
+        open_positions = self.get_open_positions()
+        for position in open_positions:
+            if position.trade_id == trade_id:
+                return position
+        return None
+
     def get_open_positions_count(self) -> int:
         """Queries the database and returns the number of currently open trades."""
         return len(self.get_open_positions())
