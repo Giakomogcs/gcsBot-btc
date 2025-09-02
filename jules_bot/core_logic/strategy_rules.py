@@ -108,18 +108,17 @@ class StrategyRules:
         
         return False, "unknown", reason or "No signal"
 
-    def calculate_sell_target_price(self, purchase_price: Decimal, params: Dict[str, Decimal] = None) -> Decimal:
+    def calculate_sell_target_price(self, purchase_price: Decimal, quantity: Decimal, params: Dict[str, Decimal] = None) -> Decimal:
         """
         Calculates the target sell price using dynamic sell_rise_percentage.
         Handles cases where params might be None.
+        Note: The micro-profit logic was removed in favor of the Trailing Take-Profit implemented in the bot's main loop.
         """
         purchase_price = Decimal(purchase_price)
 
-        # If params is None (e.g., during historical sync), use default values.
         if params is None:
             params = {}
 
-        # Use sell_rise_percentage for the calculation, not target_profit
         sell_rise_percentage = params.get('sell_rise_percentage', Decimal('0.01'))
         one = Decimal('1')
 
@@ -130,7 +129,6 @@ class StrategyRules:
             return Decimal('inf')
 
         break_even_price = numerator / denominator
-        # The sell target is based on the rise percentage from the break-even price
         sell_target_price = break_even_price * (one + sell_rise_percentage)
         return sell_target_price
 

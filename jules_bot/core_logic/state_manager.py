@@ -241,7 +241,8 @@ class StateManager:
                         logger.warning(f"Could not find price for commission asset '{commission_asset}' during sync. commission_usd will be 0.")
             
             internal_trade_id = str(uuid.uuid4())
-            sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price, params=None)
+            # Pass the quantity to the function to match the new signature.
+            sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price, quantity, params=None)
 
             buy_result = {
                 "run_id": self.bot_id,

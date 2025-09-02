@@ -226,29 +226,6 @@ class TUIApp(App):
             self.call_from_thread(self.log_display.write, f"[bold red]Error streaming logs: {e}[/]")
 
     @work(thread=True)
-    def run_command_worker(self, command: list[str]) -> None:
-        """Runs a one-off command in a Docker container, e.g., force_buy/sell."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-        try:
-            project_name = os.getenv("PROJECT_NAME", "gcsbot-btc")
-            docker_image_name = f"{project_name}-app"
-            docker_network_name = os.getenv("DOCKER_NETWORK_NAME", f"{project_name}_default")
-
-            docker_command = SUDO_PREFIX + ["docker", "run", "--rm", "--network", docker_network_name, "--env-file", ".env", "-e", f"BOT_NAME={self.bot_name}", "-e", f"BOT_MODE={self.mode}", "-v", f"{project_root}:/app", docker_image_name] + command
-            process = subprocess.run(docker_command, capture_output=True, text=True, check=False, encoding='utf-8', errors='replace')
-            
-            output = process.stdout.strip() if process.returncode == 0 else process.stderr.strip()
-            success = process.returncode == 0
-            if not success:
-                self.call_from_thread(self.log_display.write, f"[bold red]Script Error ({' '.join(command)}):[/] {output}")
-            
-            self.post_message(CommandOutput(output, success))
-        except FileNotFoundError:
-            self.post_message(CommandOutput("Docker not found. Is it installed and in your PATH?", False))
-        except Exception as e:
-            self.post_message(CommandOutput(f"Worker error: {e}", False))
-
-    @work(thread=True)
     def process_positions_worker(self, positions_data: list, sort_column: str, sort_reverse: bool) -> None:
         """Processes and sorts open positions data in a background thread."""
         try:
@@ -665,18 +642,40 @@ class TUIApp(App):
         except json.JSONDecodeError:
             if self.log_filter == "": self.log_display.write(f"[dim]{line.strip()}[/dim]")
 
+    def create_command_file(self, command_data: dict) -> None:
+        """Directly creates a command file in the shared volume."""
+        try:
+            project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+            command_dir = os.path.join(project_root, "commands", self.bot_name)
+            os.makedirs(command_dir, exist_ok=True)
+
+            # Create a unique filename
+            command_file = os.path.join(command_dir, f"cmd_{int(time.time() * 1000)}.json")
+
+            with open(command_file, "w") as f:
+                json.dump(command_data, f)
+
+            self.log_display.write(f"[green]Command file created: {os.path.basename(command_file)}[/green]")
+            # The running bot will pick this up automatically. We can trigger a UI refresh.
+            self.post_message(CommandOutput("Command sent successfully.", success=True))
+        except Exception as e:
+            self.log_display.write(f"[bold red]Error creating command file: {e}[/bold red]")
+            self.post_message(CommandOutput(f"Failed to create command file: {e}", success=False))
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "force_buy_button":
             input_widget = self.query_one("#manual_buy_input", Input)
             if input_widget.is_valid:
-                self.run_command_worker(["python", "scripts/force_buy.py", input_widget.value, "--container-id", self.container_id])
+                command = {"type": "force_buy", "amount_usd": input_widget.value}
+                self.create_command_file(command)
                 input_widget.value = ""
             else:
                 self.log_display.write("[bold red]Invalid buy amount.[/bold red]")
         elif event.button.id == "force_sell_button" and self.selected_trade_id:
             event.button.disabled = True
             self.log_display.write(f"[yellow]Initiating force sell for trade ID: {self.selected_trade_id}...[/]")
-            self.run_command_worker(["python", "scripts/force_sell.py", self.selected_trade_id, "100"])
+            command = {"type": "force_sell", "trade_id": self.selected_trade_id, "percentage": "100"}
+            self.create_command_file(command)
             self.selected_trade_id = None
         elif event.button.id in ["filter_all_button", "filter_open_button", "filter_closed_button"]:
             # Update filter state

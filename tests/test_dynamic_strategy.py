@@ -29,8 +29,9 @@ def test_calculate_sell_target_price_with_dynamic_params(mock_config_manager):
     params_regime_0 = {'sell_rise_percentage': Decimal('0.005')} # 0.5%
     # Expected: (100 * 1.001 / 0.999) * 1.005 = 100.2002 * 1.005 = 100.7012
     expected_sell_price_0 = Decimal("100.7012")
+    mock_quantity = Decimal('1')
 
-    sell_target_0 = strategy_rules.calculate_sell_target_price(purchase_price, params=params_regime_0)
+    sell_target_0 = strategy_rules.calculate_sell_target_price(purchase_price, mock_quantity, params=params_regime_0)
     assert float(sell_target_0) == pytest.approx(float(expected_sell_price_0), abs=1e-4)
 
     # --- Scenario 2: Regime 2 with high sell_rise_percentage ---
@@ -38,7 +39,7 @@ def test_calculate_sell_target_price_with_dynamic_params(mock_config_manager):
     # Expected: 100.2002 * 1.02 = 102.2042
     expected_sell_price_2 = Decimal("102.2042")
 
-    sell_target_2 = strategy_rules.calculate_sell_target_price(purchase_price, params=params_regime_2)
+    sell_target_2 = strategy_rules.calculate_sell_target_price(purchase_price, mock_quantity, params=params_regime_2)
     assert float(sell_target_2) == pytest.approx(float(expected_sell_price_2), abs=1e-4)
 
 def test_evaluate_buy_signal_dip_buying(mock_config_manager):
