@@ -187,18 +187,20 @@ class CapitalManager:
 
         return 0
 
-    def get_capital_allocation(self, portfolio_value: Decimal, open_positions: list) -> dict:
+    def get_capital_allocation(self, portfolio_value: Decimal, open_positions: list, current_price: Decimal) -> dict:
         """
         Calculates the allocation of capital into Working Capital and Strategic Reserve.
         """
         working_capital_total = portfolio_value * self.working_capital_percentage
         
-        used_capital = sum(Decimal(pos.usd_value) for pos in open_positions)
+        # Calculate used capital based on the current market value of open positions
+        used_capital = sum(Decimal(pos.quantity) * current_price for pos in open_positions)
 
         free_capital = working_capital_total - used_capital
         if free_capital < 0:
             free_capital = Decimal('0')
 
+        # Strategic reserve is the portion of the total portfolio not allocated to working capital
         strategic_reserve = portfolio_value - working_capital_total
         if strategic_reserve < 0:
             strategic_reserve = Decimal('0')

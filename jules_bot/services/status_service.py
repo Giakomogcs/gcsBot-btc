@@ -170,7 +170,8 @@ class StatusService:
             # --- Capital Allocation Calculation ---
             capital_allocation = self.capital_manager.get_capital_allocation(
                 portfolio_value=total_wallet_usd_value,
-                open_positions=open_positions_db
+                open_positions=open_positions_db,
+                current_price=current_price
             )
 
             bot_status_db = self.db_manager.get_bot_status(bot_id)

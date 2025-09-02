@@ -17,6 +17,7 @@ from textual.coordinate import Coordinate
 from textual.message import Message
 from textual.reactive import reactive
 from textual.screen import Screen
+from rich.text import Text
 from textual_plotext import PlotextPlot
 from textual_timepiece.pickers import DatePicker
 from whenever import Date
@@ -45,6 +46,20 @@ class CommandOutput(Message):
     def __init__(self, output: str, success: bool) -> None:
         self.output = output
         self.success = success
+        super().__init__()
+
+class ProcessedPositionsData(Message):
+    """Carries processed positions data from the worker."""
+    def __init__(self, sorted_positions: list, summary_text: str) -> None:
+        self.sorted_positions = sorted_positions
+        self.summary_text = summary_text
+        super().__init__()
+
+class ProcessedHistoryData(Message):
+    """Carries processed trade history data from the worker."""
+    def __init__(self, sorted_history: list, summary_text: str) -> None:
+        self.sorted_history = sorted_history
+        self.summary_text = summary_text
         super().__init__()
 
 class StatusIndicator(Static):
@@ -231,6 +246,124 @@ class TUIApp(App):
             self.post_message(CommandOutput(f"Worker error: {e}", False))
 
     @work(thread=True)
+    def process_positions_worker(self, positions_data: list, sort_column: str, sort_reverse: bool) -> None:
+        """Processes and sorts open positions data in a background thread."""
+        try:
+            # --- Perform expensive calculations ---
+            for pos in positions_data:
+                pos['current_value'] = Decimal(pos.get('quantity', 0)) * Decimal(pos.get('current_price', 0))
+            
+            open_positions_count = len(positions_data)
+            if open_positions_count > 0:
+                total_invested = sum(Decimal(p.get('entry_price', 0)) * Decimal(p.get('quantity', 0)) for p in positions_data)
+                current_market_value = sum(p['current_value'] for p in positions_data)
+                total_unrealized_pnl = sum(Decimal(p.get('unrealized_pnl', 0)) for p in positions_data)
+                pnl_color = "green" if total_unrealized_pnl >= 0 else "red"
+                summary_text = (
+                    f"Open Positions: {open_positions_count}\n\n"
+                    f"  Total Invested: ${total_invested:,.2f}\n"
+                    f"  Market Value:   ${current_market_value:,.2f}\n"
+                    f"  Unrealized PnL: [{pnl_color}]${total_unrealized_pnl:,.2f}[/]"
+                )
+            else:
+                summary_text = "No open positions."
+
+            # --- Perform sorting ---
+            sort_key_map = {
+                "ID": "trade_id", "Date": "timestamp", "Entry": "entry_price", "Value": "current_value",
+                "Unrealized PnL": "unrealized_pnl", "PnL %": "unrealized_pnl_pct",
+                "Target": "sell_target_price", "Target PnL": "target_pnl",
+                "Progress": "progress_to_sell_target_pct"
+            }
+            sort_key = sort_key_map.get(sort_column, "unrealized_pnl")
+            numeric_keys = ["entry_price", "current_value", "unrealized_pnl", "unrealized_pnl_pct", "sell_target_price", "target_pnl", "progress_to_sell_target_pct"]
+
+            def sort_func(p):
+                val = p.get(sort_key)
+                if val is None: return -float('inf') if sort_reverse else float('inf')
+                if sort_key in numeric_keys:
+                    try: return Decimal(val)
+                    except (InvalidOperation, TypeError): return -float('inf') if sort_reverse else float('inf')
+                else: return str(val)
+
+            sorted_positions = sorted(positions_data, key=sort_func, reverse=sort_reverse)
+            
+            self.post_message(ProcessedPositionsData(sorted_positions, summary_text))
+        except Exception as e:
+            # Log the error or post an error message back to the main thread
+            self.call_from_thread(self.log_display.write, f"[bold red]Error in positions worker: {e}[/]")
+
+    @work(thread=True)
+    def process_history_worker(self, history_data: list, history_filter: str, start_date_str: str, end_date_str: str, sort_column: str, sort_reverse: bool) -> None:
+        """Processes, filters, and sorts trade history data in a background thread."""
+        try:
+            # --- Filtering ---
+            if history_filter == 'open':
+                status_filtered_trades = [t for t in history_data if t.get('status') == 'OPEN']
+            elif history_filter == 'closed':
+                status_filtered_trades = [t for t in history_data if t.get('status') == 'CLOSED']
+            else:
+                status_filtered_trades = history_data
+            
+            final_filtered_history = []
+            start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date() if start_date_str else None
+            end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date() if end_date_str else None
+            for trade in status_filtered_trades:
+                trade_date = datetime.fromisoformat(trade['timestamp']).date()
+                if (start_date and trade_date < start_date) or (end_date and trade_date > end_date):
+                    continue
+                final_filtered_history.append(trade)
+
+            # --- Summary Calculation ---
+            total_trades = len(final_filtered_history)
+            if total_trades > 0:
+                buy_trades = [t for t in final_filtered_history if t.get('order_type') == 'buy']
+                closed_sells = [t for t in final_filtered_history if t.get('order_type') == 'sell' and t.get('status') == 'CLOSED']
+                total_invested = sum(Decimal(t.get('usd_value', 0)) for t in buy_trades if t.get('usd_value') is not None)
+                total_returned = sum(Decimal(t.get('sell_usd_value', 0)) for t in closed_sells if t.get('sell_usd_value') is not None)
+                total_realized_pnl = sum(Decimal(t.get('realized_pnl_usd', 0)) for t in closed_sells if t.get('realized_pnl_usd') is not None)
+                roi_pct = (total_realized_pnl / total_invested * 100) if total_invested > 0 else 0
+                pnl_color = "green" if total_realized_pnl >= 0 else "red"
+                roi_color = "green" if roi_pct >= 0 else "red"
+                summary_text = (
+                    f"Filtered Trades: {total_trades} (Buys: {len(buy_trades)}, Sells: {len(closed_sells)})\n\n"
+                    f"  Total Invested (in view): ${total_invested:,.2f}\n"
+                    f"  Total Returned (in view): ${total_returned:,.2f}\n"
+                    f"  Realized PnL (in view):   [{pnl_color}]${total_realized_pnl:,.2f}[/]\n"
+                    f"  ROI (of closed in view):  [{roi_color}]{roi_pct:.2f}%[/]"
+                )
+            else:
+                summary_text = "No trades match the current filter."
+
+            # --- Sorting ---
+            sort_key_map = {
+                "Timestamp": "timestamp", "Symbol": "symbol", "Type": "order_type", "Status": "status",
+                "Buy Price": "price", "Sell Price": "sell_price", "Quantity": "quantity",
+                "USD Value": "usd_value", "PnL (USD)": "realized_pnl_usd", "PnL (%)": "pnl_percentage",
+                "Trade ID": "trade_id"
+            }
+            sort_key = sort_key_map.get(sort_column, "timestamp")
+            numeric_keys = ["price", "sell_price", "quantity", "usd_value", "realized_pnl_usd", "pnl_percentage"]
+
+            def sort_func(trade):
+                if sort_key == 'pnl_percentage': val = trade.get('decision_context', {}).get('pnl_percentage')
+                else: val = trade.get(sort_key)
+                if val is None: return -float('inf') if sort_reverse else float('inf')
+                if sort_key in numeric_keys:
+                    try: return Decimal(val)
+                    except (InvalidOperation, TypeError): return -float('inf') if sort_reverse else float('inf')
+                else: return str(val)
+            
+            sorted_history = sorted(final_filtered_history, key=sort_func, reverse=sort_reverse)
+
+            self.post_message(ProcessedHistoryData(sorted_history, summary_text))
+        except ValueError:
+            self.call_from_thread(self.log_display.write, "[bold red]Invalid date format. Please use YYYY-MM-DD.[/bold red]")
+        except Exception as e:
+            self.call_from_thread(self.log_display.write, f"[bold red]Error in history worker: {e}[/]")
+
+
+    @work(thread=True)
     def read_status_file_worker(self) -> None:
         """Worker to read the bot status from the JSON file."""
         # O arquivo de status agora está em um diretório compartilhado via volume do Docker
@@ -289,90 +422,45 @@ class TUIApp(App):
         self.update_capital_panel(data.get("capital_allocation", {}), data.get("buy_signal_status", {}))
         self.update_wallet_table(data.get("wallet_balances", []))
 
-        # Update open positions
+        # --- Trigger background workers to process and render table data ---
         self.open_positions_data = data.get("open_positions_status", [])
-        self.update_positions_table()
-
-        # Update trade history
+        self.process_positions_worker(self.open_positions_data, self.positions_sort_column, self.positions_sort_reverse)
+        
         self.trade_history_data = data.get("trade_history", [])
-        self.update_history_table()
+        self.update_history_table() # This will call the worker
 
         # Update portfolio chart
         self.update_portfolio_chart(data.get("portfolio_history", []))
 
-    def update_history_table(self):
-        table = self.query_one("#history_table", DataTable)
-
-        # --- Combined Filtering Logic ---
-        
-        # 1. Status Filter
-        if self.history_filter == 'open':
-            status_filtered_trades = [t for t in self.trade_history_data if t.get('order_type') == 'buy' and t.get('status') == 'OPEN']
-        elif self.history_filter == 'closed':
-            status_filtered_trades = [t for t in self.trade_history_data if t.get('order_type') == 'sell']
-        else:
-            status_filtered_trades = self.trade_history_data
-
-        # 2. Date Filter
+    def update_history_table(self) -> None:
+        """Triggers the history processing worker with the current filters."""
         start_date_str = self.query_one("#start_date_input", Input).value
         end_date_str = self.query_one("#end_date_input", Input).value
-        final_filtered_history = []
-        try:
-            start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date() if start_date_str else None
-            end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date() if end_date_str else None
+        self.process_history_worker(
+            self.trade_history_data,
+            self.history_filter,
+            start_date_str,
+            end_date_str,
+            self.history_sort_column,
+            self.history_sort_reverse
+        )
 
-            for trade in status_filtered_trades:
-                trade_date = datetime.fromisoformat(trade['timestamp']).date()
-                if (start_date and trade_date < start_date) or (end_date and trade_date > end_date):
-                    continue
-                final_filtered_history.append(trade)
-        except ValueError:
-            # Handle invalid date format gracefully
-            self.log_display.write("[bold red]Invalid date format. Please use YYYY-MM-DD.[/bold red]")
-            final_filtered_history = status_filtered_trades # Or show no data
-
-        # --- Update Summary Label ---
-        total_trades = len(final_filtered_history)
-        if total_trades > 0:
-            buy_trades = [t for t in final_filtered_history if t.get('order_type') == 'buy']
-            closed_sells = [t for t in final_filtered_history if t.get('order_type') == 'sell' and t.get('status') == 'CLOSED']
-            total_invested = sum(Decimal(t.get('usd_value', 0)) for t in buy_trades if t.get('usd_value') is not None)
-            total_returned = sum(Decimal(t.get('sell_price', 0)) * Decimal(t.get('quantity', 0)) for t in closed_sells if t.get('sell_price') is not None and t.get('quantity') is not None)
-            total_realized_pnl = sum(Decimal(t.get('realized_pnl_usd', 0)) for t in closed_sells if t.get('realized_pnl_usd') is not None)
-            roi_pct = (total_realized_pnl / total_invested * 100) if total_invested > 0 else 0
-            pnl_color = "green" if total_realized_pnl >= 0 else "red"
-            roi_color = "green" if roi_pct >= 0 else "red"
-            summary_text = (
-                f"Filtered Trades: {total_trades} (Buys: {len(buy_trades)}, Sells: {len(closed_sells)})\n\n"
-                f"  Total Invested (in view): ${total_invested:,.2f}\n"
-                f"  Total Returned (in view): ${total_returned:,.2f}\n"
-                f"  Realized PnL (in view):   [{pnl_color}]${total_realized_pnl:,.2f}[/]\n"
-                f"  ROI (of closed in view):  [{roi_color}]{roi_pct:.2f}%[/]"
-            )
-        else:
-            summary_text = "No trades match the current filter."
-        self.query_one("#history_summary_label").update(summary_text)
-
-        # --- Incremental Update Logic ---
-        existing_rows_keys = set(table.rows.keys())
-        new_data_keys = {t.get("trade_id") for t in final_filtered_history}
-
-        rows_to_remove = existing_rows_keys - new_data_keys
-        for key in rows_to_remove:
-            table.remove_row(key)
-
-        sort_key_map = {"Timestamp": "timestamp", "Buy Price": "price", "Sell Price": "sell_price", "PnL (USD)": "realized_pnl_usd", "PnL (%)": "pnl_percentage"}
-        sort_key = sort_key_map.get(self.history_sort_column, "timestamp")
-        def sort_func(trade):
-            val = trade.get(sort_key) if sort_key != 'pnl_percentage' else trade.get('decision_context', {}).get('pnl_percentage')
-            if val is None: return -float('inf') if self.history_sort_reverse else float('inf')
-            if sort_key == "timestamp": return val
-            try: return Decimal(val)
-            except (InvalidOperation, TypeError): return -float('inf') if self.history_sort_reverse else float('inf')
+    def on_processed_history_data(self, message: ProcessedHistoryData) -> None:
+        """Renders the processed trade history data received from the worker."""
+        table = self.query_one("#history_table", DataTable)
+        self.query_one("#history_summary_label").update(message.summary_text)
         
-        sorted_history = sorted(final_filtered_history, key=sort_func, reverse=self.history_sort_reverse)
+        self._update_table_headers(table, self.history_sort_column, self.history_sort_reverse)
         
-        for index, trade in enumerate(sorted_history):
+        # Clear the table and add all rows at once for performance
+        table.clear()
+        
+        if not message.sorted_history:
+            table.add_row("No trades match the current filter.", key="placeholder_history")
+            return
+
+        rows_to_add = []
+        for trade in message.sorted_history:
             trade_id = trade.get("trade_id")
             if not trade_id: continue
 
@@ -398,24 +486,14 @@ class TUIApp(App):
             
             row_data = (
                 timestamp, trade.get('symbol'), type_cell, trade.get('status'), buy_price, sell_price, 
-                f"{Decimal(trade.get('quantity', 0)):.8f}", f"${Decimal(trade.get('usd_value', 0)):,.2f}", 
+                f"{Decimal(trade.get('quantity', 0)):.8f}", f"${Decimal(trade.get('usd_value', 0)):.2f}", 
                 pnl_cell, pnl_pct_cell if order_type == 'sell' else "N/A", trade_id_short
             )
-
-            if trade_id in existing_rows_keys:
-                row_index = table.get_row_index(trade_id)
-                for col_idx, cell_data in enumerate(row_data):
-                    table.update_cell_at(Coordinate(row_index, col_idx), cell_data)
-            else:
-                table.add_row(*row_data, key=trade_id)
-
-        # Handle placeholder for empty table
-        has_placeholder = "placeholder_history" in table.rows
-        if not final_filtered_history:
-            if not has_placeholder and len(table.rows) == 0:
-                table.add_row("No trades match the current filter.", key="placeholder_history")
-        elif has_placeholder:
-            table.remove_row("placeholder_history")
+            rows_to_add.append(row_data)
+        
+        # Using add_rows is more performant for large amounts of data
+        if rows_to_add:
+            table.add_rows(rows_to_add)
 
     def on_command_output(self, message: CommandOutput) -> None:
         if message.success:
@@ -502,63 +580,28 @@ class TUIApp(App):
         elif has_placeholder:
             wallet_table.remove_row("placeholder_wallet")
 
-    def update_positions_table(self):
+    def update_positions_table(self) -> None:
+        """Triggers the positions processing worker."""
+        self.process_positions_worker(self.open_positions_data, self.positions_sort_column, self.positions_sort_reverse)
+
+    def on_processed_positions_data(self, message: ProcessedPositionsData) -> None:
+        """Renders the processed open positions data received from the worker."""
         pos_table = self.query_one("#positions_table", DataTable)
-        
-        # --- Update Summary Label (this can be done every time) ---
-        for pos in self.open_positions_data:
-            pos['current_value'] = Decimal(pos.get('quantity', 0)) * Decimal(pos.get('current_price', 0))
-        
-        open_positions_count = len(self.open_positions_data)
-        if open_positions_count > 0:
-            total_invested = sum(Decimal(p.get('entry_price', 0)) * Decimal(p.get('quantity', 0)) for p in self.open_positions_data)
-            current_market_value = sum(p['current_value'] for p in self.open_positions_data)
-            total_unrealized_pnl = sum(Decimal(p.get('unrealized_pnl', 0)) for p in self.open_positions_data)
-            pnl_color = "green" if total_unrealized_pnl >= 0 else "red"
-            summary_text = (
-                f"Open Positions: {open_positions_count}\n\n"
-                f"  Total Invested: ${total_invested:,.2f}\n"
-                f"  Market Value:   ${current_market_value:,.2f}\n"
-                f"  Unrealized PnL: [{pnl_color}]${total_unrealized_pnl:,.2f}[/]"
-            )
-        else:
-            summary_text = "No open positions."
-        self.query_one("#positions_summary_label").update(summary_text)
+        self.query_one("#positions_summary_label").update(message.summary_text)
 
-        # --- Incremental Table Update Logic ---
-        
-        # 1. Get current state of the table
-        existing_rows_keys = set(pos_table.rows.keys())
-        new_data_keys = {pos.get("trade_id") for pos in self.open_positions_data}
+        self._update_table_headers(pos_table, self.positions_sort_column, self.positions_sort_reverse)
 
-        # 2. Identify rows to remove
-        rows_to_remove = existing_rows_keys - new_data_keys
-        for key in rows_to_remove:
-            pos_table.remove_row(key)
-        
-        # 3. Sort new data for ordered insertion/update
-        sort_key_map = {
-            "ID": "trade_id", "Date": "timestamp", "Entry": "entry_price", "Value": "current_value",
-            "Unrealized PnL": "unrealized_pnl", "PnL %": "unrealized_pnl_pct",
-            "Target": "sell_target_price", "Target PnL": "target_pnl",
-            "Progress": "progress_to_sell_target_pct"
-        }
-        sort_key = sort_key_map.get(self.positions_sort_column, "unrealized_pnl")
-        def sort_func(p):
-            val = p.get(sort_key)
-            if val is None: return -float('inf') if self.positions_sort_reverse else float('inf')
-            if sort_key in ['trade_id', 'timestamp']: return val
-            try: return Decimal(val)
-            except (InvalidOperation, TypeError): return -float('inf') if self.positions_sort_reverse else float('inf')
-        
-        sorted_positions = sorted(self.open_positions_data, key=sort_func, reverse=self.positions_sort_reverse)
+        pos_table.clear()
 
-        # 4. Add new rows and update existing ones
-        for index, pos in enumerate(sorted_positions):
+        if not message.sorted_positions:
+            pos_table.add_row("No open positions.", key="placeholder_positions")
+            return
+        
+        rows_to_add = []
+        for pos in message.sorted_positions:
             trade_id = pos.get("trade_id")
             if trade_id is None: continue
 
-            # Format data for display
             pnl = Decimal(pos.get("unrealized_pnl", 0))
             pnl_color = "green" if pnl >= 0 else "red"
             pnl_pct = Decimal(pos.get("unrealized_pnl_pct", 0))
@@ -574,33 +617,14 @@ class TUIApp(App):
             timestamp = datetime.fromisoformat(pos['timestamp']).strftime('%Y-%m-%d %H:%M')
 
             row_data = (
-                trade_id.split('-')[0],
-                timestamp,
-                f"${Decimal(pos.get('entry_price', 0)):,.2f}",
-                f"${current_value:,.2f}",
-                f"[{pnl_color}]${pnl:,.2f}[/]",
-                pnl_pct_str,
-                f"${Decimal(pos.get('sell_target_price', 0)):,.2f}",
-                target_pnl_str,
-                progress_str,
+                trade_id.split('-')[0], timestamp, f"${Decimal(pos.get('entry_price', 0)):,.2f}",
+                f"${current_value:,.2f}", f"[{pnl_color}]${pnl:,.2f}[/]", pnl_pct_str,
+                f"${Decimal(pos.get('sell_target_price', 0)):,.2f}", target_pnl_str, progress_str,
             )
-
-            if trade_id in existing_rows_keys:
-                # Update existing row cells
-                row_index = pos_table.get_row_index(trade_id)
-                for col_idx, cell_data in enumerate(row_data):
-                    pos_table.update_cell_at(Coordinate(row_index, col_idx), cell_data)
-            else:
-                # Add new row
-                pos_table.add_row(*row_data, key=trade_id)
-
-        # Handle placeholder for empty table
-        has_placeholder = "placeholder_positions" in pos_table.rows
-        if not self.open_positions_data:
-            if not has_placeholder and len(pos_table.rows) == 0:
-                pos_table.add_row("No open positions.", key="placeholder_positions")
-        elif has_placeholder:
-            pos_table.remove_row("placeholder_positions")
+            rows_to_add.append(row_data)
+        
+        if rows_to_add:
+            pos_table.add_rows(rows_to_add)
 
     def update_portfolio_chart(self, history: list):
         chart = self.query_one("#portfolio_chart", PlotextPlot)
@@ -666,15 +690,46 @@ class TUIApp(App):
             self.log_display.clear()
             self.log_display.write("[bold green]Log filter applied. Tailing new logs...[/bold green]")
 
+    def _update_table_headers(self, table: DataTable, sort_column: str, is_reverse: bool):
+        """Adds sort indicators (▲/▼) to the table headers, ensuring labels are Text objects."""
+        for column in table.columns.values():
+            # Safely convert the column label (which could be str or Text) to a string
+            label_str = str(column.label)
+            # Strip any existing indicator to get the base label
+            base_label = label_str.rstrip(" ▲▼")
+            
+            if base_label == sort_column:
+                # Append the correct indicator
+                indicator = " ▼" if is_reverse else " ▲"
+                new_label_str = f"{base_label}{indicator}"
+            else:
+                new_label_str = base_label
+            
+            # Always assign a Text object back to the label to avoid type errors
+            column.label = Text(new_label_str)
+
+
     def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
-        table_id, column_label = event.control.id, event.label
-        if table_id == "positions_table":
-            if self.positions_sort_column == column_label: self.positions_sort_reverse = not self.positions_sort_reverse
-            else: self.positions_sort_column, self.positions_sort_reverse = column_label, True
+        """Handles sorting when a table header is clicked."""
+        table = event.control
+        # The event label can be a str or Text object, so convert to str to be safe.
+        column_label = str(event.label).rstrip(" ▲▼")
+
+        if table.id == "positions_table":
+            if self.positions_sort_column == column_label:
+                self.positions_sort_reverse = not self.positions_sort_reverse
+            else:
+                self.positions_sort_column = column_label
+                self.positions_sort_reverse = True  # Default to descending for new column
+            self._update_table_headers(table, self.positions_sort_column, self.positions_sort_reverse)
             self.update_positions_table()
-        elif table_id == "history_table":
-            if self.history_sort_column == column_label: self.history_sort_reverse = not self.history_sort_reverse
-            else: self.history_sort_column, self.history_sort_reverse = column_label, True
+        elif table.id == "history_table":
+            if self.history_sort_column == column_label:
+                self.history_sort_reverse = not self.history_sort_reverse
+            else:
+                self.history_sort_column = column_label
+                self.history_sort_reverse = True # Default to descending for new column
+            self._update_table_headers(table, self.history_sort_column, self.history_sort_reverse)
             self.update_history_table()
 
 def run_tui():
