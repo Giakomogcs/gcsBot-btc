@@ -18,6 +18,8 @@ sqlalchemy
 psycopg2-binary
 alembic
 httpx
+fastapi
+uvicorn
 
 # --- Technical Analysis ---
 # ta # Comentado - pandas-ta geralmente cobre tudo

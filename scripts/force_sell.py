@@ -1,14 +1,9 @@
-import os
-import sys
 import typer
-import uuid
-import json
+import requests
 from typing_extensions import Annotated
 
-# Add project root to sys.path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from jules_bot.utils.logger import logger
+API_PORT = 8766  # This should match the port in trading_bot.py
+BASE_URL = f"http://localhost:{API_PORT}/api"
 
 def main(
     trade_id: Annotated[str, typer.Argument(
@@ -23,44 +18,32 @@ def main(
     )],
 ):
     """
-    Creates a command file to instruct the running bot to execute a manual sell.
+    Sends a 'force_sell' command to the running bot via its API.
     """
-    bot_name = os.getenv("BOT_NAME")
-    if not bot_name:
-        logger.error("CRITICAL ERROR: BOT_NAME environment variable is not set.")
-        print("❌ CRITICAL ERROR: BOT_NAME environment variable is not set.")
-        raise typer.Exit(code=1)
+    endpoint = f"{BASE_URL}/force_sell"
+    payload = {"trade_id": trade_id, "percentage": percentage}
 
-    command_dir = os.path.join("/app", "commands", bot_name)
+    print(f"▶️ Sending force sell command for {percentage}% of trade {trade_id} to {endpoint}...")
 
     try:
-        os.makedirs(command_dir, exist_ok=True)
-        logger.info(f"Command directory '{command_dir}' is ready.")
-    except OSError as e:
-        logger.error(f"Failed to create command directory '{command_dir}': {e}", exc_info=True)
-        print(f"❌ Failed to create command directory: {e}")
-        raise typer.Exit(code=1)
+        response = requests.post(endpoint, json=payload, timeout=10)
 
-    command = {
-        "type": "force_sell",
-        "trade_id": trade_id,
-        "percentage": str(percentage) # Keep as string for consistency
-    }
+        if response.status_code == 200:
+            print("✅ Success! Bot executed the sell command.")
+            print("   Response:", response.json())
+        elif response.status_code == 400:
+            print("❌ Bad Request: The bot rejected the command.")
+            print("   Reason:", response.json().get("detail"))
+        else:
+            print(f"❌ Error: Received status code {response.status_code}")
+            try:
+                print("   Response:", response.json())
+            except requests.exceptions.JSONDecodeError:
+                print("   Response body:", response.text)
 
-    command_filename = f"force_sell_{uuid.uuid4()}.json"
-    command_filepath = os.path.join(command_dir, command_filename)
-
-    try:
-        with open(command_filepath, "w") as f:
-            json.dump(command, f)
-        
-        logger.info(f"Successfully created sell command file at {command_filepath}")
-        print(f"✅ Successfully created sell command for {percentage}% of trade {trade_id}.")
-        print(f"   The bot will execute it on its next cycle.")
-        
-    except Exception as e:
-        logger.error(f"Failed to write command file to {command_filepath}: {e}", exc_info=True)
-        print(f"❌ Failed to write command file: {e}")
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Failed to connect to the bot's API at {endpoint}.")
+        print(f"   Is the bot running? Details: {e}")
         raise typer.Exit(code=1)
 
 if __name__ == "__main__":
