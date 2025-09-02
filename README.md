@@ -21,6 +21,27 @@
 
 O **Robô de Automação Jules** é um sistema de trading automatizado, robusto e flexível, projetado para operar no mercado de criptomoedas da Binance. Sua arquitetura é centrada em Docker, permitindo que cada bot opere em um contêiner isolado, garantindo estabilidade e escalabilidade. O sistema é controlado por uma poderosa interface de linha de comando (`run.py`) que gerencia todo o ciclo de vida dos bots, desde a criação e configuração até a execução e monitoramento em tempo real.
 
+## Estratégias de Trading Implementadas
+
+As seguintes estratégias foram implementadas para tornar o robô mais inteligente e adaptável às condições de mercado.
+
+### Fator de Dificuldade de Compra Incremental
+
+Para evitar a exaustão de capital durante tendências de baixa prolongadas, o robô emprega um fator de dificuldade de compra que se torna progressivamente mais rigoroso.
+
+- **Como Funciona:** Após um número configurável de compras consecutivas (definido por `STRATEGY_RULES_CONSECUTIVE_BUYS_THRESHOLD`), o robô aumenta a exigência para novas compras. Em vez de comprar após uma queda de X%, ele passará a exigir uma queda de X+1, X+2, e assim por diante.
+- **Reset da Dificuldade:** A dificuldade é zerada se ocorrer uma venda ou se não houver novas compras dentro de um período de tempo configurável (`STRATEGY_RULES_DIFFICULTY_RESET_TIMEOUT_HOURS`).
+
+### Trailing Take-Profit (Venda com Rastreamento de Lucro)
+
+Em vez de vender a um preço-alvo fixo, o robô utiliza uma estratégia de "trailing take-profit" para maximizar os ganhos.
+
+- **Como Funciona:**
+  1.  Quando uma posição atinge seu alvo de lucro inicial (`sell_target_price`), a venda não é executada imediatamente. Em vez disso, o modo "trailing" é ativado.
+  2.  O robô começa a rastrear o preço mais alto (`highest_price_since_breach`) que a posição atinge a partir daquele ponto.
+  3.  A venda só é acionada se o preço recuar uma porcentagem configurável (`STRATEGY_RULES_TRAILING_STOP_PERCENT`) a partir desse pico.
+- **Benefício:** Esta abordagem permite que o robô "surfe" as tendências de alta, capturando lucros muito maiores do que um alvo fixo permitiria, ao mesmo tempo em que garante um lucro mínimo caso o mercado reverta.
+
 ## Pré-requisitos
 
 Para executar este projeto, você precisará ter os seguintes softwares instalados em sua máquina:
@@ -89,6 +110,46 @@ O projeto utiliza um arquivo `.env` para gerenciar segredos e configurações.
 | `BINANCE_API_SECRET`         | Seu segredo de API para a conta de produção da Binance.        | `1a2b3c4d5e6f7g8h9i0j1k2l3m4n...` |
 | `BINANCE_TESTNET_API_KEY`    | Sua chave de API para a conta de teste (Testnet) da Binance.   | `...`                             |
 | `BINANCE_TESTNET_API_SECRET` | Seu segredo de API para a conta de teste (Testnet) da Binance. | `...`                             |
+
+## Configuração Detalhada de Estratégias
+
+Para um controle fino sobre o comportamento do robô, as seguintes variáveis podem ser ajustadas no seu arquivo `.env`.
+
+### Regras Gerais da Estratégia (`STRATEGY_RULES_*`)
+
+Estas variáveis controlam a lógica de alto nível e as salvaguardas da estratégia de trading.
+
+| Variável                                             | Descrição                                                                                                                   | Valor Padrão |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `STRATEGY_RULES_COMMISSION_RATE`                     | A taxa de comissão da exchange (ex: 0.001 para 0.1%). Usada para calcular o preço de break-even.                            | `0.001`      |
+| `STRATEGY_RULES_SELL_FACTOR`                         | A porcentagem de uma posição a ser vendida quando o alvo de lucro é atingido (ex: 1 para vender 100%, 0.5 para vender 50%). | `1`          |
+| `STRATEGY_RULES_MAX_OPEN_POSITIONS`                  | O número máximo de posições que o robô pode manter abertas simultaneamente.                                                 | `150`        |
+| `STRATEGY_RULES_USE_DYNAMIC_CAPITAL`                 | Se `true`, ativa lógicas dinâmicas como o fator de dificuldade.                                                             | `true`       |
+| `STRATEGY_RULES_WORKING_CAPITAL_PERCENTAGE`          | A porcentagem do capital total da carteira que deve ser usada para trading ativo.                                           | `0.85`       |
+| `STRATEGY_RULES_USE_REVERSAL_BUY_STRATEGY`           | Se `true`, ativa a estratégia que monitora por uma reversão de preço antes de confirmar uma compra em um dip.               | `true`       |
+| `STRATEGY_RULES_REVERSAL_BUY_THRESHOLD_PERCENT`      | A porcentagem que o preço precisa subir do ponto mais baixo para confirmar uma compra por reversão.                         | `0.005`      |
+| `STRATEGY_RULES_REVERSAL_MONITORING_TIMEOUT_SECONDS` | O tempo em segundos que o robô monitora por uma reversão antes de cancelar a tentativa de compra.                           | `100`        |
+| `STRATEGY_RULES_CONSECUTIVE_BUYS_THRESHOLD`          | O número de compras consecutivas antes que o fator de dificuldade comece a ser aplicado.                                    | `5`          |
+| `STRATEGY_RULES_DIFFICULTY_ADJUSTMENT_FACTOR`        | O multiplicador usado para aumentar a exigência de compra a cada nível de dificuldade.                                      | `0.005`      |
+| `STRATEGY_RULES_DIFFICULTY_RESET_TIMEOUT_HOURS`      | O número de horas sem compras após o qual o fator de dificuldade é resetado.                                                | `2`          |
+| `STRATEGY_RULES_TRAILING_STOP_PERCENT`               | A porcentagem de recuo do preço máximo que aciona a venda na estratégia de Trailing Take-Profit.                            | `0.005`      |
+
+### Parâmetros por Regime de Mercado (`REGIME_*`)
+
+O robô identifica 4 regimes de mercado e aplica um conjunto diferente de parâmetros para cada um, permitindo uma estratégia adaptativa.
+
+- **Regime 0:** Baixa Volatilidade / Mercado em Range (Estratégia Conservadora)
+- **Regime 1:** Tendência de Alta Moderada (Estratégia Equilibrada)
+- **Regime 2:** Alta Volatilidade / Tendência Forte (Estratégia Agressiva)
+- **Regime 3:** Tendência de Baixa / Cautela (Estratégia Muito Conservadora)
+
+| Variável                        | Descrição                                                                                | Valor Padrão (Regime 1) |
+| ------------------------------- | ---------------------------------------------------------------------------------------- | ----------------------- |
+| `REGIME_X_BUY_DIP_PERCENTAGE`   | A porcentagem de queda a partir de um topo recente necessária para iniciar uma compra.   | `0.003`                 |
+| `REGIME_X_SELL_RISE_PERCENTAGE` | A porcentagem de lucro inicial que, ao ser atingida, ativa o Trailing Take-Profit.       | `0.008`                 |
+| `REGIME_X_ORDER_SIZE_USD`       | O tamanho base da ordem em USD para este regime (se não estiver usando sizing dinâmico). | `10`                    |
+
+_Substitua `X` pelo número do regime (0, 1, 2 ou 3) para configurar cada um individualmente._
 
 ## Guia de Uso e Comandos
 

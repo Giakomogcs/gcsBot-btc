@@ -1,8 +1,8 @@
 [
     {
-        "bot_name": "gcs-bot",
-        "container_id": "fbb65a994b80eb97bb374b632b8227c54206116583e26e69f9aef418a5da6c3d",
+        "bot_name": "gpt-bot",
+        "container_id": "e5cc14ea9351d40f178fef5181a1d87e0bc9825c3d53f2361e4703bf8795d4b8",
         "bot_mode": "test",
-        "start_time": "2025-09-02T00:15:49.828299"
+        "start_time": "2025-09-02T17:03:45.863222"
     }
 ]

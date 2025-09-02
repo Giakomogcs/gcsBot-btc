@@ -68,7 +68,8 @@ def _ensure_env_is_running():
             print("🚀 Ambiente Docker não detectado. Iniciando serviços de suporte (PostgreSQL, etc.)...")
             
             print("   -> Etapa 1: Baixando as imagens base (Postgres, etc.)...")
-            if not run_docker_compose_command(["pull"], capture_output=False):
+            # Specify services to pull to avoid trying to pull the locally built app image
+            if not run_docker_compose_command(["pull", "postgres", "pgadmin"], capture_output=False):
                 print("❌ Falha ao baixar imagens Docker. Verifique sua conexão ou o limite de pulls do Docker Hub.")
                 return False
 
