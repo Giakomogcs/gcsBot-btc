@@ -634,10 +634,12 @@ class TUIApp(App):
                 f"${current_value:,.2f}", f"[{pnl_color}]${pnl:,.2f}[/]", pnl_pct_str,
                 f"${Decimal(pos.get('sell_target_price', 0)):,.2f}", target_pnl_str, progress_str,
             )
-            rows_to_add.append(row_data)
-        
+            rows_to_add.append((trade_id, row_data))
+
         if rows_to_add:
-            pos_table.add_rows(rows_to_add)
+            # Using add_row with a key is better for selection, even if slightly slower.
+            for trade_id, row_data in rows_to_add:
+                pos_table.add_row(*row_data, key=trade_id)
 
     def update_portfolio_chart(self, history: list):
         chart = self.query_one("#portfolio_chart", PlotextPlot)

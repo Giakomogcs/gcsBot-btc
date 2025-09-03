@@ -11,8 +11,8 @@ def main(
     )],
     bot_name: Annotated[str, typer.Option(
         "--bot-name", "-n",
-        help="The name of the bot to send the command to.",
-        prompt="Please enter the name of the bot to command",
+        help="The name of the bot to send the command to. Defaults to the BOT_NAME environment variable.",
+        envvar="BOT_NAME",
         show_default=False,
     )],
 ):
