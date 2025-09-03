@@ -4,11 +4,11 @@ from pydantic import BaseModel
 router = APIRouter()
 
 class ForceBuyPayload(BaseModel):
-    amount_usd: float
+    amount_usd: str
 
 class ForceSellPayload(BaseModel):
     trade_id: str
-    percentage: float
+    percentage: str
 
 from fastapi import Request, HTTPException
 

@@ -9,8 +9,8 @@ def main(
         help="The unique ID of the trade to sell.",
         show_default=False
     )],
-    percentage: Annotated[float, typer.Argument(
-        help="The percentage of the position to sell (e.g., 100 for 100%).",
+    percentage: Annotated[str, typer.Argument(
+        help="The percentage of the position to sell (e.g., '100' for 100%).",
         show_default=False
     )],
     bot_name: Annotated[str, typer.Option(
@@ -29,8 +29,13 @@ def main(
         print("   Make sure the bot is started and check the name for typos.")
         raise typer.Exit(code=1)
 
-    if not 1.0 <= percentage <= 100.0:
-        print("❌ Error: The percentage must be between 1.0 and 100.0.")
+    try:
+        p = float(percentage)
+        if not 1.0 <= p <= 100.0:
+            print("❌ Error: The percentage must be between 1.0 and 100.0.")
+            raise typer.Exit(code=1)
+    except ValueError:
+        print(f"❌ Error: Invalid number format '{percentage}'.")
         raise typer.Exit(code=1)
 
     base_url = f"http://host.docker.internal:{bot.host_port}/api"

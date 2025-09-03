@@ -139,16 +139,22 @@ class TradingBot:
         self.api_app.state.bot = self  # Make bot instance available to endpoints
         self.api_app.include_router(api_router, prefix="/api")
 
-    def process_force_buy(self, amount_usd: float):
+    def process_force_buy(self, amount_usd: str):
         """Processes a force buy command received from the API."""
-        logger.info(f"▶️ API command received: Force buy for ${amount_usd:.2f}")
+        try:
+            amount_decimal = Decimal(amount_usd)
+        except InvalidOperation:
+            logger.error(f"Invalid number format for force buy: {amount_usd}")
+            return {"status": "error", "message": "Invalid number format provided."}
+
+        logger.info(f"▶️ API command received: Force buy for ${amount_decimal:.2f}")
         # Basic validation
-        if Decimal(amount_usd) < self.min_trade_size:
-            logger.error(f"Manual buy for ${amount_usd:.2f} is below min trade size ${self.min_trade_size:.2f}.")
+        if amount_decimal < self.min_trade_size:
+            logger.error(f"Manual buy for ${amount_decimal:.2f} is below min trade size ${self.min_trade_size:.2f}.")
             return {"status": "error", "message": "Amount is below minimum trade size."}
 
         logger.info("▶️ Sending force buy command...")
-        success, buy_result = self.trader.execute_buy(float(amount_usd), self.run_id, {"reason": "manual_api_override"})
+        success, buy_result = self.trader.execute_buy(float(amount_decimal), self.run_id, {"reason": "manual_api_override"})
         if success:
             purchase_price = Decimal(str(buy_result.get('price', '0')))
             quantity_bought = Decimal(str(buy_result.get('quantity', '0')))
@@ -166,12 +172,18 @@ class TradingBot:
             self._update_status_file()  # Update TUI immediately
             return {"status": "success", "trade_details": buy_result}
         else:
-            logger.error(f"Force buy for ${amount_usd:.2f} failed during execution.")
+            logger.error(f"Force buy for ${amount_decimal:.2f} failed during execution.")
             return {"status": "error", "message": "Trader failed to execute buy."}
 
-    def process_force_sell(self, trade_id: str, percentage: float):
+    def process_force_sell(self, trade_id: str, percentage: str):
         """Processes a force sell command received from the API."""
-        logger.info(f"▶️ API command received: Force sell for {percentage}% of trade {trade_id}")
+        try:
+            percentage_decimal = Decimal(percentage)
+        except InvalidOperation:
+            logger.error(f"Invalid number format for force sell percentage: {percentage}")
+            return {"status": "error", "message": "Invalid number format for percentage."}
+
+        logger.info(f"▶️ API command received: Force sell for {percentage_decimal}% of trade {trade_id}")
         position = next((p for p in self.state_manager.get_open_positions() if p.trade_id == trade_id), None)
 
         if not position:
@@ -179,7 +191,7 @@ class TradingBot:
             return {"status": "error", "message": f"Trade ID '{trade_id}' not found."}
 
         # The rest of the logic is similar to the file-based one, adapted for direct execution
-        quantity_to_sell = Decimal(str(position.quantity)) * (Decimal(percentage) / Decimal("100"))
+        quantity_to_sell = Decimal(str(position.quantity)) * (percentage_decimal / Decimal("100"))
 
         # Validation checks
         current_price_str = self.trader.get_current_price(self.symbol)

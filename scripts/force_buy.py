@@ -5,7 +5,7 @@ from jules_bot.utils import process_manager
 
 
 def main(
-    usd_amount: Annotated[float, typer.Argument(
+    usd_amount: Annotated[str, typer.Argument(
         help="The amount in USD to buy.",
         show_default=False,
     )],
@@ -25,15 +25,19 @@ def main(
         print("   Make sure the bot is started and check the name for typos.")
         raise typer.Exit(code=1)
 
-    if usd_amount < 1.0:
-        print("❌ Error: The amount to buy must be at least 1.0 USD.")
+    try:
+        if float(usd_amount) < 1.0:
+            print("❌ Error: The amount to buy must be at least 1.0 USD.")
+            raise typer.Exit(code=1)
+    except ValueError:
+        print(f"❌ Error: Invalid number format '{usd_amount}'.")
         raise typer.Exit(code=1)
 
     base_url = f"http://host.docker.internal:{bot.host_port}/api"
     endpoint = f"{base_url}/force_buy"
     payload = {"amount_usd": usd_amount}
 
-    print(f"▶️ Sending force buy command for ${usd_amount:.2f} to {endpoint}...")
+    print(f"▶️ Sending force buy command for ${usd_amount} to {endpoint}...")
 
     try:
         response = requests.post(endpoint, json=payload, timeout=10)
