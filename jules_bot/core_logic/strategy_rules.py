@@ -16,7 +16,6 @@ class StrategyRules:
         self.base_usd_per_trade = self._safe_get_decimal('base_usd_per_trade', '20.0')
         self.sell_factor = self._safe_get_decimal('sell_factor', '0.9')
         self.commission_rate = self._safe_get_decimal('commission_rate', '0.001')
-        self.difficulty_adjustment_factor = self._safe_get_decimal('difficulty_adjustment_factor', '0.005')
         self.trailing_stop_percent = self._safe_get_decimal('trailing_stop_percent', '0.001')
         self.smart_trailing_activation_profit_percent = self._safe_get_decimal('smart_trailing_activation_profit_percent', '0.015')
 
@@ -45,11 +44,14 @@ class StrategyRules:
             )
             return Decimal(fallback)
 
-    def evaluate_buy_signal(self, market_data: dict, open_positions_count: int, difficulty_factor: int = 0, params: Dict[str, Decimal] = None) -> tuple[bool, str, str]:
+    def evaluate_buy_signal(self, market_data: dict, open_positions_count: int, difficulty_factor: Decimal = None, params: Dict[str, Decimal] = None) -> tuple[bool, str, str]:
         """
         Evaluates if a buy signal is present, providing detailed reasons for no signal.
         Uses dynamic parameters for buy dip percentage.
         """
+        if difficulty_factor is None:
+            difficulty_factor = Decimal('0')
+
         current_price = market_data.get('close')
         high_price = market_data.get('high')
         ema_100 = market_data.get('ema_100')
@@ -64,13 +66,15 @@ class StrategyRules:
         ema_100 = Decimal(str(ema_100))
         ema_20 = Decimal(str(ema_20))
         
-        difficulty_multiplier = Decimal(1) - (Decimal(difficulty_factor) * self.difficulty_adjustment_factor)
+        # The difficulty_factor is now the direct percentage adjustment.
+        # A factor of 0.01 means the bbl target is lowered by 1%.
+        difficulty_multiplier = Decimal('1') - difficulty_factor
         adjusted_bbl = Decimal(str(bbl)) * difficulty_multiplier
 
         # --- Dynamic Dip Logic with Difficulty Adjustment ---
         base_buy_dip = params.get('buy_dip_percentage', Decimal('0.02')) if params else Decimal('0.02')
-        difficulty_adjustment = Decimal(difficulty_factor) * self.difficulty_adjustment_factor
-        adjusted_buy_dip_percentage = base_buy_dip + difficulty_adjustment
+        # The difficulty_factor is added directly to the dip percentage.
+        adjusted_buy_dip_percentage = base_buy_dip + difficulty_factor
         price_dip_target = high_price * (Decimal('1') - adjusted_buy_dip_percentage)
 
         reason = ""

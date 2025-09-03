@@ -21,6 +21,7 @@ from rich.text import Text
 from textual_plotext import PlotextPlot
 from textual_timepiece.pickers import DatePicker
 from whenever import Date
+import pytz
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 SUDO_PREFIX = ["sudo"] if os.name != "nt" else []
@@ -484,7 +485,10 @@ class TUIApp(App):
             pnl_cell = f"[{pnl_color}]{pnl_str}[/]" if order_type == 'sell' else "N/A"
             type_color = "green" if order_type == 'buy' else "red"
             type_cell = f"[{type_color}]{order_type.upper()}[/]"
-            timestamp = datetime.fromisoformat(trade['timestamp']).strftime('%Y-%m-%d %H:%M')
+            sao_paulo_tz = pytz.timezone('America/Sao_Paulo')
+            utc_timestamp = datetime.fromisoformat(trade['timestamp'])
+            local_timestamp = utc_timestamp.astimezone(sao_paulo_tz)
+            timestamp = local_timestamp.strftime('%Y-%m-%d %H:%M')
             trade_id_short = trade_id.split('-')[0]
             buy_price = f"${Decimal(trade.get('price', 0)):,.2f}"
             sell_price = f"${Decimal(trade.get('sell_price', 0)):,.2f}" if trade.get('sell_price') else "N/A"
@@ -627,7 +631,10 @@ class TUIApp(App):
             progress_bar = "█" * int(progress / 10) + "░" * (10 - int(progress / 10))
             progress_str = f"[{progress_bar}] {progress:.1f}%"
             current_value = pos['current_value']
-            timestamp = datetime.fromisoformat(pos['timestamp']).strftime('%Y-%m-%d %H:%M')
+            sao_paulo_tz = pytz.timezone('America/Sao_Paulo')
+            utc_timestamp = datetime.fromisoformat(pos['timestamp'])
+            local_timestamp = utc_timestamp.astimezone(sao_paulo_tz)
+            timestamp = local_timestamp.strftime('%Y-%m-%d %H:%M')
 
             row_data = (
                 trade_id.split('-')[0], timestamp, f"${Decimal(pos.get('entry_price', 0)):,.2f}",

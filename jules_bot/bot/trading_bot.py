@@ -139,6 +139,11 @@ class TradingBot:
         self.api_app.state.bot = self  # Make bot instance available to endpoints
         self.api_app.include_router(api_router, prefix="/api")
 
+        # State for TUI synchronization
+        self.last_decision_reason: str = "Initializing..."
+        self.last_operating_mode: str = "STARTUP"
+        self.last_difficulty_factor: Decimal = Decimal('0')
+
     def process_force_buy(self, amount_usd: str):
         """Processes a force buy command received from the API."""
         try:
@@ -245,17 +250,18 @@ class TradingBot:
         except (IOError, OSError) as e:
             logger.error(f"Could not write to state file {self.state_file_path}: {e}")
 
-    def _calculate_buy_progress(self, market_data: dict, open_positions_count: int, current_params: dict) -> tuple[Decimal, Decimal]:
+    def _calculate_buy_progress(self, market_data: dict, open_positions_count: int, current_params: dict, difficulty_factor: Decimal) -> tuple[Decimal, Decimal]:
         """
         Calculates the target price for the next buy and the progress towards it.
         """
         try:
             current_price = Decimal(str(market_data.get('close')))
             high_price = Decimal(str(market_data.get('high', current_price)))
-            buy_dip_percentage = current_params.get('buy_dip_percentage', Decimal('0.02'))
 
-            # The buy target is a percentage dip from the recent high
-            target_price = high_price * (Decimal('1') - buy_dip_percentage)
+            # This logic must mirror `strategy_rules.py` to ensure TUI consistency
+            base_buy_dip = current_params.get('buy_dip_percentage', Decimal('0.02'))
+            adjusted_buy_dip_percentage = base_buy_dip + difficulty_factor
+            target_price = high_price * (Decimal('1') - adjusted_buy_dip_percentage)
 
             # The "start price" for measuring progress is the recent high.
             progress = _calculate_progress_pct(current_price, high_price, target_price)
@@ -554,7 +560,7 @@ class TradingBot:
                             continue
 
                     # Determine buy amount and operating mode
-                    buy_amount_usdt, operating_mode, reason, regime = self.capital_manager.get_buy_order_details(
+                    buy_amount_usdt, operating_mode, reason, regime, difficulty_factor = self.capital_manager.get_buy_order_details(
                         market_data=market_data,
                         open_positions=open_positions,
                         portfolio_value=total_portfolio_value,
@@ -564,6 +570,10 @@ class TradingBot:
                         force_buy_signal=buy_from_reversal,
                         forced_reason="Buy triggered by price reversal."
                     )
+                    # Store the decision state for TUI synchronization
+                    self.last_decision_reason = reason
+                    self.last_operating_mode = operating_mode
+                    self.last_difficulty_factor = difficulty_factor
 
                     # If the signal is to start monitoring, update state and skip buying this cycle
                     if regime == "START_MONITORING" and not self.is_monitoring_for_reversal:
@@ -653,18 +663,13 @@ class TradingBot:
             self.dynamic_params.update_parameters(current_regime)
             current_params = self.dynamic_params.parameters
 
-            # 4. Determine current "reason" text by re-evaluating capital manager logic
-            end_date = datetime.utcnow()
-            start_date = end_date - timedelta(hours=self.capital_manager.difficulty_reset_timeout_hours)
-            trade_history = self.db_manager.get_all_trades_in_range(mode=self.mode, start_date=start_date, end_date=end_date)
+            # 4. Use the stored decision from the main loop for consistency
+            reason = self.last_decision_reason
+            operating_mode = self.last_operating_mode
+            difficulty_factor = self.last_difficulty_factor
             
-            _, operating_mode, reason, _ = self.capital_manager.get_buy_order_details(
-                market_data=market_data, open_positions=open_positions, portfolio_value=total_portfolio_value,
-                free_cash=cash_balance, params=current_params, trade_history=trade_history
-            )
-
-            # 5. Calculate buy progress
-            buy_target, buy_progress = self._calculate_buy_progress(market_data, len(open_positions), current_params)
+            # 5. Calculate buy progress using the same difficulty factor
+            buy_target, buy_progress = self._calculate_buy_progress(market_data, len(open_positions), current_params, difficulty_factor)
 
             # 6. Persist the latest status to the database for the TUI
             self.status_service.update_bot_status(

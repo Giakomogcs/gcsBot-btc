@@ -62,6 +62,9 @@ class CapitalManager:
             logger.critical(f"Invalid value for 'difficulty_reset_timeout_hours'. Using fallback '2'. Error: {e}")
             self.difficulty_reset_timeout_hours = 2
 
+        self.base_difficulty_percentage = self._safe_get_decimal('STRATEGY_RULES', 'base_difficulty_percentage', '0.005')
+        self.per_buy_difficulty_increment = self._safe_get_decimal('STRATEGY_RULES', 'per_buy_difficulty_increment', '0.001')
+
     def _safe_get_decimal(self, section: str, key: str, fallback: str) -> Decimal:
         """Safely gets a parameter from config and converts it to Decimal."""
         value_str = self.config_manager.get(section, key, fallback=fallback)
@@ -105,18 +108,17 @@ class CapitalManager:
 
         return max(base_buy_amount, self.min_trade_size), reason
 
-    def get_buy_order_details(self, market_data: dict, open_positions: list, portfolio_value: Decimal, free_cash: Decimal, params: Dict[str, Decimal], trade_history: list = None, force_buy_signal: bool = False, forced_reason: str = None) -> tuple[Decimal, str, str, str]:
+    def get_buy_order_details(self, market_data: dict, open_positions: list, portfolio_value: Decimal, free_cash: Decimal, params: Dict[str, Decimal], trade_history: list = None, force_buy_signal: bool = False, forced_reason: str = None) -> tuple[Decimal, str, str, str, Decimal]:
         """
         Determines the operating mode and calculates the appropriate buy amount based on that mode.
         Can be forced to assume a buy signal is present.
-        Returns the buy amount, operating mode, reason, and the raw signal regime.
+        Returns the buy amount, operating mode, reason, the raw signal regime, and the difficulty factor used.
         """
         num_open_positions = len(open_positions)
+        difficulty_factor = self._calculate_difficulty_factor(trade_history or [])
 
         if not self.use_dynamic_capital and num_open_positions >= self.max_open_positions:
-            return Decimal('0'), OperatingMode.PRESERVATION.name, f"Max open positions ({self.max_open_positions}) reached.", "PRESERVATION"
-
-        difficulty_factor = self._calculate_difficulty_factor(trade_history or [])
+            return Decimal('0'), OperatingMode.PRESERVATION.name, f"Max open positions ({self.max_open_positions}) reached.", "PRESERVATION", difficulty_factor
 
         if force_buy_signal:
             should_buy, regime, reason = True, "uptrend", forced_reason or "Buy signal forced by reversal."
@@ -126,10 +128,10 @@ class CapitalManager:
             )
 
         if regime == "START_MONITORING":
-            return Decimal('0'), OperatingMode.MONITORING.name, reason, regime
+            return Decimal('0'), OperatingMode.MONITORING.name, reason, regime, difficulty_factor
 
         if not should_buy:
-            return Decimal('0'), OperatingMode.PRESERVATION.name, reason, "PRESERVATION"
+            return Decimal('0'), OperatingMode.PRESERVATION.name, reason, "PRESERVATION", difficulty_factor
 
         # Determine operating mode based on signal
         if regime == "uptrend" and num_open_positions < (self.max_open_positions / 4):
@@ -154,20 +156,21 @@ class CapitalManager:
             reason += f", Capped at max trade size"
 
         if buy_amount > free_cash:
-            return Decimal('0'), OperatingMode.PRESERVATION.name, f"Insufficient funds to place order of ${buy_amount:,.2f}", regime
+            return Decimal('0'), OperatingMode.PRESERVATION.name, f"Insufficient funds to place order of ${buy_amount:,.2f}", regime, difficulty_factor
 
         if buy_amount < self.min_trade_size:
-            return Decimal('0'), OperatingMode.PRESERVATION.name, f"Amount ${buy_amount:,.2f} is below min trade size.", regime
+            return Decimal('0'), OperatingMode.PRESERVATION.name, f"Amount ${buy_amount:,.2f} is below min trade size.", regime, difficulty_factor
 
         final_amount = buy_amount.quantize(Decimal("0.01"))
-        return final_amount, mode.name, reason, regime
+        return final_amount, mode.name, reason, regime, difficulty_factor
 
-    def _calculate_difficulty_factor(self, trade_history: list) -> int:
+    def _calculate_difficulty_factor(self, trade_history: list) -> Decimal:
         """
-        Calculates the difficulty factor based on consecutive buys.
+        Calculates a progressive difficulty factor based on consecutive buys.
+        The factor is a Decimal percentage that makes buying harder.
         """
         if not self.use_dynamic_capital or not trade_history:
-            return 0
+            return Decimal('0')
 
         logger.info(f"Calculating difficulty factor based on {len(trade_history)} trades in the last {self.difficulty_reset_timeout_hours} hours.")
         # Sort trades by timestamp, most recent first
@@ -178,14 +181,27 @@ class CapitalManager:
             if trade.order_type == 'buy':
                 consecutive_buys += 1
             elif trade.order_type == 'sell':
-                logger.info("Consecutive buy streak broken by a sell.")
-                break  # Streak is broken by a sell
+                logger.info(f"Consecutive buy streak of {consecutive_buys} broken by a sell.")
+                # The streak is the number of buys since the last sell, so we stop counting.
+                break
 
-        if consecutive_buys > self.consecutive_buys_threshold:
-            logger.info(f"Difficulty factor of 1 applied due to {consecutive_buys} consecutive buys.")
-            return 1
+        if consecutive_buys >= self.consecutive_buys_threshold:
+            # We start applying difficulty from the threshold number of buys.
+            # The number of buys *over* the threshold determines the increment.
+            additional_buys = consecutive_buys - self.consecutive_buys_threshold
 
-        return 0
+            additional_difficulty = Decimal(additional_buys) * self.per_buy_difficulty_increment
+            total_difficulty = self.base_difficulty_percentage + additional_difficulty
+
+            logger.info(
+                f"Difficulty applied: {total_difficulty:.4%} due to {consecutive_buys} consecutive buys "
+                f"(Threshold: {self.consecutive_buys_threshold}, Base: {self.base_difficulty_percentage:.2%}, "
+                f"Increment: {self.per_buy_difficulty_increment:.2%})"
+            )
+            return total_difficulty
+
+        logger.info(f"No difficulty applied. Consecutive buys ({consecutive_buys}) below threshold ({self.consecutive_buys_threshold}).")
+        return Decimal('0')
 
     def get_capital_allocation(self, portfolio_value: Decimal, open_positions: list) -> dict:
         """

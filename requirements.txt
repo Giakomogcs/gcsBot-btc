@@ -40,6 +40,7 @@ textual
 textual-plotext
 textual-timepiece
 whenever
+pytz
 
 # --- Testing ---
 pytest
