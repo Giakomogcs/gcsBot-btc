@@ -365,7 +365,8 @@ class TradingBot:
                     trade_history = self.db_manager.get_all_trades_in_range(
                         mode=self.mode,
                         start_date=start_date,
-                        end_date=end_date
+                        end_date=end_date,
+                        bot_id=self.run_id
                     )
 
                     # For the state file, we might still want the full history
@@ -415,17 +416,16 @@ class TradingBot:
 
                             # Check if the stop-loss is triggered
                             if current_price <= trailing_stop_price:
-                                # PnL-based safety check
-                                projected_pnl = self.strategy_rules.calculate_net_unrealized_pnl(
-                                    entry_price=Decimal(str(position.price)),
-                                    current_price=current_price,
-                                    total_quantity=Decimal(str(position.quantity)),
-                                    buy_commission_usd=Decimal(str(position.commission_usd or '0'))
+                                # Final safety check: Use the break-even price to ensure the sale covers
+                                # the entry price plus all commissions, as per the user's final requirement.
+                                break_even_price = self.strategy_rules.calculate_break_even_price(
+                                    purchase_price=Decimal(str(position.price))
                                 )
 
-                                if projected_pnl < 0:
+                                if current_price < break_even_price:
                                     logger.warning(
-                                        f"Trailing stop for {position.trade_id} would result in a loss (PnL: ${projected_pnl:,.2f}). "
+                                        f"Trailing stop for {position.trade_id} would not be profitable. "
+                                        f"(Sell Price: ${current_price:,.2f} < Break-Even Price: ${break_even_price:,.2f}). "
                                         f"Resetting trailing state instead of selling."
                                     )
                                     self.state_manager.update_trade_trailing_state(
@@ -439,7 +439,7 @@ class TradingBot:
                                 else:
                                     logger.info(
                                         f"Trailing stop triggered for position {position.trade_id}. Price ${current_price:,.2f} <= Stop "
-                                        f"${trailing_stop_price:,.2f}. Projected PnL: ${projected_pnl:,.2f}. Marking for sale."
+                                        f"${trailing_stop_price:,.2f}. Price is above break-even. Marking for sale."
                                     )
                                     positions_to_sell_now.append(position)
 

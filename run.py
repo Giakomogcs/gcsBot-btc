@@ -28,6 +28,20 @@ def main(ctx: typer.Context):
         print("INFO: Arquivo '.env' não encontrado. Copiando de '.env.example'...")
         shutil.copy(".env.example", ".env")
 
+import socket
+
+def find_free_port(start_port=8766):
+    """Finds an available TCP port on the host, starting from start_port."""
+    port = start_port
+    while port <= 65535:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(('127.0.0.1', port))
+                return port
+        except OSError:
+            port += 1
+    raise IOError("Could not find a free port.")
+
 def get_docker_compose_command():
     if shutil.which("docker-compose"):
         return SUDO_PREFIX + ["docker-compose"]
@@ -118,7 +132,7 @@ def status():
     print("📊 Verificando status dos serviços Docker...")
     run_docker_compose_command(["ps"])
 
-def run_bot_in_container(bot_name: str, mode: str) -> Optional[str]:
+def run_bot_in_container(bot_name: str, mode: str) -> tuple[Optional[str], int]:
     container_name = f"{PROJECT_NAME}-instance-{bot_name}-{mode}"
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '.'))
     try:
@@ -133,7 +147,15 @@ def run_bot_in_container(bot_name: str, mode: str) -> Optional[str]:
     tui_files_dir = os.path.join(project_root, ".tui_files")
     os.makedirs(tui_files_dir, exist_ok=True)
 
-    command = SUDO_PREFIX + ["docker", "run", "--detach", "--name", container_name, "--network", DOCKER_NETWORK_NAME, "--env-file", ".env", "-e", f"BOT_NAME={bot_name}", "-e", f"BOT_MODE={mode}", "-e", "JULES_BOT_SCRIPT_MODE=1", "-v", f"{project_root}:/app", "-v", f"{tui_files_dir}:/app/.tui_files", DOCKER_IMAGE_NAME, "python", "jules_bot/main.py"]
+    # Find a free port for the bot's API
+    try:
+        host_port = find_free_port()
+        print(f"   API do bot será exposta na porta do host: {host_port}")
+    except IOError as e:
+        print(f"❌ Erro: {e}")
+        return None, -1
+
+    command = SUDO_PREFIX + ["docker", "run", "--detach", "--name", container_name, "--network", DOCKER_NETWORK_NAME, "--env-file", ".env", "-e", f"BOT_NAME={bot_name}", "-e", f"BOT_MODE={mode}", "-e", "JULES_BOT_SCRIPT_MODE=1", "-p", f"{host_port}:8766", "-v", f"{project_root}:/app", "-v", f"{tui_files_dir}:/app/.tui_files", DOCKER_IMAGE_NAME, "python", "jules_bot/main.py"]
     
     print(f"   (executando: `{' '.join(command)}`)")
     try:
@@ -142,8 +164,8 @@ def run_bot_in_container(bot_name: str, mode: str) -> Optional[str]:
         if not container_id:
             print("❌ Falha ao obter o ID do container do comando 'docker run'.")
             print(f"   Stderr: {result.stderr}")
-            return None
-        return container_id
+            return None, -1
+        return container_id, host_port
     except FileNotFoundError:
         print("❌ Erro: O comando 'docker' não foi encontrado. O Docker está instalado e no seu PATH?")
         return None
@@ -202,10 +224,11 @@ def trade(bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help=
         _confirm_and_clear_data(final_bot_name)
     if final_detached:
         print(f"🚀 Iniciando o bot '{final_bot_name}' em modo '{mode.upper()}' em SEGUNDO PLANO...")
-        container_id = run_bot_in_container(final_bot_name, mode)
-        if container_id:
-            process_manager.add_running_bot(final_bot_name, container_id, mode)
+        container_id, host_port = run_bot_in_container(final_bot_name, mode)
+        if container_id and host_port > 0:
+            process_manager.add_running_bot(final_bot_name, container_id, mode, host_port)
             print(f"✅ Bot '{final_bot_name}' iniciado com sucesso. ID do Container: {container_id[:12]}")
+            print(f"   API está acessível em: http://localhost:{host_port}")
             print(f"   Para ver os logs, use: python run.py logs --bot-name {final_bot_name}")
         else:
             print(f"❌ Falha ao iniciar o bot '{final_bot_name}'.")
@@ -228,10 +251,11 @@ def test(bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="
         _confirm_and_clear_data(final_bot_name)
     if final_detached:
         print(f"🚀 Iniciando o bot '{final_bot_name}' em modo '{mode.upper()}' em SEGUNDO PLANO...")
-        container_id = run_bot_in_container(final_bot_name, mode)
-        if container_id:
-            process_manager.add_running_bot(final_bot_name, container_id, mode)
+        container_id, host_port = run_bot_in_container(final_bot_name, mode)
+        if container_id and host_port > 0:
+            process_manager.add_running_bot(final_bot_name, container_id, mode, host_port)
             print(f"✅ Bot '{final_bot_name}' iniciado com sucesso. ID do Container: {container_id[:12]}")
+            print(f"   API está acessível em: http://localhost:{host_port}")
             print(f"   Para ver os logs, use: python run.py logs --bot-name {final_bot_name}")
         else:
             print(f"❌ Falha ao iniciar o bot '{final_bot_name}'.")

@@ -6,13 +6,14 @@ from binance.exceptions import BinanceAPIException
 from jules_bot.core.schemas import TradePoint
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.utils.logger import logger
+from jules_bot.core_logic.strategy_rules import StrategyRules
 
 class SynchronizationManager:
     """
     Handles the synchronization of trade history between Binance and the local database.
     Ensures that the local state is a faithful mirror of the exchange's history.
     """
-    def __init__(self, binance_client: Client, db_manager: PostgresManager, symbol: str, environment: str = 'live'):
+    def __init__(self, binance_client: Client, db_manager: PostgresManager, symbol: str, strategy_rules: StrategyRules, environment: str = 'live'):
         """
         Initializes the SynchronizationManager.
         """
@@ -20,6 +21,8 @@ class SynchronizationManager:
         self.db = db_manager
         self.symbol = symbol
         self.environment = environment
+        self.strategy_rules = strategy_rules
+        self.base_asset = symbol.replace("USDT", "")
         logger.info("SynchronizationManager initialized.")
 
     def run_full_sync(self):
@@ -140,8 +143,58 @@ class SynchronizationManager:
             )
             self.db.update_trade_quantity(open_buy_trade.trade_id, float(new_quantity))
 
+        # Calculate PnL before logging the sell
+        try:
+            buy_commission_usd = self._calculate_commission_in_usd(
+                price=open_buy_trade.price,
+                commission=open_buy_trade.commission,
+                commission_asset=open_buy_trade.commission_asset
+            )
+            sell_commission_usd = self._calculate_commission_in_usd(
+                price=sell_trade_point.price,
+                commission=sell_trade_point.commission,
+                commission_asset=sell_trade_point.commission_asset
+            )
+
+            realized_pnl = self.strategy_rules.calculate_realized_pnl(
+                buy_price=open_buy_trade.price,
+                sell_price=sell_trade_point.price,
+                quantity_sold=sell_qty,
+                buy_commission_usd=buy_commission_usd,
+                sell_commission_usd=sell_commission_usd,
+                buy_quantity=buy_qty
+            )
+            sell_trade_point.realized_pnl_usd = realized_pnl
+            logger.info(f"Calculated realized PnL for synced trade: ${realized_pnl:,.4f}")
+
+        except Exception as e:
+            logger.error(f"Failed to calculate PnL for synced sell trade (Binance ID: {sell_trade_point.binance_trade_id}): {e}", exc_info=True)
+
+
         # Log the sell trade to the database
         self.db.log_trade(sell_trade_point)
+
+    def _calculate_commission_in_usd(self, price: Decimal, commission: Decimal, commission_asset: str) -> Decimal:
+        """
+        Calculates the value of the commission in USD.
+        NOTE: This is a simplified version for sync. It doesn't handle historical BNB prices.
+        """
+        price = Decimal(str(price))
+        commission = Decimal(str(commission))
+
+        if commission_asset == "USDT":
+            return commission
+        if commission_asset == self.base_asset:
+            return commission * price
+        if commission_asset == "BNB":
+            logger.warning("Commission in BNB detected during sync. Historical BNB price is not available. PnL may be slightly inaccurate.")
+            # Fallback: Assume BNB price is correlated with the asset price for an approximation.
+            # A more robust solution would require a historical price oracle for BNB.
+            return commission * price # This is an approximation
+
+        logger.warning(f"Unknown commission asset '{commission_asset}'. Returning 0 for commission USD.")
+        return Decimal("0")
+
 
     def _convert_binance_trade_to_tradepoint(self, binance_trade: dict) -> TradePoint:
         """

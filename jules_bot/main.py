@@ -56,11 +56,15 @@ def main():
             # E precisa do nome do símbolo para buscar os trades corretos
             symbol = config_manager.get('APP', 'symbol')
 
+            # The sync manager needs the strategy rules to calculate PnL correctly
+            from jules_bot.core_logic.strategy_rules import StrategyRules
+            strategy_rules = StrategyRules(config_manager)
             sync_manager = SynchronizationManager(
                 binance_client=exchange_manager.client,
                 db_manager=db_manager,
                 symbol=symbol,
-                environment=bot_mode
+                environment=bot_mode,
+                strategy_rules=strategy_rules
             )
             sync_manager.run_full_sync()
             logger.info("Sincronização do histórico de trades concluída com sucesso.")

@@ -1,21 +1,36 @@
 import typer
 import requests
 from typing_extensions import Annotated
+from jules_bot.utils import process_manager
 
-API_PORT = 8766  # This should match the port in trading_bot.py
-BASE_URL = f"http://localhost:{API_PORT}/api"
 
 def main(
     usd_amount: Annotated[float, typer.Argument(
         help="The amount in USD to buy.",
-        min=1.0,
-        show_default=False
+        show_default=False,
+    )],
+    bot_name: Annotated[str, typer.Option(
+        "--bot-name", "-n",
+        help="The name of the bot to send the command to.",
+        prompt="Please enter the name of the bot to command",
+        show_default=False,
     )],
 ):
     """
     Sends a 'force_buy' command to the running bot via its API.
     """
-    endpoint = f"{BASE_URL}/force_buy"
+    bot = process_manager.get_bot_by_name(bot_name)
+    if not bot:
+        print(f"❌ Error: Bot '{bot_name}' not found or is not running.")
+        print("   Make sure the bot is started and check the name for typos.")
+        raise typer.Exit(code=1)
+
+    if usd_amount < 1.0:
+        print("❌ Error: The amount to buy must be at least 1.0 USD.")
+        raise typer.Exit(code=1)
+
+    base_url = f"http://localhost:{bot.host_port}/api"
+    endpoint = f"{base_url}/force_buy"
     payload = {"amount_usd": usd_amount}
 
     print(f"▶️ Sending force buy command for ${usd_amount:.2f} to {endpoint}...")

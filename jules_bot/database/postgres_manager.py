@@ -498,10 +498,11 @@ class PostgresManager:
                     filters.append(Trade.environment == mode)
                 if symbol:
                     filters.append(Trade.symbol == symbol)
-                # NOTE: The bot_id filter (run_id) is intentionally removed for the TUI use case.
-                # The TUI passes the bot_name, which does not match the unique run_id of individual trades.
-                # The database connection is already scoped to the bot's schema, which correctly
-                # isolates the data. This change mirrors the fix previously applied to get_open_positions.
+                # NOTE: The bot_id filter (run_id) is used to isolate trades for a specific bot RUN.
+                # This is crucial for features like the CapitalManager's difficulty factor, which
+                # should not be influenced by previous runs of the same bot.
+                if bot_id:
+                    filters.append(Trade.run_id == bot_id)
 
                 # Handle start_date
                 if start_date:

@@ -17,8 +17,8 @@ class DynamicParameters:
         value_str = self.config_manager.get(section, key, fallback=fallback)
 
         # This can happen if allow_no_value=True and a key is present without a value
-        if value_str is None:
-            logger.warning(f"Config value for '{key}' in section '{section}' is missing. Using fallback '{fallback}'.")
+        if value_str is None or not value_str.strip():
+            logger.warning(f"Config value for '{key}' in section '{section}' is missing, empty, or just whitespace. Using fallback '{fallback}'.")
             return Decimal(fallback)
 
         try:

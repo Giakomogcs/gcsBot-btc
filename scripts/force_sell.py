@@ -1,9 +1,8 @@
 import typer
 import requests
 from typing_extensions import Annotated
+from jules_bot.utils import process_manager
 
-API_PORT = 8766  # This should match the port in trading_bot.py
-BASE_URL = f"http://localhost:{API_PORT}/api"
 
 def main(
     trade_id: Annotated[str, typer.Argument(
@@ -12,15 +11,30 @@ def main(
     )],
     percentage: Annotated[float, typer.Argument(
         help="The percentage of the position to sell (e.g., 100 for 100%).",
-        min=1.0,
-        max=100.0,
         show_default=False
+    )],
+    bot_name: Annotated[str, typer.Option(
+        "--bot-name", "-n",
+        help="The name of the bot to send the command to.",
+        prompt="Please enter the name of the bot to command",
+        show_default=False,
     )],
 ):
     """
     Sends a 'force_sell' command to the running bot via its API.
     """
-    endpoint = f"{BASE_URL}/force_sell"
+    bot = process_manager.get_bot_by_name(bot_name)
+    if not bot:
+        print(f"❌ Error: Bot '{bot_name}' not found or is not running.")
+        print("   Make sure the bot is started and check the name for typos.")
+        raise typer.Exit(code=1)
+
+    if not 1.0 <= percentage <= 100.0:
+        print("❌ Error: The percentage must be between 1.0 and 100.0.")
+        raise typer.Exit(code=1)
+
+    base_url = f"http://localhost:{bot.host_port}/api"
+    endpoint = f"{base_url}/force_sell"
     payload = {"trade_id": trade_id, "percentage": percentage}
 
     print(f"▶️ Sending force sell command for {percentage}% of trade {trade_id} to {endpoint}...")

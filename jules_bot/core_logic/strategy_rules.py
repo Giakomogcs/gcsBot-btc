@@ -137,6 +137,23 @@ class StrategyRules:
         sell_target_price = break_even_price * (one + sell_rise_percentage)
         return sell_target_price
 
+    def calculate_break_even_price(self, purchase_price: Decimal) -> Decimal:
+        """
+        Calculates the break-even price for a trade, accounting for both
+        buy and sell commissions.
+        """
+        purchase_price = Decimal(purchase_price)
+        one = Decimal('1')
+
+        numerator = purchase_price * (one + self.commission_rate)
+        denominator = one - self.commission_rate
+
+        if denominator == 0:
+            # Avoid division by zero, though commission_rate would have to be 100%
+            return Decimal('inf')
+
+        return numerator / denominator
+
     def calculate_realized_pnl(
         self,
         buy_price: Decimal,
