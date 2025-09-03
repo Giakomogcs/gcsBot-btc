@@ -90,7 +90,7 @@ class TestStatusService(unittest.TestCase):
 
 
         # Arrange: Mock strategy evaluation and other helper methods
-        self.status_service.capital_manager.get_buy_order_details = MagicMock(return_value=(Decimal('0'), 'ACCUMULATION', 'Test Condition', 'unknown'))
+        self.status_service.capital_manager.get_buy_order_details = MagicMock(return_value=(Decimal('0'), 'ACCUMULATION', 'Test Condition', 'unknown', Decimal('0')))
 
         # 2. Act: Call the method under test
         result = self.status_service.get_extended_status("test", "test_bot")

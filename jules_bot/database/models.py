@@ -83,5 +83,4 @@ class BotStatus(Base):
     buy_target = Column(Numeric(20, 8))
     buy_progress = Column(Numeric(5, 2))
     last_buy_condition = Column(String) # To store detailed feedback
-    last_difficulty_factor = Column(Numeric(10, 5), default=0.0) # To store the exact difficulty factor used
     timestamp = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)

@@ -23,7 +23,7 @@ from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.database.portfolio_manager import PortfolioManager as DbPortfolioManager
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
 from jules_bot.services.status_service import StatusService
-from jules_bot.utils.helpers import _calculate_progress_pct
+from jules_bot.utils.helpers import _calculate_progress_pct, calculate_buy_progress
 from jules_bot.bot.api import router as api_router
 
 getcontext().prec = 28
@@ -139,10 +139,10 @@ class TradingBot:
         self.api_app.state.bot = self  # Make bot instance available to endpoints
         self.api_app.include_router(api_router, prefix="/api")
 
-        # API Setup
-        self.api_app = FastAPI(title=f"Jules Bot API - {self.bot_name}")
-        self.api_app.state.bot = self  # Make bot instance available to endpoints
-        self.api_app.include_router(api_router, prefix="/api")
+        # State for TUI synchronization
+        self.last_decision_reason: str = "Initializing..."
+        self.last_operating_mode: str = "STARTUP"
+        self.last_difficulty_factor: Decimal = Decimal('0')
 
     def process_force_buy(self, amount_usd: str):
         """Processes a force buy command received from the API."""
@@ -231,7 +231,6 @@ class TradingBot:
             logger.error(f"Force sell for trade {trade_id} failed during execution.")
             return {"status": "error", "message": "Trader failed to execute sell."}
 
-
     def _write_state_to_file(self, open_positions: list, current_price: Decimal, wallet_balances: list, trade_history: list, portfolio_value: Decimal):
         serializable_trade_history = [t.to_dict() for t in trade_history]
         serializable_open_positions = [p.to_dict() for p in open_positions]
@@ -249,27 +248,6 @@ class TradingBot:
             os.rename(temp_path, self.state_file_path)
         except (IOError, OSError) as e:
             logger.error(f"Could not write to state file {self.state_file_path}: {e}")
-
-    def _calculate_buy_progress(self, market_data: dict, open_positions_count: int, current_params: dict, difficulty_factor: Decimal) -> tuple[Decimal, Decimal]:
-        """
-        Calculates the target price for the next buy and the progress towards it.
-        """
-        try:
-            current_price = Decimal(str(market_data.get('close')))
-            high_price = Decimal(str(market_data.get('high', current_price)))
-
-            # This logic must mirror `strategy_rules.py` to ensure TUI consistency
-            base_buy_dip = current_params.get('buy_dip_percentage', Decimal('0.02'))
-            adjusted_buy_dip_percentage = base_buy_dip + difficulty_factor
-            target_price = high_price * (Decimal('1') - adjusted_buy_dip_percentage)
-
-            # The "start price" for measuring progress is the recent high.
-            progress = _calculate_progress_pct(current_price, high_price, target_price)
-
-            return target_price, progress
-
-        except (InvalidOperation, TypeError):
-            return Decimal('0'), Decimal('0')
 
     def _check_and_handle_refresh_signal(self):
         """Checks for a TUI-initiated refresh signal and triggers a status update if found."""
@@ -526,7 +504,6 @@ class TradingBot:
                             end_date=end_date
                         )
 
-
                     # --- BUY LOGIC ---
                     market_data = final_candle.to_dict()
                     cash_balance = Decimal(self.trader.get_account_balance("USDT"))
@@ -570,31 +547,12 @@ class TradingBot:
                         force_buy_signal=buy_from_reversal,
                         forced_reason="Buy triggered by price reversal."
                     )
-                    # --- STATE PERSISTENCE & TUI SYNC ---
-                    # This is the single source of truth for the bot's state.
-                    # We calculate the final state here and persist it immediately.
-                    buy_target, buy_progress = self._calculate_buy_progress(
-                        market_data, len(open_positions), current_params, difficulty_factor
-                    )
 
-                    # Persist the definitive state to the database
-                    self.status_service.update_bot_status(
-                        bot_id=self.bot_name,
-                        mode=self.mode,
-                        reason=reason,
-                        open_positions=len(open_positions),
-                        portfolio_value=total_portfolio_value,
-                        market_regime=current_regime,
-                        operating_mode=operating_mode,
-                        buy_target=buy_target,
-                        buy_progress=buy_progress,
-                        difficulty_factor=difficulty_factor
-                    )
+                    # Store the decision state for TUI synchronization
+                    self.last_decision_reason = reason
+                    self.last_operating_mode = operating_mode
+                    self.last_difficulty_factor = difficulty_factor
 
-                    # Now, trigger the TUI to update itself using the data we just saved.
-                    self._update_status_file()
-
-                    # --- ACTION BASED ON STATE ---
                     # If the signal is to start monitoring, update state and skip buying this cycle
                     if regime == "START_MONITORING" and not self.is_monitoring_for_reversal:
                         self.is_monitoring_for_reversal = True
@@ -630,6 +588,9 @@ class TradingBot:
                                 self.live_portfolio_manager.get_total_portfolio_value(purchase_price, force_recalculation=True)
                     else:
                         logger.debug(f"[{operating_mode}] No buy signal: {reason}")
+
+                    # Update the status file at the end of the regular cycle
+                    self._update_status_file()
                     
                     # Reduced sleep time to improve responsiveness to sell targets
                     logger.info("--- Cycle complete. Waiting 5 seconds...")
@@ -649,35 +610,67 @@ class TradingBot:
 
     def _update_status_file(self):
         """
-        Gathers the bot's current status from the database (the single source of truth)
-        and writes it to a JSON file for the TUI to consume.
+        Gathers the bot's current state by re-running calculations and writes it to the JSON file for the TUI.
+        This is a self-contained method that can be called at any time to refresh the status.
         """
-        logger.info("Updating TUI status file from database...")
+        logger.info("Starting status file update...")
         try:
+            # 1. Get latest market data
+            features_df = self.feature_calculator.get_features_dataframe()
+            if features_df.empty:
+                logger.warning("Could not get features dataframe for status update.")
+                return
+            final_candle = features_df.iloc[-1]
+            if final_candle.isnull().any():
+                logger.warning("Final candle contains NaN values during status update.")
+                return
+            market_data = final_candle.to_dict()
+            current_price = Decimal(final_candle['close'])
+
+            # 2. Get latest positions and portfolio value
+            open_positions = self.state_manager.get_open_positions()
+            total_portfolio_value = self.live_portfolio_manager.get_total_portfolio_value(current_price, force_recalculation=True)
+
+            # 3. Get latest regime and parameters
+            current_regime = -1
+            if self.sa_instance:
+                regime_df = self.sa_instance.transform(features_df)
+                if not regime_df.empty:
+                    current_regime = int(regime_df['market_regime'].iloc[-1])
+            self.dynamic_params.update_parameters(current_regime)
+            current_params = self.dynamic_params.parameters
+
+            # 4. Use the stored decision from the main loop for consistency
+            reason = self.last_decision_reason
+            operating_mode = self.last_operating_mode
+
+            # 5. Calculate buy progress using the same difficulty factor
+            buy_target, buy_progress = calculate_buy_progress(market_data, current_params, self.last_difficulty_factor)
+
+            # 6. Persist the latest status to the database for the TUI
+            self.status_service.update_bot_status(
+                bot_id=self.bot_name, mode=self.mode, reason=reason, open_positions=len(open_positions),
+                portfolio_value=total_portfolio_value, market_regime=current_regime, operating_mode=operating_mode,
+                buy_target=buy_target, buy_progress=buy_progress
+            )
+
+            # 7. Write the live status file
             status_dir = "/app/.tui_files"
+            # Ensure the directory exists and has permissions that allow writing from different users (e.g., inside and outside Docker)
             os.makedirs(status_dir, mode=0o777, exist_ok=True)
             status_file_path = os.path.join(status_dir, f".bot_status_{self.bot_name}.json")
-
-            # Get the extended status, which reads from the database and performs post-processing
             status_data = self.status_service.get_extended_status(self.mode, self.bot_name)
-            
-            # Add portfolio history for charting in the TUI
             portfolio_history = self.db_manager.get_portfolio_history(self.bot_name)
-            if portfolio_history:
-                status_data['portfolio_history'] = [p.to_dict() for p in portfolio_history]
-            else:
-                status_data['portfolio_history'] = []
+            status_data['portfolio_history'] = [p.to_dict() for p in portfolio_history]
 
-            # Safely write the file to prevent corruption from partial writes
             temp_path = status_file_path + ".tmp"
             with open(temp_path, "w") as f:
                 json.dump(status_data, f, default=str)
             os.rename(temp_path, status_file_path)
-
-            logger.info("TUI status file update complete.")
+            logger.info("Status file update complete.")
 
         except Exception as e:
-            logger.error(f"Failed to write status file for TUI: {e}", exc_info=True)
+            logger.error(f"Failed to write status file for TUI during update: {e}", exc_info=True)
 
     def shutdown(self):
         logger.info("[SHUTDOWN] Initiating graceful shutdown...")

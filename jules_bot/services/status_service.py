@@ -17,7 +17,7 @@ from jules_bot.database.models import BotStatus
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
 from jules_bot.utils.config_manager import ConfigManager
-from jules_bot.utils.helpers import _calculate_progress_pct
+from jules_bot.utils.helpers import _calculate_progress_pct, calculate_buy_progress
 
 logger = logging.getLogger(__name__)
 
@@ -31,9 +31,9 @@ class StatusService:
         self.capital_manager = CapitalManager(self.config_manager, self.strategy)
 
 
-    def update_bot_status(self, bot_id: str, mode: str, reason: str, open_positions: int, portfolio_value: Decimal, market_regime: int, operating_mode: str, buy_target: Decimal, buy_progress: Decimal, difficulty_factor: Decimal):
+    def update_bot_status(self, bot_id: str, mode: str, reason: str, open_positions: int, portfolio_value: Decimal, market_regime: int, operating_mode: str, buy_target: Decimal, buy_progress: Decimal):
         """
-        Creates or updates the status of a bot in the database. This is the single source of truth for the TUI.
+        Creates or updates the status of a bot in the database.
         """
         with self.db_manager.get_db() as session:
             try:
@@ -42,7 +42,6 @@ class StatusService:
                     status = BotStatus(bot_id=bot_id, mode=mode, is_running=True)
                     session.add(status)
                 
-                # Update all status fields with the latest data from the bot's decision-making loop
                 status.last_buy_condition = reason
                 status.open_positions = int(open_positions)
                 status.portfolio_value_usd = portfolio_value
@@ -50,7 +49,6 @@ class StatusService:
                 status.operating_mode = operating_mode
                 status.buy_target = buy_target
                 status.buy_progress = buy_progress
-                status.last_difficulty_factor = difficulty_factor
                 status.is_running = True # Mark as running on update
                 
                 session.commit()
@@ -134,16 +132,28 @@ class StatusService:
                 end_date=end_date
             )
 
+            difficulty_factor = self.capital_manager._calculate_difficulty_factor(trade_history)
+
+            # Re-evaluate the buy signal here to get the live status for the TUI
+            buy_amount, operating_mode, reason, regime, _ = self.capital_manager.get_buy_order_details(
+                market_data=market_data,
+                open_positions=open_positions_db,
+                portfolio_value=total_wallet_usd_value, # Using total wallet value as portfolio value
+                free_cash=cash_balance,
+                params=current_params,
+                trade_history=trade_history
+            )
+
+            should_buy = buy_amount > 0
+
+            # This logic is now duplicated from the trading_bot, which is what the user wants.
+            # It ensures the TUI is calculating its own state.
+            condition_target_price, condition_progress = calculate_buy_progress(
+                market_data, current_params, difficulty_factor
+            )
+
             bot_status_db = self.db_manager.get_bot_status(bot_id)
             bot_status_str = "RUNNING" if bot_status_db and bot_status_db.is_running else "STOPPED"
-
-            # Use the status from the database as the source of truth
-            reason = bot_status_db.last_buy_condition if bot_status_db else "N/A"
-            operating_mode = bot_status_db.operating_mode if bot_status_db else "N/A"
-            condition_target_price = bot_status_db.buy_target if bot_status_db else Decimal('0')
-            condition_progress = bot_status_db.buy_progress if bot_status_db else Decimal('0')
-            
-            should_buy = condition_progress >= 100
 
             # Format the target price for display
             condition_target = f"${condition_target_price:,.2f}" if condition_target_price > 0 else "N/A"
