@@ -60,7 +60,7 @@ def test_evaluate_buy_signal_dip_buying(mock_config_manager):
     # --- Scenario 1: Price has not dipped enough -> No Signal ---
     # Dip target is 105 * (1 - 0.02) = 102.9. Current price 103.0 is above.
     market_data['close'] = 103.0
-    should_buy, _, reason = strategy_rules.evaluate_buy_signal(market_data, 1, params=params)
+    should_buy, _, reason = strategy_rules.evaluate_buy_signal(market_data, 1, params=params, difficulty_dip_adjustment=Decimal('0'))
     assert not should_buy
     assert "Dip buy signal" not in reason
 
@@ -68,7 +68,7 @@ def test_evaluate_buy_signal_dip_buying(mock_config_manager):
     # Current price 102.8 is below the 102.9 target
     market_data['close'] = 102.8
     # With use_reversal_buy_strategy=True (default), this should now return START_MONITORING
-    should_buy, regime, reason = strategy_rules.evaluate_buy_signal(market_data, 1, 0, params=params)
+    should_buy, regime, reason = strategy_rules.evaluate_buy_signal(market_data, 1, params=params, difficulty_dip_adjustment=Decimal('0'))
     assert should_buy
     assert regime == "START_MONITORING"
     assert "Dip target hit on existing position" in reason

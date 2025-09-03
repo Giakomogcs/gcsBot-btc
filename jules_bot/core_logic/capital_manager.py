@@ -116,13 +116,29 @@ class CapitalManager:
         if not self.use_dynamic_capital and num_open_positions >= self.max_open_positions:
             return Decimal('0'), OperatingMode.PRESERVATION.name, f"Max open positions ({self.max_open_positions}) reached.", "PRESERVATION"
 
-        difficulty_factor = self._calculate_difficulty_factor(trade_history or [])
+        consecutive_buy_streak = self._calculate_consecutive_buy_streak(trade_history or [])
+
+        # Calculate the difficulty adjustment based on the user's specified logic
+        difficulty_dip_adjustment = Decimal('0')
+        if consecutive_buy_streak >= self.consecutive_buys_threshold:
+            # Base adjustment of 0.5% for hitting the threshold (5 buys)
+            base_adjustment = Decimal('0.005')
+            # Additional 0.1% for each buy beyond the threshold
+            additional_buys = consecutive_buy_streak - self.consecutive_buys_threshold
+            additional_adjustment = Decimal(str(additional_buys)) * Decimal('0.001')
+            difficulty_dip_adjustment = base_adjustment + additional_adjustment
+            logger.info(f"Applying difficulty dip adjustment of {difficulty_dip_adjustment:.4%} due to {consecutive_buy_streak} consecutive buys.")
 
         if force_buy_signal:
             should_buy, regime, reason = True, "uptrend", forced_reason or "Buy signal forced by reversal."
         else:
+            # The interface with strategy_rules is now cleaner.
+            # CapitalManager is responsible for ALL difficulty logic.
             should_buy, regime, reason = self.strategy_rules.evaluate_buy_signal(
-                market_data, num_open_positions, difficulty_factor, params=params
+                market_data=market_data,
+                open_positions_count=num_open_positions,
+                params=params,
+                difficulty_dip_adjustment=difficulty_dip_adjustment # Pass the final adjustment
             )
 
         if regime == "START_MONITORING":
@@ -162,14 +178,14 @@ class CapitalManager:
         final_amount = buy_amount.quantize(Decimal("0.01"))
         return final_amount, mode.name, reason, regime
 
-    def _calculate_difficulty_factor(self, trade_history: list) -> int:
+    def _calculate_consecutive_buy_streak(self, trade_history: list) -> int:
         """
-        Calculates the difficulty factor based on consecutive buys.
+        Calculates the current streak of consecutive buys from the most recent trade.
+        The streak is broken as soon as a non-buy trade is encountered.
         """
-        if not self.use_dynamic_capital or not trade_history:
+        if not trade_history:
             return 0
 
-        logger.info(f"Calculating difficulty factor based on {len(trade_history)} trades in the last {self.difficulty_reset_timeout_hours} hours.")
         # Sort trades by timestamp, most recent first
         sorted_trades = sorted(trade_history, key=lambda t: t.timestamp, reverse=True)
 
@@ -177,15 +193,12 @@ class CapitalManager:
         for trade in sorted_trades:
             if trade.order_type == 'buy':
                 consecutive_buys += 1
-            elif trade.order_type == 'sell':
-                logger.info("Consecutive buy streak broken by a sell.")
-                break  # Streak is broken by a sell
+            else:
+                # The first non-buy trade breaks the streak
+                break
 
-        if consecutive_buys > self.consecutive_buys_threshold:
-            logger.info(f"Difficulty factor of 1 applied due to {consecutive_buys} consecutive buys.")
-            return 1
-
-        return 0
+        logger.info(f"Checked for difficulty: Found a streak of {consecutive_buys} consecutive buys.")
+        return consecutive_buys
 
     def get_capital_allocation(self, portfolio_value: Decimal, open_positions: list) -> dict:
         """

@@ -18,6 +18,7 @@ class StrategyRules:
         self.commission_rate = self._safe_get_decimal('commission_rate', '0.001')
         self.difficulty_adjustment_factor = self._safe_get_decimal('difficulty_adjustment_factor', '0.005')
         self.trailing_stop_percent = self._safe_get_decimal('trailing_stop_percent', '0.001')
+        self.adoption_sell_rise_percentage = self._safe_get_decimal('adoption_sell_rise_percentage', '0.02') # New safe parameter
 
         # Boolean values don't need Decimal conversion
         self.use_reversal_buy_strategy = self.config_manager.getboolean(
@@ -44,10 +45,10 @@ class StrategyRules:
             )
             return Decimal(fallback)
 
-    def evaluate_buy_signal(self, market_data: dict, open_positions_count: int, difficulty_factor: int = 0, params: Dict[str, Decimal] = None) -> tuple[bool, str, str]:
+    def evaluate_buy_signal(self, market_data: dict, open_positions_count: int, params: Dict[str, Decimal], difficulty_dip_adjustment: Decimal) -> tuple[bool, str, str]:
         """
         Evaluates if a buy signal is present, providing detailed reasons for no signal.
-        Uses dynamic parameters for buy dip percentage.
+        Uses dynamic parameters for buy dip percentage and a direct difficulty adjustment.
         """
         current_price = market_data.get('close')
         high_price = market_data.get('high')
@@ -62,14 +63,15 @@ class StrategyRules:
         high_price = Decimal(str(high_price))
         ema_100 = Decimal(str(ema_100))
         ema_20 = Decimal(str(ema_20))
-        
-        difficulty_multiplier = Decimal(1) - (Decimal(difficulty_factor) * self.difficulty_adjustment_factor)
-        adjusted_bbl = Decimal(str(bbl)) * difficulty_multiplier
 
-        # --- Dynamic Dip Logic with Difficulty Adjustment ---
-        base_buy_dip = params.get('buy_dip_percentage', Decimal('0.02')) if params else Decimal('0.02')
-        difficulty_adjustment = Decimal(difficulty_factor) * self.difficulty_adjustment_factor
-        adjusted_buy_dip_percentage = base_buy_dip + difficulty_adjustment
+        # The 'difficulty_factor' logic for bbl is removed for simplification,
+        # as the primary difficulty mechanism is now the dip adjustment.
+        # A simpler approach is to just use the raw bbl value.
+        adjusted_bbl = Decimal(str(bbl))
+
+        # --- Dynamic Dip Logic with Direct Difficulty Adjustment ---
+        base_buy_dip = params.get('buy_dip_percentage', Decimal('0.02'))
+        adjusted_buy_dip_percentage = base_buy_dip + difficulty_dip_adjustment
         price_dip_target = high_price * (Decimal('1') - adjusted_buy_dip_percentage)
 
         reason = ""
@@ -86,7 +88,7 @@ class StrategyRules:
                     reason = f"Price ${current_price:,.2f} is above EMA100 but below EMA20 ${ema_20:,.2f}"
             else:
                 if current_price <= adjusted_bbl:
-                    return True, "downtrend", f"Aggressive first entry (volatility breakout at difficulty {difficulty_factor})"
+                    return True, "downtrend", "Aggressive first entry (volatility breakout)"
                 else:
                     reason = f"Buy target: ${adjusted_bbl:,.2f}. Price is too high."
         else:
@@ -102,7 +104,7 @@ class StrategyRules:
                     reason = f"In uptrend (price > EMA100), but no pullback signal found"
             else:
                 if current_price <= adjusted_bbl:
-                    return True, "downtrend", f"Downtrend volatility breakout (difficulty {difficulty_factor})"
+                    return True, "downtrend", "Downtrend volatility breakout"
                 else:
                     reason = f"Buy target: ${adjusted_bbl:,.2f}. Price is too high."
         

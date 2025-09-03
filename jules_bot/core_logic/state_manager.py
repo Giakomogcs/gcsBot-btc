@@ -190,13 +190,14 @@ class StateManager:
                 if binance_id in db_trades_map:
                     # UPDATE existing trade
                     db_trade = db_trades_map[binance_id]
-                    if db_trade.status != final_status or not math.isclose(db_trade.quantity, float(buy_trade_state['remaining_qty'])):
-                        logger.info(f"Updating BUY {binance_id}: Status {db_trade.status}->{final_status}, Qty {db_trade.quantity}->{buy_trade_state['remaining_qty']:.8f}")
-                        self.db_manager.update_trade_status_and_quantity(
-                            trade_id=db_trade.trade_id,
-                            new_status=final_status,
-                            new_quantity=float(buy_trade_state['remaining_qty'])
-                        )
+                    if db_trade.status != final_status:
+                         logger.info(f"Updating BUY {binance_id}: Status {db_trade.status}->{final_status}")
+                         self.db_manager.update_trade_status(db_trade.trade_id, final_status)
+
+                    # Use a tolerance for quantity comparison
+                    if not math.isclose(Decimal(str(db_trade.quantity)), buy_trade_state['remaining_qty'], rel_tol=1e-9):
+                        logger.info(f"Updating BUY {binance_id}: Qty {db_trade.quantity}->{buy_trade_state['remaining_qty']:.8f}")
+                        self.db_manager.update_trade_quantity(db_trade.trade_id, float(buy_trade_state['remaining_qty']))
                 else:
                     # INSERT new trade
                     logger.info(f"Creating new BUY record for Binance ID {binance_id} with status {final_status}.")
@@ -297,11 +298,16 @@ class StateManager:
             )
             
             internal_trade_id = str(uuid.uuid4())
-            # Pass original_quantity for an accurate sell target calculation if it depends on the full size
-            sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price, original_quantity, params=None)
+
+            # For synced trades, use the safe, conservative adoption sell target percentage
+            # This prevents instant sell-offs upon adoption.
+            adoption_params = {'sell_rise_percentage': strategy_rules.adoption_sell_rise_percentage}
+            sell_target_price = strategy_rules.calculate_sell_target_price(
+                purchase_price, original_quantity, params=adoption_params
+            )
 
             buy_result = {
-                "run_id": self.bot_id,
+                "run_id": "sync", # Mark this as a synced trade, not from this bot run
                 "trade_id": internal_trade_id,
                 "symbol": symbol,
                 "price": purchase_price,
