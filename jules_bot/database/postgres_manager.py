@@ -7,7 +7,7 @@ from typing import Optional, Iterator
 from datetime import datetime
 import pandas as pd
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, desc, and_, text, inspect, asc
+from sqlalchemy import create_engine, desc, and_, text, inspect, asc, func
 from sqlalchemy.orm import sessionmaker, Session
 from contextlib import contextmanager
 from jules_bot.core.schemas import TradePoint
@@ -281,6 +281,45 @@ class PostgresManager:
             except Exception as e:
                 logger.error(f"Failed to get oldest open buy trade: {e}", exc_info=True)
                 return None
+
+    def get_total_open_quantity(self, symbol: str) -> Decimal:
+        """
+        Calculates the total quantity of all open 'buy' trades for a given symbol.
+        """
+        with self.get_db() as db:
+            try:
+                # We query for the sum of quantities of all OPEN buy trades for the symbol
+                total_quantity = db.query(func.sum(Trade.quantity)).filter(
+                    and_(
+                        Trade.symbol == symbol,
+                        Trade.status == "OPEN",
+                        Trade.order_type == "buy"
+                    )
+                ).scalar()
+
+                # If total_quantity is None (no open trades), return Decimal('0')
+                return total_quantity or Decimal("0")
+            except Exception as e:
+                logger.error(f"Failed to get total open quantity for symbol {symbol}: {e}", exc_info=True)
+                return Decimal("0")
+
+    def get_open_buy_trades_sorted(self, symbol: str) -> list[Trade]:
+        """
+        Fetches all open 'buy' trades for a given symbol, sorted by timestamp (oldest first).
+        """
+        with self.get_db() as db:
+            try:
+                trades = db.query(Trade).filter(
+                    and_(
+                        Trade.symbol == symbol,
+                        Trade.status == "OPEN",
+                        Trade.order_type == "buy"
+                    )
+                ).order_by(asc(Trade.timestamp)).all()
+                return trades
+            except Exception as e:
+                logger.error(f"Failed to get sorted open buy trades for symbol {symbol}: {e}", exc_info=True)
+                return []
 
     def get_open_positions(self, environment: str, bot_id: Optional[str] = None, symbol: Optional[str] = None) -> list:
         """

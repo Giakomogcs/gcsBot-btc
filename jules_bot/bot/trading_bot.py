@@ -373,40 +373,36 @@ class TradingBot:
                     full_trade_history = self.state_manager.get_trade_history_for_run()
                     self._write_state_to_file(open_positions, current_price, wallet_balances, full_trade_history, total_portfolio_value)
 
-                    # --- SELL LOGIC (with Trailing Take-Profit) ---
+                    # --- SAGAZ SELL LOGIC ---
                     positions_to_sell_now = []
                     for position in open_positions:
-                        # Ensure sell_target_price is a Decimal, handle None
-                        sell_target_price = Decimal(str(position.sell_target_price)) if position.sell_target_price is not None else Decimal('inf')
+                        break_even_price = self.strategy_rules.calculate_break_even_price(Decimal(str(position.price)))
 
-                        # 1. Check if the take-profit target has been reached.
-                        # If so, trigger a partial sale and activate trailing for the remainder.
-                        if not position.is_trailing and current_price >= sell_target_price:
-                            logger.info(f"✅ Position {position.trade_id} hit target ${sell_target_price:,.2f}. Marking for partial sale and activating trailing stop.")
-                            
-                            # Mark the position for a partial sell (quantity determined by sell_factor).
-                            positions_to_sell_now.append(position)
-                            
-                            # Activate trailing for the remainder of the position.
-                            self.state_manager.update_trade_trailing_state(
-                                trade_id=position.trade_id,
-                                is_trailing=True,
-                                highest_price=current_price
-                            )
-                            # Update the in-memory object for the current cycle to reflect the new state.
-                            position.is_trailing = True
-                            position.highest_price_since_breach = current_price
-                            
-                            # This position has been handled for this cycle.
-                            continue
+                        # 1. Sagaz Trailing Stop Activation
+                        # Activate trailing if it's not already active and profit threshold is met.
+                        if not position.is_trailing:
+                            activation_price = break_even_price * (Decimal('1') + self.strategy_rules.trailing_stop_activation_profit_percent)
+                            if current_price >= activation_price:
+                                logger.info(
+                                    f"✅ SAGAZ TRAILING ACTIVATED for position {position.trade_id}. "
+                                    f"Price ${current_price:,.2f} crossed activation target ${activation_price:,.2f}."
+                                )
+                                self.state_manager.update_trade_trailing_state(
+                                    trade_id=position.trade_id,
+                                    is_trailing=True,
+                                    highest_price=current_price
+                                )
+                                # Update in-memory object for the current cycle
+                                position.is_trailing = True
+                                position.highest_price_since_breach = current_price
+                                # Continue to the next iteration to start trailing on the next cycle
+                                continue
 
-
-                        # 2. Handle positions that are already trailing
+                        # 2. Handle Active Trailing Stop
                         if position.is_trailing:
-                            # Ensure highest_price_since_breach is a Decimal
-                            highest_price = Decimal(str(position.highest_price_since_breach)) if position.highest_price_since_breach is not None else current_price
+                            highest_price = Decimal(str(position.highest_price_since_breach))
 
-                            # Update the highest price if a new peak is reached
+                            # Update highest price if a new peak is reached
                             if current_price > highest_price:
                                 logger.info(f"Trailing position {position.trade_id} reached new peak: ${current_price:,.2f}")
                                 self.state_manager.update_trade_trailing_state(
@@ -416,31 +412,30 @@ class TradingBot:
                                 )
                                 highest_price = current_price # Update in-memory object
 
-                            # Calculate the stop-loss price
+                            # Calculate the stop-loss trigger price
                             trailing_stop_price = highest_price * (Decimal('1') - self.strategy_rules.trailing_stop_percent)
 
-                            logger.debug(f"Position {position.trade_id}: Highest Price=${highest_price:,.2f}, Stop Price=${trailing_stop_price:,.2f}, Current Price=${current_price:,.2f}")
+                            logger.debug(
+                                f"Position {position.trade_id}: Highest Price=${highest_price:,.2f}, "
+                                f"Stop Price=${trailing_stop_price:,.2f}, Current Price=${current_price:,.2f}"
+                            )
 
                             # Check if the stop-loss is triggered
                             if current_price <= trailing_stop_price:
-                                # Stop price hit. Now, check if the sale would be profitable.
-                                break_even_price = self.strategy_rules.calculate_break_even_price(
-                                    purchase_price=Decimal(str(position.price))
-                                )
                                 logger.info(
                                     f"🚨 TRAILING STOP TRIGGERED for position {position.trade_id}. "
-                                    f"Current Price: ${current_price:,.2f}, "
-                                    f"Stop Price: ${trailing_stop_price:,.2f}, "
-                                    f"Break-Even Price: ${break_even_price:,.2f}."
+                                    f"Price ${current_price:,.2f} <= Stop Price ${trailing_stop_price:,.2f}."
                                 )
 
-                                # Final safety check: Use the break-even price to ensure the sale covers
-                                # the entry price plus all commissions, as per the user's final requirement.
-                                if current_price < break_even_price:
+                                # 3. Loss Prevention Check
+                                # Check if the sale would result in a loss beyond the allowed threshold.
+                                loss_prevention_price = break_even_price * (Decimal('1') - self.strategy_rules.trailing_stop_loss_prevention_percent)
+
+                                if current_price < loss_prevention_price:
                                     logger.warning(
-                                        f"Trailing stop for {position.trade_id} would not be profitable. "
-                                        f"(Sell Price: ${current_price:,.2f} < Break-Even Price: ${break_even_price:,.2f}). "
-                                        f"Resetting trailing state instead of selling."
+                                        f"LOSS PREVENTION: Trailing stop for {position.trade_id} would result in a sale at ${current_price:,.2f}, "
+                                        f"which is below the loss prevention threshold of ${loss_prevention_price:,.2f}. "
+                                        f"Resetting trailing state instead of selling to allow for recovery."
                                     )
                                     self.state_manager.update_trade_trailing_state(
                                         trade_id=position.trade_id,
@@ -451,13 +446,14 @@ class TradingBot:
                                     position.is_trailing = False
                                     position.highest_price_since_breach = None
                                 else:
+                                    # The sale is profitable or within the acceptable loss threshold. Mark for selling.
                                     logger.info(
-                                        f"Trailing stop triggered for position {position.trade_id}. Price ${current_price:,.2f} <= Stop "
-                                        f"${trailing_stop_price:,.2f}. Price is above break-even. Marking for sale."
+                                        f"Trailing stop for {position.trade_id} is profitable or within acceptable loss. "
+                                        f"Marking for sale at ${current_price:,.2f}."
                                     )
                                     positions_to_sell_now.append(position)
 
-                    # 3. Execute sales for triggered positions
+                    # 4. Execute sales for triggered positions
                     sell_executed_in_cycle = False
                     if positions_to_sell_now:
                         logger.info(f"Found {len(positions_to_sell_now)} positions meeting sell criteria.")

@@ -27,21 +27,164 @@ class SynchronizationManager:
 
     def run_full_sync(self):
         """
-        Runs the full synchronization process. It's idempotent and can be run safely multiple times.
+        Runs the full synchronization process, prioritizing position sync and then trade history.
         """
-        logger.info("Starting full trade history synchronization...")
-        
-        # Get the ID of the last trade we successfully synced
+        logger.info("Starting full synchronization...")
+
+        # First, synchronize the current open positions
+        self.sync_positions()
+
+        # Then, reconcile the trade history for logging and PnL calculation
         last_synced_id = self.db.get_last_binance_trade_id()
-        
-        # Fetch all trades from the exchange starting from the next ID
-        # If last_synced_id is 0, this will fetch from id 1.
         trades_from_binance = self._fetch_all_binance_trades(start_from_id=last_synced_id + 1)
         
         if trades_from_binance:
             self._reconcile_trades(trades_from_binance)
         
-        logger.info("Synchronization process complete.")
+        logger.info("Full synchronization process complete.")
+
+    def sync_positions(self):
+        """
+        Synchronizes the bot's open positions with the actual balance on the exchange.
+        This method is the source of truth for the bot's state.
+        It will adopt, update, or close local positions to match the exchange exactly.
+        """
+        logger.info(f"Starting position synchronization for {self.symbol}...")
+        try:
+            # 1. Get quantity from the exchange
+            asset_balance = self.client.get_asset_balance(asset=self.base_asset)
+            exchange_quantity = Decimal(asset_balance['free']) if asset_balance and 'free' in asset_balance else Decimal("0")
+            logger.info(f"Exchange balance for {self.base_asset}: {exchange_quantity}")
+
+            # 2. Get quantity from local DB
+            local_quantity = self.db.get_total_open_quantity(self.symbol)
+            logger.info(f"Local open quantity for {self.symbol}: {local_quantity}")
+
+            # 3. Reconcile
+            if exchange_quantity == local_quantity:
+                logger.info(f"Quantities for {self.symbol} are in sync. No action needed.")
+                return
+
+            logger.warning(f"Discrepancy detected for {self.symbol}. Exchange: {exchange_quantity}, Local: {local_quantity}. Reconciling...")
+
+            # If there's any discrepancy, the simplest and most robust approach is to
+            # make the local state match the exchange state.
+
+            # First, wipe the slate clean locally.
+            self._close_all_local_positions()
+
+            # If there's a position on the exchange, adopt it.
+            if exchange_quantity > 0:
+                self._adopt_position(exchange_quantity)
+
+        except BinanceAPIException as e:
+            logger.error(f"Binance API error during position sync for {self.base_asset}: {e}", exc_info=True)
+            return
+        except Exception as e:
+            logger.error(f"An unexpected error occurred during position sync: {e}", exc_info=True)
+            return
+
+    def _adopt_position(self, quantity_to_adopt: Decimal):
+        """
+        Adopts a position from the exchange by calculating its average entry price
+        from trade history and creating a single representative trade in the local DB.
+        This uses a FIFO accounting method to determine the cost basis.
+        """
+        logger.info(f"Attempting to adopt position of {quantity_to_adopt} {self.base_asset}.")
+
+        try:
+            # 1. Fetch trade history
+            all_trades = self.client.get_my_trades(symbol=self.symbol, limit=1000)
+            if not all_trades:
+                logger.error("Cannot adopt position: No trade history found for symbol.")
+                return
+
+            # 2. Reconstruct current position using FIFO
+            inventory = []  # Stores the buy trades that constitute the current position
+            for trade in all_trades:
+                if trade['isBuyer']:
+                    inventory.append(trade)
+                else:  # It's a sell
+                    sell_qty = Decimal(trade['qty'])
+                    # Deduct sell quantity from the oldest buys first
+                    while sell_qty > 0 and inventory:
+                        oldest_buy = inventory[0]
+                        oldest_buy_qty = Decimal(oldest_buy['qty'])
+
+                        if oldest_buy_qty > sell_qty:
+                            # The oldest buy partially covers the sell
+                            oldest_buy['qty'] = str(oldest_buy_qty - sell_qty)
+                            sell_qty = Decimal('0')
+                        else:
+                            # The oldest buy is completely used up by the sell
+                            inventory.pop(0)
+                            sell_qty -= oldest_buy_qty
+
+            if not inventory:
+                logger.error("Cannot adopt position: Inventory calculation resulted in zero holdings, which contradicts exchange balance.")
+                return
+
+            # 3. Calculate weighted average price from the remaining inventory
+            total_cost = Decimal('0')
+            total_qty = Decimal('0')
+            for buy_trade in inventory:
+                price = Decimal(buy_trade['price'])
+                qty = Decimal(buy_trade['qty'])
+                total_cost += price * qty
+                total_qty += qty
+
+            if total_qty == 0:
+                logger.error("Cannot adopt position: Calculated total quantity is zero.")
+                return
+
+            avg_price = total_cost / total_qty
+            logger.info(f"Calculated average entry price for adoption: {avg_price:.8f}")
+
+            # 4. Create the new adopted trade in the database
+            # The quantity is the one from get_asset_balance, which is the ultimate source of truth.
+            # The calculated average price is for this true quantity.
+            new_trade = TradePoint(
+                run_id="adopted",
+                environment=self.environment,
+                strategy_name="adopted",
+                symbol=self.symbol,
+                trade_id=f"adopted_{uuid.uuid4()}",
+                exchange="binance",
+                status="OPEN",
+                order_type='buy',
+                price=float(avg_price),
+                quantity=float(quantity_to_adopt),
+                usd_value=float(avg_price * quantity_to_adopt),
+                commission=0.0,  # Placeholder, as commissions are part of the historical price
+                commission_asset='USDT',
+                timestamp=datetime.datetime.now(datetime.timezone.utc),  # Timestamp of adoption
+                decision_context={'source': 'adoption', 'reason': 'Adopting existing position from exchange.'}
+            )
+            self.db.log_trade(new_trade)
+            logger.info(f"Successfully adopted position for {self.symbol} with trade_id {new_trade.trade_id}.")
+
+        except BinanceAPIException as e:
+            logger.error(f"Binance API error during position adoption for {self.symbol}: {e}", exc_info=True)
+        except Exception as e:
+            logger.error(f"An unexpected error occurred during position adoption: {e}", exc_info=True)
+
+    def _close_all_local_positions(self):
+        """
+        Closes all open 'buy' trades for the current symbol in the local database.
+        """
+        logger.info(f"Closing all local open positions for {self.symbol} as part of sync.")
+        open_trades = self.db.get_open_buy_trades_sorted(self.symbol)
+
+        if not open_trades:
+            logger.info(f"No local open positions found for {self.symbol} to close.")
+            return
+
+        for trade in open_trades:
+            # Using a specific status for traceability
+            self.db.update_trade_status(trade.trade_id, "CLOSED_BY_SYNC")
+            logger.info(f"Closed local trade {trade.trade_id} (qty: {trade.quantity}) to sync with exchange.")
+
+        logger.info(f"Finished closing {len(open_trades)} local positions for {self.symbol}.")
 
     def _fetch_all_binance_trades(self, start_from_id: int = 0) -> list:
         """
@@ -98,81 +241,11 @@ class SynchronizationManager:
 
             trade_point = self._convert_binance_trade_to_tradepoint(trade)
 
-            if trade['isBuyer']:
-                # For a buy trade, log it as OPEN. Sells will close it later.
-                self.db.log_trade(trade_point)
-            else: 
-                self._reconcile_sell_trade(trade_point)
-    
-    def _reconcile_sell_trade(self, sell_trade_point: TradePoint):
-        """
-        Handles the logic for linking a sell trade to a buy trade using FIFO.
-        """
-        open_buy_trade = self.db.get_oldest_open_buy_trade()
-
-        if not open_buy_trade:
-            logger.critical(
-                f"CRITICAL INCONSISTENCY: Found a sell trade (Binance ID: {sell_trade_point.binance_trade_id}) "
-                f"but there are NO open buy positions in the database. This sell cannot be linked."
-            )
-            # Log the sell without a link for data integrity.
-            self.db.log_trade(sell_trade_point)
-            return
-
-        sell_trade_point.linked_trade_id = open_buy_trade.trade_id
-        
-        sell_qty = Decimal(str(sell_trade_point.quantity))
-        buy_qty = Decimal(str(open_buy_trade.quantity))
-
-        if sell_qty >= buy_qty:
-            logger.info(
-                f"Sell trade (Binance ID: {sell_trade_point.binance_trade_id}) closes buy trade "
-                f"(Trade ID: {open_buy_trade.trade_id})."
-            )
-            self.db.update_trade_status(open_buy_trade.trade_id, "CLOSED")
-            if sell_qty > buy_qty:
-                logger.warning(
-                    f"Sell quantity ({sell_qty}) is greater than the oldest open buy's quantity ({buy_qty}). "
-                    f"This suggests a data discrepancy (e.g., manual trades). The buy position will be closed."
-                )
-        else:
-            new_quantity = buy_qty - sell_qty
-            logger.info(
-                f"Sell trade (Binance ID: {sell_trade_point.binance_trade_id}) partially closes buy trade "
-                f"(Trade ID: {open_buy_trade.trade_id}). Reducing quantity from {buy_qty} to {new_quantity}."
-            )
-            self.db.update_trade_quantity(open_buy_trade.trade_id, float(new_quantity))
-
-        # Calculate PnL before logging the sell
-        try:
-            buy_commission_usd = self._calculate_commission_in_usd(
-                price=open_buy_trade.price,
-                commission=open_buy_trade.commission,
-                commission_asset=open_buy_trade.commission_asset
-            )
-            sell_commission_usd = self._calculate_commission_in_usd(
-                price=sell_trade_point.price,
-                commission=sell_trade_point.commission,
-                commission_asset=sell_trade_point.commission_asset
-            )
-
-            realized_pnl = self.strategy_rules.calculate_realized_pnl(
-                buy_price=open_buy_trade.price,
-                sell_price=sell_trade_point.price,
-                quantity_sold=sell_qty,
-                buy_commission_usd=buy_commission_usd,
-                sell_commission_usd=sell_commission_usd,
-                buy_quantity=buy_qty
-            )
-            sell_trade_point.realized_pnl_usd = realized_pnl
-            logger.info(f"Calculated realized PnL for synced trade: ${realized_pnl:,.4f}")
-
-        except Exception as e:
-            logger.error(f"Failed to calculate PnL for synced sell trade (Binance ID: {sell_trade_point.binance_trade_id}): {e}", exc_info=True)
-
-
-        # Log the sell trade to the database
-        self.db.log_trade(sell_trade_point)
+            # The new sync_positions logic is the source of truth for the state of open positions.
+            # Here, we just log the trade from history for completeness, without trying to
+            # affect the state of any open positions.
+            # The status ('OPEN' or 'CLOSED') is correctly set in _convert_binance_trade_to_tradepoint.
+            self.db.log_trade(trade_point)
 
     def _calculate_commission_in_usd(self, price: Decimal, commission: Decimal, commission_asset: str) -> Decimal:
         """

@@ -19,6 +19,8 @@ class StrategyRules:
         self.difficulty_adjustment_factor = self._safe_get_decimal('difficulty_adjustment_factor', '0.005')
         self.trailing_stop_percent = self._safe_get_decimal('trailing_stop_percent', '0.001')
         self.adoption_sell_rise_percentage = self._safe_get_decimal('adoption_sell_rise_percentage', '0.02') # New safe parameter
+        self.trailing_stop_activation_profit_percent = self._safe_get_decimal('trailing_stop_activation_profit_percent', '0.015')
+        self.trailing_stop_loss_prevention_percent = self._safe_get_decimal('trailing_stop_loss_prevention_percent', '0.005')
 
         # Boolean values don't need Decimal conversion
         self.use_reversal_buy_strategy = self.config_manager.getboolean(
