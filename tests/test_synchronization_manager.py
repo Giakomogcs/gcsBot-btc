@@ -31,14 +31,15 @@ def mock_db_manager():
 def mock_strategy_rules():
     return MagicMock()
 
-def test_adopt_position_calculates_correct_average_price(mock_binance_client, mock_db_manager, mock_strategy_rules):
+def test_adopt_position_creates_independent_trades(mock_binance_client, mock_db_manager, mock_strategy_rules):
     """
-    Tests that when sync_positions detects a discrepancy, it correctly adopts the position
-    and calculates the weighted average price from the FIFO-reconstructed inventory.
+    Tests that sync_positions adopts each open buy trade as an independent
+    position in the local database.
     """
     # Arrange
-    # Mock the exchange balance to be 1.5 BTC
     mock_binance_client.get_asset_balance.return_value = {'asset': 'BTC', 'free': '1.5', 'locked': '0.0'}
+    # Prevent get_trade_by_binance_trade_id from finding existing trades
+    mock_db_manager.get_trade_by_binance_trade_id.return_value = None
 
     sync_manager = SynchronizationManager(
         binance_client=mock_binance_client,
@@ -55,24 +56,30 @@ def test_adopt_position_calculates_correct_average_price(mock_binance_client, mo
     # 1. It should have checked for local positions to close them.
     mock_db_manager.get_open_buy_trades_sorted.assert_called_once_with('BTCUSDT')
 
-    # 2. It should have called log_trade to create the new adopted position
-    mock_db_manager.log_trade.assert_called_once()
+    # 2. It should have called log_trade twice, once for each open position.
+    assert mock_db_manager.log_trade.call_count == 2
 
-    # 3. Check the details of the created TradePoint
-    call_args = mock_db_manager.log_trade.call_args
-    created_trade_point: TradePoint = call_args[0][0]
+    # 3. Check the details of the created TradePoints
+    calls = mock_db_manager.log_trade.call_args_list
 
-    assert created_trade_point.run_id == 'adopted'
-    assert created_trade_point.status == 'OPEN'
-    assert created_trade_point.quantity == 1.5
+    # The inventory after FIFO is a partial buy from trade 1 and the full buy from trade 2.
+    # The calls might not be in a guaranteed order, so we check the contents.
 
-    # Expected average price calculation:
-    # Inventory after FIFO:
-    # - 0.5 BTC from trade 1 (price 50000)
-    # - 1.0 BTC from trade 2 (price 51000)
-    # Total Cost = (0.5 * 50000) + (1.0 * 51000) = 25000 + 51000 = 76000
-    # Total Qty = 1.5
-    # Avg Price = 76000 / 1.5 = 50666.666...
-    expected_avg_price = (Decimal('0.5') * Decimal('50000') + Decimal('1.0') * Decimal('51000')) / Decimal('1.5')
+    trade1_found = False
+    trade2_found = False
 
-    assert created_trade_point.price == pytest.approx(float(expected_avg_price))
+    for call in calls:
+        created_trade: TradePoint = call[0][0]
+        assert created_trade.run_id == 'adopted'
+        assert created_trade.status == 'OPEN'
+
+        if created_trade.binance_trade_id == 1:
+            trade1_found = True
+            assert created_trade.price == 50000.00
+            assert created_trade.quantity == 0.5 # 1.0 original - 0.5 sell
+        elif created_trade.binance_trade_id == 2:
+            trade2_found = True
+            assert created_trade.price == 51000.00
+            assert created_trade.quantity == 1.0
+
+    assert trade1_found and trade2_found, "Both adopted trades were not found in log_trade calls."

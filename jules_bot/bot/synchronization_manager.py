@@ -86,11 +86,10 @@ class SynchronizationManager:
 
     def _adopt_position(self, quantity_to_adopt: Decimal):
         """
-        Adopts a position from the exchange by calculating its average entry price
-        from trade history and creating a single representative trade in the local DB.
-        This uses a FIFO accounting method to determine the cost basis.
+        Adopts positions from the exchange by creating an independent local trade record
+        for each open buy trade identified from the trade history via FIFO accounting.
         """
-        logger.info(f"Attempting to adopt position of {quantity_to_adopt} {self.base_asset}.")
+        logger.info(f"Attempting to adopt positions for a total of {quantity_to_adopt} {self.base_asset}.")
 
         try:
             # 1. Fetch trade history
@@ -100,68 +99,60 @@ class SynchronizationManager:
                 return
 
             # 2. Reconstruct current position using FIFO
-            inventory = []  # Stores the buy trades that constitute the current position
+            inventory = []
             for trade in all_trades:
                 if trade['isBuyer']:
-                    inventory.append(trade)
-                else:  # It's a sell
+                    # Add a copy to avoid modifying the original list
+                    inventory.append(trade.copy())
+                else:
                     sell_qty = Decimal(trade['qty'])
-                    # Deduct sell quantity from the oldest buys first
                     while sell_qty > 0 and inventory:
                         oldest_buy = inventory[0]
                         oldest_buy_qty = Decimal(oldest_buy['qty'])
-
                         if oldest_buy_qty > sell_qty:
-                            # The oldest buy partially covers the sell
                             oldest_buy['qty'] = str(oldest_buy_qty - sell_qty)
                             sell_qty = Decimal('0')
                         else:
-                            # The oldest buy is completely used up by the sell
                             inventory.pop(0)
                             sell_qty -= oldest_buy_qty
 
             if not inventory:
-                logger.error("Cannot adopt position: Inventory calculation resulted in zero holdings, which contradicts exchange balance.")
+                logger.error("Cannot adopt positions: Inventory calculation resulted in zero holdings, which contradicts exchange balance.")
                 return
 
-            # 3. Calculate weighted average price from the remaining inventory
-            total_cost = Decimal('0')
-            total_qty = Decimal('0')
-            for buy_trade in inventory:
-                price = Decimal(buy_trade['price'])
-                qty = Decimal(buy_trade['qty'])
-                total_cost += price * qty
-                total_qty += qty
+            logger.info(f"Found {len(inventory)} individual open positions on the exchange to adopt.")
 
-            if total_qty == 0:
-                logger.error("Cannot adopt position: Calculated total quantity is zero.")
-                return
+            # 3. Create a local trade record for each open buy in the inventory
+            for open_buy in inventory:
+                price = Decimal(open_buy['price'])
+                quantity = Decimal(open_buy['qty'])
 
-            avg_price = total_cost / total_qty
-            logger.info(f"Calculated average entry price for adoption: {avg_price:.8f}")
+                # Check if a trade with this binance_trade_id already exists to avoid duplicates
+                if self.db.get_trade_by_binance_trade_id(int(open_buy['id'])):
+                    logger.warning(f"Trade with Binance ID {open_buy['id']} already exists in DB. Skipping adoption for this trade.")
+                    continue
 
-            # 4. Create the new adopted trade in the database
-            # The quantity is the one from get_asset_balance, which is the ultimate source of truth.
-            # The calculated average price is for this true quantity.
-            new_trade = TradePoint(
-                run_id="adopted",
-                environment=self.environment,
-                strategy_name="adopted",
-                symbol=self.symbol,
-                trade_id=f"adopted_{uuid.uuid4()}",
-                exchange="binance",
-                status="OPEN",
-                order_type='buy',
-                price=float(avg_price),
-                quantity=float(quantity_to_adopt),
-                usd_value=float(avg_price * quantity_to_adopt),
-                commission=0.0,  # Placeholder, as commissions are part of the historical price
-                commission_asset='USDT',
-                timestamp=datetime.datetime.now(datetime.timezone.utc),  # Timestamp of adoption
-                decision_context={'source': 'adoption', 'reason': 'Adopting existing position from exchange.'}
-            )
-            self.db.log_trade(new_trade)
-            logger.info(f"Successfully adopted position for {self.symbol} with trade_id {new_trade.trade_id}.")
+                new_trade = TradePoint(
+                    run_id="adopted",
+                    environment=self.environment,
+                    strategy_name="adopted",
+                    symbol=self.symbol,
+                    trade_id=f"adopted_{open_buy['id']}_{uuid.uuid4()}", # Make trade_id unique
+                    exchange="binance",
+                    status="OPEN",
+                    order_type='buy',
+                    price=float(price),
+                    quantity=float(quantity),
+                    usd_value=float(price * quantity),
+                    commission=float(open_buy['commission']),
+                    commission_asset=open_buy['commissionAsset'],
+                    timestamp=datetime.datetime.fromtimestamp(open_buy['time'] / 1000, tz=datetime.timezone.utc),
+                    exchange_order_id=str(open_buy['orderId']),
+                    binance_trade_id=int(open_buy['id']),
+                    decision_context={'source': 'adoption', 'reason': 'Adopting individual existing position from exchange.'}
+                )
+                self.db.log_trade(new_trade)
+                logger.info(f"Successfully adopted position from Binance trade {open_buy['id']} with local trade_id {new_trade.trade_id}.")
 
         except BinanceAPIException as e:
             logger.error(f"Binance API error during position adoption for {self.symbol}: {e}", exc_info=True)
