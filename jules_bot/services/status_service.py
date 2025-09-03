@@ -98,7 +98,8 @@ class StatusService:
             market_data = market_data_series.to_dict()
             current_price = Decimal(str(market_data.get('close', '0')))
 
-            open_positions_db = self.db_manager.get_open_positions(environment, bot_id) or []
+            # Fetch all open positions for the bot, not just for this specific run_id
+            open_positions_db = self.db_manager.get_open_positions(environment) or []
             open_positions_count = len(open_positions_db)
 
             positions_status = self._process_open_positions(open_positions_db, current_price)
@@ -152,7 +153,8 @@ class StatusService:
                 except InvalidOperation:
                     pass
 
-            full_trade_history = self.db_manager.get_all_trades_in_range(mode=environment, bot_id=bot_id, start_date=None) or []
+            # Get all trades for the bot's schema, not just this run, for accurate PnL
+            full_trade_history = self.db_manager.get_all_trades_in_range(mode=environment, bot_id=None, start_date=None) or []
 
             # --- PnL and Count Calculation ---
             total_realized_pnl = sum(
