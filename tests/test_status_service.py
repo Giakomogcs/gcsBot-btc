@@ -117,8 +117,9 @@ class TestStatusService(unittest.TestCase):
         # to include the full quantity and estimated sell commission, instead of using the sell_factor.
         # (52000 - 50000) * 0.1 - (52000 * 0.1 * 0.001) = 200 - 5.2 = 194.8
         self.assertAlmostEqual(float(pos1_status["unrealized_pnl"]), 194.80, places=2)
-        # Progress: (52000 - 50000) / (55000 - 50000) * 100 = 40%
-        self.assertAlmostEqual(float(pos1_status["progress_to_sell_target_pct"]), 40.0, places=2)
+        # Progress is calculated based on PnL, not price, to account for commissions.
+        # unrealized_pnl = 194.8, target_pnl = 494.5. Progress = (194.8 / 494.5) * 100 = 39.39
+        self.assertAlmostEqual(float(pos1_status["progress_to_sell_target_pct"]), 39.39, places=2)
         self.assertAlmostEqual(float(pos1_status["price_to_target"]), 3000, places=2)
         self.assertAlmostEqual(float(pos1_status["usd_to_target"]), 300, places=2)
         

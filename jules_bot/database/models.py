@@ -61,6 +61,13 @@ class Trade(Base):
     is_trailing = Column(Boolean, default=False, nullable=False)
     highest_price_since_breach = Column(Numeric(20, 8), nullable=True)
 
+    # Fields for Intelligent Trailing Stop
+    is_smart_trailing_active = Column(Boolean, default=False, nullable=False)
+    smart_trailing_activation_price = Column(Numeric(20, 8), nullable=True)
+    smart_trailing_highest_price = Column(Numeric(20, 8), nullable=True)
+    smart_trailing_activation_threshold = Column(Numeric(20, 8), nullable=True)
+
+
 class BotStatus(Base):
     __tablename__ = 'bot_status'
     id = Column(Integer, primary_key=True)

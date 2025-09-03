@@ -373,91 +373,74 @@ class TradingBot:
                     full_trade_history = self.state_manager.get_trade_history_for_run()
                     self._write_state_to_file(open_positions, current_price, wallet_balances, full_trade_history, total_portfolio_value)
 
-                    # --- SELL LOGIC (with Trailing Take-Profit) ---
+                    # --- SELL LOGIC (Intelligent Trailing Stop & Take Profit) ---
                     positions_to_sell_now = []
                     for position in open_positions:
-                        # Ensure sell_target_price is a Decimal, handle None
+                        # --- 1. Hard Take Profit Check ---
                         sell_target_price = Decimal(str(position.sell_target_price)) if position.sell_target_price is not None else Decimal('inf')
-
-                        # 1. Check if the take-profit target has been reached.
-                        # If so, trigger a partial sale and activate trailing for the remainder.
-                        if not position.is_trailing and current_price >= sell_target_price:
-                            logger.info(f"✅ Position {position.trade_id} hit target ${sell_target_price:,.2f}. Marking for partial sale and activating trailing stop.")
-                            
-                            # Mark the position for a partial sell (quantity determined by sell_factor).
+                        if current_price >= sell_target_price:
+                            logger.info(f"✅ TAKE PROFIT HIT for position {position.trade_id} at ${current_price:,.2f} (Target: ${sell_target_price:,.2f}). Marking for sale.")
                             positions_to_sell_now.append(position)
-                            
-                            # Activate trailing for the remainder of the position.
-                            self.state_manager.update_trade_trailing_state(
+                            continue # Position will be sold, no need for further checks this cycle
+
+                        # --- 2. Intelligent Trailing Stop Logic ---
+                        entry_price = Decimal(str(position.price))
+                        break_even_price = self.strategy_rules.calculate_break_even_price(entry_price)
+
+                        # Calculate current PnL to decide on trailing stop actions
+                        # Note: This is a gross PnL check for activation; the final sale check should use break-even.
+                        current_pnl_percent = (current_price / entry_price) - Decimal('1')
+
+                        # A. Activate Trailing Stop
+                        if not position.is_smart_trailing_active and current_pnl_percent >= self.strategy_rules.smart_trailing_activation_profit_percent:
+                            logger.info(f"🚀 SMART TRAILING ACTIVATED for {position.trade_id} at {current_pnl_percent:.2%} profit.")
+                            self.state_manager.update_trade_smart_trailing_state(
                                 trade_id=position.trade_id,
-                                is_trailing=True,
-                                highest_price=current_price
+                                is_active=True,
+                                highest_price=current_price,
+                                activation_price=current_price
                             )
-                            # Update the in-memory object for the current cycle to reflect the new state.
-                            position.is_trailing = True
-                            position.highest_price_since_breach = current_price
-                            
-                            # This position has been handled for this cycle.
-                            continue
+                            # Update in-memory object for this cycle
+                            position.is_smart_trailing_active = True
+                            position.smart_trailing_highest_price = current_price
+                            continue # Activated now, will be monitored next cycle
 
+                        # B. Monitor Active Trailing Stop
+                        if position.is_smart_trailing_active:
+                            highest_price = Decimal(str(position.smart_trailing_highest_price)) if position.smart_trailing_highest_price is not None else current_price
 
-                        # 2. Handle positions that are already trailing
-                        if position.is_trailing:
-                            # Ensure highest_price_since_breach is a Decimal
-                            highest_price = Decimal(str(position.highest_price_since_breach)) if position.highest_price_since_breach is not None else current_price
-
-                            # Update the highest price if a new peak is reached
-                            if current_price > highest_price:
-                                logger.info(f"Trailing position {position.trade_id} reached new peak: ${current_price:,.2f}")
-                                self.state_manager.update_trade_trailing_state(
+                            # B.1 Deactivate/Pause if position becomes unprofitable
+                            if current_price < break_even_price:
+                                logger.warning(f"PAUSING SMART TRAILING for {position.trade_id}. Price ${current_price:,.2f} fell below break-even ${break_even_price:,.2f}.")
+                                self.state_manager.update_trade_smart_trailing_state(
                                     trade_id=position.trade_id,
-                                    is_trailing=True,
+                                    is_active=False,
+                                    highest_price=None,
+                                    activation_price=None
+                                )
+                                position.is_smart_trailing_active = False
+                                continue
+
+                            # B.2 Update highest price if new peak is reached
+                            if current_price > highest_price:
+                                self.state_manager.update_trade_smart_trailing_state(
+                                    trade_id=position.trade_id,
+                                    is_active=True,
                                     highest_price=current_price
                                 )
-                                highest_price = current_price # Update in-memory object
+                                position.smart_trailing_highest_price = current_price
+                                highest_price = current_price # Update for current cycle's logic
+                                logger.info(f"📈 New peak for smart trailing on {position.trade_id}: ${highest_price:,.2f}")
 
-                            # Calculate the stop-loss price
-                            trailing_stop_price = highest_price * (Decimal('1') - self.strategy_rules.trailing_stop_percent)
+                            # B.3 Check if stop is triggered
+                            stop_price = highest_price * (Decimal('1') - self.strategy_rules.trailing_stop_percent)
+                            logger.debug(f"Position {position.trade_id} [Smart Trailing]: Highest Price=${highest_price:,.2f}, Stop Price=${stop_price:,.2f}, Current Price=${current_price:,.2f}")
 
-                            logger.debug(f"Position {position.trade_id}: Highest Price=${highest_price:,.2f}, Stop Price=${trailing_stop_price:,.2f}, Current Price=${current_price:,.2f}")
+                            if current_price <= stop_price:
+                                logger.info(f"🚨 SMART TRAILING STOP TRIGGERED for {position.trade_id} at ${current_price:,.2f} (Stop: ${stop_price:,.2f}). Marking for sale.")
+                                positions_to_sell_now.append(position)
 
-                            # Check if the stop-loss is triggered
-                            if current_price <= trailing_stop_price:
-                                # Stop price hit. Now, check if the sale would be profitable.
-                                break_even_price = self.strategy_rules.calculate_break_even_price(
-                                    purchase_price=Decimal(str(position.price))
-                                )
-                                logger.info(
-                                    f"🚨 TRAILING STOP TRIGGERED for position {position.trade_id}. "
-                                    f"Current Price: ${current_price:,.2f}, "
-                                    f"Stop Price: ${trailing_stop_price:,.2f}, "
-                                    f"Break-Even Price: ${break_even_price:,.2f}."
-                                )
-
-                                # Final safety check: Use the break-even price to ensure the sale covers
-                                # the entry price plus all commissions, as per the user's final requirement.
-                                if current_price < break_even_price:
-                                    logger.warning(
-                                        f"Trailing stop for {position.trade_id} would not be profitable. "
-                                        f"(Sell Price: ${current_price:,.2f} < Break-Even Price: ${break_even_price:,.2f}). "
-                                        f"Resetting trailing state instead of selling."
-                                    )
-                                    self.state_manager.update_trade_trailing_state(
-                                        trade_id=position.trade_id,
-                                        is_trailing=False,
-                                        highest_price=None
-                                    )
-                                    # Update in-memory object for this cycle
-                                    position.is_trailing = False
-                                    position.highest_price_since_breach = None
-                                else:
-                                    logger.info(
-                                        f"Trailing stop triggered for position {position.trade_id}. Price ${current_price:,.2f} <= Stop "
-                                        f"${trailing_stop_price:,.2f}. Price is above break-even. Marking for sale."
-                                    )
-                                    positions_to_sell_now.append(position)
-
-                    # 3. Execute sales for triggered positions
+                    # 3. Execute sales for all triggered positions
                     sell_executed_in_cycle = False
                     if positions_to_sell_now:
                         logger.info(f"Found {len(positions_to_sell_now)} positions meeting sell criteria.")

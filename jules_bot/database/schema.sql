@@ -19,3 +19,7 @@ CREATE TABLE IF NOT EXISTS trades (
 
 -- To add this to an existing SQLite database, you would run:
 -- ALTER TABLE trades ADD COLUMN is_legacy_hold BOOLEAN NOT NULL DEFAULT 0;
+ALTER TABLE trades ADD COLUMN is_smart_trailing_active BOOLEAN NOT NULL DEFAULT 0;
+ALTER TABLE trades ADD COLUMN smart_trailing_activation_price REAL;
+ALTER TABLE trades ADD COLUMN smart_trailing_highest_price REAL;
+ALTER TABLE trades ADD COLUMN smart_trailing_activation_threshold REAL;
