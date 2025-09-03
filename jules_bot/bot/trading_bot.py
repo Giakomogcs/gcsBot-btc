@@ -12,6 +12,7 @@ from decimal import Decimal, getcontext, InvalidOperation
 from jules_bot.utils.logger import logger
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.bot.account_manager import AccountManager
+from jules_bot.bot.synchronization_manager import SynchronizationManager
 from jules_bot.core_logic.state_manager import StateManager
 from jules_bot.core_logic.trader import Trader
 from jules_bot.core_logic.strategy_rules import StrategyRules
@@ -126,6 +127,13 @@ class TradingBot:
         self.account_manager = AccountManager(self.trader.client)
         self.strategy_rules = StrategyRules(config_manager)
         self.capital_manager = CapitalManager(config_manager, self.strategy_rules)
+        self.synchronization_manager = SynchronizationManager(
+            binance_client=self.trader.client,
+            db_manager=self.db_manager,
+            symbol=self.symbol,
+            strategy_rules=self.strategy_rules,
+            environment=self.mode
+        )
 
         equity_recalc_interval = int(config_manager.get('APP', 'equity_recalculation_interval', fallback=300))
         quote_asset = "USDT"
@@ -292,7 +300,8 @@ class TradingBot:
             self.shutdown()
             return
 
-        self.state_manager.sync_holdings_with_binance(self.account_manager, self.strategy_rules, self.trader)
+        # Use the new, robust synchronization manager at startup
+        self.synchronization_manager.run_full_sync()
 
         # Perform an initial target recalculation after sync and before starting the main loop
         logger.info("Performing initial recalculation of sell targets before starting main loop...")
