@@ -658,14 +658,35 @@ class TUIApp(App):
         chart.refresh()
 
     def process_log_line(self, line: str) -> None:
+        """Processes a log line, applying default or user-specified filters."""
         try:
             log_entry = json.loads(line)
-            level, message = log_entry.get("level", "INFO"), log_entry.get("message", "")
-            if self.log_filter.lower() in message.lower() or self.log_filter.upper() in level:
+            level = log_entry.get("level", "INFO")
+            message = log_entry.get("message", "")
+
+            show_log = False
+            # If the user has an active filter, it takes precedence.
+            if self.log_filter:
+                if self.log_filter.lower() in message.lower() or self.log_filter.upper() in level:
+                    show_log = True
+            # Otherwise, apply the default filter to reduce noise.
+            else:
+                if level in ["WARNING", "ERROR", "CRITICAL"]:
+                    show_log = True
+                elif level == "INFO":
+                    # Keywords for important INFO messages
+                    keywords = ["sell", "buy", "comprou", "vendeu", "position", "trigger", "shutdown", "started"]
+                    if any(keyword in message.lower() for keyword in keywords):
+                        show_log = True
+            
+            if show_log:
                 color = {"INFO": "green", "WARNING": "yellow", "ERROR": "red", "CRITICAL": "bold red"}.get(level, "white")
                 self.log_display.write(f"[[{color}]{level}[/{color}]] {message}")
+
         except json.JSONDecodeError:
-            if self.log_filter == "": self.log_display.write(f"[dim]{line.strip()}[/dim]")
+            # For non-JSON lines (e.g., from docker-compose), only show if there's no filter.
+            if not self.log_filter:
+                self.log_display.write(f"[dim]{line.strip()}[/dim]")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "force_buy_button":

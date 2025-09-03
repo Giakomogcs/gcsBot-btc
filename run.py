@@ -145,7 +145,7 @@ def run_bot_in_container(bot_name: str, mode: str) -> tuple[Optional[str], int]:
     # Adicionando o volume mount (-v) para que o arquivo de status seja visível no host
     # Garante que o diretório de arquivos da TUI exista no host
     tui_files_dir = os.path.join(project_root, ".tui_files")
-    os.makedirs(tui_files_dir, exist_ok=True)
+    os.makedirs(tui_files_dir, mode=0o777, exist_ok=True)
 
     # Find a free port for the bot's API
     try:

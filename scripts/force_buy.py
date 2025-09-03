@@ -29,7 +29,7 @@ def main(
         print("❌ Error: The amount to buy must be at least 1.0 USD.")
         raise typer.Exit(code=1)
 
-    base_url = f"http://localhost:{bot.host_port}/api"
+    base_url = f"http://host.docker.internal:{bot.host_port}/api"
     endpoint = f"{base_url}/force_buy"
     payload = {"amount_usd": usd_amount}
 

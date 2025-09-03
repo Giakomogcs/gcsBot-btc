@@ -278,7 +278,8 @@ class StatusService:
                 buy_quantity=quantity
             )
 
-            progress_pct = _calculate_progress_pct(current_price, entry_price, sell_target_price)
+            # Calculate progress based on PnL, which is more intuitive than price.
+            progress_pct = _calculate_progress_pct(unrealized_pnl, Decimal('0'), target_pnl)
             price_to_target = sell_target_price - current_price
             usd_to_target = price_to_target * quantity
 

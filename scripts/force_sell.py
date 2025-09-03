@@ -33,7 +33,7 @@ def main(
         print("❌ Error: The percentage must be between 1.0 and 100.0.")
         raise typer.Exit(code=1)
 
-    base_url = f"http://localhost:{bot.host_port}/api"
+    base_url = f"http://host.docker.internal:{bot.host_port}/api"
     endpoint = f"{base_url}/force_sell"
     payload = {"trade_id": trade_id, "percentage": percentage}
 

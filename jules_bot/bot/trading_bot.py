@@ -379,18 +379,25 @@ class TradingBot:
                         # Ensure sell_target_price is a Decimal, handle None
                         sell_target_price = Decimal(str(position.sell_target_price)) if position.sell_target_price is not None else Decimal('inf')
 
-                        # 1. Check if the take-profit target has been reached to ACTIVATE trailing
+                        # 1. Check if the take-profit target has been reached.
+                        # If so, trigger a partial sale and activate trailing for the remainder.
                         if not position.is_trailing and current_price >= sell_target_price:
-                            logger.info(f"Position {position.trade_id} hit target ${sell_target_price:,.2f}. Activating trailing stop.")
+                            logger.info(f"✅ Position {position.trade_id} hit target ${sell_target_price:,.2f}. Marking for partial sale and activating trailing stop.")
+                            
+                            # Mark the position for a partial sell (quantity determined by sell_factor).
+                            positions_to_sell_now.append(position)
+                            
+                            # Activate trailing for the remainder of the position.
                             self.state_manager.update_trade_trailing_state(
                                 trade_id=position.trade_id,
                                 is_trailing=True,
                                 highest_price=current_price
                             )
-                            # Update the in-memory object for the current cycle
+                            # Update the in-memory object for the current cycle to reflect the new state.
                             position.is_trailing = True
                             position.highest_price_since_breach = current_price
-                            # Do not sell yet, let the trailing logic handle it from now on
+                            
+                            # This position has been handled for this cycle.
                             continue
 
 
@@ -416,12 +423,19 @@ class TradingBot:
 
                             # Check if the stop-loss is triggered
                             if current_price <= trailing_stop_price:
-                                # Final safety check: Use the break-even price to ensure the sale covers
-                                # the entry price plus all commissions, as per the user's final requirement.
+                                # Stop price hit. Now, check if the sale would be profitable.
                                 break_even_price = self.strategy_rules.calculate_break_even_price(
                                     purchase_price=Decimal(str(position.price))
                                 )
+                                logger.info(
+                                    f"🚨 TRAILING STOP TRIGGERED for position {position.trade_id}. "
+                                    f"Current Price: ${current_price:,.2f}, "
+                                    f"Stop Price: ${trailing_stop_price:,.2f}, "
+                                    f"Break-Even Price: ${break_even_price:,.2f}."
+                                )
 
+                                # Final safety check: Use the break-even price to ensure the sale covers
+                                # the entry price plus all commissions, as per the user's final requirement.
                                 if current_price < break_even_price:
                                     logger.warning(
                                         f"Trailing stop for {position.trade_id} would not be profitable. "
