@@ -203,27 +203,29 @@ class CapitalManager:
         logger.info(f"No difficulty applied. Consecutive buys ({consecutive_buys}) below threshold ({self.consecutive_buys_threshold}).")
         return Decimal('0')
 
-    def get_capital_allocation(self, portfolio_value: Decimal, open_positions: list) -> dict:
+    def get_capital_allocation(self, open_positions: list, free_usdt_balance: Decimal, total_btc_balance: Decimal, current_btc_price: Decimal) -> dict:
         """
-        Calculates the allocation of capital into Working Capital and Strategic Reserve.
+        Calculates a clearer breakdown of capital allocation based on live data.
         """
-        working_capital_total = portfolio_value * self.working_capital_percentage
+        # BTC in open positions is the sum of quantities from all open trades
+        btc_in_open_positions = sum(Decimal(pos.quantity) for pos in open_positions)
 
-        # Calculate used capital based on the entry cost of open positions
-        used_capital = sum(Decimal(pos.usd_value) for pos in open_positions)
+        # Used Capital is the current market value of the BTC in those open positions
+        used_capital_usd = btc_in_open_positions * current_btc_price
 
-        free_capital = working_capital_total - used_capital
-        if free_capital < 0:
-            free_capital = Decimal('0')
+        # Free Capital is the available USDT in the wallet
+        free_capital_usd = free_usdt_balance
 
-        # Strategic reserve is the portion of the total portfolio not allocated to working capital
-        strategic_reserve = portfolio_value - working_capital_total
-        if strategic_reserve < 0:
-            strategic_reserve = Decimal('0')
+        # Working Capital is the total capital actively managed by the bot
+        working_capital_total_usd = used_capital_usd + free_capital_usd
+
+        # Strategic Reserve is the value of any BTC held that is NOT in an open position
+        strategic_reserve_btc = total_btc_balance - btc_in_open_positions
+        strategic_reserve_usd = strategic_reserve_btc * current_btc_price
 
         return {
-            "working_capital_total": working_capital_total,
-            "working_capital_used": used_capital,
-            "working_capital_free": free_capital,
-            "strategic_reserve": strategic_reserve
+            "working_capital_total": working_capital_total_usd,
+            "working_capital_used": used_capital_usd,
+            "working_capital_free": free_capital_usd,
+            "strategic_reserve": strategic_reserve_usd
         }

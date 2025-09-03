@@ -170,9 +170,12 @@ class StatusService:
             total_trades_count = len(trade_history_dicts)
 
             # --- Capital Allocation Calculation ---
+            total_btc_balance = next((bal['total'] for bal in wallet_balances if bal['asset'] == 'BTC'), Decimal('0'))
             capital_allocation = self.capital_manager.get_capital_allocation(
-                portfolio_value=total_wallet_usd_value,
-                open_positions=open_positions_db
+                open_positions=open_positions_db,
+                free_usdt_balance=cash_balance, # cash_balance is already the free USDT
+                total_btc_balance=total_btc_balance,
+                current_btc_price=current_price
             )
 
             bot_status_db = self.db_manager.get_bot_status(bot_id)
