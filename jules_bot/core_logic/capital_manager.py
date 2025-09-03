@@ -168,40 +168,57 @@ class CapitalManager:
         """
         Calculates a progressive difficulty factor based on consecutive buys.
         The factor is a Decimal percentage that makes buying harder.
+        - Resets to 0 if there's a sell or if there are no trades in the timeout period.
+        - After a threshold of consecutive buys, a base difficulty is applied.
+        - For each subsequent buy, the difficulty increases.
         """
-        if not self.use_dynamic_capital or not trade_history:
+        if not self.use_dynamic_capital:
+            return Decimal('0')
+
+        if not trade_history:
+            logger.info("No recent trades found. Difficulty factor is 0.")
             return Decimal('0')
 
         logger.info(f"Calculating difficulty factor based on {len(trade_history)} trades in the last {self.difficulty_reset_timeout_hours} hours.")
-        # Sort trades by timestamp, most recent first
+
+        # Sort trades by timestamp, most recent first, to correctly count the current streak
         sorted_trades = sorted(trade_history, key=lambda t: t.timestamp, reverse=True)
 
         consecutive_buys = 0
         for trade in sorted_trades:
-            if trade.order_type == 'buy':
+            if trade.order_type.lower() == 'buy':
                 consecutive_buys += 1
-            elif trade.order_type == 'sell':
-                logger.info(f"Consecutive buy streak of {consecutive_buys} broken by a sell.")
-                # The streak is the number of buys since the last sell, so we stop counting.
+            elif trade.order_type.lower() == 'sell':
+                # The first non-buy trade breaks the current streak
+                logger.info(f"Consecutive buy streak broken by a recent sell. Streak was {consecutive_buys}.")
                 break
 
-        if consecutive_buys >= self.consecutive_buys_threshold:
-            # We start applying difficulty from the threshold number of buys.
-            # The number of buys *over* the threshold determines the increment.
-            additional_buys = consecutive_buys - self.consecutive_buys_threshold
+        if consecutive_buys < self.consecutive_buys_threshold:
+            logger.info(f"No difficulty applied. Consecutive buys ({consecutive_buys}) is below threshold ({self.consecutive_buys_threshold}).")
+            return Decimal('0')
 
-            additional_difficulty = Decimal(additional_buys) * self.per_buy_difficulty_increment
-            total_difficulty = self.base_difficulty_percentage + additional_difficulty
+        # --- Difficulty Calculation ---
+        # The first buy at or over the threshold triggers the base difficulty.
+        # Each buy after that adds an increment.
+        # Example: Threshold = 5.
+        # 5 buys -> additional_buys = 0. Difficulty = base.
+        # 6 buys -> additional_buys = 1. Difficulty = base + 1 * increment.
 
-            logger.info(
-                f"Difficulty applied: {total_difficulty:.4%} due to {consecutive_buys} consecutive buys "
-                f"(Threshold: {self.consecutive_buys_threshold}, Base: {self.base_difficulty_percentage:.2%}, "
-                f"Increment: {self.per_buy_difficulty_increment:.2%})"
-            )
-            return total_difficulty
+        buys_over_threshold = consecutive_buys - self.consecutive_buys_threshold
 
-        logger.info(f"No difficulty applied. Consecutive buys ({consecutive_buys}) below threshold ({self.consecutive_buys_threshold}).")
-        return Decimal('0')
+        base_difficulty = self.base_difficulty_percentage
+        additional_difficulty = Decimal(buys_over_threshold) * self.per_buy_difficulty_increment
+        total_difficulty = base_difficulty + additional_difficulty
+
+        logger.info(
+            f"Difficulty applied: {total_difficulty:.4%}. "
+            f"Streak: {consecutive_buys} buys. "
+            f"Threshold: {self.consecutive_buys_threshold}. "
+            f"Base: {base_difficulty:.2%}. "
+            f"Increment: {self.per_buy_difficulty_increment:.2%} x {buys_over_threshold} buys over threshold."
+        )
+
+        return total_difficulty
 
     def get_capital_allocation(self, open_positions: list, free_usdt_balance: Decimal, total_btc_balance: Decimal, current_btc_price: Decimal) -> dict:
         """

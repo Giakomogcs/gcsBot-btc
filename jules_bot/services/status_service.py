@@ -3,6 +3,7 @@ import os
 import re
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
+import pytz
 
 from sqlalchemy import select
 from sqlalchemy.exc import OperationalError
@@ -30,9 +31,9 @@ class StatusService:
         self.capital_manager = CapitalManager(self.config_manager, self.strategy)
 
 
-    def update_bot_status(self, bot_id: str, mode: str, reason: str, open_positions: int, portfolio_value: Decimal, market_regime: int, operating_mode: str, buy_target: Decimal, buy_progress: Decimal):
+    def update_bot_status(self, bot_id: str, mode: str, reason: str, open_positions: int, portfolio_value: Decimal, market_regime: int, operating_mode: str, buy_target: Decimal, buy_progress: Decimal, difficulty_factor: Decimal):
         """
-        Creates or updates the status of a bot in the database.
+        Creates or updates the status of a bot in the database. This is the single source of truth for the TUI.
         """
         with self.db_manager.get_db() as session:
             try:
@@ -41,6 +42,7 @@ class StatusService:
                     status = BotStatus(bot_id=bot_id, mode=mode, is_running=True)
                     session.add(status)
                 
+                # Update all status fields with the latest data from the bot's decision-making loop
                 status.last_buy_condition = reason
                 status.open_positions = int(open_positions)
                 status.portfolio_value_usd = portfolio_value
@@ -48,6 +50,7 @@ class StatusService:
                 status.operating_mode = operating_mode
                 status.buy_target = buy_target
                 status.buy_progress = buy_progress
+                status.last_difficulty_factor = difficulty_factor
                 status.is_running = True # Mark as running on update
                 
                 session.commit()
@@ -123,7 +126,7 @@ class StatusService:
             current_params = dynamic_params.parameters
 
             cash_balance = next((bal['free'] for bal in wallet_balances if bal['asset'] == 'USDT'), Decimal('0'))
-            end_date = datetime.utcnow()
+            end_date = datetime.now(pytz.utc)
             start_date = end_date - timedelta(hours=self.capital_manager.difficulty_reset_timeout_hours)
             trade_history = self.db_manager.get_all_trades_in_range(
                 mode=environment,

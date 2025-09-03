@@ -49,7 +49,7 @@ class TestCapitalManager(unittest.TestCase):
         self.config_values[('STRATEGY_RULES', 'use_dynamic_capital')] = False
         self.capital_manager = CapitalManager(self.mock_config_manager, self.mock_strategy_rules)
 
-        amount, mode, reason, _ = self.capital_manager.get_buy_order_details(
+        amount, mode, reason, _, _ = self.capital_manager.get_buy_order_details(
             market_data={},
             open_positions=[MagicMock()] * 10, # 10 open positions, which is the max
             portfolio_value=Decimal('1000'),
@@ -65,7 +65,7 @@ class TestCapitalManager(unittest.TestCase):
         """Should not buy if there is no buy signal."""
         self.mock_strategy_rules.evaluate_buy_signal.return_value = (False, "unknown", "No signal")
 
-        amount, mode, reason, _ = self.capital_manager.get_buy_order_details(
+        amount, mode, reason, _, _ = self.capital_manager.get_buy_order_details(
             market_data={},
             open_positions=[],
             portfolio_value=Decimal('1000'),
@@ -77,7 +77,7 @@ class TestCapitalManager(unittest.TestCase):
         self.assertEqual(mode, OperatingMode.PRESERVATION.name)
         # self.assertEqual(reason, "No signal")
         # Verify it was called with difficulty 0
-        self.mock_strategy_rules.evaluate_buy_signal.assert_called_with({}, 0, 0, params=self.params)
+        self.mock_strategy_rules.evaluate_buy_signal.assert_called_with({}, 0, Decimal('0'), params=self.params)
 
     def test_accumulation_mode_logic(self):
         """Should return base trade size in ACCUMULATION mode."""
@@ -87,7 +87,7 @@ class TestCapitalManager(unittest.TestCase):
 
         # This test is no longer about open positions, but about trade history.
         # Let's not check the difficulty factor here as it's tested separately.
-        amount, mode, reason, _ = self.capital_manager.get_buy_order_details(
+        amount, mode, reason, _, _ = self.capital_manager.get_buy_order_details(
             market_data={},
             open_positions=[MagicMock()] * 6, # More than max_open_positions / 4
             portfolio_value=Decimal('1000'),
@@ -98,7 +98,7 @@ class TestCapitalManager(unittest.TestCase):
 
         self.assertEqual(mode, OperatingMode.ACCUMULATION.name)
         self.assertEqual(amount, Decimal('20.00'))
-        self.mock_strategy_rules.evaluate_buy_signal.assert_called_with({}, 6, 0, params=self.params)
+        self.mock_strategy_rules.evaluate_buy_signal.assert_called_with({}, 6, Decimal('0'), params=self.params)
 
     def test_aggressive_mode_logic(self):
         """Should return multiplied trade size in AGGRESSIVE mode."""
@@ -106,7 +106,7 @@ class TestCapitalManager(unittest.TestCase):
         self.capital_manager = CapitalManager(self.mock_config_manager, self.mock_strategy_rules)
         self.mock_strategy_rules.evaluate_buy_signal.return_value = (True, "uptrend", "Strong uptrend signal")
 
-        amount, mode, reason, _ = self.capital_manager.get_buy_order_details(
+        amount, mode, reason, _, _ = self.capital_manager.get_buy_order_details(
             market_data={},
             open_positions=[MagicMock()] * 2, # 2 is less than 10/4=2.5, difficulty 0
             portfolio_value=Decimal('1000'),
@@ -116,7 +116,7 @@ class TestCapitalManager(unittest.TestCase):
 
         self.assertEqual(mode, OperatingMode.AGGRESSIVE.name)
         self.assertEqual(amount, Decimal('40.00')) # 20 * 2.0
-        self.mock_strategy_rules.evaluate_buy_signal.assert_called_with({}, 2, 0, params=self.params)
+        self.mock_strategy_rules.evaluate_buy_signal.assert_called_with({}, 2, Decimal('0'), params=self.params)
 
     def test_correction_entry_mode_logic(self):
         """Should return larger trade size for a correction entry."""
@@ -124,7 +124,7 @@ class TestCapitalManager(unittest.TestCase):
         self.capital_manager = CapitalManager(self.mock_config_manager, self.mock_strategy_rules)
         self.mock_strategy_rules.evaluate_buy_signal.return_value = (True, "downtrend", "Potential bottom signal")
 
-        amount, mode, reason, _ = self.capital_manager.get_buy_order_details(
+        amount, mode, reason, _, _ = self.capital_manager.get_buy_order_details(
             market_data={},
             open_positions=[], # 0 open positions, difficulty 0
             portfolio_value=Decimal('1000'),
@@ -134,13 +134,13 @@ class TestCapitalManager(unittest.TestCase):
 
         self.assertEqual(mode, OperatingMode.CORRECTION_ENTRY.name)
         self.assertEqual(amount, Decimal('50.00')) # 20 * 2.5
-        self.mock_strategy_rules.evaluate_buy_signal.assert_called_with({}, 0, 0, params=self.params)
+        self.mock_strategy_rules.evaluate_buy_signal.assert_called_with({}, 0, Decimal('0'), params=self.params)
 
     def test_insufficient_funds_logic(self):
         """Should not buy if free cash is less than the calculated amount."""
         self.mock_strategy_rules.evaluate_buy_signal.return_value = (True, "uptrend", "A valid signal")
 
-        amount, mode, reason, _ = self.capital_manager.get_buy_order_details(
+        amount, mode, reason, _, _ = self.capital_manager.get_buy_order_details(
             market_data={},
             open_positions=[],
             portfolio_value=Decimal('1000'),
@@ -158,7 +158,7 @@ class TestCapitalManager(unittest.TestCase):
         self.params['order_size_usd'] = Decimal('20.0')
         self.mock_strategy_rules.evaluate_buy_signal.return_value = (True, "accumulation", "A valid signal")
 
-        amount, mode, reason, _ = self.capital_manager.get_buy_order_details(
+        amount, mode, reason, _, _ = self.capital_manager.get_buy_order_details(
             market_data={},
             open_positions=[MagicMock()],
             portfolio_value=Decimal('1000'),
@@ -169,7 +169,7 @@ class TestCapitalManager(unittest.TestCase):
         self.assertEqual(amount, Decimal('0'))
         self.assertEqual(mode, OperatingMode.PRESERVATION.name)
         self.assertIn("below min trade size", reason)
-        self.mock_strategy_rules.evaluate_buy_signal.assert_called_with({}, 1, 0, params=self.params)
+        self.mock_strategy_rules.evaluate_buy_signal.assert_called_with({}, 1, Decimal('0'), params=self.params)
 
 if __name__ == '__main__':
     unittest.main()
@@ -181,8 +181,10 @@ class TestConsecutiveBuyDifficulty(unittest.TestCase):
 
         self.config_values = {
             ('STRATEGY_RULES', 'use_dynamic_capital'): True,
-            ('STRATEGY_RULES', 'consecutive_buys_threshold'): 5,
-            ('STRATEGY_RULES', 'difficulty_reset_timeout_hours'): 2,
+            ('STRATEGY_RULES', 'consecutive_buys_threshold'): '5',
+            ('STRATEGY_RULES', 'difficulty_reset_timeout_hours'): '2',
+            ('STRATEGY_RULES', 'base_difficulty_percentage'): '0.005',
+            ('STRATEGY_RULES', 'per_buy_difficulty_increment'): '0.001'
         }
         self.mock_config_manager.get.side_effect = self.get_config_value
         self.mock_config_manager.getboolean.side_effect = self.get_config_boolean_value
@@ -208,16 +210,16 @@ class TestConsecutiveBuyDifficulty(unittest.TestCase):
         return trade
 
     def test_no_difficulty_with_fewer_than_threshold_buys(self):
-        """Should have difficulty factor 0 with 5 or fewer consecutive buys."""
+        """Should have base difficulty factor with exactly 5 consecutive buys."""
         trade_history = [self.create_mock_trade('buy', i) for i in range(5)] # 5 buys
         difficulty = self.capital_manager._calculate_difficulty_factor(trade_history)
-        self.assertEqual(difficulty, 0)
+        self.assertEqual(difficulty, Decimal('0.005'))
 
     def test_difficulty_applied_after_consecutive_buys(self):
-        """Should have difficulty factor 1 after more than 5 consecutive buys."""
+        """Should have increased difficulty factor after more than 5 consecutive buys."""
         trade_history = [self.create_mock_trade('buy', i) for i in range(6)] # 6 buys
         difficulty = self.capital_manager._calculate_difficulty_factor(trade_history)
-        self.assertEqual(difficulty, 1)
+        self.assertEqual(difficulty, Decimal('0.006'))
 
     def test_difficulty_resets_after_sell(self):
         """A sell should break the streak and reset difficulty to 0."""

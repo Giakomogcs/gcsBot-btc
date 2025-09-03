@@ -6,6 +6,8 @@ import sys
 import os
 from tabulate import tabulate
 import pandas as pd
+from datetime import datetime
+import pytz
 
 # --- NÍVEL DE LOG CUSTOMIZADO PARA PERFORMANCE ---
 PERFORMANCE_LEVEL_NUM = 25
@@ -19,6 +21,18 @@ logging.Logger.performance = performance
 
 # --- FORMATADOR JSON CUSTOMIZADO ---
 class JsonFormatter(logging.Formatter):
+    _timezone = pytz.timezone('America/Sao_Paulo')
+
+    def formatTime(self, record, datefmt=None):
+        dt = datetime.fromtimestamp(record.created, tz=pytz.utc).astimezone(self._timezone)
+        if datefmt:
+            return dt.strftime(datefmt)
+
+        # This format is what the user's log shows, so let's stick to it.
+        # YYYY-MM-DD HH:MM:SS,ms
+        t = dt.strftime('%Y-%m-%d %H:%M:%S')
+        return '%s,%03d' % (t, record.msecs)
+
     def format(self, record):
         log_object = {
             "timestamp": self.formatTime(record, self.datefmt),
