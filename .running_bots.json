@@ -1,9 +1,9 @@
 [
     {
         "bot_name": "gpt-bot",
-        "container_id": "96dcf0ac35894f72a54d3198ae20e490f9a4d19344f5ff82166509eb0ef2681c",
+        "container_id": "c8db83f8eb7228695ffbc04633ac52626fb4366f9b25ce8e27c0eb8af4b7ef1a",
         "bot_mode": "test",
-        "start_time": "2025-09-03T13:37:06.053202",
+        "start_time": "2025-09-03T17:32:12.137359",
         "host_port": 8766
     }
 ]

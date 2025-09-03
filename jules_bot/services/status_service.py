@@ -303,34 +303,42 @@ class StatusService:
 
     def _process_wallet_balances(self, exchange_manager, current_price):
         wallet_balances = exchange_manager.get_account_balance() or []
-        processed_balances_dict = {
-            'BTC': {'asset': 'BTC', 'free': '0.0', 'locked': '0.0'},
-            'USDT': {'asset': 'USDT', 'free': '0.0', 'locked': '0.0'}
-        }
-        for bal in wallet_balances:
-            asset = bal.get('asset')
-            if asset in processed_balances_dict:
-                processed_balances_dict[asset] = bal
+        logger.info(f"Raw wallet balances from exchange: {wallet_balances}")
 
         processed_balances = []
-        total_usd_value = Decimal('0')
-        for asset, bal in processed_balances_dict.items():
+        total_quote_value = Decimal('0')
+
+        # Per user request, calculate value ONLY from BTC and USDT balances.
+        btc_bal = next((bal for bal in wallet_balances if bal['asset'] == 'BTC'), None)
+        usdt_bal = next((bal for bal in wallet_balances if bal['asset'] == 'USDT'), None)
+
+        # Process USDT
+        if usdt_bal:
             try:
-                free = Decimal(bal.get('free', '0'))
-                locked = Decimal(bal.get('locked', '0'))
+                free = Decimal(usdt_bal.get('free', '0'))
+                locked = Decimal(usdt_bal.get('locked', '0'))
                 total = free + locked
-
-                if asset == 'BTC':
-                    usd_value = total * current_price
-                else:
-                    usd_value = total
-
+                total_quote_value += total
                 processed_balances.append({
-                    'asset': asset, 'free': free, 'locked': locked,
-                    'total': total, 'usd_value': usd_value
+                    'asset': 'USDT', 'free': free, 'locked': locked,
+                    'total': total, 'usd_value': total
                 })
-                total_usd_value += usd_value
-            except InvalidOperation:
-                continue
+            except (InvalidOperation, TypeError) as e:
+                logger.warning(f"Could not process USDT balance: {e}")
 
-        return processed_balances, total_usd_value
+        # Process BTC
+        if btc_bal:
+            try:
+                free = Decimal(btc_bal.get('free', '0'))
+                locked = Decimal(btc_bal.get('locked', '0'))
+                total = free + locked
+                btc_usd_value = total * current_price
+                total_quote_value += btc_usd_value
+                processed_balances.append({
+                    'asset': 'BTC', 'free': free, 'locked': locked,
+                    'total': total, 'usd_value': btc_usd_value
+                })
+            except (InvalidOperation, TypeError) as e:
+                logger.warning(f"Could not process BTC balance: {e}")
+
+        return processed_balances, total_quote_value
