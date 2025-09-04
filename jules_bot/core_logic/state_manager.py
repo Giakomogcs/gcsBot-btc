@@ -106,10 +106,12 @@ class StateManager:
 
     def sync_holdings_with_binance(self, account_manager: AccountManager, strategy_rules: StrategyRules, trader):
         """
-        Adopts existing positions from Binance by synchronizing the full trade history.
-        This process is strictly read-only and will never execute trades. It ensures that
-        any purchase on the exchange not fully sold is represented as an 'OPEN' position
-        in the local database, ready for active management by the bot.
+        Synchronizes the bot's state with the exchange. It ensures that any position
+        on the exchange is accurately reflected in the local database.
+        - It uses a FIFO method to match sells to buys.
+        - Adopts new positions from the exchange that aren't in the database.
+        - Updates the status and quantity of existing positions.
+        - Closes local positions that are no longer open on the exchange.
         """
         logger.info("--- Starting State Synchronization & Position Adoption ---")
         try:
@@ -118,42 +120,38 @@ class StateManager:
                 logger.error("No symbol configured. Cannot perform sync.")
                 return
 
-            # 1. Fetch all trades from Binance and the local DB
             all_binance_trades = trader.get_all_my_trades(symbol=symbol)
+            if all_binance_trades is None:
+                logger.error("Failed to fetch trades from Binance. Aborting sync.")
+                return
+
             db_trades = self.db_manager.get_all_trades_in_range(mode=self.mode, symbol=symbol)
             db_trades_map = {t.binance_trade_id: t for t in db_trades if t.binance_trade_id}
 
             logger.info(f"Found {len(all_binance_trades)} trades on Binance and {len(db_trades_map)} in DB for {symbol}.")
 
             if not all_binance_trades:
-                logger.info("No trade history on Binance. Sync complete.")
-                # As a safety measure, ensure no positions are marked as OPEN locally
+                logger.info("No trade history on Binance. Closing any locally open positions.")
                 open_positions = self.get_open_positions()
                 for pos in open_positions:
                     logger.warning(f"Closing stale local position {pos.trade_id} as no trades exist on Binance.")
                     self.db_manager.update_trade_status(pos.trade_id, "CLOSED")
                 return
 
-            # 2. In-memory FIFO simulation to determine the true state of each position
             buys = sorted([t for t in all_binance_trades if t['isBuyer']], key=lambda t: t['time'])
             sells = sorted([t for t in all_binance_trades if not t['isBuyer']], key=lambda t: t['time'])
 
-            # Create a mutable pool of buys with their remaining quantities
             buy_pool = {
-                buy['id']: {
-                    **buy,
-                    'remaining_qty': Decimal(str(buy['qty']))
-                } for buy in buys
+                buy['id']: {**buy, 'remaining_qty': Decimal(str(buy['qty']))}
+                for buy in buys
             }
 
             for sell in sells:
                 sell_qty_to_match = Decimal(str(sell['qty']))
-                for buy_id in sorted(buy_pool.keys()): # Ensure FIFO by processing oldest buys first
+                for buy_id in sorted(buy_pool.keys()):
+                    if sell_qty_to_match <= Decimal('0'): break
                     buy = buy_pool[buy_id]
-                    if sell_qty_to_match <= Decimal(0):
-                        break
-                    if buy['remaining_qty'] <= Decimal(0):
-                        continue
+                    if buy['remaining_qty'] <= Decimal('0'): continue
 
                     matched_qty = min(sell_qty_to_match, buy['remaining_qty'])
                     buy['remaining_qty'] -= matched_qty
@@ -161,36 +159,35 @@ class StateManager:
 
             logger.info("FIFO simulation complete. Reconciling with local database...")
 
-            # 3. Reconcile Buys - Adopt or update positions
             all_prices = trader.get_all_prices()
+            binance_open_buy_ids = set()
+
             for buy_id, buy_state in buy_pool.items():
                 final_quantity = buy_state['remaining_qty']
-                is_open = final_quantity > Decimal('1e-9') # Use tolerance for float comparison
-                final_status = "OPEN" if is_open else "CLOSED"
+                is_open_on_binance = final_quantity > Decimal('1e-9')
+
+                if is_open_on_binance:
+                    binance_open_buy_ids.add(buy_id)
 
                 db_trade = db_trades_map.get(buy_id)
 
                 if db_trade:
-                    # Position exists in DB, check if update is needed
+                    # Trade exists in DB, check for updates
+                    final_status = "OPEN" if is_open_on_binance else "CLOSED"
                     if db_trade.status != final_status or not math.isclose(Decimal(str(db_trade.quantity)), final_quantity, rel_tol=1e-9):
-                        logger.info(f"Updating adopted position {db_trade.trade_id} (BinanceID: {buy_id}): Status {db_trade.status}->{final_status}, Qty {db_trade.quantity}->{final_quantity:.8f}")
-                        self.db_manager.update_trade_status_and_quantity(
-                            trade_id=db_trade.trade_id,
-                            new_status=final_status,
-                            new_quantity=float(final_quantity)
-                        )
-                elif is_open:
-                    # Position does not exist in DB and is open, must be "adopted"
-                    logger.info(f"Adopting new position from Binance (TradeID: {buy_id}). Status: {final_status}, Qty: {final_quantity:.8f}")
-                    self._create_position_from_binance_trade(buy_state, strategy_rules, all_prices, final_status)
+                        logger.info(f"Updating position {db_trade.trade_id} (BinanceID: {buy_id}): Status {db_trade.status}->{final_status}, Qty {db_trade.quantity}->{final_quantity:.8f}")
+                        self.db_manager.update_trade_status_and_quantity(db_trade.trade_id, final_status, float(final_quantity))
+                elif is_open_on_binance:
+                    # Trade is open on Binance but not in DB, so adopt it
+                    logger.info(f"Adopting new open position from Binance (TradeID: {buy_id}), Qty: {final_quantity:.8f}")
+                    self._create_position_from_binance_trade(buy_state, strategy_rules, all_prices, "OPEN")
 
-            # 4. Reconcile Sells - Ensure history is complete
-            db_sells = {t.binance_trade_id: t for t in db_trades if t.order_type == 'sell' and t.binance_trade_id}
-            for sell_trade_data in sells:
-                if sell_trade_data['id'] not in db_sells:
-                    logger.info(f"Adding missing historical SELL record to DB (BinanceID: {sell_trade_data['id']})")
-                    # This sell has no buy link in our system, log it for history
-                    self._create_sell_record_from_sync_unlinked(sell_trade_data)
+            # Close any local positions that are no longer considered open on Binance
+            locally_open_trades = self.get_open_positions()
+            for local_trade in locally_open_trades:
+                if local_trade.binance_trade_id and local_trade.binance_trade_id not in binance_open_buy_ids:
+                    logger.warning(f"Closing local-only position {local_trade.trade_id} (BinanceID: {local_trade.binance_trade_id}) as it's no longer open on the exchange.")
+                    self.db_manager.update_trade_status(local_trade.trade_id, "CLOSED")
 
             logger.info("--- State Synchronization & Position Adoption Finished ---")
         except Exception as e:
@@ -349,6 +346,11 @@ class StateManager:
         regime_df = sa_instance.transform(features_df)
         if not regime_df.empty:
             current_regime = int(regime_df['market_regime'].iloc[-1])
+
+        # If the regime is undefined, we cannot determine the correct parameters.
+        if current_regime == -1:
+            logger.warning("Cannot recalculate targets because market regime is undefined (-1). Skipping.")
+            return
 
         logger.info(f"Recalculating targets based on current market regime: {current_regime}")
 

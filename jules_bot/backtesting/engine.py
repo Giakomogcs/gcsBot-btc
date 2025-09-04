@@ -17,6 +17,16 @@ from jules_bot.services.trade_logger import TradeLogger
 
 getcontext().prec = 28
 
+class BacktestTrade:
+    """A simple class to mimic the structure of a database Trade object for backtesting."""
+    def __init__(self, **kwargs):
+        self.timestamp = None
+        self.order_type = None
+        self.__dict__.update(kwargs)
+
+    def to_dict(self):
+        return self.__dict__
+
 class Backtester:
     def __init__(self, db_manager: PostgresManager, days: int = None, start_date: str = None, end_date: str = None):
         self.run_id = f"backtest_{uuid.uuid4()}"
@@ -54,7 +64,7 @@ class Backtester:
             symbol=symbol
         )
         self.strategy_rules = StrategyRules(config_manager)
-        self.capital_manager = CapitalManager(config_manager, self.strategy_rules)
+        self.capital_manager = CapitalManager(config_manager, self.strategy_rules, db_manager=self.db_manager)
 
         # --- Dynamic Strategy Components ---
         self.dynamic_params = DynamicParameters(config_manager)
@@ -141,12 +151,13 @@ class Backtester:
                             'commission_asset': "USDT", 'timestamp': current_time, 'decision_context': candle.to_dict(),
                             'commission_usd': sell_result.get('commission_usd', Decimal('0')), 'realized_pnl_usd': realized_pnl_usd
                         }
-                        all_trades_for_run.append(trade_data)
+                        all_trades_for_run.append(BacktestTrade(**trade_data))
                         del open_positions[trade_id]
 
             # BUY LOGIC
             market_data = candle.to_dict()
-            recent_trades_for_difficulty = [t for t in all_trades_for_run if t['timestamp'] <= current_time]
+            # The list comprehension now correctly filters BacktestTrade objects
+            recent_trades_for_difficulty = [t for t in all_trades_for_run if t.timestamp <= current_time]
 
             buy_amount_usdt, op_mode, reason, _, diff_factor = self.capital_manager.get_buy_order_details(
                 market_data=market_data, open_positions=list(open_positions.values()),
@@ -178,7 +189,7 @@ class Backtester:
                         'decision_context': decision_context_buy, 'sell_target_price': sell_target_price,
                         'commission_usd': buy_result.get('commission_usd', Decimal('0'))
                     }
-                    all_trades_for_run.append(trade_data)
+                    all_trades_for_run.append(BacktestTrade(**trade_data))
 
         self._log_trades_to_db(all_trades_for_run)
         self._generate_and_save_summary(open_positions, portfolio_history)
@@ -188,7 +199,8 @@ class Backtester:
         if not trades:
             return
         logger.info(f"Logging {len(trades)} trades from backtest run to database...")
-        for trade_data in trades:
+        for trade in trades:
+            trade_data = trade.to_dict() # Convert BacktestTrade object to dictionary
             if trade_data['status'] == 'OPEN':
                 self.trade_logger.log_trade(trade_data)
             else: # status is 'CLOSED'

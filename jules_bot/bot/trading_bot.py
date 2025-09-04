@@ -125,7 +125,7 @@ class TradingBot:
         self.state_manager = StateManager(mode=self.mode, bot_id=self.run_id, db_manager=self.db_manager, feature_calculator=self.feature_calculator)
         self.account_manager = AccountManager(self.trader.client)
         self.strategy_rules = StrategyRules(config_manager)
-        self.capital_manager = CapitalManager(config_manager, self.strategy_rules)
+        self.capital_manager = CapitalManager(config_manager, self.strategy_rules, self.db_manager)
 
         equity_recalc_interval = int(config_manager.get('APP', 'equity_recalculation_interval', fallback=300))
         quote_asset = "USDT"
@@ -343,6 +343,12 @@ class TradingBot:
                                 logger.warning("Could not determine market regime from candle.")
                         except Exception as e:
                             logger.error(f"Error getting market regime: {e}", exc_info=True)
+
+                    # If regime is -1 (undefined), log it and skip to the next cycle
+                    if current_regime == -1:
+                        logger.warning("Market regime is -1 (undefined). Skipping buy/sell logic for this cycle.")
+                        time.sleep(10) # Wait before retrying
+                        continue
 
                     self.dynamic_params.update_parameters(current_regime)
                     current_params = self.dynamic_params.parameters

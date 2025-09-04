@@ -17,13 +17,17 @@ class OperatingMode(Enum):
     CORRECTION_ENTRY = auto()
     MONITORING = auto()
 
+from jules_bot.database.postgres_manager import PostgresManager
+
+
 class CapitalManager:
     """
     Manages capital allocation, determining buy amounts and strategy based on market conditions.
     """
-    def __init__(self, config_manager: ConfigManager, strategy_rules: StrategyRules):
+    def __init__(self, config_manager: ConfigManager, strategy_rules: StrategyRules, db_manager: "PostgresManager | None" = None):
         self.config_manager = config_manager
         self.strategy_rules = strategy_rules
+        self.db_manager = db_manager
 
         # Load parameters using the safe getter
         self.min_trade_size = self._safe_get_decimal('TRADING_STRATEGY', 'min_trade_size_usdt', '10.0')
@@ -181,14 +185,29 @@ class CapitalManager:
 
         logger.info(f"Calculating difficulty factor based on {len(trade_history)} trades in the last {self.difficulty_reset_timeout_hours} hours.")
 
-        # Sort trades by timestamp, most recent first, to correctly count the current streak
-        sorted_trades = sorted(trade_history, key=lambda t: t.timestamp, reverse=True)
+        # Sort trades by timestamp, most recent first.
+        # This now handles both dicts from the backtester and objects from live trading.
+        def get_timestamp(trade):
+            if isinstance(trade, dict):
+                return trade.get('timestamp')
+            return getattr(trade, 'timestamp', None)
+
+        # Filter out trades that don't have a timestamp
+        trade_history = [t for t in trade_history if get_timestamp(t) is not None]
+        sorted_trades = sorted(trade_history, key=get_timestamp, reverse=True)
+
 
         consecutive_buys = 0
         for trade in sorted_trades:
-            if trade.order_type.lower() == 'buy':
+            order_type = ''
+            if isinstance(trade, dict):
+                order_type = trade.get('order_type', '').lower()
+            else:
+                order_type = getattr(trade, 'order_type', '').lower()
+
+            if order_type == 'buy':
                 consecutive_buys += 1
-            elif trade.order_type.lower() == 'sell':
+            elif order_type == 'sell':
                 # The first non-buy trade breaks the current streak
                 logger.info(f"Consecutive buy streak broken by a recent sell. Streak was {consecutive_buys}.")
                 break
