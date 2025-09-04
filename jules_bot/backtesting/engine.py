@@ -14,18 +14,25 @@ from jules_bot.utils.logger import logger
 from jules_bot.core.schemas import TradePoint
 from jules_bot.research.feature_engineering import add_all_features
 from jules_bot.services.trade_logger import TradeLogger
+from jules_bot.core_logic.state_manager import StateManager
+from jules_bot.bot.unified_logic import UnifiedTradingLogic
 
 getcontext().prec = 28
 
-class BacktestTrade:
-    """A simple class to mimic the structure of a database Trade object for backtesting."""
-    def __init__(self, **kwargs):
-        self.timestamp = None
-        self.order_type = None
-        self.__dict__.update(kwargs)
+class MockPortfolioManager:
+    """A mock portfolio manager for backtesting that mimics LivePortfolioManager."""
+    def __init__(self, mock_trader, state_manager):
+        self.mock_trader = mock_trader
+        self.state_manager = state_manager
+        self.quote_asset = "USDT"
 
-    def to_dict(self):
-        return self.__dict__
+    def get_total_portfolio_value(self, current_price: Decimal, force_recalculation: bool = False) -> Decimal:
+        cash_balance = self.mock_trader.get_account_balance(asset=self.quote_asset)
+        open_positions = self.state_manager.get_open_positions()
+        open_positions_value = sum(
+            Decimal(p.quantity) * current_price for p in open_positions
+        )
+        return cash_balance + open_positions_value
 
 class Backtester:
     def __init__(self, db_manager: PostgresManager, days: int = None, start_date: str = None, end_date: str = None):
@@ -65,15 +72,29 @@ class Backtester:
         )
         self.strategy_rules = StrategyRules(config_manager)
         self.capital_manager = CapitalManager(config_manager, self.strategy_rules, db_manager=self.db_manager)
-
-        # --- Dynamic Strategy Components ---
         self.dynamic_params = DynamicParameters(config_manager)
-        
-        logger.info("Initializing the Situational Awareness model...")
         self.sa_model = SituationalAwareness()
-        
         self.feature_data = self.sa_model.transform(self.feature_data)
-        logger.info("Market regimes calculated for the entire backtest period.")
+        
+        # Use the real StateManager
+        self.state_manager = StateManager(mode='backtest', bot_id=self.run_id, db_manager=self.db_manager, feature_calculator=None) # No live feature calculator
+        
+        # Use the mock portfolio manager
+        self.mock_portfolio_manager = MockPortfolioManager(self.mock_trader, self.state_manager)
+
+        # Instantiate the unified logic engine
+        self.unified_logic = UnifiedTradingLogic(
+            bot_id=self.run_id,
+            mode='backtest',
+            trader=self.mock_trader,
+            state_manager=self.state_manager,
+            capital_manager=self.capital_manager,
+            strategy_rules=self.strategy_rules,
+            dynamic_params=self.dynamic_params,
+            sa_instance=self.sa_model,
+            portfolio_manager=self.mock_portfolio_manager,
+            db_manager=self.db_manager
+        )
 
     def run(self):
         logger.info(f"--- Starting backtest run {self.run_id} ---")
@@ -83,194 +104,35 @@ class Backtester:
         strategy_name = config_manager.get('APP', 'strategy_name', fallback='default_strategy')
         min_trade_size = Decimal(config_manager.get('TRADING_STRATEGY', 'min_trade_size_usdt', fallback='10.0'))
 
-        open_positions = {}
         portfolio_history = []
-        all_trades_for_run = []
 
+        # The Backtester now iterates through the data and calls the unified logic,
+        # just like the live bot does.
         for current_time, candle in self.feature_data.iterrows():
-            current_price = Decimal(str(candle['close']))
-            self.mock_trader.set_current_time_and_price(current_time, current_price)
+            self.mock_trader.set_current_time_and_price(current_time, candle['close'])
+            
+            # The unified logic requires the features for the current candle,
+            # but also the historical data for some indicators. We pass a slice
+            # of the dataframe up to the current point in time.
+            current_data_slice = self.feature_data.loc[:current_time]
+            
+            # Run the unified trading cycle
+            cycle_results = self.unified_logic.run_trading_cycle(current_data_slice)
 
-            current_regime = candle.get('market_regime', -1)
-            self.dynamic_params.update_parameters(int(current_regime))
-            current_params = self.dynamic_params.parameters
+            # Record portfolio value for this timestep
+            if cycle_results:
+                _, _, _, _, portfolio_val = cycle_results
+                portfolio_history.append(portfolio_val)
 
-            cash_balance = self.mock_trader.get_account_balance()
-            current_open_positions_value = sum(pos['quantity'] * current_price for pos in open_positions.values())
-            total_portfolio_value = cash_balance + current_open_positions_value
-            portfolio_history.append(total_portfolio_value)
-
-            positions_to_sell_now = []
-            for trade_id, position in list(open_positions.items()):
-                sell_target_price = position.get('sell_target_price', Decimal('inf'))
-                if current_price >= sell_target_price:
-                    positions_to_sell_now.append(position)
-                    continue
-
-                entry_price = position['price']
-
-                # Calculate the current net unrealized PnL for the position
-                net_unrealized_pnl = self.strategy_rules.calculate_net_unrealized_pnl(
-                    entry_price=entry_price,
-                    current_price=current_price,
-                    total_quantity=position['quantity'],
-                    buy_commission_usd=position.get('commission_usd', Decimal('0'))
-                )
-
-                # --- Final Genius Trailing Stop Logic with Reset ---
-
-                is_profit_lock_active = position.get('is_profit_lock_active', False)
-
-                # 1. If profit lock is not active, check for activation.
-                if not is_profit_lock_active:
-                    if net_unrealized_pnl >= self.strategy_rules.trailing_stop_profit:
-                        position['is_profit_lock_active'] = True
-                        # On activation, calculate and store the break-even price.
-                        break_even_price = self.strategy_rules.calculate_break_even_price(position['price'])
-                        position['break_even_price'] = break_even_price
-                        # Set the initial stop-loss at the break-even price.
-                        position['stop_loss_price'] = break_even_price
-                        logger.info(f"Profit lock activated for trade {trade_id}. Initial stop set at break-even price: {break_even_price:.4f}")
-
-                # 2. If profit lock IS active, perform trailing logic.
-                else:
-                    # Update the highest price seen since the buy.
-                    position['highest_price_since_buy'] = max(
-                        position.get('highest_price_since_buy', position['price']),
-                        current_price
-                    )
-
-                    # Calculate the candidate stop price based on the trail percentage from the peak.
-                    trail_percentage = self.strategy_rules.dynamic_trail_percentage
-                    candidate_stop_price = position['highest_price_since_buy'] * (Decimal('1') - trail_percentage)
-
-                    # The stop price cannot be lower than the break-even price.
-                    candidate_stop_price = max(candidate_stop_price, position['break_even_price'])
-
-                    # The stop price only ever moves up.
-                    current_stop_price = position.get('stop_loss_price', Decimal('0'))
-                    if candidate_stop_price > current_stop_price:
-                        position['stop_loss_price'] = candidate_stop_price
-                        logger.debug(f"Trade {trade_id}: Stop loss trailed up to {candidate_stop_price:.4f}")
-
-                # 3. Check for Sell or Reset condition.
-                final_stop_price = position.get('stop_loss_price')
-                if is_profit_lock_active and final_stop_price and current_price <= final_stop_price:
-                    # Final check: would this sale be profitable?
-                    quantity_to_sell = position['quantity'] * self.strategy_rules.sell_factor
-                    pnl_at_sell = self.strategy_rules.calculate_realized_pnl(
-                        buy_price=position['price'], sell_price=current_price, quantity_sold=quantity_to_sell,
-                        buy_commission_usd=position.get('commission_usd', Decimal('0')),
-                        sell_commission_usd=(current_price * quantity_to_sell * self.strategy_rules.commission_rate),
-                        buy_quantity=position['quantity']
-                    )
-
-                    if pnl_at_sell >= 0:
-                        logger.info(f"Trailing Stop SELL triggered for trade {trade_id}. Price {current_price:.2f} <= Stop {final_stop_price:.2f}. PnL: ${pnl_at_sell:.2f}")
-                        positions_to_sell_now.append(position)
-                    else:
-                        # "Never sell at a loss" rule.
-                        logger.warning(f"Trailing Stop RESET for trade {trade_id}. Stop {final_stop_price:.2f} was breached at price {current_price:.2f}, but PnL would be negative (${pnl_at_sell:.2f}). Resetting profit lock.")
-                        position['is_profit_lock_active'] = False
-                        position['stop_loss_price'] = None
-                        position['break_even_price'] = None
-
-            if positions_to_sell_now:
-                for position in positions_to_sell_now:
-                    trade_id = position['trade_id']
-                    original_quantity = position['quantity']
-                    sell_quantity = original_quantity * strategy_rules.sell_factor
-
-                    success, sell_result = self.mock_trader.execute_sell({'quantity': sell_quantity}, self.run_id, candle.to_dict())
-                    if success:
-                        realized_pnl_usd = strategy_rules.calculate_realized_pnl(
-                            buy_price=position['price'], sell_price=sell_result['price'], quantity_sold=sell_result['quantity'],
-                            buy_commission_usd=position['commission_usd'], sell_commission_usd=sell_result.get('commission_usd', Decimal('0')),
-                            buy_quantity=position['quantity']
-                        )
-                        hodl_asset_amount = original_quantity - sell_quantity
-
-                        trade_data = {
-                            'run_id': self.run_id, 'strategy_name': strategy_name, 'symbol': symbol,
-                            'trade_id': trade_id, 'linked_trade_id': trade_id, # Link sell to buy
-                            'exchange': "backtest_engine", 'order_type': "sell",
-                            'status': "CLOSED", 'price': sell_result['price'], 'quantity': sell_result['quantity'],
-                            'usd_value': sell_result['usd_value'], 'commission': sell_result.get('commission_usd', Decimal('0')),
-                            'commission_asset': "USDT", 'timestamp': current_time, 'decision_context': candle.to_dict(),
-                            'commission_usd': sell_result.get('commission_usd', Decimal('0')), 'realized_pnl_usd': realized_pnl_usd
-                        }
-                        all_trades_for_run.append(BacktestTrade(**trade_data))
-                        del open_positions[trade_id]
-
-            # BUY LOGIC
-            market_data = candle.to_dict()
-            # The list comprehension now correctly filters BacktestTrade objects
-            recent_trades_for_difficulty = [t for t in all_trades_for_run if t.timestamp <= current_time]
-
-            buy_amount_usdt, op_mode, reason, _, diff_factor = self.capital_manager.get_buy_order_details(
-                market_data=market_data, open_positions=list(open_positions.values()),
-                portfolio_value=total_portfolio_value, free_cash=cash_balance,
-                params=current_params, trade_history=recent_trades_for_difficulty,
-                current_time=current_time
-            )
-
-            if buy_amount_usdt > 0 and cash_balance >= min_trade_size:
-                decision_context_buy = {**candle.to_dict(), 'operating_mode': op_mode, 'buy_trigger_reason': reason, 'market_regime': current_regime}
-                success, buy_result = self.mock_trader.execute_buy(buy_amount_usdt, self.run_id, decision_context_buy)
-                if success:
-                    new_trade_id = str(uuid.uuid4())
-                    sell_target_price = strategy_rules.calculate_sell_target_price(buy_result['price'], buy_result['quantity'], params=current_params)
-
-                    position_data = {
-                        'trade_id': new_trade_id,
-                        'price': buy_result['price'],
-                        'quantity': buy_result['quantity'],
-                        'usd_value': buy_result['usd_value'],
-                        'sell_target_price': sell_target_price,
-                        'commission_usd': buy_result.get('commission_usd', Decimal('0')),
-                        # State for the final trailing stop logic
-                        'is_profit_lock_active': False,
-                        'highest_price_since_buy': buy_result['price'],
-                        'stop_loss_price': None,
-                        'break_even_price': None
-                    }
-                    open_positions[new_trade_id] = position_data
-
-                    trade_data = {
-                        'run_id': self.run_id, 'strategy_name': strategy_name, 'symbol': symbol,
-                        'trade_id': new_trade_id, 'exchange': "backtest_engine", 'order_type': "buy",
-                        'status': "OPEN", 'price': buy_result['price'], 'quantity': buy_result['quantity'],
-                        'usd_value': buy_result['usd_value'], 'commission': buy_result.get('commission_usd', Decimal('0')),
-                        'commission_asset': "USDT", 'timestamp': current_time,
-                        'decision_context': decision_context_buy, 'sell_target_price': sell_target_price,
-                        'commission_usd': buy_result.get('commission_usd', Decimal('0'))
-                    }
-                    all_trades_for_run.append(BacktestTrade(**trade_data))
-
-        self._log_trades_to_db(all_trades_for_run)
-        self._generate_and_save_summary(open_positions, portfolio_history)
+        # After the loop, all trades are already logged by the StateManager.
+        # We just need to generate the final summary.
+        self._generate_and_save_summary(self.state_manager.get_open_positions(), portfolio_history)
         logger.info(f"--- Backtest {self.run_id} finished ---")
 
     def _log_trades_to_db(self, trades: list):
-        """
-        Logs the list of completed trades from the backtest simulation to the database.
-        It correctly handles creating BUY records and updating them for SELLs.
-        """
-        if not trades:
-            return
-        logger.info(f"Logging {len(trades)} trades from backtest run to database...")
-        for trade in trades:
-            trade_data = trade.to_dict()  # Convert BacktestTrade object to dictionary
-
-            if trade_data.get('order_type') == 'buy':
-                # This is a new position, so we create a new record.
-                self.trade_logger.log_trade(trade_data)
-            elif trade_data.get('order_type') == 'sell':
-                # This is a closing trade, so we update the original record.
-                # The `update_trade` method in the logger handles the data mapping.
-                self.trade_logger.update_trade(trade_data)
-            else:
-                logger.warning(f"Unknown order type in backtest log: {trade_data.get('order_type')}")
+        # This method is no longer needed, as the StateManager and UnifiedLogic
+        # handle logging trades directly to the database.
+        pass
 
     def _generate_and_save_summary(self, open_positions: dict, portfolio_history: list[Decimal]):
         logger.info("--- Generating and saving backtest summary ---")
