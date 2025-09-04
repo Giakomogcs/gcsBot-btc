@@ -106,25 +106,27 @@ def test_evaluate_buy_signal_with_difficulty_factor(mock_config_manager):
         'close': '100.1', 'high': '101', 'ema_100': '110', 'ema_20': '105',
         'bbl_20_2_0': '100.0'
     }
+    open_positions_count = 1
+    market_regime = 3 # DOWNTREND
 
     # --- Scenario 1: No difficulty, price is NOT below BBL -> No Signal ---
-    should_buy, _, reason = strategy_rules.evaluate_buy_signal(market_data, 1, difficulty_factor=Decimal('0'), params=params)
+    should_buy, _, reason = strategy_rules.evaluate_buy_signal(market_data, market_regime, open_positions_count, difficulty_factor=Decimal('0'), params=params)
     assert not should_buy
-    assert "Price is too high" in reason
+    assert "Preço está muito alto" in reason
 
     # --- Scenario 2: No difficulty, price IS below BBL -> Signal ---
     market_data['close'] = '99.9'
-    should_buy, _, _ = strategy_rules.evaluate_buy_signal(market_data, 1, difficulty_factor=Decimal('0'), params=params)
+    should_buy, _, _ = strategy_rules.evaluate_buy_signal(market_data, market_regime, open_positions_count, difficulty_factor=Decimal('0'), params=params)
     assert should_buy
 
     # --- Scenario 3: With difficulty, price is NOT below adjusted BBL -> No Signal ---
     # Adjusted BBL = 100.0 * (1 - 0.005) = 99.5
     market_data['close'] = '99.6'
-    should_buy, _, reason = strategy_rules.evaluate_buy_signal(market_data, 1, difficulty_factor=Decimal('0.005'), params=params)
+    should_buy, _, reason = strategy_rules.evaluate_buy_signal(market_data, market_regime, open_positions_count, difficulty_factor=Decimal('0.005'), params=params)
     assert not should_buy
-    assert "Price is too high" in reason
+    assert "Preço está muito alto" in reason
 
     # --- Scenario 4: With difficulty, price IS below adjusted BBL -> Signal ---
     market_data['close'] = '99.4'
-    should_buy, _, _ = strategy_rules.evaluate_buy_signal(market_data, 1, difficulty_factor=Decimal('0.005'), params=params)
+    should_buy, _, _ = strategy_rules.evaluate_buy_signal(market_data, market_regime, open_positions_count, difficulty_factor=Decimal('0.005'), params=params)
     assert should_buy

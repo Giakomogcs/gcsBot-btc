@@ -44,74 +44,70 @@ class StrategyRules:
             )
             return Decimal(fallback)
 
-    def evaluate_buy_signal(self, market_data: dict, open_positions_count: int, difficulty_factor: Decimal = None, params: Dict[str, Decimal] = None) -> tuple[bool, str, str]:
+    def evaluate_buy_signal(self, market_data: dict, market_regime: int, open_positions_count: int, difficulty_factor: Decimal = None, params: Dict[str, Decimal] = None) -> tuple[bool, str, str]:
         """
-        Evaluates if a buy signal is present, providing detailed reasons for no signal.
-        Uses dynamic parameters for buy dip percentage.
+        Avalia se um sinal de compra está presente com base no regime de mercado fornecido.
+        Retorna uma tupla contendo (sinal_de_compra, tipo_de_sinal, razao).
         """
         if difficulty_factor is None:
             difficulty_factor = Decimal('0')
 
+        # --- Mapeamento de Regimes (espelhado de SituationalAwareness) ---
+        # "RANGING": 0, "UPTREND": 1, "HIGH_VOLATILITY": 2, "DOWNTREND": 3
+
+        # --- Lógica de Segurança ---
+        if market_regime == 2: # HIGH_VOLATILITY
+            return False, "NO_TRADE", "Negociação pausada devido à alta volatilidade."
+        if market_regime == -1: # Undefined
+            return False, "NO_TRADE", "Regime de mercado indefinido."
+
+        # --- Extração de Dados e Cálculos Comuns ---
         current_price = market_data.get('close')
         high_price = market_data.get('high')
-        ema_100 = market_data.get('ema_100')
-        ema_20 = market_data.get('ema_20')
-        bbl = market_data.get('bbl_20_2_0')
+        bbl = market_data.get('bbl_20_2_0') # Lower Bollinger Band
 
-        if any(v is None for v in [current_price, high_price, ema_100, ema_20, bbl]):
-            return False, "unknown", "Not enough indicator data"
+        if any(v is None for v in [current_price, high_price, bbl]):
+            return False, "NO_TRADE", "Dados de indicadores insuficientes para avaliação."
 
         current_price = Decimal(str(current_price))
         high_price = Decimal(str(high_price))
-        ema_100 = Decimal(str(ema_100))
-        ema_20 = Decimal(str(ema_20))
-        
-        # The difficulty_factor is now the direct percentage adjustment.
-        # A factor of 0.01 means the bbl target is lowered by 1%.
+
+        # O difficulty_factor agora é o ajuste direto da porcentagem.
+        # Um fator de 0.01 significa que o alvo do bbl é reduzido em 1%.
         difficulty_multiplier = Decimal('1') - difficulty_factor
         adjusted_bbl = Decimal(str(bbl)) * difficulty_multiplier
 
-        # --- Dynamic Dip Logic with Difficulty Adjustment ---
-        base_buy_dip = params.get('buy_dip_percentage', Decimal('0.02')) if params else Decimal('0.02')
-        # The difficulty_factor is added directly to the dip percentage.
-        adjusted_buy_dip_percentage = base_buy_dip + difficulty_factor
-        price_dip_target = high_price * (Decimal('1') - adjusted_buy_dip_percentage)
+        # --- Lógica de Compra por Regime ---
 
-        reason = ""
-        if open_positions_count == 0:
-            if current_price > ema_100:
-                if current_price > ema_20:
-                    return True, "uptrend", "Aggressive first entry (price > ema_20)"
-                elif current_price <= price_dip_target:
-                    if self.use_reversal_buy_strategy:
-                        return True, "START_MONITORING", f"Dip target hit at {adjusted_buy_dip_percentage:.2%}. Starting reversal monitoring."
-                    else:
-                        return True, "uptrend", f"Dip buy signal triggered at {adjusted_buy_dip_percentage:.2%}"
+        # Regime: UPTREND (1)
+        if market_regime == 1:
+            base_buy_dip = params.get('buy_dip_percentage', Decimal('0.02')) if params else Decimal('0.02')
+            adjusted_buy_dip_percentage = base_buy_dip + difficulty_factor
+            price_dip_target = high_price * (Decimal('1') - adjusted_buy_dip_percentage)
+
+            if current_price <= price_dip_target:
+                if self.use_reversal_buy_strategy:
+                    reason = f"Alvo de dip atingido em {adjusted_buy_dip_percentage:.2%}. Iniciando monitoramento de reversão."
+                    return True, "START_MONITORING", reason
                 else:
-                    reason = f"Price ${current_price:,.2f} is above EMA100 but below EMA20 ${ema_20:,.2f}"
+                    reason = f"Sinal de compra em dip acionado em {adjusted_buy_dip_percentage:.2%}"
+                    return True, "uptrend", reason
             else:
-                if current_price <= adjusted_bbl:
-                    return True, "downtrend", f"Aggressive first entry (volatility breakout at difficulty {difficulty_factor})"
-                else:
-                    reason = f"Buy target: ${adjusted_bbl:,.2f}. Price is too high."
-        else:
-            if current_price > ema_100:
-                if high_price > ema_20 and current_price < ema_20:
-                    return True, "uptrend", "Uptrend pullback"
-                elif current_price <= price_dip_target:
-                    if self.use_reversal_buy_strategy:
-                        return True, "START_MONITORING", f"Dip target hit on existing position at {adjusted_buy_dip_percentage:.2%}. Starting reversal monitoring."
-                    else:
-                        return True, "uptrend", f"Dip buy signal on existing position at {adjusted_buy_dip_percentage:.2%}"
-                else:
-                    reason = f"In uptrend (price > EMA100), but no pullback signal found"
+                return False, "NO_TRADE", f"Preço {current_price:,.2f} acima do alvo de dip {price_dip_target:,.2f}"
+
+        # Regime: DOWNTREND (3) ou RANGING (0)
+        # A mesma lógica de "pegar a faca caindo" pode ser aplicada a ambos,
+        # comprando perto do suporte percebido (Banda de Bollinger Inferior).
+        elif market_regime == 3 or market_regime == 0:
+            if current_price <= adjusted_bbl:
+                signal_type = "downtrend" if market_regime == 3 else "ranging"
+                reason = f"Breakout de volatilidade em {signal_type} (dificuldade {difficulty_factor})"
+                return True, signal_type, reason
             else:
-                if current_price <= adjusted_bbl:
-                    return True, "downtrend", f"Downtrend volatility breakout (difficulty {difficulty_factor})"
-                else:
-                    reason = f"Buy target: ${adjusted_bbl:,.2f}. Price is too high."
+                return False, "NO_TRADE", f"Alvo de compra: ${adjusted_bbl:,.2f}. Preço está muito alto."
         
-        return False, "unknown", reason or "No signal"
+        # Se nenhum regime corresponder, não faz nada.
+        return False, "NO_TRADE", "Nenhuma condição de compra atendida para o regime atual."
 
     def calculate_sell_target_price(self, purchase_price: Decimal, quantity: "Decimal | None" = None, params: "Dict[str, Decimal] | None" = None) -> Decimal:
         """

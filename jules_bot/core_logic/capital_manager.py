@@ -108,37 +108,40 @@ class CapitalManager:
 
         return max(base_buy_amount, self.min_trade_size), reason
 
-    def get_buy_order_details(self, market_data: dict, open_positions: list, portfolio_value: Decimal, free_cash: Decimal, params: Dict[str, Decimal], trade_history: list = None, force_buy_signal: bool = False, forced_reason: str = None) -> tuple[Decimal, str, str, str, Decimal]:
+    def get_buy_order_details(self, market_data: dict, market_regime: int, open_positions: list, portfolio_value: Decimal, free_cash: Decimal, params: Dict[str, Decimal], trade_history: list = None, force_buy_signal: bool = False, forced_reason: str = None) -> tuple[Decimal, str, str, str, Decimal]:
         """
-        Determines the operating mode and calculates the appropriate buy amount based on that mode.
-        Can be forced to assume a buy signal is present.
-        Returns the buy amount, operating mode, reason, the raw signal regime, and the difficulty factor used.
+        Determina o modo de operação e calcula o valor de compra apropriado com base nesse modo.
+        Pode ser forçado a assumir que um sinal de compra está presente.
+        Retorna o valor da compra, modo de operação, razão, o regime de sinal bruto e o fator de dificuldade usado.
         """
         num_open_positions = len(open_positions)
         difficulty_factor = self._calculate_difficulty_factor(open_positions)
 
         if not self.use_dynamic_capital and num_open_positions >= self.max_open_positions:
-            return Decimal('0'), OperatingMode.PRESERVATION.name, f"Max open positions ({self.max_open_positions}) reached.", "PRESERVATION", difficulty_factor
+            return Decimal('0'), OperatingMode.PRESERVATION.name, f"Máximo de posições abertas ({self.max_open_positions}) atingido.", "PRESERVATION", difficulty_factor
 
         if force_buy_signal:
-            should_buy, regime, reason = True, "uptrend", forced_reason or "Buy signal forced by reversal."
+            # Força um sinal de compra, mas ainda respeita a lógica de alocação de capital do regime
+            should_buy, signal_type, reason = True, "uptrend", forced_reason or "Sinal de compra forçado por reversão."
         else:
-            should_buy, regime, reason = self.strategy_rules.evaluate_buy_signal(
-                market_data, num_open_positions, difficulty_factor, params=params
+            # A avaliação agora depende do market_regime fornecido
+            should_buy, signal_type, reason = self.strategy_rules.evaluate_buy_signal(
+                market_data, market_regime, num_open_positions, difficulty_factor, params=params
             )
 
-        if regime == "START_MONITORING":
-            return Decimal('0'), OperatingMode.MONITORING.name, reason, regime, difficulty_factor
+        if signal_type == "START_MONITORING":
+            return Decimal('0'), OperatingMode.MONITORING.name, reason, signal_type, difficulty_factor
 
         if not should_buy:
             return Decimal('0'), OperatingMode.PRESERVATION.name, reason, "PRESERVATION", difficulty_factor
 
-        # Determine operating mode based on signal
-        if regime == "uptrend" and num_open_positions < (self.max_open_positions / 4):
+        # --- Determinar o modo de operação com base no REGIME DE MERCADO ---
+        # "RANGING": 0, "UPTREND": 1, "HIGH_VOLATILITY": 2, "DOWNTREND": 3
+        if market_regime == 1 and num_open_positions < (self.max_open_positions / 4): # UPTREND
             mode = OperatingMode.AGGRESSIVE
-        elif regime == "downtrend" and num_open_positions == 0:
+        elif market_regime == 3 and num_open_positions == 0: # DOWNTREND
             mode = OperatingMode.CORRECTION_ENTRY
-        else:
+        else: # RANGING ou outras condições
             mode = OperatingMode.ACCUMULATION
 
         buy_amount = Decimal('0')
@@ -156,13 +159,13 @@ class CapitalManager:
             reason += f", Capped at max trade size"
 
         if buy_amount > free_cash:
-            return Decimal('0'), OperatingMode.PRESERVATION.name, f"Insufficient funds to place order of ${buy_amount:,.2f}", regime, difficulty_factor
+            return Decimal('0'), OperatingMode.PRESERVATION.name, f"Insufficient funds to place order of ${buy_amount:,.2f}", signal_type, difficulty_factor
 
         if buy_amount < self.min_trade_size:
-            return Decimal('0'), OperatingMode.PRESERVATION.name, f"Amount ${buy_amount:,.2f} is below min trade size.", regime, difficulty_factor
+            return Decimal('0'), OperatingMode.PRESERVATION.name, f"Amount ${buy_amount:,.2f} is below min trade size.", signal_type, difficulty_factor
 
         final_amount = buy_amount.quantize(Decimal("0.01"))
-        return final_amount, mode.name, reason, regime, difficulty_factor
+        return final_amount, mode.name, reason, signal_type, difficulty_factor
 
     def _calculate_difficulty_factor(self, open_positions: list) -> Decimal:
         """

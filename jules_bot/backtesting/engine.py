@@ -175,6 +175,7 @@ class Backtester:
             # so we no longer need to pass the trade history.
             buy_amount_usdt, op_mode, reason, _, diff_factor = self.capital_manager.get_buy_order_details(
                 market_data=market_data,
+                market_regime=int(current_regime),
                 open_positions=list(open_positions.values()),
                 portfolio_value=total_portfolio_value,
                 free_cash=cash_balance,

@@ -47,31 +47,33 @@ def test_evaluate_buy_signal_dip_buying(mock_config_manager):
     """
     Tests the new dip-buying logic in evaluate_buy_signal.
     """
+    # This test now checks the UPTREND logic.
+    mock_config_manager.getboolean.return_value = True # Ensure use_reversal_buy_strategy is on
     strategy_rules = StrategyRules(mock_config_manager)
 
-    # Base market data for an uptrend pullback scenario
     market_data = {
-        'high': 105.0, 'ema_100': 100.0, 'ema_20': 102.0, 'bbl_20_2_0': 98.0,
-        'close': 102.5 # Price has not dipped yet
+        'high': 105.0,
+        'close': 103.0, # Price has not dipped yet
+        'bbl_20_2_0': 98.0 # Include bbl just in case
     }
-
     params = {'buy_dip_percentage': Decimal('0.02')} # 2% dip
+    market_regime = 1 # UPTREND
+    open_positions_count = 1
 
     # --- Scenario 1: Price has not dipped enough -> No Signal ---
     # Dip target is 105 * (1 - 0.02) = 102.9. Current price 103.0 is above.
     market_data['close'] = 103.0
-    should_buy, _, reason = strategy_rules.evaluate_buy_signal(market_data, 1, params=params)
+    should_buy, signal_type, reason = strategy_rules.evaluate_buy_signal(market_data, market_regime, open_positions_count, params=params)
     assert not should_buy
-    assert "Dip buy signal" not in reason
+    assert "acima do alvo de dip" in reason
 
     # --- Scenario 2: Price has dipped below the target -> Signal ---
     # Current price 102.8 is below the 102.9 target
     market_data['close'] = 102.8
-    # With use_reversal_buy_strategy=True (default), this should now return START_MONITORING
-    should_buy, regime, reason = strategy_rules.evaluate_buy_signal(market_data, 1, 0, params=params)
+    should_buy, signal_type, reason = strategy_rules.evaluate_buy_signal(market_data, market_regime, open_positions_count, params=params)
     assert should_buy
-    assert regime == "START_MONITORING"
-    assert "Dip target hit on existing position" in reason
+    assert signal_type == "START_MONITORING"
+    assert "Alvo de dip atingido" in reason
 
 
 from jules_bot.core_logic.dynamic_parameters import DynamicParameters
