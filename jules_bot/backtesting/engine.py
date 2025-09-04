@@ -160,7 +160,8 @@ class Backtester:
 
                         trade_data = {
                             'run_id': self.run_id, 'strategy_name': strategy_name, 'symbol': symbol,
-                            'trade_id': trade_id, 'exchange': "backtest_engine", 'order_type': "sell",
+                            'trade_id': trade_id, 'linked_trade_id': trade_id, # Link sell to buy
+                            'exchange': "backtest_engine", 'order_type': "sell",
                             'status': "CLOSED", 'price': sell_result['price'], 'quantity': sell_result['quantity'],
                             'usd_value': sell_result['usd_value'], 'commission': sell_result.get('commission_usd', Decimal('0')),
                             'commission_asset': "USDT", 'timestamp': current_time, 'decision_context': candle.to_dict(),
@@ -211,21 +212,25 @@ class Backtester:
         logger.info(f"--- Backtest {self.run_id} finished ---")
 
     def _log_trades_to_db(self, trades: list):
+        """
+        Logs the list of completed trades from the backtest simulation to the database.
+        It correctly handles creating BUY records and updating them for SELLs.
+        """
         if not trades:
             return
         logger.info(f"Logging {len(trades)} trades from backtest run to database...")
         for trade in trades:
-            trade_data = trade.to_dict() # Convert BacktestTrade object to dictionary
-            if trade_data['status'] == 'OPEN':
+            trade_data = trade.to_dict()  # Convert BacktestTrade object to dictionary
+
+            if trade_data.get('order_type') == 'buy':
+                # This is a new position, so we create a new record.
                 self.trade_logger.log_trade(trade_data)
-            else: # status is 'CLOSED'
-                # For closed trades, we need to log the initial buy and then update it
-                # This is a simplification; a more robust solution would be needed for complex scenarios
-                # but for this backtester, it's sufficient.
-                buy_trade_data = {**trade_data}
-                buy_trade_data['status'] = 'OPEN'
-                self.trade_logger.log_trade(buy_trade_data)
+            elif trade_data.get('order_type') == 'sell':
+                # This is a closing trade, so we update the original record.
+                # The `update_trade` method in the logger handles the data mapping.
                 self.trade_logger.update_trade(trade_data)
+            else:
+                logger.warning(f"Unknown order type in backtest log: {trade_data.get('order_type')}")
 
     def _generate_and_save_summary(self, open_positions: dict, portfolio_history: list[Decimal]):
         logger.info("--- Generating and saving backtest summary ---")
