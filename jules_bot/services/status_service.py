@@ -137,11 +137,11 @@ class StatusService:
             # Re-evaluate the buy signal here to get the live status for the TUI
             buy_amount, operating_mode, reason, regime, _ = self.capital_manager.get_buy_order_details(
                 market_data=market_data,
-                market_regime=current_regime,
                 open_positions=open_positions_db,
                 portfolio_value=total_wallet_usd_value, # Using total wallet value as portfolio value
                 free_cash=cash_balance,
-                params=current_params
+                params=current_params,
+                trade_history=trade_history
             )
 
             should_buy = buy_amount > 0

@@ -539,13 +539,13 @@ class TradingBot:
                             continue
 
                     # Determine buy amount and operating mode
-                    buy_amount_usdt, operating_mode, reason, signal_type, difficulty_factor = self.capital_manager.get_buy_order_details(
+                    buy_amount_usdt, operating_mode, reason, regime, difficulty_factor = self.capital_manager.get_buy_order_details(
                         market_data=market_data,
-                        market_regime=current_regime, # <-- PASSA O REGIME AQUI
                         open_positions=open_positions,
                         portfolio_value=total_portfolio_value,
                         free_cash=cash_balance,
                         params=current_params,
+                        market_regime=current_regime,
                         force_buy_signal=buy_from_reversal,
                         forced_reason="Buy triggered by price reversal."
                     )
@@ -556,7 +556,7 @@ class TradingBot:
                     self.last_difficulty_factor = difficulty_factor
 
                     # If the signal is to start monitoring, update state and skip buying this cycle
-                    if signal_type == "START_MONITORING" and not self.is_monitoring_for_reversal:
+                    if regime == "START_MONITORING" and not self.is_monitoring_for_reversal:
                         self.is_monitoring_for_reversal = True
                         self.lowest_price_since_monitoring_started = current_price
                         self.monitoring_started_at = time.time()

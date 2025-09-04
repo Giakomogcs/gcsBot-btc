@@ -78,10 +78,10 @@ def test_backtester_pnl_calculation(mock_add_all_features, mock_summary, mock_co
          patch('jules_bot.core_logic.strategy_rules.StrategyRules.calculate_sell_target_price') as mock_sell_target:
 
         # Configure the mock CapitalManager to return a buy decision only on the first cycle
-        # The method now returns 5 values, so we update the mock.
+        # The method now returns 4 values, so we add a dummy value for the last one.
         mock_capital_manager.return_value.get_buy_order_details.side_effect = [
-            (Decimal('100.0'), 'TEST_MODE', 'test buy reason', 'uptrend', Decimal('0'))
-        ] + [(Decimal('0'), 'HOLD', 'no signal', 'no_trade', Decimal('0'))] * (len(feature_data) - 1)
+            (Decimal('100.0'), 'TEST_MODE', 'test buy reason', {})
+        ] + [(Decimal('0'), 'HOLD', 'no signal', {})] * (len(feature_data) - 1)
 
         # Sell if price is >= 110 (the close of the second candle)
         mock_sell_target.return_value = Decimal("110.0")
@@ -94,14 +94,10 @@ def test_backtester_pnl_calculation(mock_add_all_features, mock_summary, mock_co
         backtester.run()
 
         # Assert
-        log_trade_calls = [c for c in trade_logger_mock.method_calls if c[0] == 'log_trade']
+        update_calls = [c for c in trade_logger_mock.method_calls if c[0] == 'update_trade']
+        assert len(update_calls) == 1, "Expected one sell trade to be updated"
         
-        # We expect two calls: one for the initial buy, one for the sell.
-        assert len(log_trade_calls) == 2, "Expected a buy and a sell trade to be logged"
-
-        # The sell trade is the second one logged.
-        sell_trade_data = log_trade_calls[1][0][0] # The argument is the trade dict itself
-        assert sell_trade_data['order_type'] == 'sell'
+        sell_trade_data = update_calls[0][1][0]
         realized_pnl_usd = sell_trade_data.get('realized_pnl_usd')
 
         # Manually calculate the expected PnL using the same logic as the application
