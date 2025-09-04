@@ -444,8 +444,25 @@ class TradingBot:
                             logger.debug(f"Position {position.trade_id} [Smart Trailing]: Highest Profit=${highest_profit:,.2f}, Stop Target=${min_profit_target:,.2f}, Current PnL=${net_unrealized_pnl:,.2f}")
 
                             if net_unrealized_pnl <= min_profit_target:
-                                logger.info(f"🚨 SMART TRAILING STOP TRIGGERED for {position.trade_id}. Profit ${net_unrealized_pnl:,.2f} fell to/below target ${min_profit_target:,.2f}. Marking for sale.")
-                                positions_to_sell_now.append(position)
+                                # --- FINAL PROFITABILITY CHECK (THE 'RESET' RULE) ---
+                                # Before selling, ensure the trade is still profitable.
+                                if net_unrealized_pnl > 0:
+                                    logger.info(f"✅ SMART TRAILING STOP TRIGGERED for {position.trade_id}. Profit ${net_unrealized_pnl:,.2f} is above 0. Marking for sale.")
+                                    positions_to_sell_now.append(position)
+                                else:
+                                    # This is the 'reset' condition. The stop was hit, but the position is no longer profitable.
+                                    logger.warning(
+                                        f"RESETTING SMART TRAILING for {position.trade_id}. Stop was triggered, but current PnL is ${net_unrealized_pnl:,.2f}. "
+                                        "The position will NOT be sold to prevent a loss. Waiting for it to become profitable again."
+                                    )
+                                    # Deactivate the trailing stop, resetting the state for this position.
+                                    self.state_manager.update_trade_smart_trailing_state(
+                                        trade_id=position.trade_id,
+                                        is_active=False,
+                                        highest_profit=None,
+                                        activation_price=None
+                                    )
+                                    position.is_smart_trailing_active = False
 
                     # 3. Execute sales for all triggered positions
                     sell_executed_in_cycle = False
