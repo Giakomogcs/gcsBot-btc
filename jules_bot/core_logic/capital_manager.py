@@ -185,30 +185,22 @@ class CapitalManager:
 
         logger.info(f"Calculating difficulty factor based on {len(trade_history)} trades in the last {self.difficulty_reset_timeout_hours} hours.")
 
-        # Sort trades by timestamp, most recent first.
         # This now handles both dicts from the backtester and objects from live trading.
-        def get_timestamp(trade):
-            if isinstance(trade, dict):
-                return trade.get('timestamp')
-            return getattr(trade, 'timestamp', None)
+        def get_attribute(item, key):
+            if isinstance(item, dict):
+                return item.get(key)
+            return getattr(item, key, None)
 
-        # Filter out trades that don't have a timestamp
-        trade_history = [t for t in trade_history if get_timestamp(t) is not None]
-        sorted_trades = sorted(trade_history, key=get_timestamp, reverse=True)
-
+        # Filter out trades that don't have a valid timestamp and sort them
+        valid_trades = [t for t in trade_history if get_attribute(t, 'timestamp') is not None]
+        sorted_trades = sorted(valid_trades, key=lambda t: get_attribute(t, 'timestamp'), reverse=True)
 
         consecutive_buys = 0
         for trade in sorted_trades:
-            order_type = ''
-            if isinstance(trade, dict):
-                order_type = trade.get('order_type', '').lower()
-            else:
-                order_type = getattr(trade, 'order_type', '').lower()
-
-            if order_type == 'buy':
+            order_type = get_attribute(trade, 'order_type')
+            if order_type and order_type.lower() == 'buy':
                 consecutive_buys += 1
-            elif order_type == 'sell':
-                # The first non-buy trade breaks the current streak
+            elif order_type and order_type.lower() == 'sell':
                 logger.info(f"Consecutive buy streak broken by a recent sell. Streak was {consecutive_buys}.")
                 break
 
