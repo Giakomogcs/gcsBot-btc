@@ -143,6 +143,7 @@ class TradingBot:
         self.last_decision_reason: str = "Initializing..."
         self.last_operating_mode: str = "STARTUP"
         self.last_difficulty_factor: Decimal = Decimal('0')
+        self.current_regime: int = -1
 
     def process_force_buy(self, amount_usd: str):
         """Processes a force buy command received from the API."""
@@ -290,11 +291,6 @@ class TradingBot:
 
         self.state_manager.sync_holdings_with_binance(self.account_manager, self.strategy_rules, self.trader)
 
-        # Perform an initial target recalculation after sync and before starting the main loop
-        logger.info("Performing initial recalculation of sell targets before starting main loop...")
-        self.state_manager.recalculate_open_position_targets(self.strategy_rules, self.sa_instance, self.dynamic_params)
-        logger.info("Initial recalculation complete.")
-
         # Now that initialization is complete, set the status to RUNNING
         self.status_service.set_bot_running(self.bot_name, self.mode)
 
@@ -312,7 +308,6 @@ class TradingBot:
                     self._check_and_handle_refresh_signal()
                     
                     logger.info("--- Starting new trading cycle ---")
-                    self.state_manager.recalculate_open_position_targets(self.strategy_rules, self.sa_instance, self.dynamic_params)
 
                     features_df = self.feature_calculator.get_features_dataframe()
                     if features_df.empty:
@@ -323,31 +318,38 @@ class TradingBot:
                     final_candle = features_df.iloc[-1]
 
                     # Defensively check for NaN values in the latest candle data.
-                    # This can happen if there's not enough historical data for an indicator.
                     if final_candle.isnull().any():
                         logger.warning(f"Final candle contains NaN values, skipping cycle. Data: {final_candle.to_dict()}")
                         time.sleep(10)
                         continue
 
                     # --- DYNAMIC STRATEGY LOGIC ---
-                    current_regime = -1 # Default to fallback
+                    # 1. Determine the current market regime
+                    new_regime = -1
+                    regime_reason = "Undefined"
                     if self.sa_instance:
                         try:
-                            # Pass the full dataframe to transform
                             regime_df = self.sa_instance.transform(features_df)
                             if not regime_df.empty:
-                                # Get the regime from the last row
-                                current_regime = int(regime_df['market_regime'].iloc[-1])
-                                logger.debug(f"Current market regime detected: {current_regime}")
-                            else:
-                                logger.warning("Could not determine market regime from candle.")
+                                last_row = regime_df.iloc[-1]
+                                new_regime = int(last_row['market_regime'])
+                                regime_reason = last_row.get('regime_reason', 'No reason provided')
+                                logger.info(f"Market regime detected: {new_regime} ({regime_reason})")
                         except Exception as e:
                             logger.error(f"Error getting market regime: {e}", exc_info=True)
 
-                    self.dynamic_params.update_parameters(current_regime)
+                    # 2. Always update parameters to pick up config changes and reflect current regime
+                    self.dynamic_params.update_parameters(new_regime)
                     current_params = self.dynamic_params.parameters
-                    logger.debug(f"Using strategy parameters for Regime {current_regime}: {current_params}")
+                    logger.debug(f"Using strategy parameters for Regime {new_regime}: {current_params}")
 
+                    # 3. If regime has changed, log it and trigger a recalculation of all open position targets
+                    if new_regime != self.current_regime:
+                        logger.info(f"Market regime change detected: {self.current_regime} -> {new_regime}. Recalculating sell targets.")
+                        self.state_manager.recalculate_open_position_targets(self.strategy_rules, self.dynamic_params)
+                        self.current_regime = new_regime
+
+                    current_regime = new_regime # Use new_regime for the rest of the cycle
                     current_price = Decimal(final_candle['close'])
                     open_positions = self.state_manager.get_open_positions()
                     total_portfolio_value = self.live_portfolio_manager.get_total_portfolio_value(current_price)
@@ -358,12 +360,20 @@ class TradingBot:
                     # Fetch recent trades for difficulty calculation
                     end_date = datetime.utcnow()
                     start_date = end_date - timedelta(hours=self.capital_manager.difficulty_reset_timeout_hours)
-                    trade_history = self.db_manager.get_all_trades_in_range(
+                    recent_trades = self.db_manager.get_all_trades_in_range(
                         mode=self.mode,
                         start_date=start_date,
                         end_date=end_date,
                         bot_id=self.run_id
                     )
+
+                    # For difficulty calculation, combine all open positions (including old/synced ones)
+                    # with recent trades to get a complete picture of the buy streak.
+                    combined_trades = {t.trade_id: t for t in open_positions}
+                    for t in recent_trades:
+                        if t.trade_id not in combined_trades:
+                            combined_trades[t.trade_id] = t
+                    trade_history_for_difficulty = list(combined_trades.values())
 
                     # For the state file, we might still want the full history
                     full_trade_history = self.state_manager.get_trade_history_for_run()
@@ -498,11 +508,18 @@ class TradingBot:
                         logger.debug("Re-fetching trade history after sell to update difficulty factor.")
                         end_date = datetime.utcnow()
                         start_date = end_date - timedelta(hours=self.capital_manager.difficulty_reset_timeout_hours)
-                        trade_history = self.db_manager.get_all_trades_in_range(
+                        recent_trades = self.db_manager.get_all_trades_in_range(
                             mode=self.mode,
                             start_date=start_date,
-                            end_date=end_date
+                            end_date=end_date,
+                            bot_id=self.run_id
                         )
+                        # Re-combine with open positions
+                        combined_trades = {t.trade_id: t for t in open_positions}
+                        for t in recent_trades:
+                            if t.trade_id not in combined_trades:
+                                combined_trades[t.trade_id] = t
+                        trade_history_for_difficulty = list(combined_trades.values())
 
                     # --- BUY LOGIC ---
                     market_data = final_candle.to_dict()
@@ -543,7 +560,7 @@ class TradingBot:
                         portfolio_value=total_portfolio_value,
                         free_cash=cash_balance,
                         params=current_params,
-                        trade_history=trade_history,
+                        trade_history=trade_history_for_difficulty,
                         force_buy_signal=buy_from_reversal,
                         forced_reason="Buy triggered by price reversal."
                     )
@@ -568,7 +585,8 @@ class TradingBot:
                             decision_context = {
                                 "operating_mode": operating_mode,
                                 "buy_trigger_reason": reason,
-                                "market_regime": int(current_regime)
+                                "market_regime": int(current_regime),
+                                "regime_reason": regime_reason,
                             }
                             success, buy_result = self.trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
 

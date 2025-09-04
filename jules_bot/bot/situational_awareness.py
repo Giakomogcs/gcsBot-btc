@@ -56,28 +56,34 @@ class SituationalAwareness:
         ).quantile(self.volatility_percentile)
 
         # Define uma função para aplicar a lógica de regime a cada linha
-        def get_regime(row):
+        def get_regime_with_reason(row):
             # Se o limiar de volatilidade for NaN (no início do período de dados), retorna um regime de fallback
             if pd.isna(row['volatility_threshold']):
-                return -1 # Regime indefinido
+                return -1, "Undefined (Not enough data for volatility threshold)"
 
             # 1. Checa por alta volatilidade primeiro, pois é o regime prioritário
             if row['atr_14'] > row['volatility_threshold']:
-                return self.regime_map["HIGH_VOLATILITY"]
+                reason = f"High Volatility (ATR {row['atr_14']:.4f} > Threshold {row['volatility_threshold']:.4f})"
+                return self.regime_map["HIGH_VOLATILITY"], reason
 
             # 2. Checa por tendência de alta
             if row['macd_diff_12_26_9'] > 0:
-                return self.regime_map["UPTREND"]
+                reason = f"Uptrend (MACD Diff {row['macd_diff_12_26_9']:.4f} > 0)"
+                return self.regime_map["UPTREND"], reason
 
             # 3. Checa por tendência de baixa
             if row['macd_diff_12_26_9'] < 0:
-                return self.regime_map["DOWNTREND"]
+                reason = f"Downtrend (MACD Diff {row['macd_diff_12_26_9']:.4f} < 0)"
+                return self.regime_map["DOWNTREND"], reason
 
             # 4. Se nenhuma das condições acima for atendida, é um mercado em range
-            return self.regime_map["RANGING"]
+            reason = f"Ranging (MACD Diff {row['macd_diff_12_26_9']:.4f} is neutral)"
+            return self.regime_map["RANGING"], reason
 
-        # Aplica a função para determinar o regime. fillna(-1) para casos onde as features são NaN
-        df['market_regime'] = df.apply(get_regime, axis=1).fillna(-1).astype(int)
+        # Aplica a função para obter o regime e a razão
+        regime_results = df.apply(get_regime_with_reason, axis=1, result_type='expand')
+        df['market_regime'] = regime_results[0].fillna(-1).astype(int)
+        df['regime_reason'] = regime_results[1].fillna("Undefined")
         
         # Limpa a coluna de limiar que não é mais necessária fora deste contexto
         df.drop(columns=['volatility_threshold'], inplace=True)

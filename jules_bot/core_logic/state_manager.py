@@ -327,36 +327,22 @@ class StateManager:
         except Exception as e:
             logger.error(f"Failed to create unlinked sell record from sync: {e}", exc_info=True)
 
-    def recalculate_open_position_targets(self, strategy_rules: StrategyRules, sa_instance: SituationalAwareness, dynamic_params: DynamicParameters):
+    def recalculate_open_position_targets(self, strategy_rules: StrategyRules, dynamic_params: DynamicParameters):
         """
-        Recalculates the sell_target_price for all open positions based on the current
-        market regime and strategy parameters.
+        Recalculates the sell_target_price for all open positions based on the
+        currently loaded parameters in the dynamic_params object. This is typically
+        called after a market regime change.
         """
-        logger.info("--- Starting recalculation of sell targets for open positions ---")
         open_positions = self.get_open_positions()
         if not open_positions:
-            logger.info("No open positions to recalculate.")
             return
 
-        # 1. Determine the current market regime
-        features_df = self.feature_calculator.get_features_dataframe()
-        if features_df.empty:
-            logger.error("Could not get features dataframe. Aborting target recalculation.")
-            return
+        logger.info(f"Recalculating sell targets for {len(open_positions)} open positions...")
 
-        current_regime = -1
-        # The sa_instance is always "fitted" as it's rule-based.
-        regime_df = sa_instance.transform(features_df)
-        if not regime_df.empty:
-            current_regime = int(regime_df['market_regime'].iloc[-1])
-
-        logger.info(f"Recalculating targets based on current market regime: {current_regime}")
-
-        # 2. Get the parameters for the current regime
-        dynamic_params.update_parameters(current_regime)
+        # The dynamic_params object is assumed to be already updated with the correct regime's parameters.
         current_params = dynamic_params.parameters
 
-        # 3. Iterate through open positions and recalculate
+        # Iterate through open positions and recalculate
         updated_count = 0
         for position in open_positions:
             try:

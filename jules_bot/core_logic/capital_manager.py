@@ -176,13 +176,18 @@ class CapitalManager:
             return Decimal('0')
 
         if not trade_history:
-            logger.info("No recent trades found. Difficulty factor is 0.")
+            logger.info("No trades provided for difficulty calculation. Factor is 0.")
             return Decimal('0')
 
-        logger.info(f"Calculating difficulty factor based on {len(trade_history)} trades in the last {self.difficulty_reset_timeout_hours} hours.")
+        logger.info(f"Calculating difficulty factor based on {len(trade_history)} provided trades.")
 
         # Sort trades by timestamp, most recent first, to correctly count the current streak
         sorted_trades = sorted(trade_history, key=lambda t: t.timestamp, reverse=True)
+
+        logger.debug("--- Trades considered for difficulty calculation (most recent first) ---")
+        for trade in sorted_trades:
+            logger.debug(f"  - ID: {trade.trade_id}, Type: {trade.order_type}, Time: {trade.timestamp}, Status: {trade.status}")
+        logger.debug("--------------------------------------------------------------------")
 
         consecutive_buys = 0
         for trade in sorted_trades:
@@ -190,7 +195,7 @@ class CapitalManager:
                 consecutive_buys += 1
             elif trade.order_type.lower() == 'sell':
                 # The first non-buy trade breaks the current streak
-                logger.info(f"Consecutive buy streak broken by a recent sell. Streak was {consecutive_buys}.")
+                logger.info(f"Consecutive buy streak broken by a recent sell (ID: {trade.trade_id}). Streak was {consecutive_buys}.")
                 break
 
         if consecutive_buys < self.consecutive_buys_threshold:

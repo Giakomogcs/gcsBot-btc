@@ -145,13 +145,19 @@ class Backtester:
                         del open_positions[trade_id]
 
             # BUY LOGIC
+            from types import SimpleNamespace
             market_data = candle.to_dict()
-            recent_trades_for_difficulty = [t for t in all_trades_for_run if t['timestamp'] <= current_time]
+
+            # Create a history of trade *objects* for the capital manager, not dicts.
+            # This ensures that the difficulty factor can be calculated correctly, as the
+            # function expects objects with attributes (e.g., trade.order_type) rather than dict keys.
+            trade_history_dicts = [t for t in all_trades_for_run if t['timestamp'] <= current_time]
+            trade_history_objects = [SimpleNamespace(**t) for t in trade_history_dicts]
 
             buy_amount_usdt, op_mode, reason, _, diff_factor = self.capital_manager.get_buy_order_details(
                 market_data=market_data, open_positions=list(open_positions.values()),
                 portfolio_value=total_portfolio_value, free_cash=cash_balance,
-                params=current_params, trade_history=recent_trades_for_difficulty
+                params=current_params, trade_history=trade_history_objects
             )
 
             if buy_amount_usdt > 0 and cash_balance >= min_trade_size:
