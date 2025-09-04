@@ -7,7 +7,7 @@ from typing import Optional, Iterator
 from datetime import datetime
 import pandas as pd
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, desc, and_, text, inspect, asc
+from sqlalchemy import create_engine, desc, and_, not_, text, inspect, asc
 from sqlalchemy.orm import sessionmaker, Session
 from contextlib import contextmanager
 from jules_bot.core.schemas import TradePoint
@@ -512,7 +512,10 @@ class PostgresManager:
             try:
                 query = db.query(Trade).order_by(desc(Trade.timestamp))
 
-                filters = []
+                # By default, filter out closed buy trades as they are represented by sell trades.
+                filters = [
+                    not_(and_(Trade.order_type == 'buy', Trade.status == 'CLOSED'))
+                ]
                 if mode:
                     filters.append(Trade.environment == mode)
                 if symbol:

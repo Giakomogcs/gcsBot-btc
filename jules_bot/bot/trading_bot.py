@@ -440,11 +440,31 @@ class TradingBot:
                                 highest_profit = net_unrealized_pnl # Update for current cycle's logic
                                 logger.info(f"📈 New profit peak for smart trailing on {position.trade_id}: ${highest_profit:,.2f}")
 
-                            # B.3 Check if stop is triggered (profit dropped back to the minimum target)
-                            logger.debug(f"Position {position.trade_id} [Smart Trailing]: Highest Profit=${highest_profit:,.2f}, Stop Target=${min_profit_target:,.2f}, Current PnL=${net_unrealized_pnl:,.2f}")
+                            # B.3 Check if stop is triggered (percentage-based trail)
+                            trail_percentage = self.strategy_rules.dynamic_trail_percentage
+                            
+                            # Calculate the stop-loss level based on a percentage drop from the highest profit
+                            stop_profit_level = highest_profit * (Decimal('1') - trail_percentage)
+                            
+                            # The actual trigger point is the higher of the calculated stop-loss level
+                            # or the initial minimum profit target. This prevents the trail from
+                            # triggering a sale at a profit lower than the activation point.
+                            final_trigger_profit = max(stop_profit_level, min_profit_target)
 
-                            if net_unrealized_pnl <= min_profit_target:
-                                logger.info(f"✅ SMART TRAILING STOP TRIGGERED for {position.trade_id}. Adding to sell candidates for final check.")
+                            logger.debug(
+                                f"Position {position.trade_id} [Smart Trailing]: "
+                                f"Highest Profit=${highest_profit:,.2f}, "
+                                f"Current PnL=${net_unrealized_pnl:,.2f}, "
+                                f"Trail %={trail_percentage:.2%}, "
+                                f"Stop Target=${final_trigger_profit:,.2f}"
+                            )
+
+                            if net_unrealized_pnl <= final_trigger_profit:
+                                logger.info(
+                                    f"✅ SMART TRAILING STOP TRIGGERED for {position.trade_id} "
+                                    f"(PnL ${net_unrealized_pnl:,.2f} <= Target ${final_trigger_profit:,.2f}). "
+                                    f"Adding to sell candidates for final check."
+                                )
                                 sell_candidates.append((position, "trailing_stop"))
 
 
@@ -457,21 +477,18 @@ class TradingBot:
                         for position, reason in sell_candidates:
                             # --- UNIFIED PROFITABILITY GATE ---
                             # This is the single, authoritative check before any non-forced sale.
-                            net_unrealized_pnl = self.strategy_rules.calculate_net_unrealized_pnl(
-                                entry_price=Decimal(str(position.price)),
-                                current_price=current_price,
-                                total_quantity=Decimal(str(position.quantity)),
-                                buy_commission_usd=Decimal(str(position.commission_usd or '0'))
-                            )
+                            # It uses the break-even price to provide an absolute guarantee against selling at a loss.
+                            entry_price = Decimal(str(position.price))
+                            break_even_price = self.strategy_rules.calculate_break_even_price(entry_price)
 
-                            if net_unrealized_pnl > 0:
-                                logger.info(f"✅ Position {position.trade_id} is PROFITABLE (${net_unrealized_pnl:,.2f}). Marking for sale.")
+                            if current_price > break_even_price:
+                                logger.info(f"✅ Position {position.trade_id} is PROFITABLE. Current price ${current_price:,.2f} > Break-even price ${break_even_price:,.2f}. Marking for sale.")
                                 positions_to_sell_now.append(position)
                             else:
                                 # This is the critical safety net.
                                 logger.warning(
                                     f"❌ SALE CANCELED for position {position.trade_id}. Reason: {reason}. "
-                                    f"Final check shows NON-PROFITABLE PnL of ${net_unrealized_pnl:,.2f}."
+                                    f"Current price ${current_price:,.2f} is not above break-even price ${break_even_price:,.2f}."
                                 )
                                 # If the trigger was a trailing stop, reset it to prevent an immediate loss-making sale on the next cycle.
                                 if reason == 'trailing_stop' and position.is_smart_trailing_active:

@@ -86,6 +86,7 @@ def mock_bot_components():
 
         # Configure mock_strategy_rules with the new profit-based values
         mock_strategy_rules.trailing_stop_profit = Decimal('0.10') # $0.10 profit target
+        mock_strategy_rules.dynamic_trail_percentage = Decimal('0.1') # 10% trail
 
         # Mock the PnL calculation
         mock_strategy_rules.calculate_net_unrealized_pnl = MagicMock(return_value=Decimal('0.0'))
@@ -101,117 +102,151 @@ class TestSmartTrailingStop:
         mock_state_manager, _, mock_strategy_rules, mock_logger = mock_bot_components
 
         # Arrange
-        # This PnL is greater than the $0.10 activation threshold
-        net_unrealized_pnl = Decimal('0.15')
+        net_unrealized_pnl = Decimal('0.15') # PnL is greater than the $0.10 activation threshold
         mock_strategy_rules.calculate_net_unrealized_pnl.return_value = net_unrealized_pnl
-        current_price = Decimal('101.6') # Not used directly in logic, but for context
+        current_price = Decimal('101.6')
 
         position = Trade(
-            trade_id='test_trade_1',
-            price=Decimal('100'),
-            is_smart_trailing_active=False, # Starts as inactive
-            sell_target_price=Decimal('110')
-        )
-        mock_state_manager.get_open_positions.return_value = [position]
-
-        # Act: This block simulates the core sell logic from the trading bot's main loop
-        for pos in mock_state_manager.get_open_positions():
-            pnl = mock_strategy_rules.calculate_net_unrealized_pnl()
-            if not pos.is_smart_trailing_active and pnl >= mock_strategy_rules.trailing_stop_profit:
-                mock_logger.info(f"ACTIVATING for {pos.trade_id}")
-                mock_state_manager.update_trade_smart_trailing_state(
-                    trade_id=pos.trade_id,
-                    is_active=True,
-                    highest_profit=pnl,
-                    activation_price=current_price
-                )
-
-        # Assert
-        mock_state_manager.update_trade_smart_trailing_state.assert_called_once_with(
-            trade_id='test_trade_1',
-            is_active=True,
-            highest_profit=net_unrealized_pnl,
-            activation_price=current_price
-        )
-        mock_logger.info.assert_called_with("ACTIVATING for test_trade_1")
-
-    def test_trailing_stop_triggers_sell_when_profit_drops_to_target(self, mock_bot_components):
-        """
-        Verify that an active smart trailing stop triggers a sell when the profit drops
-        back to the minimum profit target.
-        """
-        mock_state_manager, _, mock_strategy_rules, mock_logger = mock_bot_components
-        positions_to_sell_now = []
-
-        # Arrange
-        min_profit_target = Decimal('0.10')
-        mock_strategy_rules.trailing_stop_profit = min_profit_target
-        # The current profit has dropped from a peak back to the minimum target
-        net_unrealized_pnl = Decimal('0.10')
-        mock_strategy_rules.calculate_net_unrealized_pnl.return_value = net_unrealized_pnl
-
-        position = Trade(
-            trade_id='test_trade_2',
-            price=Decimal('100'),
-            is_smart_trailing_active=True, # Starts as active
-            smart_trailing_highest_profit=Decimal('0.50'), # Had a peak profit of $0.50
-            sell_target_price=Decimal('120')
+            trade_id='test_trade_1', is_smart_trailing_active=False, sell_target_price=Decimal('110')
         )
         mock_state_manager.get_open_positions.return_value = [position]
 
         # Act
-        for pos in mock_state_manager.get_open_positions():
-            if pos.is_smart_trailing_active:
-                pnl = mock_strategy_rules.calculate_net_unrealized_pnl()
-                if pnl <= mock_strategy_rules.trailing_stop_profit:
-                    mock_logger.info(f"SELLING {pos.trade_id}")
-                    positions_to_sell_now.append(pos)
+        # This is a simplified simulation of the logic in TradingBot.run()
+        if not position.is_smart_trailing_active and net_unrealized_pnl >= mock_strategy_rules.trailing_stop_profit:
+            mock_state_manager.update_trade_smart_trailing_state(
+                trade_id=position.trade_id, is_active=True, highest_profit=net_unrealized_pnl, activation_price=current_price
+            )
 
         # Assert
-        assert len(positions_to_sell_now) == 1
-        assert positions_to_sell_now[0].trade_id == 'test_trade_2'
-        mock_logger.info.assert_called_with("SELLING test_trade_2")
+        mock_state_manager.update_trade_smart_trailing_state.assert_called_once_with(
+            trade_id='test_trade_1', is_active=True, highest_profit=net_unrealized_pnl, activation_price=current_price
+        )
 
-    def test_trailing_stop_cancels_when_position_is_unprofitable(self, mock_bot_components):
+    def test_trailing_stop_triggers_sell_on_percentage_drawdown(self, mock_bot_components):
         """
-        Verify that the smart trailing stop is canceled (deactivated) if the position
-        becomes unprofitable, to avoid selling at a loss.
+        Verify that an active smart trailing stop triggers a sell when the profit drops
+        by the dynamic_trail_percentage from its peak.
+        """
+        mock_state_manager, _, mock_strategy_rules, mock_logger = mock_bot_components
+        
+        # Arrange
+        highest_profit = Decimal('2.00') # Peak profit of $2.00
+        trail_percentage = mock_strategy_rules.dynamic_trail_percentage # 10%
+        
+        # Profit drops by 10%, which should trigger the sale.
+        current_pnl = highest_profit * (1 - trail_percentage) # 2.00 * 0.9 = 1.80
+        mock_strategy_rules.calculate_net_unrealized_pnl.return_value = current_pnl
+        
+        position = Trade(
+            trade_id='test_trade_2', is_smart_trailing_active=True, smart_trailing_highest_profit=highest_profit
+        )
+
+        # Act
+        # Simplified simulation of the trigger logic
+        stop_profit_level = highest_profit * (1 - trail_percentage)
+        final_trigger_profit = max(stop_profit_level, mock_strategy_rules.trailing_stop_profit)
+        
+        sell_triggered = current_pnl <= final_trigger_profit
+
+        # Assert
+        assert sell_triggered is True
+        assert final_trigger_profit == Decimal('1.80')
+
+    def test_trailing_stop_does_not_trigger_if_drawdown_is_small(self, mock_bot_components):
+        """
+        Verify that a sell is NOT triggered if the profit dips, but not enough to
+        breach the percentage trail.
+        """
+        mock_state_manager, _, mock_strategy_rules, mock_logger = mock_bot_components
+        
+        # Arrange
+        highest_profit = Decimal('2.00') # Peak profit of $2.00
+        trail_percentage = mock_strategy_rules.dynamic_trail_percentage # 10%
+        
+        # Profit drops, but only by 5% (less than the 10% trail)
+        current_pnl = highest_profit * (1 - (trail_percentage / 2)) # 2.00 * 0.95 = 1.90
+        mock_strategy_rules.calculate_net_unrealized_pnl.return_value = current_pnl
+        
+        position = Trade(
+            trade_id='test_trade_2.1', is_smart_trailing_active=True, smart_trailing_highest_profit=highest_profit
+        )
+
+        # Act
+        stop_profit_level = highest_profit * (1 - trail_percentage) # This will be 1.80
+        final_trigger_profit = max(stop_profit_level, mock_strategy_rules.trailing_stop_profit)
+        
+        sell_triggered = current_pnl <= final_trigger_profit # 1.90 <= 1.80 is False
+
+        # Assert
+        assert sell_triggered is False
+
+    def test_trailing_stop_uses_min_profit_as_floor(self, mock_bot_components):
+        """
+        Verify that the trigger profit does not go below the minimum activation profit,
+        even if the percentage drawdown calculates a lower value.
         """
         mock_state_manager, _, mock_strategy_rules, mock_logger = mock_bot_components
 
         # Arrange
-        # PnL is now negative
+        min_profit_target = mock_strategy_rules.trailing_stop_profit # $0.10
+        trail_percentage = mock_strategy_rules.dynamic_trail_percentage # 10%
+        
+        # Set a highest_profit so low that a 10% drawdown would be less than the min_profit_target
+        highest_profit = Decimal('0.105') # 10.5 cents
+        
+        # The percentage-based stop would be 0.105 * (1 - 0.1) = 0.0945
+        # But the floor is the min_profit_target of 0.10
+        
+        # Act
+        stop_profit_level = highest_profit * (1 - trail_percentage)
+        final_trigger_profit = max(stop_profit_level, min_profit_target)
+
+        # Assert
+        assert stop_profit_level == Decimal('0.0945')
+        assert final_trigger_profit == min_profit_target # Should be capped at 0.10
+        
+        # Test with a PnL ABOVE the trigger profit. It should NOT trigger a sale.
+        pnl_above_trigger = Decimal('0.101')
+        sell_triggered_above = (pnl_above_trigger <= final_trigger_profit)
+        assert not sell_triggered_above
+
+        # Test with a PnL AT the trigger profit. It SHOULD trigger a sale.
+        pnl_at_trigger = Decimal('0.10')
+        sell_triggered_at = (pnl_at_trigger <= final_trigger_profit)
+        assert sell_triggered_at
+
+    def test_trailing_stop_cancels_when_position_is_unprofitable(self, mock_bot_components):
+        """
+        Verify that the smart trailing stop is canceled if the position becomes unprofitable.
+        This behavior should remain unchanged.
+        """
+        mock_state_manager, _, mock_strategy_rules, mock_logger = mock_bot_components
+
+        # Arrange
         net_unrealized_pnl = Decimal('-0.05')
         mock_strategy_rules.calculate_net_unrealized_pnl.return_value = net_unrealized_pnl
 
         position = Trade(
-            trade_id='test_trade_3',
-            price=Decimal('100'),
-            is_smart_trailing_active=True,
-            smart_trailing_highest_profit=Decimal('0.20'),
-            sell_target_price=Decimal('120')
+            trade_id='test_trade_3', is_smart_trailing_active=True, smart_trailing_highest_profit=Decimal('0.20')
         )
         mock_state_manager.get_open_positions.return_value = [position]
 
         # Act
-        for pos in mock_state_manager.get_open_positions():
-            if pos.is_smart_trailing_active:
-                pnl = mock_strategy_rules.calculate_net_unrealized_pnl()
-                if pnl < 0:
-                    mock_logger.info(f"CANCELING {pos.trade_id}")
-                    mock_state_manager.update_trade_smart_trailing_state(
-                        trade_id=pos.trade_id, is_active=False, highest_profit=None, activation_price=None
-                    )
+        if position.is_smart_trailing_active and net_unrealized_pnl < 0:
+            mock_state_manager.update_trade_smart_trailing_state(
+                trade_id=position.trade_id, is_active=False, highest_profit=None, activation_price=None
+            )
 
         # Assert
         mock_state_manager.update_trade_smart_trailing_state.assert_called_once_with(
             trade_id='test_trade_3', is_active=False, highest_profit=None, activation_price=None
         )
-        mock_logger.info.assert_called_with("CANCELING test_trade_3")
 
     def test_trailing_stop_updates_highest_profit(self, mock_bot_components):
         """
         Verify that the highest_profit is updated when the PnL reaches a new peak.
+        This behavior should remain unchanged.
         """
         mock_state_manager, _, mock_strategy_rules, mock_logger = mock_bot_components
 
@@ -221,30 +256,17 @@ class TestSmartTrailingStop:
         mock_strategy_rules.calculate_net_unrealized_pnl.return_value = new_highest_profit
 
         position = Trade(
-            trade_id='test_trade_4',
-            price=Decimal('100'),
-            is_smart_trailing_active=True,
-            smart_trailing_highest_profit=old_highest_profit,
-            sell_target_price=Decimal('120')
+            trade_id='test_trade_4', is_smart_trailing_active=True, smart_trailing_highest_profit=old_highest_profit
         )
         mock_state_manager.get_open_positions.return_value = [position]
 
         # Act
-        for pos in mock_state_manager.get_open_positions():
-            if pos.is_smart_trailing_active:
-                pnl = mock_strategy_rules.calculate_net_unrealized_pnl()
-                if pnl > Decimal(str(pos.smart_trailing_highest_profit)):
-                    mock_logger.info(f"UPDATING PEAK for {pos.trade_id}")
-                    mock_state_manager.update_trade_smart_trailing_state(
-                        trade_id=pos.trade_id,
-                        is_active=True,
-                        highest_profit=pnl
-                    )
+        if position.is_smart_trailing_active and new_highest_profit > position.smart_trailing_highest_profit:
+            mock_state_manager.update_trade_smart_trailing_state(
+                trade_id=position.trade_id, is_active=True, highest_profit=new_highest_profit
+            )
 
         # Assert
         mock_state_manager.update_trade_smart_trailing_state.assert_called_once_with(
-            trade_id='test_trade_4',
-            is_active=True,
-            highest_profit=new_highest_profit
+            trade_id='test_trade_4', is_active=True, highest_profit=new_highest_profit
         )
-        mock_logger.info.assert_called_with("UPDATING PEAK for test_trade_4")
