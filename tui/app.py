@@ -142,8 +142,9 @@ class TUIApp(App):
                                     yield Static("Symbol: N/A", id="status_symbol")
                                     yield Static("Price: N/A", id="status_price")
                                     yield Static("Wallet Value: N/A", id="status_wallet_usd")
-                                    yield Static("Total PnL: N/A", id="status_total_pnl")
                                     yield Static("Realized PnL: N/A", id="status_realized_pnl")
+                                    yield Static("Unrealized PnL: N/A", id="status_unrealized_pnl")
+                                    yield Static("Total PnL: N/A", id="status_total_pnl")
                                     yield Static("Positions: N/A", id="status_positions_count")
                                 yield Static("Strategy Status", classes="title")
                                 with Static(id="strategy_container"):
@@ -415,10 +416,13 @@ class TUIApp(App):
         wallet_value = Decimal(data.get('total_wallet_usd_value', 0))
         self.query_one("#status_wallet_usd").update(f"Wallet Value: ${wallet_value:,.2f}")
         realized_pnl = Decimal(data.get("total_realized_pnl", 0))
+        unrealized_pnl = Decimal(data.get("total_unrealized_pnl", 0))
         net_total_pnl = Decimal(data.get("net_total_pnl", 0))
         realized_color = "green" if realized_pnl >= 0 else "red"
+        unrealized_color = "green" if unrealized_pnl >= 0 else "red"
         total_color = "green" if net_total_pnl >= 0 else "red"
         self.query_one("#status_realized_pnl").update(f"Realized PnL: [{realized_color}]${realized_pnl:,.2f}[/]")
+        self.query_one("#status_unrealized_pnl").update(f"Unrealized PnL: [{unrealized_color}]${unrealized_pnl:,.2f}[/]")
         self.query_one("#status_total_pnl").update(f"Total PnL: [{total_color}]${net_total_pnl:,.2f}[/]")
 
         # --- Update All UI Components from the Single Data Source ---

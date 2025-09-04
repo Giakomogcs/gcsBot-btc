@@ -377,14 +377,14 @@ class TradingBot:
                     self._write_state_to_file(open_positions, current_price, wallet_balances, full_trade_history, total_portfolio_value)
 
                     # --- SELL LOGIC (Intelligent Trailing Stop & Take Profit) ---
-                    positions_to_sell_now = []
+                    sell_candidates = []
                     for position in open_positions:
                         # --- 1. Hard Take Profit Check ---
                         sell_target_price = Decimal(str(position.sell_target_price)) if position.sell_target_price is not None else Decimal('inf')
                         if current_price >= sell_target_price:
-                            logger.info(f"✅ TAKE PROFIT HIT for position {position.trade_id} at ${current_price:,.2f} (Target: ${sell_target_price:,.2f}). Marking for sale.")
-                            positions_to_sell_now.append(position)
-                            continue # Position will be sold, no need for further checks this cycle
+                            logger.info(f"✅ TAKE PROFIT HIT for position {position.trade_id} at ${current_price:,.2f} (Target: ${sell_target_price:,.2f}). Adding to sell candidates.")
+                            sell_candidates.append((position, "take_profit"))
+                            continue # Position will be evaluated, no need for further checks this cycle
 
                         # --- 2. Intelligent Trailing Stop Logic (Profit-Based) ---
                         entry_price = Decimal(str(position.price))
@@ -444,18 +444,38 @@ class TradingBot:
                             logger.debug(f"Position {position.trade_id} [Smart Trailing]: Highest Profit=${highest_profit:,.2f}, Stop Target=${min_profit_target:,.2f}, Current PnL=${net_unrealized_pnl:,.2f}")
 
                             if net_unrealized_pnl <= min_profit_target:
-                                # --- FINAL PROFITABILITY CHECK (THE 'RESET' RULE) ---
-                                # Before selling, ensure the trade is still profitable.
-                                if net_unrealized_pnl > 0:
-                                    logger.info(f"✅ SMART TRAILING STOP TRIGGERED for {position.trade_id}. Profit ${net_unrealized_pnl:,.2f} is above 0. Marking for sale.")
-                                    positions_to_sell_now.append(position)
-                                else:
-                                    # This is the 'reset' condition. The stop was hit, but the position is no longer profitable.
-                                    logger.warning(
-                                        f"RESETTING SMART TRAILING for {position.trade_id}. Stop was triggered, but current PnL is ${net_unrealized_pnl:,.2f}. "
-                                        "The position will NOT be sold to prevent a loss. Waiting for it to become profitable again."
-                                    )
-                                    # Deactivate the trailing stop, resetting the state for this position.
+                                logger.info(f"✅ SMART TRAILING STOP TRIGGERED for {position.trade_id}. Adding to sell candidates for final check.")
+                                sell_candidates.append((position, "trailing_stop"))
+
+
+                    # 3. Execute sales for all triggered positions
+                    sell_executed_in_cycle = False
+                    positions_to_sell_now = [] # This list will be populated after the profitability check
+
+                    if sell_candidates:
+                        logger.info(f"Found {len(sell_candidates)} candidates for selling. Performing final profitability check...")
+                        for position, reason in sell_candidates:
+                            # --- UNIFIED PROFITABILITY GATE ---
+                            # This is the single, authoritative check before any non-forced sale.
+                            net_unrealized_pnl = self.strategy_rules.calculate_net_unrealized_pnl(
+                                entry_price=Decimal(str(position.price)),
+                                current_price=current_price,
+                                total_quantity=Decimal(str(position.quantity)),
+                                buy_commission_usd=Decimal(str(position.commission_usd or '0'))
+                            )
+
+                            if net_unrealized_pnl > 0:
+                                logger.info(f"✅ Position {position.trade_id} is PROFITABLE (${net_unrealized_pnl:,.2f}). Marking for sale.")
+                                positions_to_sell_now.append(position)
+                            else:
+                                # This is the critical safety net.
+                                logger.warning(
+                                    f"❌ SALE CANCELED for position {position.trade_id}. Reason: {reason}. "
+                                    f"Final check shows NON-PROFITABLE PnL of ${net_unrealized_pnl:,.2f}."
+                                )
+                                # If the trigger was a trailing stop, reset it to prevent an immediate loss-making sale on the next cycle.
+                                if reason == 'trailing_stop' and position.is_smart_trailing_active:
+                                    logger.warning(f"RESETTING SMART TRAILING for {position.trade_id} to prevent loss.")
                                     self.state_manager.update_trade_smart_trailing_state(
                                         trade_id=position.trade_id,
                                         is_active=False,
@@ -464,10 +484,8 @@ class TradingBot:
                                     )
                                     position.is_smart_trailing_active = False
 
-                    # 3. Execute sales for all triggered positions
-                    sell_executed_in_cycle = False
                     if positions_to_sell_now:
-                        logger.info(f"Found {len(positions_to_sell_now)} positions meeting sell criteria.")
+                        logger.info(f"Found {len(positions_to_sell_now)} positions that passed the final profitability check.")
                         total_sell_quantity = sum(Decimal(str(p.quantity)) * self.strategy_rules.sell_factor for p in positions_to_sell_now)
                         available_balance = Decimal(self.trader.get_account_balance(asset=base_asset))
 

@@ -146,22 +146,63 @@ class StateManager:
                 for buy in buys
             }
 
+            # --- New FIFO Matching Logic ---
+            # This logic now also tracks which sells close which buys to create sell records.
+            matched_sells = {}
             for sell in sells:
                 sell_qty_to_match = Decimal(str(sell['qty']))
+                sell_id = sell['id']
+                matched_sells[sell_id] = []
+
                 for buy_id in sorted(buy_pool.keys()):
-                    if sell_qty_to_match <= Decimal('0'): break
+                    if sell_qty_to_match <= Decimal('0'):
+                        break
+
                     buy = buy_pool[buy_id]
-                    if buy['remaining_qty'] <= Decimal('0'): continue
+                    if buy['remaining_qty'] <= Decimal('0'):
+                        continue
 
                     matched_qty = min(sell_qty_to_match, buy['remaining_qty'])
-                    buy['remaining_qty'] -= matched_qty
-                    sell_qty_to_match -= matched_qty
+                    if matched_qty > 0:
+                        buy['remaining_qty'] -= matched_qty
+                        sell_qty_to_match -= matched_qty
 
-            logger.info("FIFO simulation complete. Reconciling with local database...")
+                        # Record the match for creating a sell record later
+                        matched_sells[sell_id].append({
+                            'buy_id': buy_id,
+                            'matched_qty': matched_qty,
+                            'sell_trade_data': sell
+                        })
+
+            logger.info("FIFO simulation complete. Reconciling with local database and creating sell records...")
 
             all_prices = trader.get_all_prices()
-            binance_open_buy_ids = set()
 
+            # Create sell records for all matched sells
+            for sell_id, matches in matched_sells.items():
+                for match in matches:
+                    buy_id = match['buy_id']
+                    sell_trade_data = match['sell_trade_data']
+
+                    # Check if this sell has already been recorded
+                    if self.db_manager.get_trade_by_binance_id(sell_trade_data['id']):
+                        logger.info(f"Sell trade {sell_trade_data['id']} has already been recorded. Skipping.")
+                        continue
+
+                    original_buy_db_trade = db_trades_map.get(buy_id)
+                    if original_buy_db_trade:
+                        self._create_sell_record_from_sync(
+                            original_buy_trade=original_buy_db_trade,
+                            binance_sell_trade=sell_trade_data,
+                            quantity_sold=match['matched_qty'],
+                            strategy_rules=strategy_rules,
+                            all_prices=all_prices
+                        )
+                    else:
+                        logger.warning(f"Could not find original buy trade in DB for Binance buy_id {buy_id}. Cannot create linked sell record.")
+
+            # Reconcile local state with the simulated state from the exchange
+            binance_open_buy_ids = set()
             for buy_id, buy_state in buy_pool.items():
                 final_quantity = buy_state['remaining_qty']
                 is_open_on_binance = final_quantity > Decimal('1e-9')
@@ -170,10 +211,10 @@ class StateManager:
                     binance_open_buy_ids.add(buy_id)
 
                 db_trade = db_trades_map.get(buy_id)
-
                 if db_trade:
-                    # Trade exists in DB, check for updates
+                    # Trade exists in DB, check for status/quantity updates
                     final_status = "OPEN" if is_open_on_binance else "CLOSED"
+                    # Only update if there's a meaningful change
                     if db_trade.status != final_status or not math.isclose(Decimal(str(db_trade.quantity)), final_quantity, rel_tol=1e-9):
                         logger.info(f"Updating position {db_trade.trade_id} (BinanceID: {buy_id}): Status {db_trade.status}->{final_status}, Qty {db_trade.quantity}->{final_quantity:.8f}")
                         self.db_manager.update_trade_status_and_quantity(db_trade.trade_id, final_status, float(final_quantity))
@@ -182,11 +223,12 @@ class StateManager:
                     logger.info(f"Adopting new open position from Binance (TradeID: {buy_id}), Qty: {final_quantity:.8f}")
                     self._create_position_from_binance_trade(buy_state, strategy_rules, all_prices, "OPEN")
 
-            # Close any local positions that are no longer considered open on Binance
+            # Final check: Close any local positions that are no longer considered open on Binance
             locally_open_trades = self.get_open_positions()
             for local_trade in locally_open_trades:
+                # Check if the trade has a Binance ID and if that ID is not in the set of open buys from the simulation
                 if local_trade.binance_trade_id and local_trade.binance_trade_id not in binance_open_buy_ids:
-                    logger.warning(f"Closing local-only position {local_trade.trade_id} (BinanceID: {local_trade.binance_trade_id}) as it's no longer open on the exchange.")
+                    logger.warning(f"Closing stale local position {local_trade.trade_id} (BinanceID: {local_trade.binance_trade_id}) as it's no longer considered open on the exchange.")
                     self.db_manager.update_trade_status(local_trade.trade_id, "CLOSED")
 
             logger.info("--- State Synchronization & Position Adoption Finished ---")
@@ -257,22 +299,46 @@ class StateManager:
         except Exception as e:
             logger.error(f"Failed to create position from trade {binance_trade.get('id')}: {e}", exc_info=True)
 
-    def _create_sell_record_from_sync(self, original_buy_trade: Trade, binance_sell_trade: dict, quantity_sold: Decimal, realized_pnl_usd: Decimal, sell_commission_usd: Decimal):
-        """Helper to create a new SELL record during synchronization."""
+    def _create_sell_record_from_sync(self, original_buy_trade: Trade, binance_sell_trade: dict, quantity_sold: Decimal, strategy_rules: StrategyRules, all_prices: dict):
+        """
+        Helper to create a new SELL record during synchronization.
+        This now calculates PnL and stores the raw sell data as 'fills'.
+        """
         try:
             sell_price = Decimal(str(binance_sell_trade['price']))
             sell_trade_id = str(uuid.uuid4())
             sell_usd_value = sell_price * quantity_sold
             commission = Decimal(str(binance_sell_trade['commission']))
             commission_asset = binance_sell_trade['commissionAsset']
+            symbol = original_buy_trade.symbol
+
+            # --- PnL and Commission Calculation ---
+            sell_commission_usd = self._calculate_commission_in_usd(
+                commission, commission_asset, sell_price, symbol, all_prices
+            )
+
+            realized_pnl_usd = strategy_rules.calculate_realized_pnl(
+                buy_price=Decimal(str(original_buy_trade.price)),
+                sell_price=sell_price,
+                quantity_sold=quantity_sold,
+                buy_commission_usd=Decimal(str(original_buy_trade.commission_usd)),
+                sell_commission_usd=sell_commission_usd,
+                buy_quantity=Decimal(str(original_buy_trade.quantity)) # Use original buy quantity for pro-rata calc
+            )
 
             buy_usd_value = original_buy_trade.price * quantity_sold
             pnl_percentage = (realized_pnl_usd / buy_usd_value) * 100 if buy_usd_value != 0 else 0
-            decision_context = {'reason': 'sync_from_binance_sell', 'pnl_percentage': f"{pnl_percentage:.2f}"}
+
+            # Store the raw sell trade data in the decision context to act as the "fills"
+            decision_context = {
+                'reason': 'sync_from_binance_sell',
+                'pnl_percentage': f"{pnl_percentage:.2f}",
+                'fills': binance_sell_trade
+            }
 
             sell_data = {
                 'run_id': original_buy_trade.run_id, 'environment': self.mode,
-                'strategy_name': original_buy_trade.strategy_name, 'symbol': original_buy_trade.symbol,
+                'strategy_name': original_buy_trade.strategy_name, 'symbol': symbol,
                 'trade_id': sell_trade_id, 'linked_trade_id': original_buy_trade.trade_id,
                 'exchange': original_buy_trade.exchange, 'status': 'CLOSED', 'order_type': 'sell',
                 'price': original_buy_trade.price, 'quantity': quantity_sold,
@@ -282,13 +348,13 @@ class StateManager:
                 'commission': commission,
                 'commission_asset': commission_asset,
                 'commission_usd': sell_commission_usd,
-                'timestamp': datetime.utcfromtimestamp(binance_sell_trade['time'] / 1000).replace(tzinfo=timezone.utc),
+                'timestamp': datetime.fromtimestamp(binance_sell_trade['time'] / 1000, tz=timezone.utc),
                 'exchange_order_id': str(binance_sell_trade['orderId']),
                 'binance_trade_id': int(binance_sell_trade['id']),
                 'decision_context': decision_context,
                 'realized_pnl_usd': realized_pnl_usd
             }
-            logger.debug(f"Passing this data to TradeLogger for a SELL record: {sell_data}")
+
             self.trade_logger.log_trade(sell_data)
             logger.info(f"Created SELL record {sell_trade_id} linked to BUY {original_buy_trade.trade_id} with PnL ${realized_pnl_usd:.2f}")
         except Exception as e:
