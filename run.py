@@ -31,15 +31,24 @@ def main(ctx: typer.Context):
 import socket
 import errno
 
-def find_free_port(start_port=8766):
-    """Finds an available TCP port on the host, starting from start_port."""
+def find_free_port(start_port=8766, exclude_ports=None):
+    """
+    Finds an available TCP port on the host, starting from start_port.
+    Skips any ports mentioned in the exclude_ports list.
+    """
+    if exclude_ports is None:
+        exclude_ports = []
     port = start_port
     while port <= 65535:
+        if port in exclude_ports:
+            port += 1
+            continue
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.bind(('0.0.0.0', port))
                 return port
         except OSError as e:
+            # Check for 'address already in use' error on both Linux/macOS and Windows
             if e.errno == errno.EADDRINUSE or (hasattr(e, 'winerror') and e.winerror == 10048):
                 port += 1
             else:
@@ -153,7 +162,11 @@ def run_bot_in_container(bot_name: str, mode: str) -> tuple[Optional[str], int]:
 
     # Find a free port for the bot's API
     try:
-        host_port = find_free_port()
+        # Get ports already in use by our managed bots to avoid conflicts
+        running_bots = process_manager.sync_and_get_running_bots()
+        used_ports = [bot.host_port for bot in running_bots]
+
+        host_port = find_free_port(exclude_ports=used_ports)
         print(f"   API do bot será exposta na porta do host: {host_port}")
     except IOError as e:
         print(f"❌ Erro: {e}")
