@@ -56,3 +56,9 @@ build/
 
 # Postgres
 .pgpass
+
+# Bot-specific files
+/.tui_files/
+.running_bots.json
+.bot_status_*.json
+*.log
