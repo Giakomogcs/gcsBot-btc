@@ -171,17 +171,14 @@ class Backtester:
             # BUY LOGIC
             market_data = candle.to_dict()
 
-            # The `all_trades_for_run` list now contains `Trade` objects, which is the
-            # same format the live bot uses.
-            recent_trades_for_difficulty = [t for t in all_trades_for_run if t.timestamp <= current_time]
-
+            # The difficulty is now calculated based on the number of open positions,
+            # so we no longer need to pass the trade history.
             buy_amount_usdt, op_mode, reason, _, diff_factor = self.capital_manager.get_buy_order_details(
                 market_data=market_data,
                 open_positions=list(open_positions.values()),
                 portfolio_value=total_portfolio_value,
                 free_cash=cash_balance,
-                params=current_params,
-                trade_history=recent_trades_for_difficulty
+                params=current_params
             )
 
             if buy_amount_usdt > 0 and cash_balance >= min_trade_size:
@@ -252,8 +249,8 @@ class Backtester:
 
         unrealized_pnl = sum(
             self.strategy_rules.calculate_net_unrealized_pnl(
-                entry_price=pos['price'], current_price=self.mock_trader.get_current_price(),
-                total_quantity=pos['quantity'], buy_commission_usd=pos.get('commission_usd', Decimal('0'))
+                entry_price=pos.price, current_price=self.mock_trader.get_current_price(),
+                total_quantity=pos.quantity, buy_commission_usd=pos.commission_usd
             ) for pos in open_positions.values()
         )
 

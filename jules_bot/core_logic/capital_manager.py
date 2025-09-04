@@ -115,7 +115,7 @@ class CapitalManager:
         Returns the buy amount, operating mode, reason, the raw signal regime, and the difficulty factor used.
         """
         num_open_positions = len(open_positions)
-        difficulty_factor = self._calculate_difficulty_factor(trade_history or [])
+        difficulty_factor = self._calculate_difficulty_factor(open_positions)
 
         if not self.use_dynamic_capital and num_open_positions >= self.max_open_positions:
             return Decimal('0'), OperatingMode.PRESERVATION.name, f"Max open positions ({self.max_open_positions}) reached.", "PRESERVATION", difficulty_factor
@@ -164,42 +164,23 @@ class CapitalManager:
         final_amount = buy_amount.quantize(Decimal("0.01"))
         return final_amount, mode.name, reason, regime, difficulty_factor
 
-    def _calculate_difficulty_factor(self, trade_history: list) -> Decimal:
+    def _calculate_difficulty_factor(self, open_positions: list) -> Decimal:
         """
-        Calculates a progressive difficulty factor based on consecutive buys.
-        The factor is a Decimal percentage that makes buying harder.
-        - Resets to 0 if there's a sell or if there are no trades in the timeout period.
-        - After a threshold of consecutive buys, a base difficulty is applied.
-        - For each subsequent buy, the difficulty increases.
+        Calculates a progressive difficulty factor based on the number of open positions.
+        This directly models the user's requirement that difficulty should increase
+        as the number of unanswered 'buy' trades grows.
+
+        - After a threshold of open positions, a base difficulty is applied.
+        - For each subsequent open position, the difficulty increases.
         """
         if not self.use_dynamic_capital:
             return Decimal('0')
 
-        if not trade_history:
-            logger.info("No trades provided for difficulty calculation. Factor is 0.")
-            return Decimal('0')
-
-        logger.info(f"Calculating difficulty factor based on {len(trade_history)} provided trades.")
-
-        # Sort trades by timestamp, most recent first, to correctly count the current streak
-        sorted_trades = sorted(trade_history, key=lambda t: t.timestamp, reverse=True)
-
-        logger.debug("--- Trades considered for difficulty calculation (most recent first) ---")
-        for trade in sorted_trades:
-            logger.debug(f"  - ID: {trade.trade_id}, Type: {trade.order_type}, Time: {trade.timestamp}, Status: {trade.status}")
-        logger.debug("--------------------------------------------------------------------")
-
-        consecutive_buys = 0
-        for trade in sorted_trades:
-            if trade.order_type.lower() == 'buy':
-                consecutive_buys += 1
-            elif trade.order_type.lower() == 'sell':
-                # The first non-buy trade breaks the current streak
-                logger.info(f"Consecutive buy streak broken by a recent sell (ID: {trade.trade_id}). Streak was {consecutive_buys}.")
-                break
+        # The number of "consecutive buys" is now simply the number of open positions.
+        consecutive_buys = len(open_positions)
 
         if consecutive_buys < self.consecutive_buys_threshold:
-            logger.info(f"No difficulty applied. Consecutive buys ({consecutive_buys}) is below threshold ({self.consecutive_buys_threshold}).")
+            logger.info(f"No difficulty applied. Open positions ({consecutive_buys}) is below threshold ({self.consecutive_buys_threshold}).")
             return Decimal('0')
 
         # --- Difficulty Calculation ---

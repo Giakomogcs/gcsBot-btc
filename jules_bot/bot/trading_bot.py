@@ -374,14 +374,6 @@ class TradingBot:
                         bot_id=self.run_id
                     )
 
-                    # For difficulty calculation, combine all open positions (including old/synced ones)
-                    # with recent trades to get a complete picture of the buy streak.
-                    combined_trades = {t.trade_id: t for t in open_positions}
-                    for t in recent_trades:
-                        if t.trade_id not in combined_trades:
-                            combined_trades[t.trade_id] = t
-                    trade_history_for_difficulty = list(combined_trades.values())
-
                     # For the state file, we might still want the full history
                     full_trade_history = self.state_manager.get_trade_history_for_run()
                     self._write_state_to_file(open_positions, current_price, wallet_balances, full_trade_history, total_portfolio_value)
@@ -510,23 +502,9 @@ class TradingBot:
                                 else:
                                     logger.error(f"Sell execution failed for position {trade_id}.")
                     
-                    # If a sell happened, refetch history to ensure difficulty factor is reset in the same cycle
-                    if sell_executed_in_cycle:
-                        logger.debug("Re-fetching trade history after sell to update difficulty factor.")
-                        end_date = datetime.utcnow()
-                        start_date = end_date - timedelta(hours=self.capital_manager.difficulty_reset_timeout_hours)
-                        recent_trades = self.db_manager.get_all_trades_in_range(
-                            mode=self.mode,
-                            start_date=start_date,
-                            end_date=end_date,
-                            bot_id=self.run_id
-                        )
-                        # Re-combine with open positions
-                        combined_trades = {t.trade_id: t for t in open_positions}
-                        for t in recent_trades:
-                            if t.trade_id not in combined_trades:
-                                combined_trades[t.trade_id] = t
-                        trade_history_for_difficulty = list(combined_trades.values())
+                    # If a sell happened, the number of open positions will have changed,
+                    # and the difficulty will be naturally recalculated on the next cycle.
+                    # No special history refetch is needed anymore.
 
                     # --- BUY LOGIC ---
                     market_data = final_candle.to_dict()
@@ -567,7 +545,6 @@ class TradingBot:
                         portfolio_value=total_portfolio_value,
                         free_cash=cash_balance,
                         params=current_params,
-                        trade_history=trade_history_for_difficulty,
                         force_buy_signal=buy_from_reversal,
                         forced_reason="Buy triggered by price reversal."
                     )
