@@ -100,6 +100,22 @@ class PostgresManager:
                         logger.info(f"Running migration: Adding missing column 'highest_price_since_breach' to table '{self.bot_name}.trades'")
                         with connection.begin():
                             connection.execute(text(f"ALTER TABLE {self.bot_name}.trades ADD COLUMN highest_price_since_breach NUMERIC(20, 8)"))
+                    
+                    # Migration for Intelligent Trailing Stop columns
+                    if 'is_smart_trailing_active' not in trade_columns:
+                        logger.info(f"Running migration: Adding missing column 'is_smart_trailing_active' to table '{self.bot_name}.trades'")
+                        with connection.begin():
+                            connection.execute(text(f"ALTER TABLE {self.bot_name}.trades ADD COLUMN is_smart_trailing_active BOOLEAN NOT NULL DEFAULT FALSE"))
+                    
+                    if 'smart_trailing_activation_price' not in trade_columns:
+                        logger.info(f"Running migration: Adding missing column 'smart_trailing_activation_price' to table '{self.bot_name}.trades'")
+                        with connection.begin():
+                            connection.execute(text(f"ALTER TABLE {self.bot_name}.trades ADD COLUMN smart_trailing_activation_price NUMERIC(20, 8)"))
+
+                    if 'smart_trailing_highest_profit' not in trade_columns:
+                        logger.info(f"Running migration: Adding missing column 'smart_trailing_highest_profit' to table '{self.bot_name}.trades'")
+                        with connection.begin():
+                            connection.execute(text(f"ALTER TABLE {self.bot_name}.trades ADD COLUMN smart_trailing_highest_profit NUMERIC(20, 8)"))
 
                 # Migration for 'bot_status' table
                 if inspector.has_table("bot_status", schema=self.bot_name):

@@ -62,3 +62,4 @@ build/
 .running_bots.json
 .bot_status_*.json
 *.log
+*.json
