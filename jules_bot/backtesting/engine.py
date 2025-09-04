@@ -108,24 +108,39 @@ class Backtester:
                     continue
 
                 entry_price = position['price']
-                break_even_price = self.strategy_rules.calculate_break_even_price(entry_price)
-                current_pnl_percent = (current_price / entry_price) - Decimal('1') if entry_price > 0 else Decimal('0')
 
-                if not position.get('is_smart_trailing_active') and current_pnl_percent >= self.strategy_rules.smart_trailing_activation_profit_percent:
+                # Calculate the current net unrealized PnL for the position
+                net_unrealized_pnl = self.strategy_rules.calculate_net_unrealized_pnl(
+                    entry_price=entry_price,
+                    current_price=current_price,
+                    total_quantity=position['quantity'],
+                    buy_commission_usd=position.get('commission_usd', Decimal('0'))
+                )
+
+                min_profit_target = self.strategy_rules.trailing_stop_profit
+
+                # A. Activate Trailing Stop
+                if not position.get('is_smart_trailing_active') and net_unrealized_pnl >= min_profit_target:
                     position['is_smart_trailing_active'] = True
-                    position['smart_trailing_highest_price'] = current_price
+                    position['smart_trailing_highest_profit'] = net_unrealized_pnl
                     continue
 
+                # B. Monitor Active Trailing Stop
                 if position.get('is_smart_trailing_active'):
-                    highest_price = position.get('smart_trailing_highest_price', current_price)
-                    if current_price < break_even_price:
+                    highest_profit = position.get('smart_trailing_highest_profit', net_unrealized_pnl)
+
+                    # B.1 Deactivate if position becomes unprofitable
+                    if net_unrealized_pnl < 0:
                         position['is_smart_trailing_active'] = False
                         continue
-                    if current_price > highest_price:
-                        position['smart_trailing_highest_price'] = current_price
-                        highest_price = current_price
-                    stop_price = highest_price * (Decimal('1') - self.strategy_rules.trailing_stop_percent)
-                    if current_price <= stop_price:
+
+                    # B.2 Update highest profit
+                    if net_unrealized_pnl > highest_profit:
+                        position['smart_trailing_highest_profit'] = net_unrealized_pnl
+                        highest_profit = net_unrealized_pnl
+
+                    # B.3 Check for sell trigger
+                    if net_unrealized_pnl <= min_profit_target:
                         positions_to_sell_now.append(position)
 
             if positions_to_sell_now:

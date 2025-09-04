@@ -64,8 +64,7 @@ class Trade(Base):
     # Fields for Intelligent Trailing Stop
     is_smart_trailing_active = Column(Boolean, default=False, nullable=False)
     smart_trailing_activation_price = Column(Numeric(20, 8), nullable=True)
-    smart_trailing_highest_price = Column(Numeric(20, 8), nullable=True)
-    smart_trailing_activation_threshold = Column(Numeric(20, 8), nullable=True)
+    smart_trailing_highest_profit = Column(Numeric(20, 8), nullable=True)
 
 
 class BotStatus(Base):

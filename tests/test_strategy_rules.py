@@ -16,8 +16,7 @@ def mock_config_manager():
         ('STRATEGY_RULES', 'target_profit'): '0.005',
         ('STRATEGY_RULES', 'max_open_positions'): '20',
         ('STRATEGY_RULES', 'use_reversal_buy_strategy'): False,
-        ('STRATEGY_RULES', 'trailing_stop_percent'): '0.001',
-        ('STRATEGY_RULES', 'smart_trailing_activation_profit_percent'): '0.015'
+        ('STRATEGY_RULES', 'trailing_stop_profit'): '0.10'
     }
 
     def get_side_effect(section, key, fallback=None):

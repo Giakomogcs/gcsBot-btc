@@ -402,16 +402,17 @@ class StateManager:
         # The underlying db_manager.update_trade is prepared to handle this dictionary
         self.db_manager.update_trade(trade_id, update_data)
 
-    def update_trade_smart_trailing_state(self, trade_id: str, is_active: bool, highest_price: Optional[Decimal] = None, activation_price: Optional[Decimal] = None):
+    def update_trade_smart_trailing_state(self, trade_id: str, is_active: bool, highest_profit: Optional[Decimal] = None, activation_price: Optional[Decimal] = None):
         """
         Updates the state fields for the intelligent trailing stop for a specific trade.
         """
-        logger.info(f"Updating smart trailing state for {trade_id}: active={is_active}, highest_price={highest_price}, activation_price={activation_price}")
+        logger.info(f"Updating smart trailing state for {trade_id}: active={is_active}, highest_profit={highest_profit}, activation_price={activation_price}")
         update_data = {
             "is_smart_trailing_active": is_active,
-            "smart_trailing_highest_price": highest_price,
+            "smart_trailing_highest_profit": highest_profit,
             "smart_trailing_activation_price": activation_price
         }
+        # The underlying db_manager.update_trade is prepared to handle this dictionary
         self.db_manager.update_trade(trade_id, update_data)
 
     def record_partial_sell(self, original_trade_id: str, remaining_quantity: Decimal, sell_data: dict):

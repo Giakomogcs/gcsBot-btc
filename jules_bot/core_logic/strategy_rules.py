@@ -16,8 +16,7 @@ class StrategyRules:
         self.base_usd_per_trade = self._safe_get_decimal('base_usd_per_trade', '20.0')
         self.sell_factor = self._safe_get_decimal('sell_factor', '0.9')
         self.commission_rate = self._safe_get_decimal('commission_rate', '0.001')
-        self.trailing_stop_percent = self._safe_get_decimal('trailing_stop_percent', '0.001')
-        self.smart_trailing_activation_profit_percent = self._safe_get_decimal('smart_trailing_activation_profit_percent', '0.015')
+        self.trailing_stop_profit = self._safe_get_decimal('trailing_stop_profit', '0.10')
 
         # Boolean values don't need Decimal conversion
         self.use_reversal_buy_strategy = self.config_manager.getboolean(
