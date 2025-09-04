@@ -117,31 +117,43 @@ class Backtester:
                     buy_commission_usd=position.get('commission_usd', Decimal('0'))
                 )
 
-                min_profit_target = self.strategy_rules.trailing_stop_profit
+                # --- Genius Trailing Stop Logic ---
+                # This strategy uses a dynamic stop-loss price that trails the highest price achieved by the asset.
+                # Once a minimum profit is reached, it ensures the stop-loss cannot fall below the break-even price.
 
-                # A. Activate Trailing Stop
-                if not position.get('is_smart_trailing_active') and net_unrealized_pnl >= min_profit_target:
-                    position['is_smart_trailing_active'] = True
-                    position['smart_trailing_highest_profit'] = net_unrealized_pnl
-                    continue
+                # 1. Update state: track the highest price this asset has reached since we bought it.
+                position['highest_price_since_buy'] = max(
+                    position.get('highest_price_since_buy', position['price']),
+                    current_price
+                )
 
-                # B. Monitor Active Trailing Stop
-                if position.get('is_smart_trailing_active'):
-                    highest_profit = position.get('smart_trailing_highest_profit', net_unrealized_pnl)
+                # 2. Activate Profit Lock: If not already active, check if the minimum profit target has been met.
+                if not position.get('is_profit_lock_active', False):
+                    if net_unrealized_pnl >= self.strategy_rules.trailing_stop_profit:
+                        position['is_profit_lock_active'] = True
+                        logger.info(f"Profit lock activated for trade {trade_id} at PnL {net_unrealized_pnl:.2f}")
 
-                    # B.1 Deactivate if position becomes unprofitable
-                    if net_unrealized_pnl < 0:
-                        position['is_smart_trailing_active'] = False
-                        continue
+                # 3. Calculate the new potential stop-loss price based on the trailing percentage.
+                trail_percentage = self.strategy_rules.dynamic_trail_percentage
+                candidate_stop_price = position['highest_price_since_buy'] * (Decimal('1') - trail_percentage)
 
-                    # B.2 Update highest profit
-                    if net_unrealized_pnl > highest_profit:
-                        position['smart_trailing_highest_profit'] = net_unrealized_pnl
-                        highest_profit = net_unrealized_pnl
+                # 4. Enforce Profit Lock: If the lock is active, ensure the stop-loss never falls below break-even.
+                if position.get('is_profit_lock_active', False):
+                    break_even_price = self.strategy_rules.calculate_break_even_price(position['price'])
+                    candidate_stop_price = max(candidate_stop_price, break_even_price)
 
-                    # B.3 Check for sell trigger
-                    if net_unrealized_pnl <= min_profit_target:
-                        positions_to_sell_now.append(position)
+                # 5. Update Stop-Loss Price: The stop-loss price should only ever move up.
+                current_stop_price = position.get('stop_loss_price', Decimal('0'))
+                if candidate_stop_price > current_stop_price:
+                    position['stop_loss_price'] = candidate_stop_price
+                    logger.debug(f"Trade {trade_id}: Stop loss updated to {candidate_stop_price:.4f}")
+
+                # 6. Sell Trigger: Check if the current price has fallen to or below the stop-loss price.
+                final_stop_price = position.get('stop_loss_price')
+                if final_stop_price and current_price <= final_stop_price:
+                    logger.info(f"Dynamic Trailing Stop triggered for trade {trade_id}. "
+                                f"Price {current_price:.2f} <= Stop Loss {final_stop_price:.2f}")
+                    positions_to_sell_now.append(position)
 
             if positions_to_sell_now:
                 for position in positions_to_sell_now:
@@ -178,7 +190,8 @@ class Backtester:
             buy_amount_usdt, op_mode, reason, _, diff_factor = self.capital_manager.get_buy_order_details(
                 market_data=market_data, open_positions=list(open_positions.values()),
                 portfolio_value=total_portfolio_value, free_cash=cash_balance,
-                params=current_params, trade_history=recent_trades_for_difficulty
+                params=current_params, trade_history=recent_trades_for_difficulty,
+                current_time=current_time
             )
 
             if buy_amount_usdt > 0 and cash_balance >= min_trade_size:
@@ -189,10 +202,16 @@ class Backtester:
                     sell_target_price = strategy_rules.calculate_sell_target_price(buy_result['price'], buy_result['quantity'], params=current_params)
 
                     position_data = {
-                        'trade_id': new_trade_id, 'price': buy_result['price'], 'quantity': buy_result['quantity'],
-                        'usd_value': buy_result['usd_value'], 'sell_target_price': sell_target_price,
+                        'trade_id': new_trade_id,
+                        'price': buy_result['price'],
+                        'quantity': buy_result['quantity'],
+                        'usd_value': buy_result['usd_value'],
+                        'sell_target_price': sell_target_price,
                         'commission_usd': buy_result.get('commission_usd', Decimal('0')),
-                        'is_smart_trailing_active': False, 'smart_trailing_highest_price': None
+                        # State for the dynamic trailing stop
+                        'is_profit_lock_active': False,
+                        'highest_price_since_buy': buy_result['price'],
+                        'stop_loss_price': Decimal('0')  # Initialized to 0, will be updated on the first tick
                     }
                     open_positions[new_trade_id] = position_data
 

@@ -112,14 +112,14 @@ class CapitalManager:
 
         return max(base_buy_amount, self.min_trade_size), reason
 
-    def get_buy_order_details(self, market_data: dict, open_positions: list, portfolio_value: Decimal, free_cash: Decimal, params: Dict[str, Decimal], trade_history: list = None, force_buy_signal: bool = False, forced_reason: str = None) -> tuple[Decimal, str, str, str, Decimal]:
+    def get_buy_order_details(self, market_data: dict, open_positions: list, portfolio_value: Decimal, free_cash: Decimal, params: Dict[str, Decimal], trade_history: list = None, force_buy_signal: bool = False, forced_reason: str = None, current_time=None) -> tuple[Decimal, str, str, str, Decimal]:
         """
         Determines the operating mode and calculates the appropriate buy amount based on that mode.
         Can be forced to assume a buy signal is present.
         Returns the buy amount, operating mode, reason, the raw signal regime, and the difficulty factor used.
         """
         num_open_positions = len(open_positions)
-        difficulty_factor = self._calculate_difficulty_factor(trade_history or [])
+        difficulty_factor = self._calculate_difficulty_factor(trade_history or [], current_time)
 
         if not self.use_dynamic_capital and num_open_positions >= self.max_open_positions:
             return Decimal('0'), OperatingMode.PRESERVATION.name, f"Max open positions ({self.max_open_positions}) reached.", "PRESERVATION", difficulty_factor
@@ -168,11 +168,11 @@ class CapitalManager:
         final_amount = buy_amount.quantize(Decimal("0.01"))
         return final_amount, mode.name, reason, regime, difficulty_factor
 
-    def _calculate_difficulty_factor(self, trade_history: list) -> Decimal:
+    def _calculate_difficulty_factor(self, trade_history: list, current_time=None) -> Decimal:
         """
         Calculates a progressive difficulty factor based on consecutive buys.
         The factor is a Decimal percentage that makes buying harder.
-        - Resets to 0 if there's a sell or if there are no trades in the timeout period.
+        - Resets to 0 if there's a sell or if the last trade was too long ago (timeout).
         - After a threshold of consecutive buys, a base difficulty is applied.
         - For each subsequent buy, the difficulty increases.
         """
@@ -180,10 +180,8 @@ class CapitalManager:
             return Decimal('0')
 
         if not trade_history:
-            logger.info(f"No recent trades found. Applying base difficulty factor of {self.base_difficulty_percentage:.2%}.")
-            return self.base_difficulty_percentage
-
-        logger.info(f"Calculating difficulty factor based on {len(trade_history)} trades in the last {self.difficulty_reset_timeout_hours} hours.")
+            # No trades means no consecutive buys, so no difficulty.
+            return Decimal('0')
 
         # This now handles both dicts from the backtester and objects from live trading.
         def get_attribute(item, key):
@@ -193,7 +191,22 @@ class CapitalManager:
 
         # Filter out trades that don't have a valid timestamp and sort them
         valid_trades = [t for t in trade_history if get_attribute(t, 'timestamp') is not None]
+        if not valid_trades:
+            return Decimal('0')
+
         sorted_trades = sorted(valid_trades, key=lambda t: get_attribute(t, 'timestamp'), reverse=True)
+
+        # Check for timeout since the last trade
+        if current_time:
+            from datetime import timedelta
+            last_trade_time = get_attribute(sorted_trades[0], 'timestamp')
+            if last_trade_time:
+                time_since_last_trade = current_time - last_trade_time
+                if time_since_last_trade > timedelta(hours=self.difficulty_reset_timeout_hours):
+                    logger.info(f"Difficulty reset due to inactivity. Last trade was {time_since_last_trade.total_seconds() / 3600:.2f} hours ago (threshold: {self.difficulty_reset_timeout_hours}h).")
+                    return Decimal('0')
+
+        logger.info(f"Calculating difficulty factor based on {len(sorted_trades)} recent trades.")
 
         consecutive_buys = 0
         for trade in sorted_trades:

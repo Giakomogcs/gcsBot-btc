@@ -17,6 +17,7 @@ class StrategyRules:
         self.sell_factor = self._safe_get_decimal('sell_factor', '0.9')
         self.commission_rate = self._safe_get_decimal('commission_rate', '0.001')
         self.trailing_stop_profit = self._safe_get_decimal('trailing_stop_profit', '0.10')
+        self.dynamic_trail_percentage = self._safe_get_decimal('dynamic_trail_percentage', '0.02')  # e.g., 2% trail
 
         # Boolean values don't need Decimal conversion
         self.use_reversal_buy_strategy = self.config_manager.getboolean(

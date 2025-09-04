@@ -625,6 +625,10 @@ class PostgresManager:
 
                 logger.info(f"Updating trade {trade_id} with data: {list(update_data.keys())}")
 
+                # Critical fix: Prevent overwriting the original 'buy' order type when a sell occurs.
+                # A 'sell' action should update a trade, not change its fundamental type from buy to sell.
+                update_data.pop('order_type', None)
+
                 # If timestamp is provided as a Unix timestamp (int), convert it to datetime
                 if 'timestamp' in update_data and isinstance(update_data['timestamp'], int):
                     from datetime import datetime
