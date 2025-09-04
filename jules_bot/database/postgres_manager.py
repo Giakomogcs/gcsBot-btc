@@ -217,7 +217,10 @@ class PostgresManager:
                 existing_trade = db.query(Trade).filter(Trade.trade_id == trade_point.trade_id).first()
 
                 if existing_trade:
-                    # Update existing trade
+                    # This is an update call (e.g., a sell closing a buy).
+                    # We must not overwrite the original 'order_type' of 'buy'.
+                    trade_data_for_db.pop('order_type', None)
+                    
                     logger.info(f"Updating existing trade record for trade_id: {trade_point.trade_id}")
                     for key, value in trade_data_for_db.items():
                         if value is not None:
