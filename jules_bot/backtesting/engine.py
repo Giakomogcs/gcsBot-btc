@@ -178,7 +178,8 @@ class Backtester:
                 open_positions=list(open_positions.values()),
                 portfolio_value=total_portfolio_value,
                 free_cash=cash_balance,
-                params=current_params
+                params=current_params,
+                market_regime=int(current_regime)
             )
 
             if buy_amount_usdt > 0 and cash_balance >= min_trade_size:

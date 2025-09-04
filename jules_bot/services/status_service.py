@@ -132,7 +132,7 @@ class StatusService:
                 end_date=end_date
             )
 
-            difficulty_factor = self.capital_manager._calculate_difficulty_factor(trade_history)
+            difficulty_factor = self.capital_manager._calculate_difficulty_factor(open_positions_db)
 
             # Re-evaluate the buy signal here to get the live status for the TUI
             buy_amount, operating_mode, reason, regime, _ = self.capital_manager.get_buy_order_details(
@@ -141,7 +141,7 @@ class StatusService:
                 portfolio_value=total_wallet_usd_value, # Using total wallet value as portfolio value
                 free_cash=cash_balance,
                 params=current_params,
-                trade_history=trade_history
+                market_regime=current_regime
             )
 
             should_buy = buy_amount > 0
