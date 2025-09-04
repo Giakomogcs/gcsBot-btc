@@ -174,10 +174,13 @@ class StateManager:
                     # Position exists in DB, check if update is needed
                     if db_trade.status != final_status or not math.isclose(Decimal(str(db_trade.quantity)), final_quantity, rel_tol=1e-9):
                         logger.info(f"Updating adopted position {db_trade.trade_id} (BinanceID: {buy_id}): Status {db_trade.status}->{final_status}, Qty {db_trade.quantity}->{final_quantity:.8f}")
-                        self.db_manager.update_trade_status_and_quantity(
+                        update_data = {
+                            "status": final_status,
+                            "quantity": float(final_quantity)
+                        }
+                        self.db_manager.update_trade(
                             trade_id=db_trade.trade_id,
-                            new_status=final_status,
-                            new_quantity=float(final_quantity)
+                            update_data=update_data
                         )
                 elif is_open:
                     # Position does not exist in DB and is open, must be "adopted"

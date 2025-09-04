@@ -35,14 +35,19 @@ class DynamicParameters:
         Loads the strategy parameters for a given market regime.
         If the regime is -1 (undefined) or its config section is missing, it uses fallback values.
         """
-        section_name = f'REGIME_{regime}'
-
-        # If the regime is undefined (-1) or its specific section is missing,
-        # log a warning and fall back to the default 'STRATEGY_RULES'.
         if regime == -1:
-            logger.warning("Regime is -1 (undefined). Falling back to 'STRATEGY_RULES'.")
-            section_name = 'STRATEGY_RULES'
-        elif not self.config_manager.has_section(section_name):
+            # A safe, non-trading default
+            logger.debug("Regime is -1 (undefined). Loading safe, non-trading parameters.")
+            self.parameters = {
+                'buy_dip_percentage': Decimal('1'),
+                'sell_rise_percentage': Decimal('1'),
+                'order_size_usd': Decimal('0'),
+            }
+            return
+
+        section_name = f'REGIME_{regime}'
+        # If the specific regime section doesn't exist, fall back to the default strategy rules.
+        if not self.config_manager.has_section(section_name):
             logger.warning(f"Config section '{section_name}' not found. Falling back to 'STRATEGY_RULES'.")
             section_name = 'STRATEGY_RULES'
 

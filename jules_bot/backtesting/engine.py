@@ -12,6 +12,7 @@ from jules_bot.core_logic.dynamic_parameters import DynamicParameters
 from jules_bot.bot.situational_awareness import SituationalAwareness
 from jules_bot.utils.logger import logger
 from jules_bot.core.schemas import TradePoint
+from jules_bot.database.models import Trade
 from jules_bot.research.feature_engineering import add_all_features
 from jules_bot.services.trade_logger import TradeLogger
 
@@ -76,6 +77,7 @@ class Backtester:
         open_positions = {}
         portfolio_history = []
         all_trades_for_run = []
+        last_regime = -1  # To track regime changes
 
         for current_time, candle in self.feature_data.iterrows():
             current_price = Decimal(str(candle['close']))
@@ -86,33 +88,42 @@ class Backtester:
             current_params = self.dynamic_params.parameters
 
             cash_balance = self.mock_trader.get_account_balance()
-            current_open_positions_value = sum(pos['quantity'] * current_price for pos in open_positions.values())
+            current_open_positions_value = sum(pos.quantity * current_price for pos in open_positions.values())
             total_portfolio_value = cash_balance + current_open_positions_value
             portfolio_history.append(total_portfolio_value)
 
+            # Mirror the live bot's logic: if regime changes, recalculate targets for all open positions
+            if current_regime != last_regime:
+                logger.info(f"Backtest regime change: {last_regime} -> {current_regime}. Recalculating targets...")
+                for pos in open_positions.values():
+                    pos.sell_target_price = self.strategy_rules.calculate_sell_target_price(
+                        pos.price, pos.quantity, params=current_params
+                    )
+                last_regime = current_regime
+
             positions_to_sell_now = []
             for trade_id, position in list(open_positions.items()):
-                sell_target_price = position.get('sell_target_price', Decimal('inf'))
+                sell_target_price = position.sell_target_price or Decimal('inf')
                 if current_price >= sell_target_price:
                     positions_to_sell_now.append(position)
                     continue
 
-                entry_price = position['price']
+                entry_price = position.price
                 break_even_price = self.strategy_rules.calculate_break_even_price(entry_price)
                 current_pnl_percent = (current_price / entry_price) - Decimal('1') if entry_price > 0 else Decimal('0')
 
-                if not position.get('is_smart_trailing_active') and current_pnl_percent >= self.strategy_rules.smart_trailing_activation_profit_percent:
-                    position['is_smart_trailing_active'] = True
-                    position['smart_trailing_highest_price'] = current_price
+                if not position.is_smart_trailing_active and current_pnl_percent >= self.strategy_rules.smart_trailing_activation_profit_percent:
+                    position.is_smart_trailing_active = True
+                    position.smart_trailing_highest_price = current_price
                     continue
 
-                if position.get('is_smart_trailing_active'):
-                    highest_price = position.get('smart_trailing_highest_price', current_price)
+                if position.is_smart_trailing_active:
+                    highest_price = position.smart_trailing_highest_price or current_price
                     if current_price < break_even_price:
-                        position['is_smart_trailing_active'] = False
+                        position.is_smart_trailing_active = False
                         continue
                     if current_price > highest_price:
-                        position['smart_trailing_highest_price'] = current_price
+                        position.smart_trailing_highest_price = current_price
                         highest_price = current_price
                     stop_price = highest_price * (Decimal('1') - self.strategy_rules.trailing_stop_percent)
                     if current_price <= stop_price:
@@ -120,44 +131,57 @@ class Backtester:
 
             if positions_to_sell_now:
                 for position in positions_to_sell_now:
-                    trade_id = position['trade_id']
-                    original_quantity = position['quantity']
+                    trade_id = position.trade_id
+                    original_quantity = position.quantity
                     sell_quantity = original_quantity * strategy_rules.sell_factor
 
                     success, sell_result = self.mock_trader.execute_sell({'quantity': sell_quantity}, self.run_id, candle.to_dict())
                     if success:
                         realized_pnl_usd = strategy_rules.calculate_realized_pnl(
-                            buy_price=position['price'], sell_price=sell_result['price'], quantity_sold=sell_result['quantity'],
-                            buy_commission_usd=position['commission_usd'], sell_commission_usd=sell_result.get('commission_usd', Decimal('0')),
-                            buy_quantity=position['quantity']
+                            buy_price=position.price, sell_price=sell_result['price'], quantity_sold=sell_result['quantity'],
+                            buy_commission_usd=position.commission_usd, sell_commission_usd=sell_result.get('commission_usd', Decimal('0')),
+                            buy_quantity=position.quantity
                         )
                         hodl_asset_amount = original_quantity - sell_quantity
 
-                        trade_data = {
-                            'run_id': self.run_id, 'strategy_name': strategy_name, 'symbol': symbol,
-                            'trade_id': trade_id, 'exchange': "backtest_engine", 'order_type': "sell",
-                            'status': "CLOSED", 'price': sell_result['price'], 'quantity': sell_result['quantity'],
-                            'usd_value': sell_result['usd_value'], 'commission': sell_result.get('commission_usd', Decimal('0')),
-                            'commission_asset': "USDT", 'timestamp': current_time, 'decision_context': candle.to_dict(),
-                            'commission_usd': sell_result.get('commission_usd', Decimal('0')), 'realized_pnl_usd': realized_pnl_usd
-                        }
-                        all_trades_for_run.append(trade_data)
+                        # Create a new Trade object for the sell action, linking it to the original buy
+                        sell_trade = Trade(
+                            run_id=self.run_id,
+                            trade_id=str(uuid.uuid4()),
+                            linked_trade_id=trade_id,
+                            strategy_name=strategy_name,
+                            symbol=symbol,
+                            exchange="backtest_engine",
+                            order_type="sell",
+                            status="CLOSED",
+                            price=sell_result['price'],
+                            quantity=sell_result['quantity'],
+                            usd_value=sell_result['usd_value'],
+                            commission=sell_result.get('commission_usd', Decimal('0')),
+                            commission_asset="USDT",
+                            commission_usd=sell_result.get('commission_usd', Decimal('0')),
+                            timestamp=current_time,
+                            decision_context=candle.to_dict(),
+                            realized_pnl_usd=realized_pnl_usd,
+                            hodl_asset_amount=hodl_asset_amount
+                        )
+                        all_trades_for_run.append(sell_trade)
                         del open_positions[trade_id]
 
             # BUY LOGIC
-            from types import SimpleNamespace
             market_data = candle.to_dict()
 
-            # Create a history of trade *objects* for the capital manager, not dicts.
-            # This ensures that the difficulty factor can be calculated correctly, as the
-            # function expects objects with attributes (e.g., trade.order_type) rather than dict keys.
-            trade_history_dicts = [t for t in all_trades_for_run if t['timestamp'] <= current_time]
-            trade_history_objects = [SimpleNamespace(**t) for t in trade_history_dicts]
+            # The `all_trades_for_run` list now contains `Trade` objects, which is the
+            # same format the live bot uses.
+            recent_trades_for_difficulty = [t for t in all_trades_for_run if t.timestamp <= current_time]
 
             buy_amount_usdt, op_mode, reason, _, diff_factor = self.capital_manager.get_buy_order_details(
-                market_data=market_data, open_positions=list(open_positions.values()),
-                portfolio_value=total_portfolio_value, free_cash=cash_balance,
-                params=current_params, trade_history=trade_history_objects
+                market_data=market_data,
+                open_positions=list(open_positions.values()),
+                portfolio_value=total_portfolio_value,
+                free_cash=cash_balance,
+                params=current_params,
+                trade_history=recent_trades_for_difficulty
             )
 
             if buy_amount_usdt > 0 and cash_balance >= min_trade_size:
@@ -167,44 +191,45 @@ class Backtester:
                     new_trade_id = str(uuid.uuid4())
                     sell_target_price = strategy_rules.calculate_sell_target_price(buy_result['price'], buy_result['quantity'], params=current_params)
 
-                    position_data = {
-                        'trade_id': new_trade_id, 'price': buy_result['price'], 'quantity': buy_result['quantity'],
-                        'usd_value': buy_result['usd_value'], 'sell_target_price': sell_target_price,
-                        'commission_usd': buy_result.get('commission_usd', Decimal('0')),
-                        'is_smart_trailing_active': False, 'smart_trailing_highest_price': None
-                    }
-                    open_positions[new_trade_id] = position_data
-
-                    trade_data = {
-                        'run_id': self.run_id, 'strategy_name': strategy_name, 'symbol': symbol,
-                        'trade_id': new_trade_id, 'exchange': "backtest_engine", 'order_type': "buy",
-                        'status': "OPEN", 'price': buy_result['price'], 'quantity': buy_result['quantity'],
-                        'usd_value': buy_result['usd_value'], 'commission': buy_result.get('commission_usd', Decimal('0')),
-                        'commission_asset': "USDT", 'timestamp': current_time,
-                        'decision_context': decision_context_buy, 'sell_target_price': sell_target_price,
-                        'commission_usd': buy_result.get('commission_usd', Decimal('0'))
-                    }
-                    all_trades_for_run.append(trade_data)
+                    # Create a new Trade object for the buy action
+                    new_position = Trade(
+                        run_id=self.run_id,
+                        trade_id=new_trade_id,
+                        strategy_name=strategy_name,
+                        symbol=symbol,
+                        exchange="backtest_engine",
+                        order_type="buy",
+                        status="OPEN",
+                        price=buy_result['price'],
+                        quantity=buy_result['quantity'],
+                        usd_value=buy_result['usd_value'],
+                        commission=buy_result.get('commission_usd', Decimal('0')),
+                        commission_asset="USDT",
+                        commission_usd=buy_result.get('commission_usd', Decimal('0')),
+                        timestamp=current_time,
+                        decision_context=decision_context_buy,
+                        sell_target_price=sell_target_price,
+                        is_smart_trailing_active=False,
+                        smart_trailing_highest_price=None
+                    )
+                    open_positions[new_trade_id] = new_position
+                    all_trades_for_run.append(new_position)
 
         self._log_trades_to_db(all_trades_for_run)
         self._generate_and_save_summary(open_positions, portfolio_history)
         logger.info(f"--- Backtest {self.run_id} finished ---")
 
-    def _log_trades_to_db(self, trades: list):
+    def _log_trades_to_db(self, trades: list[Trade]):
         if not trades:
             return
         logger.info(f"Logging {len(trades)} trades from backtest run to database...")
-        for trade_data in trades:
-            if trade_data['status'] == 'OPEN':
-                self.trade_logger.log_trade(trade_data)
-            else: # status is 'CLOSED'
-                # For closed trades, we need to log the initial buy and then update it
-                # This is a simplification; a more robust solution would be needed for complex scenarios
-                # but for this backtester, it's sufficient.
-                buy_trade_data = {**trade_data}
-                buy_trade_data['status'] = 'OPEN'
-                self.trade_logger.log_trade(buy_trade_data)
-                self.trade_logger.update_trade(trade_data)
+        for trade in trades:
+            # The TradeLogger expects a dictionary, so we convert the Trade object.
+            # We need a consistent way to do this. Let's assume a to_dict() method.
+            # If the Trade object doesn't have one, this will need to be added.
+            # For now, we'll construct the dict manually.
+            trade_data = {c.name: getattr(trade, c.name) for c in trade.__table__.columns}
+            self.trade_logger.log_trade(trade_data)
 
     def _generate_and_save_summary(self, open_positions: dict, portfolio_history: list[Decimal]):
         logger.info("--- Generating and saving backtest summary ---")

@@ -350,6 +350,13 @@ class TradingBot:
                         self.current_regime = new_regime
 
                     current_regime = new_regime # Use new_regime for the rest of the cycle
+
+                    # If the regime is undefined, log it and skip all trading logic for this cycle.
+                    if current_regime == -1:
+                        logger.warning("Market regime is -1 (Undefined). No trading decisions will be made.")
+                        time.sleep(10) # Avoid rapid looping in an undefined state
+                        continue
+
                     current_price = Decimal(final_candle['close'])
                     open_positions = self.state_manager.get_open_positions()
                     total_portfolio_value = self.live_portfolio_manager.get_total_portfolio_value(current_price)
