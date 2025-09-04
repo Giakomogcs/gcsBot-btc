@@ -301,9 +301,13 @@ class StatusService:
             price_to_target = sell_target_price - current_price
             usd_to_target = price_to_target * quantity
 
+            # Garantir que o timestamp é timezone-aware (UTC) e converter para America/Sao_Paulo
+            sao_paulo_tz = pytz.timezone('America/Sao_Paulo')
+            aware_timestamp = trade.timestamp.replace(tzinfo=pytz.utc).astimezone(sao_paulo_tz)
+
             positions_status.append({
                 "trade_id": trade.trade_id,
-                "timestamp": trade.timestamp.isoformat(),
+                "timestamp": aware_timestamp.isoformat(),
                 "entry_price": entry_price,
                 "current_price": current_price,
                 "quantity": quantity,

@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime, JSON, Boolean, Numeric
 from sqlalchemy.sql import func
 import datetime
 from decimal import Decimal
+import pytz
 from .base import Base
 
 class PriceHistory(Base):
@@ -21,7 +22,10 @@ class Trade(Base):
         for key in self.__mapper__.c.keys():
             value = getattr(self, key)
             if isinstance(value, datetime.datetime):
-                result[key] = value.isoformat()
+                # Tornar o datetime ciente do fuso horário (UTC) e converter para America/Sao_Paulo
+                sao_paulo_tz = pytz.timezone('America/Sao_Paulo')
+                aware_datetime = value.replace(tzinfo=pytz.utc).astimezone(sao_paulo_tz)
+                result[key] = aware_datetime.isoformat()
             elif isinstance(value, Decimal):
                 result[key] = str(value)
             else:

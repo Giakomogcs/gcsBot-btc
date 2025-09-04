@@ -145,8 +145,11 @@ class CapitalManager:
         else:
             mode = OperatingMode.ACCUMULATION
 
+        # Calculate the free portion of working capital
+        working_capital_free_cash = free_cash * self.working_capital_percentage
+        
         buy_amount = Decimal('0')
-        base_buy_amount, reason = self._calculate_base_buy_amount(free_cash, portfolio_value, params)
+        base_buy_amount, reason = self._calculate_base_buy_amount(working_capital_free_cash, portfolio_value, params)
 
         if mode == OperatingMode.ACCUMULATION:
             buy_amount = base_buy_amount
@@ -159,8 +162,9 @@ class CapitalManager:
             buy_amount = self.max_trade_size
             reason += f", Capped at max trade size"
 
-        if buy_amount > free_cash:
-            return Decimal('0'), OperatingMode.PRESERVATION.name, f"Insufficient funds to place order of ${buy_amount:,.2f}", regime, difficulty_factor
+        # Check against the available working capital, not the total free cash
+        if buy_amount > working_capital_free_cash:
+            return Decimal('0'), OperatingMode.PRESERVATION.name, f"Insufficient working capital for order of ${buy_amount:,.2f}. Available: ${working_capital_free_cash:,.2f}", regime, difficulty_factor
 
         if buy_amount < self.min_trade_size:
             return Decimal('0'), OperatingMode.PRESERVATION.name, f"Amount ${buy_amount:,.2f} is below min trade size.", regime, difficulty_factor
@@ -246,27 +250,41 @@ class CapitalManager:
 
     def get_capital_allocation(self, open_positions: list, free_usdt_balance: Decimal, total_btc_balance: Decimal, current_btc_price: Decimal) -> dict:
         """
-        Calculates a clearer breakdown of capital allocation based on live data.
+        Calculates a clearer breakdown of capital allocation based on live data,
+        splitting the available USDT into Working Capital and a Strategic Reserve.
         """
-        # BTC in open positions is the sum of quantities from all open trades
-        btc_in_open_positions = sum(Decimal(pos.quantity) for pos in open_positions)
+        # 1. Calculate the value of assets currently in open positions.
+        btc_in_open_positions = sum(Decimal(p.quantity) for p in open_positions if p.quantity is not None)
+        capital_in_positions_usd = btc_in_open_positions * current_btc_price
 
-        # Used Capital is the current market value of the BTC in those open positions
-        used_capital_usd = btc_in_open_positions * current_btc_price
+        # 2. Split the total free USDT into Working Capital and Strategic Reserve.
+        # This is the total cash pool available for the bot.
+        total_cash_pool_usd = free_usdt_balance
+        
+        # The portion of the cash pool designated as the bot's main operating fund.
+        working_capital_cash_pool = total_cash_pool_usd * self.working_capital_percentage
+        
+        # The portion held back for emergencies or special opportunities.
+        strategic_reserve_usd = total_cash_pool_usd - working_capital_cash_pool
 
-        # Free Capital is the available USDT in the wallet
-        free_capital_usd = free_usdt_balance
+        # 3. Determine the breakdown of the Working Capital.
+        # This is the total value of the working capital fund (cash + invested).
+        working_capital_total_usd = capital_in_positions_usd + working_capital_cash_pool
+        
+        # This is the portion of the working capital's cash that is not yet invested.
+        working_capital_free_usd = working_capital_cash_pool
 
-        # Working Capital is the total capital actively managed by the bot
-        working_capital_total_usd = used_capital_usd + free_capital_usd
-
-        # Strategic Reserve is the value of any BTC held that is NOT in an open position
-        strategic_reserve_btc = total_btc_balance - btc_in_open_positions
-        strategic_reserve_usd = strategic_reserve_btc * current_btc_price
+        # For clarity in the dictionary, 'used' refers to capital in open positions.
+        working_capital_used_usd = capital_in_positions_usd
+        
+        # Also include the value of any BTC that is not part of an open position.
+        # This can be considered another form of reserve or "unmanaged" asset.
+        unmanaged_btc_reserve = (total_btc_balance - btc_in_open_positions) * current_btc_price
 
         return {
             "working_capital_total": working_capital_total_usd,
-            "working_capital_used": used_capital_usd,
-            "working_capital_free": free_capital_usd,
-            "strategic_reserve": strategic_reserve_usd
+            "working_capital_used": working_capital_used_usd,
+            "working_capital_free": working_capital_free_usd,
+            "strategic_reserve": strategic_reserve_usd,
+            "unmanaged_btc_reserve": unmanaged_btc_reserve # Added for completeness
         }

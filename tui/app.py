@@ -163,7 +163,8 @@ class TUIApp(App):
                                 yield Static("Capital Allocation", classes="title")
                                 with Static(id="capital_container"):
                                     yield Static("Working Capital: $0 | Used: $0 | Free: $0", id="info_working_capital")
-                                    yield Static("Strategic Reserve: $0", id="info_strategic_reserve")
+                                    yield Static("USDT Strategic Reserve: $0", id="info_strategic_reserve")
+                                    yield Static("Unmanaged BTC Reserve: $0", id="info_unmanaged_btc_reserve") # New line
                                     yield Static("Operating Mode: N/A", id="info_operating_mode")
                         with Vertical(id="open_positions"):
                             yield Static("Open Positions", classes="title")
@@ -489,9 +490,8 @@ class TUIApp(App):
             pnl_cell = f"[{pnl_color}]{pnl_str}[/]" if order_type == 'sell' else "N/A"
             type_color = "green" if order_type == 'buy' else "red"
             type_cell = f"[{type_color}]{order_type.upper()}[/]"
-            sao_paulo_tz = pytz.timezone('America/Sao_Paulo')
-            utc_timestamp = datetime.fromisoformat(trade['timestamp'])
-            local_timestamp = utc_timestamp.astimezone(sao_paulo_tz)
+            # O timestamp agora chega no fuso horário correto
+            local_timestamp = datetime.fromisoformat(trade['timestamp'])
             timestamp = local_timestamp.strftime('%Y-%m-%d %H:%M')
             trade_id_short = trade_id.split('-')[0]
             buy_price = f"${Decimal(trade.get('price', 0)):,.2f}"
@@ -533,11 +533,13 @@ class TUIApp(App):
         wc_total = Decimal(capital.get("working_capital_total", 0))
         wc_used = Decimal(capital.get("working_capital_used", 0))
         wc_free = Decimal(capital.get("working_capital_free", 0))
-        sr_total = Decimal(capital.get("strategic_reserve", 0))
+        sr_usdt = Decimal(capital.get("strategic_reserve", 0))
+        sr_btc = Decimal(capital.get("unmanaged_btc_reserve", 0))
         op_mode = strategy.get("operating_mode", "N/A")
 
         self.query_one("#info_working_capital").update(f"Working Capital: ${wc_total:,.0f} | Used: ${wc_used:,.0f} | Free: ${wc_free:,.0f}")
-        self.query_one("#info_strategic_reserve").update(f"Strategic Reserve: ${sr_total:,.0f}")
+        self.query_one("#info_strategic_reserve").update(f"USDT Strategic Reserve: ${sr_usdt:,.0f}")
+        self.query_one("#info_unmanaged_btc_reserve").update(f"Unmanaged BTC Reserve: ${sr_btc:,.0f}")
         self.query_one("#info_operating_mode").update(f"Operating Mode: {op_mode}")
 
     def update_strategy_panel(self, status: dict, current_price: Decimal):
@@ -635,9 +637,8 @@ class TUIApp(App):
             progress_bar = "█" * int(progress / 10) + "░" * (10 - int(progress / 10))
             progress_str = f"[{progress_bar}] {progress:.1f}%"
             current_value = pos['current_value']
-            sao_paulo_tz = pytz.timezone('America/Sao_Paulo')
-            utc_timestamp = datetime.fromisoformat(pos['timestamp'])
-            local_timestamp = utc_timestamp.astimezone(sao_paulo_tz)
+            # O timestamp agora chega no fuso horário correto
+            local_timestamp = datetime.fromisoformat(pos['timestamp'])
             timestamp = local_timestamp.strftime('%Y-%m-%d %H:%M')
 
             row_data = (
