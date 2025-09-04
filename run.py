@@ -29,6 +29,7 @@ def main(ctx: typer.Context):
         shutil.copy(".env.example", ".env")
 
 import socket
+import errno
 
 def find_free_port(start_port=8766):
     """Finds an available TCP port on the host, starting from start_port."""
@@ -36,10 +37,13 @@ def find_free_port(start_port=8766):
     while port <= 65535:
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.bind(('127.0.0.1', port))
+                s.bind(('0.0.0.0', port))
                 return port
-        except OSError:
-            port += 1
+        except OSError as e:
+            if e.errno == errno.EADDRINUSE or (hasattr(e, 'winerror') and e.winerror == 10048):
+                port += 1
+            else:
+                raise
     raise IOError("Could not find a free port.")
 
 def get_docker_compose_command():
@@ -155,7 +159,7 @@ def run_bot_in_container(bot_name: str, mode: str) -> tuple[Optional[str], int]:
         print(f"❌ Erro: {e}")
         return None, -1
 
-    command = SUDO_PREFIX + ["docker", "run", "--detach", "--name", container_name, "--network", DOCKER_NETWORK_NAME, "--env-file", ".env", "-e", f"BOT_NAME={bot_name}", "-e", f"BOT_MODE={mode}", "-e", "JULES_BOT_SCRIPT_MODE=1", "-p", f"{host_port}:8766", "-v", f"{project_root}:/app", "-v", f"{tui_files_dir}:/app/.tui_files", DOCKER_IMAGE_NAME, "python", "jules_bot/main.py"]
+    command = SUDO_PREFIX + ["docker", "run", "--detach", "--name", container_name, "--network", DOCKER_NETWORK_NAME, "--env-file", ".env", "-e", f"BOT_NAME={bot_name}", "-e", f"BOT_MODE={mode}", "-e", "JULES_BOT_SCRIPT_MODE=1", "-e", f"API_PORT={host_port}", "-p", f"{host_port}:{host_port}", "-v", f"{project_root}:/app", "-v", f"{tui_files_dir}:/app/.tui_files", DOCKER_IMAGE_NAME, "python", "jules_bot/main.py"]
     
     print(f"   (executando: `{' '.join(command)}`)")
     try:

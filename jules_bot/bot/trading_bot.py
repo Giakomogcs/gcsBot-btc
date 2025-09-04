@@ -138,6 +138,7 @@ class TradingBot:
         self.api_app = FastAPI(title=f"Jules Bot API - {self.bot_name}")
         self.api_app.state.bot = self  # Make bot instance available to endpoints
         self.api_app.include_router(api_router, prefix="/api")
+        self.api_port = int(os.getenv('API_PORT', '8766'))
 
         # State for TUI synchronization
         self.last_decision_reason: str = "Initializing..."
@@ -183,7 +184,9 @@ class TradingBot:
     def process_force_sell(self, trade_id: str, percentage: str):
         """Processes a force sell command received from the API."""
         try:
-            percentage_decimal = Decimal(percentage)
+            # Clean the percentage string by removing '%' and stripping whitespace
+            cleaned_percentage_str = percentage.strip().replace('%', '')
+            percentage_decimal = Decimal(cleaned_percentage_str)
         except InvalidOperation:
             logger.error(f"Invalid number format for force sell percentage: {percentage}")
             return {"status": "error", "message": "Invalid number format for percentage."}
@@ -299,12 +302,10 @@ class TradingBot:
         self.status_service.set_bot_running(self.bot_name, self.mode)
 
         # Start API server in a background thread
-        # The bot will be available at http://localhost:8766
-        api_port = 8766 # Consider making this configurable
-        uvicorn_config = uvicorn.Config(self.api_app, host="0.0.0.0", port=api_port, log_level="info")
+        uvicorn_config = uvicorn.Config(self.api_app, host="0.0.0.0", port=self.api_port, log_level="info")
         api_thread = threading.Thread(target=uvicorn.Server(config=uvicorn_config).run, daemon=True)
         api_thread.start()
-        logger.info(f"🚀 --- TRADING BOT STARTED (API on port {api_port}) --- BOT NAME: {self.bot_name} --- RUN ID: {self.run_id} --- SYMBOL: {self.symbol} --- MODE: {self.mode.upper()} --- 🚀")
+        logger.info(f"🚀 --- TRADING BOT STARTED (API on port {self.api_port}) --- BOT NAME: {self.bot_name} --- RUN ID: {self.run_id} --- SYMBOL: {self.symbol} --- MODE: {self.mode.upper()} --- 🚀")
 
         try:
             while self.is_running:

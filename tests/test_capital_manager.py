@@ -63,6 +63,8 @@ class TestCapitalManager(unittest.TestCase):
 
     def test_preservation_mode_when_no_buy_signal(self):
         """Should not buy if there is no buy signal."""
+        self.config_values[('STRATEGY_RULES', 'use_dynamic_capital')] = True
+        self.capital_manager = CapitalManager(self.mock_config_manager, self.mock_strategy_rules)
         self.mock_strategy_rules.evaluate_buy_signal.return_value = (False, "unknown", "No signal")
 
         amount, mode, reason, _, _ = self.capital_manager.get_buy_order_details(
@@ -77,7 +79,7 @@ class TestCapitalManager(unittest.TestCase):
         self.assertEqual(mode, OperatingMode.PRESERVATION.name)
         # self.assertEqual(reason, "No signal")
         # Verify it was called with difficulty 0
-        self.mock_strategy_rules.evaluate_buy_signal.assert_called_with({}, 0, Decimal('0'), params=self.params)
+        self.mock_strategy_rules.evaluate_buy_signal.assert_called_with({}, 0, self.capital_manager.base_difficulty_percentage, params=self.params)
 
     def test_accumulation_mode_logic(self):
         """Should return base trade size in ACCUMULATION mode."""
@@ -98,7 +100,7 @@ class TestCapitalManager(unittest.TestCase):
 
         self.assertEqual(mode, OperatingMode.ACCUMULATION.name)
         self.assertEqual(amount, Decimal('20.00'))
-        self.mock_strategy_rules.evaluate_buy_signal.assert_called_with({}, 6, Decimal('0'), params=self.params)
+        self.mock_strategy_rules.evaluate_buy_signal.assert_called_with({}, 6, self.capital_manager.base_difficulty_percentage, params=self.params)
 
     def test_aggressive_mode_logic(self):
         """Should return multiplied trade size in AGGRESSIVE mode."""
@@ -116,7 +118,7 @@ class TestCapitalManager(unittest.TestCase):
 
         self.assertEqual(mode, OperatingMode.AGGRESSIVE.name)
         self.assertEqual(amount, Decimal('40.00')) # 20 * 2.0
-        self.mock_strategy_rules.evaluate_buy_signal.assert_called_with({}, 2, Decimal('0'), params=self.params)
+        self.mock_strategy_rules.evaluate_buy_signal.assert_called_with({}, 2, self.capital_manager.base_difficulty_percentage, params=self.params)
 
     def test_correction_entry_mode_logic(self):
         """Should return larger trade size for a correction entry."""
@@ -134,7 +136,7 @@ class TestCapitalManager(unittest.TestCase):
 
         self.assertEqual(mode, OperatingMode.CORRECTION_ENTRY.name)
         self.assertEqual(amount, Decimal('50.00')) # 20 * 2.5
-        self.mock_strategy_rules.evaluate_buy_signal.assert_called_with({}, 0, Decimal('0'), params=self.params)
+        self.mock_strategy_rules.evaluate_buy_signal.assert_called_with({}, 0, self.capital_manager.base_difficulty_percentage, params=self.params)
 
     def test_insufficient_funds_logic(self):
         """Should not buy if free cash is less than the calculated amount."""

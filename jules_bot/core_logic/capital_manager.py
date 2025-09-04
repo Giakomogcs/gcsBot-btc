@@ -180,8 +180,8 @@ class CapitalManager:
             return Decimal('0')
 
         if not trade_history:
-            logger.info("No recent trades found. Difficulty factor is 0.")
-            return Decimal('0')
+            logger.info(f"No recent trades found. Applying base difficulty factor of {self.base_difficulty_percentage:.2%}.")
+            return self.base_difficulty_percentage
 
         logger.info(f"Calculating difficulty factor based on {len(trade_history)} trades in the last {self.difficulty_reset_timeout_hours} hours.")
 
