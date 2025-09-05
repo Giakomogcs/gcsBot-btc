@@ -57,9 +57,21 @@ build/
 # Postgres
 .pgpass
 
-# Bot-specific files
-/.tui_files/
-.running_bots.json
-.bot_status_*.json
+# ===================================================
+# Arquivos de Status e Estado do Bot
+# ===================================================
+
+# Ignora arquivos de status JSON gerados em qualquer lugar
+*_status.json
+
+# Ignora uma possível pasta de estado do bot
+bot_state/
+
+# Ignora arquivos de log fora da pasta /logs
 *.log
-*.json
+
+# Arquivo de estado de bots em execução
+.running_bots.json
+
+# Pasta de arquivos temporários da TUI
+.tui_files/

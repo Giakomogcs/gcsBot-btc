@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal, getcontext, InvalidOperation
 from jules_bot.utils.logger import logger
 from jules_bot.utils.config_manager import config_manager
+from jules_bot.bot.synchronization_manager import SynchronizationManager
 from jules_bot.bot.account_manager import AccountManager
 from jules_bot.core_logic.state_manager import StateManager
 from jules_bot.core_logic.trader import Trader
@@ -133,6 +134,17 @@ class TradingBot:
 
         self.dynamic_params = DynamicParameters(config_manager)
         self.sa_instance = SituationalAwareness()
+
+        # --- Synchronization Manager ---
+        logger.info("Initializing SynchronizationManager for periodic checks...")
+        self.sync_manager = SynchronizationManager(
+            binance_client=self.trader.client,
+            db_manager=self.db_manager,
+            symbol=self.symbol,
+            strategy_rules=self.strategy_rules,
+            environment=self.mode
+        )
+        self.last_sync_time = None # Initialize to run sync on first cycle
 
         # API Setup
         self.api_app = FastAPI(title=f"Jules Bot API - {self.bot_name}")
@@ -310,6 +322,18 @@ class TradingBot:
         try:
             while self.is_running:
                 try:
+                    # --- Periodic Trade Synchronization ---
+                    now = datetime.now()
+                    # Run sync if it's the first time or if 30 minutes have passed.
+                    if self.last_sync_time is None or (now - self.last_sync_time) > timedelta(minutes=30):
+                        logger.info("Starting periodic trade history synchronization...")
+                        try:
+                            self.sync_manager.run_full_sync()
+                            self.last_sync_time = now
+                            logger.info("Periodic trade history synchronization complete.")
+                        except Exception as e:
+                            logger.error(f"An error occurred during the periodic sync: {e}", exc_info=True)
+                    
                     self._check_and_handle_refresh_signal()
                     
                     logger.info("--- Starting new trading cycle ---")

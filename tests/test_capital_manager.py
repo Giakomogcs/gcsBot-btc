@@ -152,7 +152,7 @@ class TestCapitalManager(unittest.TestCase):
 
         self.assertEqual(amount, Decimal('0'))
         self.assertEqual(mode, OperatingMode.PRESERVATION.name)
-        self.assertIn("Insufficient funds", reason)
+        self.assertIn("Insufficient working capital", reason)
 
     def test_below_minimum_trade_size_logic(self):
         """Should not buy if calculated amount is below min_trade_size."""
