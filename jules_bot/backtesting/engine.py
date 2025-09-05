@@ -63,6 +63,7 @@ class BacktestEngine:
         
         # Replace live components with mock/backtest components
         self.bot.feature_calculator = self.backtest_feature_calculator
+        self.bot.state_manager.feature_calculator = self.backtest_feature_calculator
         self.bot.trader.client = self.mock_trader
         self.bot.live_portfolio_manager = BacktestPortfolioManager(self.mock_trader)
         
