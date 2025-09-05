@@ -80,7 +80,10 @@ class MockTrader(Trader):
         }
         return True, exit_data
 
-    def get_account_balance(self) -> Decimal:
+    def get_account_balance(self, asset: str = None) -> Decimal:
+        # The MockTrader only has a single USD balance, so we ignore the asset
+        # parameter and return the USD balance. This makes the method signature
+        # compatible with the base Trader class.
         return self.usd_balance
 
     def get_crypto_balance_in_usd(self) -> Decimal:

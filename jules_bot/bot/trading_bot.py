@@ -150,6 +150,10 @@ class TradingBot:
             account_manager=self.account_manager
         )
 
+        self.last_decision_reason = "Initializing..."
+        self.last_operating_mode = "STARTUP"
+        self.last_difficulty_factor = Decimal("0.0")
+
         # API Setup
         self.api_app = FastAPI(title=f"Jules Bot API - {self.bot_name}")
         self.api_app.state.bot = self  # Make bot instance available to endpoints
@@ -331,6 +335,9 @@ class TradingBot:
                     # Unpack results. If None, it means the cycle was skipped.
                     if cycle_results:
                         reason, op_mode, diff_factor, regime, portfolio_val = cycle_results
+                        self.last_decision_reason = reason
+                        self.last_operating_mode = op_mode
+                        self.last_difficulty_factor = diff_factor
                         
                         # The unified logic now handles its own state, but the bot needs to know the outcome for status updates.
                         # Persist the latest status to the database for the TUI
