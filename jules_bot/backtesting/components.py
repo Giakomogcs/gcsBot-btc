@@ -1,14 +1,15 @@
 import pandas as pd
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
 
-class BacktestFeatureCalculator:
+class BacktestFeatureCalculator(LiveFeatureCalculator):
     """
-    A mock feature calculator for backtesting.
+    A mock feature calculator for backtesting that inherits from LiveFeatureCalculator.
     It holds a complete historical dataframe with pre-calculated features
-    and provides it to the TradingBot one candle at a time, mimicking
-    the behavior of the LiveFeatureCalculator.
+    and provides it to the TradingBot one candle at a time.
     """
     def __init__(self, full_feature_df: pd.DataFrame):
+        # We do NOT call super().__init__() because we want to avoid
+        # initializing a live Binance client.
         self._full_feature_df = full_feature_df
         self._current_candle = None
         self._current_index = -1
