@@ -6,6 +6,7 @@ import tempfile
 from decimal import Decimal, InvalidOperation
 import time
 from datetime import datetime
+import requests
 
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll, Horizontal, Vertical
@@ -96,14 +97,15 @@ class TUIApp(App):
     BINDINGS = [("d", "toggle_dark", "Toggle Dark Mode"), ("q", "quit", "Quit")]
     CSS_PATH = "app.css"
 
-    def __init__(self, mode: str = "test", container_id: str | None = None, bot_name: str = "jules_bot", *args, **kwargs):
+    def __init__(self, mode: str = "test", container_id: str | None = None, bot_name: str = "jules_bot", host_port: int = 8000, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.mode = mode
         self.container_id = container_id
+        self.host_port = host_port
         self.selected_trade_id: str | None = None
         self.log_display: RichLog | None = None
         self.bot_name = bot_name
-        logger.info(f"TUI is initializing for bot: {self.bot_name} (Container: {self.container_id})")
+        logger.info(f"TUI is initializing for bot: {self.bot_name} (Container: {self.container_id}, Port: {self.host_port})")
         config_manager.initialize(self.bot_name)
         self.log_filter = ""
         self.open_positions_data = []
@@ -229,27 +231,30 @@ class TUIApp(App):
             self.call_from_thread(self.log_display.write, f"[bold red]Error streaming logs: {e}[/]")
 
     @work(thread=True)
-    def run_command_worker(self, command: list[str]) -> None:
-        """Runs a one-off command in a Docker container, e.g., force_buy/sell."""
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    def api_call_worker(self, endpoint: str, payload: dict) -> None:
+        """
+        Makes a direct API call to the bot's API server.
+        """
+        url = f"http://localhost:{self.host_port}/api/{endpoint}"
         try:
-            project_name = os.getenv("PROJECT_NAME", "gcsbot-btc")
-            docker_image_name = f"{project_name}-app"
-            docker_network_name = os.getenv("DOCKER_NETWORK_NAME", f"{project_name}_default")
+            self.log_display.write(f"Sending POST request to {url} with payload: {json.dumps(payload)}")
+            response = requests.post(url, json=payload, timeout=15)
+            
+            if response.status_code == 200:
+                self.post_message(CommandOutput(json.dumps(response.json()), success=True))
+            else:
+                try:
+                    # Try to parse the JSON error from the server
+                    error_detail = response.json().get("detail", response.text)
+                except json.JSONDecodeError:
+                    error_detail = response.text
+                output = f"API Error (HTTP {response.status_code}): {error_detail}"
+                self.post_message(CommandOutput(output, success=False))
 
-            docker_command = SUDO_PREFIX + ["docker", "run", "--rm", "--network", docker_network_name, "--env-file", ".env", "-e", f"BOT_NAME={self.bot_name}", "-e", f"BOT_MODE={self.mode}", "-v", f"{project_root}:/app", docker_image_name] + command
-            process = subprocess.run(docker_command, capture_output=True, text=True, check=False, encoding='utf-8', errors='replace')
-            
-            output = process.stdout.strip() if process.returncode == 0 else process.stderr.strip()
-            success = process.returncode == 0
-            if not success:
-                self.call_from_thread(self.log_display.write, f"[bold red]Script Error ({' '.join(command)}):[/] {output}")
-            
-            self.post_message(CommandOutput(output, success))
-        except FileNotFoundError:
-            self.post_message(CommandOutput("Docker not found. Is it installed and in your PATH?", False))
+        except requests.exceptions.RequestException as e:
+            self.post_message(CommandOutput(f"Failed to connect to bot API: {e}", success=False))
         except Exception as e:
-            self.post_message(CommandOutput(f"Worker error: {e}", False))
+            self.post_message(CommandOutput(f"An unexpected error occurred: {e}", success=False))
 
     @work(thread=True)
     def process_positions_worker(self, positions_data: list, sort_column: str, sort_reverse: bool) -> None:
@@ -704,17 +709,19 @@ class TUIApp(App):
         if event.button.id == "force_buy_button":
             input_widget = self.query_one("#manual_buy_input", Input)
             if input_widget.is_valid:
-                # The scripts now only need the core arguments.
-                self.run_command_worker(["python", "scripts/force_buy.py", input_widget.value])
+                payload = {"amount_usd": input_widget.value}
+                self.api_call_worker("force_buy", payload)
                 input_widget.value = ""
             else:
                 self.log_display.write("[bold red]Invalid buy amount.[/bold red]")
+
         elif event.button.id == "force_sell_button" and self.selected_trade_id:
             event.button.disabled = True
             self.log_display.write(f"[yellow]Initiating force sell for trade ID: {self.selected_trade_id}...[/]")
-            # The scripts now only need the core arguments.
-            self.run_command_worker(["python", "scripts/force_sell.py", self.selected_trade_id, "100"])
+            payload = {"trade_id": self.selected_trade_id, "percentage": "100"}
+            self.api_call_worker("force_sell", payload)
             self.selected_trade_id = None
+
         elif event.button.id in ["filter_all_button", "filter_open_button", "filter_closed_button"]:
             # Update filter state
             self.history_filter = event.button.id.split('_')[1] # e.g., "all", "open", "closed"
@@ -788,8 +795,9 @@ def run_tui():
     parser.add_argument("--mode", type=str, choices=["trade", "test"], default="test", help="Trading mode to monitor.")
     parser.add_argument("--container-id", type=str, required=True, help="The container ID of the running bot for log streaming.")
     parser.add_argument("--bot-name", type=str, default=os.getenv("BOT_NAME", "jules_bot"), help="The name of the bot to monitor.")
+    parser.add_argument("--host-port", type=int, required=True, help="The host port the bot's API is mapped to.")
     args = parser.parse_args()
-    app = TUIApp(mode=args.mode, container_id=args.container_id, bot_name=args.bot_name)
+    app = TUIApp(mode=args.mode, container_id=args.container_id, bot_name=args.bot_name, host_port=args.host_port)
     app.run()
 
 if __name__ == "__main__":

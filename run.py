@@ -411,7 +411,12 @@ def display(bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", hel
         tui_env["BOT_NAME"] = bot_to_display.bot_name
         tui_env["DOCKER_NETWORK_NAME"] = DOCKER_NETWORK_NAME
         tui_env["PROJECT_NAME"] = PROJECT_NAME
-        command = [sys.executable, "tui/app.py", "--mode", bot_to_display.bot_mode, "--container-id", bot_to_display.container_id]
+        command = [
+            sys.executable, "tui/app.py",
+            "--mode", bot_to_display.bot_mode,
+            "--container-id", bot_to_display.container_id,
+            "--host-port", str(bot_to_display.host_port)
+        ]
         print(f"   (executando: `{' '.join(command)}`)")
         subprocess.run(command, env=tui_env, check=True)
     except Exception as e:

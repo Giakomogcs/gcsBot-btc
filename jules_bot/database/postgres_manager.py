@@ -17,8 +17,6 @@ from jules_bot.database.portfolio_models import PortfolioSnapshot, FinancialMove
 from jules_bot.utils.logger import logger
 from jules_bot.utils.config_manager import config_manager
 
-logger.critical("--- RUNNING MODIFIED postgres_manager.py ---")
-
 class PostgresManager:
     def __init__(self):
         # The config_manager MUST be initialized before this class is instantiated.
