@@ -92,30 +92,35 @@ def _ensure_env_is_running():
         check_command = base_command + ["ps", "-q", "postgres"]
         result = subprocess.run(check_command, capture_output=True, text=True, check=False)
         if not result.stdout.strip():
-            print("🚀 Ambiente Docker não detectado. Iniciando serviços de suporte (PostgreSQL, etc.)...")
-            
-            print("   -> Etapa 1: Baixando as imagens base (Postgres, etc.)...")
-            # Specify services to pull to avoid trying to pull the locally built app image
-            if not run_docker_compose_command(["pull", "postgres", "pgadmin"], capture_output=False):
-                print("❌ Falha ao baixar imagens Docker. Verifique sua conexão ou o limite de pulls do Docker Hub.")
-                return False
+            print("🚀 Ambiente Docker de serviços não detectado. Iniciando (PostgreSQL, etc.)...")
 
-            print("\n   -> Etapa 2: Construindo a imagem da aplicação (isso pode levar um momento)...")
-            # Run build with streaming output for better user feedback by setting capture_output=False
-            if not run_docker_compose_command(["build"], capture_output=False):
-                print("❌ Falha ao construir a imagem Docker. Verifique a sua instalação do Docker e o Dockerfile.")
+            print("   -> Etapa 1: Iniciando os containers de serviço em background...")
+            # We only specify the services to avoid any potential conflict if 'app' was in the compose file
+            if not run_docker_compose_command(["up", "-d", "postgres", "pgadmin"], capture_output=False):
+                print("❌ Falha ao iniciar os containers de serviço. Verifique a sua instalação do Docker.")
                 return False
-
-            print("\n   -> Etapa 3: Iniciando os containers em background...")
-            # Run 'up' without build, as it's already done
-            if not run_docker_compose_command(["up", "-d"], capture_output=True):
-                print("❌ Falha ao iniciar os containers Docker. Verifique a sua instalação do Docker.")
-                return False
-            
             print("✅ Serviços de ambiente iniciados com sucesso.")
+
     except Exception as e:
-        print(f"❌ Erro inesperado ao verificar o ambiente Docker: {e}")
+        print(f"❌ Erro inesperado ao verificar ou iniciar o ambiente Docker: {e}")
         return False
+
+    # Etapa 2: Build the application image separately, outside the initial environment check
+    print("\n   -> Etapa 2: Construindo a imagem da aplicação (isso pode levar um momento)...")
+    build_command = SUDO_PREFIX + ["docker", "build", "-t", DOCKER_IMAGE_NAME, "."]
+    print(f"   (usando comando: `{' '.join(build_command)}`)")
+    try:
+        # Use streaming output for better user feedback
+        subprocess.run(build_command, check=True)
+        print(f"✅ Imagem '{DOCKER_IMAGE_NAME}' construída com sucesso.")
+    except subprocess.CalledProcessError:
+        # The output is already streamed to the console, so we just need to indicate failure.
+        print(f"❌ Falha ao construir a imagem Docker. Verifique o output acima para mais detalhes.")
+        return False
+    except Exception as e:
+        print(f"❌ Erro inesperado ao construir a imagem Docker: {e}")
+        return False
+
     return True
 
 @app.command("start-env")
@@ -139,6 +144,22 @@ def stop_env():
                 pass
     if run_docker_compose_command(["down", "-v"], capture_output=True):
         print("✅ Ambiente Docker parado com sucesso.")
+
+    print(f"🗑️  Removendo a imagem Docker da aplicação '{DOCKER_IMAGE_NAME}'...")
+    try:
+        # Using -f to force removal, e.g. if there are dangling tags
+        remove_image_command = SUDO_PREFIX + ["docker", "rmi", "-f", DOCKER_IMAGE_NAME]
+        result = subprocess.run(remove_image_command, capture_output=True, text=True, check=False)
+        if result.returncode == 0:
+            # Docker's rmi output can be verbose, so we just confirm it worked.
+            print(f"✅ Imagem '{DOCKER_IMAGE_NAME}' removida.")
+        elif "No such image" in result.stderr:
+            print(f"ℹ️  Imagem '{DOCKER_IMAGE_NAME}' não encontrada, nada a fazer.")
+        else:
+            print(f"⚠️  Não foi possível remover a imagem '{DOCKER_IMAGE_NAME}'. Pode ser que esteja em uso por um container não relacionado. Erro:")
+            print(f"   {result.stderr.strip()}")
+    except Exception as e:
+        print(f"❌ Erro inesperado ao remover a imagem Docker: {e}")
 
 @app.command("status")
 def status():
