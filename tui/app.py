@@ -135,7 +135,7 @@ class TUIApp(App):
                         yield RichLog(id="log_display", wrap=True, markup=True, min_width=0)
                     with Vertical(id="middle_pane"):
                         with Horizontal(id="top_middle_pane"):
-                            with Vertical(id="status_and_strategy"):
+                            with VerticalScroll(id="status_and_strategy"):
                                 yield Static(f"Bot Status for {self.bot_name}", classes="title")
                                 with Static(id="status_container"):
                                     yield Static(f"Mode: {self.mode.upper()}", id="status_mode")
@@ -166,7 +166,7 @@ class TUIApp(App):
                                     yield Static("USDT Strategic Reserve: $0", id="info_strategic_reserve")
                                     yield Static("Unmanaged BTC Reserve: $0", id="info_unmanaged_btc_reserve") # New line
                                     yield Static("Operating Mode: N/A", id="info_operating_mode")
-                        with Vertical(id="open_positions"):
+                        with VerticalScroll(id="open_positions"):
                             yield Static("Open Positions", classes="title")
                             yield DataTable(id="positions_table")
             with TabPane("Trade History", id="history"):
