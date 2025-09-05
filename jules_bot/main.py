@@ -80,14 +80,18 @@ def main():
         run_id = str(uuid.uuid4())
         logger.info(f"Bot Name: {bot_name}, Unique Run ID: {run_id}")
 
+        from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
+        feature_calculator = LiveFeatureCalculator(db_manager, mode=bot_mode)
+
         # O TradingBot recebe o MarketDataProvider.
         # Internamente, o TradingBot e seus componentes (como StateManager)
         # criarão suas próprias instâncias do PostgresManager conforme necessário.
         bot = TradingBot(
             mode=bot_mode,
             bot_id=run_id, # Passando o ID único para a sessão
+            db_manager=db_manager,
             market_data_provider=market_data_provider,
-            db_manager=db_manager
+            feature_calculator=feature_calculator
         )
         
         logger.info(f"Bot instanciado com sucesso em modo '{bot_mode}'.")

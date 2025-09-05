@@ -47,24 +47,24 @@ class BacktestEngine:
 
         self.backtest_feature_calculator = BacktestFeatureCalculator(self.feature_data)
 
+        # Instantiate the TradingBot in 'backtest' mode, injecting the mock feature calculator
         self.bot = TradingBot(
             mode='backtest',
             bot_id=self.run_id,
-            market_data_provider=None,
-            db_manager=self.db_manager
+            db_manager=self.db_manager,
+            feature_calculator=self.backtest_feature_calculator
         )
 
+        # Replace the trader's client with the mock trader
         initial_balance = Decimal(config_manager.get('BACKTEST', 'initial_balance', fallback='1000.0'))
         self.mock_trader = MockTrader(
             initial_balance_usd=initial_balance,
             commission_fee_rate=Decimal(config_manager.get('BACKTEST', 'commission_fee', fallback='0.001')),
             symbol=symbol
         )
-        
-        # Replace live components with mock/backtest components
-        self.bot.feature_calculator = self.backtest_feature_calculator
-        self.bot.state_manager.feature_calculator = self.backtest_feature_calculator
         self.bot.trader.client = self.mock_trader
+
+        # Replace the live portfolio manager with the backtest one
         self.bot.live_portfolio_manager = BacktestPortfolioManager(self.mock_trader)
         
         # Disable components that are not needed

@@ -96,7 +96,7 @@ class LivePortfolioManager:
 
 
 class TradingBot:
-    def __init__(self, mode: str, bot_id: str, market_data_provider: MarketDataProvider, db_manager: PostgresManager):
+    def __init__(self, mode: str, bot_id: str, db_manager: PostgresManager, market_data_provider: Optional[MarketDataProvider] = None, feature_calculator=None):
         # ConfigManager MUST be initialized before this class is instantiated.
         if not config_manager.bot_name:
             raise RuntimeError("ConfigManager must be initialized before creating a TradingBot.")
@@ -122,8 +122,10 @@ class TradingBot:
         self.min_trade_size = Decimal(config_manager.get('TRADING_STRATEGY', 'min_trade_size_usdt', fallback='10.0'))
 
         # --- Initialize Core Components ---
-        # These are initialized here to be accessible throughout the bot's lifecycle (e.g., for status updates)
-        self.feature_calculator = LiveFeatureCalculator(self.db_manager, mode=self.mode)
+        # Use the provided feature_calculator if available (for backtesting),
+        # otherwise create a new LiveFeatureCalculator for live/test modes.
+        self.feature_calculator = feature_calculator or LiveFeatureCalculator(self.db_manager, mode=self.mode)
+
         self.status_service = StatusService(self.db_manager, config_manager, self.feature_calculator)
         self.state_manager = StateManager(mode=self.mode, bot_id=self.run_id, db_manager=self.db_manager, feature_calculator=self.feature_calculator)
         self.account_manager = AccountManager(self.trader.client)
