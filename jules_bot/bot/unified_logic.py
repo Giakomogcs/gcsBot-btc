@@ -65,6 +65,9 @@ class UnifiedTradingLogic:
             logger.warning(f"Final candle contains NaN values, skipping cycle. Data: {final_candle.to_dict()}")
             return None, None
 
+        current_price = Decimal(final_candle['close'])
+        total_portfolio_value = self.portfolio_manager.get_total_portfolio_value(current_price)
+
         current_regime = -1
         if self.sa_instance:
             try:
@@ -76,13 +79,12 @@ class UnifiedTradingLogic:
 
         if current_regime == -1:
             logger.warning("Market regime is -1. Skipping buy/sell logic.")
-            return None, None
+            # Return a full 5-item tuple to avoid unpacking errors downstream
+            return "Regime is -1", "SKIPPED", Decimal('0'), current_regime, total_portfolio_value
 
         self.dynamic_params.update_parameters(current_regime)
         current_params = self.dynamic_params.parameters
-        current_price = Decimal(final_candle['close'])
         open_positions = self.state_manager.get_open_positions()
-        total_portfolio_value = self.portfolio_manager.get_total_portfolio_value(current_price)
         base_asset = self.symbol.replace("USDT", "")
         
         cash_balance = Decimal(self.trader.get_account_balance(asset="USDT"))
