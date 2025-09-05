@@ -121,6 +121,16 @@ def _ensure_env_is_running():
         print(f"❌ Erro inesperado ao construir a imagem Docker: {e}")
         return False
 
+    # Etapa 3: Prune dangling images
+    print("\n   -> Etapa 3: Limpando imagens antigas (dangling)...")
+    prune_command = SUDO_PREFIX + ["docker", "image", "prune", "-f"]
+    print(f"   (usando comando: `{' '.join(prune_command)}`)")
+    try:
+        subprocess.run(prune_command, check=True, capture_output=True)
+        print("✅ Limpeza de imagens antigas concluída.")
+    except Exception as e:
+        print(f"⚠️  Não foi possível limpar as imagens antigas: {e}")
+
     return True
 
 @app.command("start-env")

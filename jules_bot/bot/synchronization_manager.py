@@ -84,10 +84,10 @@ class SynchronizationManager:
         """
         logger.info(f"Reconciling {len(binance_trades)} trades with the database.")
         
-        # Sort trades by time, just in case the API doesn't guarantee it
-        sorted_trades = sorted(binance_trades, key=lambda t: t['time'])
-
-        for trade in sorted_trades:
+        # Binance API returns trades sorted by tradeId, which is the correct order for FIFO reconciliation.
+        # Sorting by timestamp can cause reordering issues for trades within the same second.
+        # We will process them in the order they are received.
+        for trade in binance_trades:
             # Idempotency check: Ensure we haven't processed this trade in a previous run
             existing_trade = self.db.get_trade_by_binance_trade_id(trade['id'])
             if existing_trade:
