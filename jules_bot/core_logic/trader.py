@@ -37,8 +37,8 @@ class Trader:
 
     def _init_binance_client(self) -> Optional[Client]:
         """Initializes and authenticates the Binance API client based on the mode."""
-        if self.mode == 'offline' or config_manager.getboolean('APP', 'force_offline_mode', fallback=False):
-            logger.warning("OFFLINE mode. Trader will not connect.")
+        if self.mode in ['offline', 'backtest'] or config_manager.getboolean('APP', 'force_offline_mode', fallback=False):
+            logger.info(f"'{self.mode.upper()}' mode. Trader will not connect to live Binance API.")
             return None
 
         use_testnet = self.mode == 'test'

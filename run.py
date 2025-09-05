@@ -94,13 +94,13 @@ def _ensure_env_is_running():
         if not result.stdout.strip():
             print("🚀 Ambiente Docker não detectado. Iniciando serviços de suporte (PostgreSQL, etc.)...")
             
-            print("   -> Etapa 1: Baixando as imagens base (Postgres, etc.)...")
-            # Specify services to pull to avoid trying to pull the locally built app image
-            if not run_docker_compose_command(["pull", "postgres", "pgadmin"], capture_output=False):
-                print("❌ Falha ao baixar imagens Docker. Verifique sua conexão ou o limite de pulls do Docker Hub.")
-                return False
+            # print("   -> Etapa 1: Baixando as imagens base (Postgres, etc.)...")
+            # # Specify services to pull to avoid trying to pull the locally built app image
+            # if not run_docker_compose_command(["pull", "postgres", "pgadmin"], capture_output=False):
+            #     print("❌ Falha ao baixar imagens Docker. Verifique sua conexão ou o limite de pulls do Docker Hub.")
+            #     return False
 
-            print("\n   -> Etapa 2: Construindo a imagem da aplicação (isso pode levar um momento)...")
+            print("\n   -> Etapa 1: Construindo a imagem da aplicação (isso pode levar um momento)...")
             # Run build with streaming output for better user feedback by setting capture_output=False
             if not run_docker_compose_command(["build"], capture_output=False):
                 print("❌ Falha ao construir a imagem Docker. Verifique a sua instalação do Docker e o Dockerfile.")
@@ -512,6 +512,8 @@ def validate(bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", he
 
 @app.command()
 def backtest(bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="O nome do bot para executar."), days: int = typer.Option(30, "--days", "-d", help="Número de dias de dados recentes para o backtest.")):
+    if not _ensure_env_is_running():
+        raise typer.Exit(1)
     final_bot_name = _setup_bot_run(bot_name)
     print(f"🚀 Iniciando execução de backtest para {days} dias para o bot '{final_bot_name}'...")
     print("\n--- Etapa 1 de 2: Preparando dados ---")

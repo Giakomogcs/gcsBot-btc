@@ -8,7 +8,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from jules_bot.backtesting.engine import Backtester
+from jules_bot.backtesting.engine import BacktestEngine
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.utils.logger import logger
@@ -79,13 +79,13 @@ def main():
             logger.info("Clearing previous backtest trades as requested...")
             db_manager.clear_backtest_trades()
         
-        backtester = None
+        engine = None
         if args.days:
-            backtester = Backtester(db_manager=db_manager, days=args.days)
+            engine = BacktestEngine(db_manager=db_manager, days=args.days)
         else:
-            backtester = Backtester(db_manager=db_manager, start_date=args.start_date, end_date=args.end_date)
+            engine = BacktestEngine(db_manager=db_manager, start_date=args.start_date, end_date=args.end_date)
         
-        backtester.run()
+        engine.run()
         logger.info("--- Backtest Simulation Finished ---")
 
     except ValueError as e:
