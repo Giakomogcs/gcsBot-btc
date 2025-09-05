@@ -54,7 +54,7 @@ class UnifiedTradingLogic:
 
     def run_trading_cycle(self, features_df):
         logger.info("--- Starting new unified trading cycle ---")
-        self.state_manager.recalculate_open_position_targets(self.strategy_rules, self.sa_instance, self.dynamic_params)
+        self.state_manager.recalculate_open_position_targets(self.strategy_rules, self.sa_instance, self.dynamic_params, features_df)
 
         if features_df.empty:
             logger.warning("Feature dataframe is empty. Skipping cycle.")

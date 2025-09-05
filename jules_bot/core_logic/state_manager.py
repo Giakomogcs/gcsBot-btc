@@ -390,7 +390,7 @@ class StateManager:
         except Exception as e:
             logger.error(f"Failed to create unlinked sell record from sync: {e}", exc_info=True)
 
-    def recalculate_open_position_targets(self, strategy_rules: StrategyRules, sa_instance: SituationalAwareness, dynamic_params: DynamicParameters):
+    def recalculate_open_position_targets(self, strategy_rules: StrategyRules, sa_instance: SituationalAwareness, dynamic_params: DynamicParameters, features_df: pd.DataFrame):
         """
         Recalculates the sell_target_price for all open positions based on the current
         market regime and strategy parameters.
@@ -402,9 +402,9 @@ class StateManager:
             return
 
         # 1. Determine the current market regime
-        features_df = self.feature_calculator.get_features_dataframe()
-        if features_df.empty:
-            logger.error("Could not get features dataframe. Aborting target recalculation.")
+        # The features_df is now passed directly to the method.
+        if features_df is None or features_df.empty:
+            logger.error("Features dataframe is missing or empty. Aborting target recalculation.")
             return
 
         current_regime = -1

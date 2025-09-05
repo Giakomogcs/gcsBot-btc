@@ -310,7 +310,12 @@ class TradingBot:
 
         # Perform an initial target recalculation after sync and before starting the main loop
         logger.info("Performing initial recalculation of sell targets before starting main loop...")
-        self.state_manager.recalculate_open_position_targets(self.strategy_rules, self.sa_instance, self.dynamic_params)
+        # Get features once for the initial recalculation
+        try:
+            initial_features_df = self.feature_calculator.get_features_dataframe()
+            self.state_manager.recalculate_open_position_targets(self.strategy_rules, self.sa_instance, self.dynamic_params, initial_features_df)
+        except Exception as e:
+            logger.error(f"Could not perform initial target recalculation: {e}", exc_info=True)
         logger.info("Initial recalculation complete.")
 
         # Now that initialization is complete, set the status to RUNNING
