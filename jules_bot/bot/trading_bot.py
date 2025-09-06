@@ -411,85 +411,55 @@ class TradingBot:
                             continue # Position will be evaluated, no need for further checks this cycle
 
                         # --- 2. Intelligent Trailing Stop Logic (Profit-Based) ---
-                        entry_price = Decimal(str(position.price))
-
-                        # Calculate the current net unrealized PnL for the position
                         net_unrealized_pnl = self.strategy_rules.calculate_net_unrealized_pnl(
-                            entry_price=entry_price,
+                            entry_price=Decimal(str(position.price)),
                             current_price=current_price,
                             total_quantity=Decimal(str(position.quantity)),
                             buy_commission_usd=Decimal(str(position.commission_usd or '0'))
                         )
 
-                        min_profit_target = self.strategy_rules.trailing_stop_profit
+                        # Use the centralized logic from StrategyRules
+                        decision, reason = self.strategy_rules.evaluate_smart_trailing_stop(
+                            position.to_dict(), # Pass position as a dict
+                            net_unrealized_pnl
+                        )
 
-                        # A. Activate Trailing Stop
-                        if not position.is_smart_trailing_active and net_unrealized_pnl >= min_profit_target:
-                            logger.info(f"🚀 SMART TRAILING ACTIVATED for {position.trade_id} at ${net_unrealized_pnl:.2f} profit.")
+                        if decision == "ACTIVATE":
+                            logger.info(f"🚀 {reason}")
                             self.state_manager.update_trade_smart_trailing_state(
                                 trade_id=position.trade_id,
                                 is_active=True,
-                                highest_profit=net_unrealized_pnl, # Store profit instead of price
+                                highest_profit=net_unrealized_pnl,
                                 activation_price=current_price
                             )
-                            # Update in-memory object for this cycle
                             position.is_smart_trailing_active = True
                             position.smart_trailing_highest_profit = net_unrealized_pnl
-                            continue # Activated now, will be monitored next cycle
 
-                        # B. Monitor Active Trailing Stop
-                        if position.is_smart_trailing_active:
-                            highest_profit = Decimal(str(position.smart_trailing_highest_profit)) if position.smart_trailing_highest_profit is not None else net_unrealized_pnl
-
-                            # B.1 Deactivate if position becomes unprofitable to avoid selling at a loss
-                            if net_unrealized_pnl < 0:
-                                logger.warning(f"CANCELING SMART TRAILING for {position.trade_id}. Position is now at a loss (${net_unrealized_pnl:,.2f}).")
-                                self.state_manager.update_trade_smart_trailing_state(
-                                    trade_id=position.trade_id,
-                                    is_active=False,
-                                    highest_profit=None,
-                                    activation_price=None
-                                )
-                                position.is_smart_trailing_active = False
-                                continue
-
-                            # B.2 Update highest profit if new peak is reached
-                            if net_unrealized_pnl > highest_profit:
-                                self.state_manager.update_trade_smart_trailing_state(
-                                    trade_id=position.trade_id,
-                                    is_active=True,
-                                    highest_profit=net_unrealized_pnl
-                                )
-                                position.smart_trailing_highest_profit = net_unrealized_pnl
-                                highest_profit = net_unrealized_pnl # Update for current cycle's logic
-                                logger.info(f"📈 New profit peak for smart trailing on {position.trade_id}: ${highest_profit:,.2f}")
-
-                            # B.3 Check if stop is triggered (percentage-based trail)
-                            trail_percentage = self.strategy_rules.dynamic_trail_percentage
-                            
-                            # Calculate the stop-loss level based on a percentage drop from the highest profit
-                            stop_profit_level = highest_profit * (Decimal('1') - trail_percentage)
-                            
-                            # The actual trigger point is the higher of the calculated stop-loss level
-                            # or the initial minimum profit target. This prevents the trail from
-                            # triggering a sale at a profit lower than the activation point.
-                            final_trigger_profit = max(stop_profit_level, min_profit_target)
-
-                            logger.debug(
-                                f"Position {position.trade_id} [Smart Trailing]: "
-                                f"Highest Profit=${highest_profit:,.2f}, "
-                                f"Current PnL=${net_unrealized_pnl:,.2f}, "
-                                f"Trail %={trail_percentage:.2%}, "
-                                f"Stop Target=${final_trigger_profit:,.2f}"
+                        elif decision == "DEACTIVATE":
+                            logger.warning(f"🟡 {reason}")
+                            self.state_manager.update_trade_smart_trailing_state(
+                                trade_id=position.trade_id,
+                                is_active=False,
+                                highest_profit=None,
+                                activation_price=None
                             )
+                            position.is_smart_trailing_active = False
 
-                            if net_unrealized_pnl <= final_trigger_profit:
-                                logger.info(
-                                    f"✅ SMART TRAILING STOP TRIGGERED for {position.trade_id} "
-                                    f"(PnL ${net_unrealized_pnl:,.2f} <= Target ${final_trigger_profit:,.2f}). "
-                                    f"Adding to sell candidates for final check."
-                                )
-                                sell_candidates.append((position, "trailing_stop"))
+                        elif decision == "UPDATE_PEAK":
+                            logger.info(f"📈 {reason}")
+                            self.state_manager.update_trade_smart_trailing_state(
+                                trade_id=position.trade_id,
+                                is_active=True,
+                                highest_profit=net_unrealized_pnl
+                            )
+                            position.smart_trailing_highest_profit = net_unrealized_pnl
+
+                        elif decision == "SELL":
+                            logger.info(f"✅ {reason}")
+                            sell_candidates.append((position, "trailing_stop"))
+
+                        elif decision == "HOLD":
+                            logger.debug(f"Position {position.trade_id}: {reason}")
 
 
                     # 3. Execute sales for all triggered positions

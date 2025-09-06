@@ -117,63 +117,40 @@ class Backtester:
                     buy_commission_usd=position.get('commission_usd', Decimal('0'))
                 )
 
-                # --- Final Genius Trailing Stop Logic with Reset ---
+                # --- Unified Smart Trailing Stop Logic ---
+                decision, reason = self.strategy_rules.evaluate_smart_trailing_stop(
+                    position, net_unrealized_pnl
+                )
 
-                is_profit_lock_active = position.get('is_profit_lock_active', False)
+                if decision == "ACTIVATE":
+                    logger.info(f"🚀 Backtest: {reason}")
+                    position['is_smart_trailing_active'] = True
+                    position['smart_trailing_highest_profit'] = net_unrealized_pnl
 
-                # 1. If profit lock is not active, check for activation.
-                if not is_profit_lock_active:
-                    if net_unrealized_pnl >= self.strategy_rules.trailing_stop_profit:
-                        position['is_profit_lock_active'] = True
-                        # On activation, calculate and store the break-even price.
-                        break_even_price = self.strategy_rules.calculate_break_even_price(position['price'])
-                        position['break_even_price'] = break_even_price
-                        # Set the initial stop-loss at the break-even price.
-                        position['stop_loss_price'] = break_even_price
-                        logger.info(f"Profit lock activated for trade {trade_id}. Initial stop set at break-even price: {break_even_price:.4f}")
+                elif decision == "DEACTIVATE":
+                    logger.warning(f"🟡 Backtest: {reason}")
+                    position['is_smart_trailing_active'] = False
+                    position['smart_trailing_highest_profit'] = None
 
-                # 2. If profit lock IS active, perform trailing logic.
-                else:
-                    # Update the highest price seen since the buy.
-                    position['highest_price_since_buy'] = max(
-                        position.get('highest_price_since_buy', position['price']),
-                        current_price
-                    )
+                elif decision == "UPDATE_PEAK":
+                    logger.info(f"📈 Backtest: {reason}")
+                    position['smart_trailing_highest_profit'] = net_unrealized_pnl
 
-                    # Calculate the candidate stop price based on the trail percentage from the peak.
-                    trail_percentage = self.strategy_rules.dynamic_trail_percentage
-                    candidate_stop_price = position['highest_price_since_buy'] * (Decimal('1') - trail_percentage)
-
-                    # The stop price cannot be lower than the break-even price.
-                    candidate_stop_price = max(candidate_stop_price, position['break_even_price'])
-
-                    # The stop price only ever moves up.
-                    current_stop_price = position.get('stop_loss_price', Decimal('0'))
-                    if candidate_stop_price > current_stop_price:
-                        position['stop_loss_price'] = candidate_stop_price
-                        logger.debug(f"Trade {trade_id}: Stop loss trailed up to {candidate_stop_price:.4f}")
-
-                # 3. Check for Sell or Reset condition.
-                final_stop_price = position.get('stop_loss_price')
-                if is_profit_lock_active and final_stop_price and current_price <= final_stop_price:
-                    # Final check: would this sale be profitable?
-                    quantity_to_sell = position['quantity'] * self.strategy_rules.sell_factor
-                    pnl_at_sell = self.strategy_rules.calculate_realized_pnl(
-                        buy_price=position['price'], sell_price=current_price, quantity_sold=quantity_to_sell,
-                        buy_commission_usd=position.get('commission_usd', Decimal('0')),
-                        sell_commission_usd=(current_price * quantity_to_sell * self.strategy_rules.commission_rate),
-                        buy_quantity=position['quantity']
-                    )
-
-                    if pnl_at_sell >= 0:
-                        logger.info(f"Trailing Stop SELL triggered for trade {trade_id}. Price {current_price:.2f} <= Stop {final_stop_price:.2f}. PnL: ${pnl_at_sell:.2f}")
+                elif decision == "SELL":
+                    # --- UNIFIED PROFITABILITY GATE ---
+                    # This check is crucial and mimics the live bot's final safety net.
+                    break_even_price = self.strategy_rules.calculate_break_even_price(position['price'])
+                    if current_price > break_even_price:
+                        logger.info(f"✅ Backtest: {reason}. Position is profitable, marking for sale.")
                         positions_to_sell_now.append(position)
                     else:
-                        # "Never sell at a loss" rule.
-                        logger.warning(f"Trailing Stop RESET for trade {trade_id}. Stop {final_stop_price:.2f} was breached at price {current_price:.2f}, but PnL would be negative (${pnl_at_sell:.2f}). Resetting profit lock.")
-                        position['is_profit_lock_active'] = False
-                        position['stop_loss_price'] = None
-                        position['break_even_price'] = None
+                        logger.warning(
+                            f"❌ Backtest: SALE CANCELED for position {trade_id}. Reason: {reason}. "
+                            f"Current price ${current_price:,.2f} is not above break-even price ${break_even_price:,.2f}."
+                        )
+                        # Reset the trailing stop to prevent a loss-making sale on the next tick.
+                        position['is_smart_trailing_active'] = False
+                        position['smart_trailing_highest_profit'] = None
 
             if positions_to_sell_now:
                 for position in positions_to_sell_now:
@@ -228,11 +205,10 @@ class Backtester:
                         'usd_value': buy_result['usd_value'],
                         'sell_target_price': sell_target_price,
                         'commission_usd': buy_result.get('commission_usd', Decimal('0')),
-                        # State for the final trailing stop logic
-                        'is_profit_lock_active': False,
-                        'highest_price_since_buy': buy_result['price'],
-                        'stop_loss_price': None,
-                        'break_even_price': None
+                        # State for the new unified smart trailing logic
+                        'is_smart_trailing_active': False,
+                        'smart_trailing_highest_profit': None,
+                        'activation_price': None,
                     }
                     open_positions[new_trade_id] = position_data
 
