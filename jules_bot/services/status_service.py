@@ -17,7 +17,7 @@ from jules_bot.database.models import BotStatus
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
 from jules_bot.utils.config_manager import ConfigManager
-from jules_bot.utils.helpers import _calculate_progress_pct, calculate_buy_progress
+from jules_bot.utils.helpers import _calculate_progress_pct
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +135,7 @@ class StatusService:
             difficulty_factor = self.capital_manager._calculate_difficulty_factor(trade_history)
 
             # Re-evaluate the buy signal here to get the live status for the TUI
-            buy_amount, operating_mode, reason, regime, _ = self.capital_manager.get_buy_order_details(
+            buy_amount, operating_mode, reason, regime, _, condition_target_price, progress_start_price = self.capital_manager.get_buy_order_details(
                 market_data=market_data,
                 open_positions=open_positions_db,
                 portfolio_value=total_wallet_usd_value, # Using total wallet value as portfolio value
@@ -146,10 +146,9 @@ class StatusService:
 
             should_buy = buy_amount > 0
 
-            # This logic is now duplicated from the trading_bot, which is what the user wants.
-            # It ensures the TUI is calculating its own state.
-            condition_target_price, condition_progress = calculate_buy_progress(
-                market_data, current_params, difficulty_factor
+            # Calculate progress using the unified data from the strategy rules
+            condition_progress = _calculate_progress_pct(
+                current_price, progress_start_price, condition_target_price
             )
 
             bot_status_db = self.db_manager.get_bot_status(bot_id)
@@ -208,8 +207,8 @@ class StatusService:
                     "reason": reason,
                     "market_regime": current_regime,
                     "operating_mode": operating_mode,
-                    "condition_target": condition_target,
-                    "condition_progress": condition_progress,
+                    "condition_target": condition_target, # This is now the consistent target price
+                    "condition_progress": condition_progress, # This is now the consistent progress
                     "buy_target_percentage_drop": buy_target_percentage_drop,
                     "condition_label": "N/A"
                 },

@@ -90,7 +90,7 @@ class TestStatusService(unittest.TestCase):
 
 
         # Arrange: Mock strategy evaluation and other helper methods
-        self.status_service.capital_manager.get_buy_order_details = MagicMock(return_value=(Decimal('0'), 'ACCUMULATION', 'Test Condition', 'unknown', Decimal('0')))
+        self.status_service.capital_manager.get_buy_order_details = MagicMock(return_value=(Decimal('0'), 'ACCUMULATION', 'Test Condition', 'unknown', Decimal('0'), Decimal('51000'), Decimal('52100')))
 
         # 2. Act: Call the method under test
         result = self.status_service.get_extended_status("test", "test_bot")
@@ -132,7 +132,6 @@ class TestStatusService(unittest.TestCase):
         # Check for the new keys, ensuring the structure is correct
         self.assertIn("condition_target", buy_status)
         self.assertIn("condition_progress", buy_status)
-        self.assertIn("condition_label", buy_status)
 
 if __name__ == '__main__':
     unittest.main()

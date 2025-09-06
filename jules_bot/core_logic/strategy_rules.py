@@ -44,10 +44,16 @@ class StrategyRules:
             )
             return Decimal(fallback)
 
-    def evaluate_buy_signal(self, market_data: dict, open_positions_count: int, difficulty_factor: Decimal = None, params: Dict[str, Decimal] = None) -> tuple[bool, str, str]:
+    def evaluate_buy_signal(self, market_data: dict, open_positions_count: int, difficulty_factor: Decimal = None, params: Dict[str, Decimal] = None) -> tuple[bool, str, str, Decimal, Decimal]:
         """
-        Evaluates if a buy signal is present, providing detailed reasons for no signal.
+        Evaluates if a buy signal is present, providing detailed reasons and the data used for the decision.
         Uses dynamic parameters for buy dip percentage.
+        Returns:
+            - bool: True if a buy signal is present.
+            - str: The regime of the signal (e.g., 'uptrend', 'downtrend').
+            - str: A human-readable reason for the decision.
+            - Decimal: The calculated target price for the condition being evaluated.
+            - Decimal: The starting price for progress calculation (e.g., recent high).
         """
         if difficulty_factor is None:
             difficulty_factor = Decimal('0')
@@ -59,59 +65,61 @@ class StrategyRules:
         bbl = market_data.get('bbl_20_2_0')
 
         if any(v is None for v in [current_price, high_price, ema_100, ema_20, bbl]):
-            return False, "unknown", "Not enough indicator data"
+            return False, "unknown", "Not enough indicator data", Decimal('0'), Decimal('0')
 
         current_price = Decimal(str(current_price))
         high_price = Decimal(str(high_price))
         ema_100 = Decimal(str(ema_100))
         ema_20 = Decimal(str(ema_20))
         
-        # The difficulty_factor is now the direct percentage adjustment.
-        # A factor of 0.01 means the bbl target is lowered by 1%.
         difficulty_multiplier = Decimal('1') - difficulty_factor
         adjusted_bbl = Decimal(str(bbl)) * difficulty_multiplier
 
-        # --- Dynamic Dip Logic with Difficulty Adjustment ---
         base_buy_dip = params.get('buy_dip_percentage', Decimal('0.02')) if params else Decimal('0.02')
-        # The difficulty_factor is added directly to the dip percentage.
         adjusted_buy_dip_percentage = base_buy_dip + difficulty_factor
         price_dip_target = high_price * (Decimal('1') - adjusted_buy_dip_percentage)
 
         reason = ""
+        target_price = Decimal('0')
+        progress_start_price = high_price # Default start price for progress is the recent high
+
         if open_positions_count == 0:
             if current_price > ema_100:
+                target_price = price_dip_target
                 if current_price > ema_20:
-                    return True, "uptrend", "Aggressive first entry (price > ema_20)"
+                    return True, "uptrend", "Aggressive first entry (price > ema_20)", current_price, high_price
                 elif current_price <= price_dip_target:
-                    if self.use_reversal_buy_strategy:
-                        return True, "START_MONITORING", f"Dip target hit at {adjusted_buy_dip_percentage:.2%}. Starting reversal monitoring."
-                    else:
-                        return True, "uptrend", f"Dip buy signal triggered at {adjusted_buy_dip_percentage:.2%}"
+                    reason = f"Dip buy signal triggered at {adjusted_buy_dip_percentage:.2%}"
+                    signal = "START_MONITORING" if self.use_reversal_buy_strategy else "uptrend"
+                    return True, signal, reason, price_dip_target, high_price
                 else:
-                    reason = f"Price ${current_price:,.2f} is above EMA100 but below EMA20 ${ema_20:,.2f}"
+                    reason = f"Price ${current_price:,.2f} is above EMA100 but below EMA20 ${ema_20:,.2f}. Waiting for dip to ${target_price:,.2f}."
             else:
+                target_price = adjusted_bbl
                 if current_price <= adjusted_bbl:
-                    return True, "downtrend", f"Aggressive first entry (volatility breakout at difficulty {difficulty_factor})"
+                    return True, "downtrend", f"Aggressive first entry (volatility breakout at difficulty {difficulty_factor})", adjusted_bbl, high_price
                 else:
-                    reason = f"Buy target: ${adjusted_bbl:,.2f}. Price is too high."
+                    reason = f"Buy target: ${target_price:,.2f}. Price is too high."
         else:
             if current_price > ema_100:
+                pullback_target = ema_20
+                target_price = price_dip_target # Default target is the dip
                 if high_price > ema_20 and current_price < ema_20:
-                    return True, "uptrend", "Uptrend pullback"
+                    return True, "uptrend", "Uptrend pullback", pullback_target, high_price
                 elif current_price <= price_dip_target:
-                    if self.use_reversal_buy_strategy:
-                        return True, "START_MONITORING", f"Dip target hit on existing position at {adjusted_buy_dip_percentage:.2%}. Starting reversal monitoring."
-                    else:
-                        return True, "uptrend", f"Dip buy signal on existing position at {adjusted_buy_dip_percentage:.2%}"
+                    reason = f"Dip buy signal on existing position at {adjusted_buy_dip_percentage:.2%}"
+                    signal = "START_MONITORING" if self.use_reversal_buy_strategy else "uptrend"
+                    return True, signal, reason, price_dip_target, high_price
                 else:
-                    reason = f"In uptrend (price > EMA100), but no pullback signal found"
+                    reason = f"In uptrend (price > EMA100), but no pullback signal found. Waiting for dip to ${target_price:,.2f}."
             else:
+                target_price = adjusted_bbl
                 if current_price <= adjusted_bbl:
-                    return True, "downtrend", f"Downtrend volatility breakout (difficulty {difficulty_factor})"
+                    return True, "downtrend", f"Downtrend volatility breakout (difficulty {difficulty_factor})", adjusted_bbl, high_price
                 else:
-                    reason = f"Buy target: ${adjusted_bbl:,.2f}. Price is too high."
+                    reason = f"Buy target: ${target_price:,.2f}. Price is too high."
         
-        return False, "unknown", reason or "No signal"
+        return False, "unknown", reason or "No signal", target_price, progress_start_price
 
     def calculate_sell_target_price(self, purchase_price: Decimal, quantity: "Decimal | None" = None, params: "Dict[str, Decimal] | None" = None) -> Decimal:
         """

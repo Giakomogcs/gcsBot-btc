@@ -93,6 +93,23 @@ def test_calculate_realized_pnl(mock_config_manager):
     # Assert
     assert float(realized_pnl_breakeven) == pytest.approx(0.0, abs=1e-6)
 
+def test_evaluate_buy_signal_dip(mock_config_manager):
+    """
+    Tests the dip buying signal.
+    """
+    rules = StrategyRules(mock_config_manager)
+    market_data = {'close': '90', 'high': '100', 'ema_100': '80', 'ema_20': '95', 'bbl_20_2_0': '85'}
+    params = {'buy_dip_percentage': Decimal('0.1')}
+
+    # Act
+    should_buy, regime, reason, target_price, start_price = rules.evaluate_buy_signal(market_data, 0, params=params)
+
+    # Assert
+    assert should_buy
+    assert regime == 'uptrend'
+    assert target_price == Decimal('90')
+    assert start_price == Decimal('100')
+
 def test_evaluate_buy_signal_with_difficulty_factor(mock_config_manager):
     """
     Tests that the buy signal becomes stricter with a higher difficulty factor.
@@ -107,23 +124,23 @@ def test_evaluate_buy_signal_with_difficulty_factor(mock_config_manager):
     }
 
     # --- Scenario 1: No difficulty, price is NOT below BBL -> No Signal ---
-    should_buy, _, reason = strategy_rules.evaluate_buy_signal(market_data, 1, difficulty_factor=Decimal('0'), params=params)
+    should_buy, _, reason, _, _ = strategy_rules.evaluate_buy_signal(market_data, 1, difficulty_factor=Decimal('0'), params=params)
     assert not should_buy
     assert "Price is too high" in reason
 
     # --- Scenario 2: No difficulty, price IS below BBL -> Signal ---
     market_data['close'] = '99.9'
-    should_buy, _, _ = strategy_rules.evaluate_buy_signal(market_data, 1, difficulty_factor=Decimal('0'), params=params)
+    should_buy, _, _, _, _ = strategy_rules.evaluate_buy_signal(market_data, 1, difficulty_factor=Decimal('0'), params=params)
     assert should_buy
 
     # --- Scenario 3: With difficulty, price is NOT below adjusted BBL -> No Signal ---
     # Adjusted BBL = 100.0 * (1 - 0.005) = 99.5
     market_data['close'] = '99.6'
-    should_buy, _, reason = strategy_rules.evaluate_buy_signal(market_data, 1, difficulty_factor=Decimal('0.005'), params=params)
+    should_buy, _, reason, _, _ = strategy_rules.evaluate_buy_signal(market_data, 1, difficulty_factor=Decimal('0.005'), params=params)
     assert not should_buy
     assert "Price is too high" in reason
 
     # --- Scenario 4: With difficulty, price IS below adjusted BBL -> Signal ---
     market_data['close'] = '99.4'
-    should_buy, _, _ = strategy_rules.evaluate_buy_signal(market_data, 1, difficulty_factor=Decimal('0.005'), params=params)
+    should_buy, _, _, _, _ = strategy_rules.evaluate_buy_signal(market_data, 1, difficulty_factor=Decimal('0.005'), params=params)
     assert should_buy

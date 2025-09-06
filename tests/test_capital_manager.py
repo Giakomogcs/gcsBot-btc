@@ -32,6 +32,8 @@ class TestCapitalManager(unittest.TestCase):
             'buy_dip_percentage': Decimal('0.02'),
             'sell_rise_percentage': Decimal('0.02')
         }
+        # Default return for the mock to avoid unpack errors in all tests
+        self.mock_strategy_rules.evaluate_buy_signal.return_value = (False, "unknown", "Default mock reason", Decimal('0'), Decimal('0'))
 
         self.capital_manager = CapitalManager(
             config_manager=self.mock_config_manager,
@@ -49,7 +51,7 @@ class TestCapitalManager(unittest.TestCase):
         self.config_values[('STRATEGY_RULES', 'use_dynamic_capital')] = False
         self.capital_manager = CapitalManager(self.mock_config_manager, self.mock_strategy_rules)
 
-        amount, mode, reason, _, _ = self.capital_manager.get_buy_order_details(
+        amount, mode, reason, _, _, _, _ = self.capital_manager.get_buy_order_details(
             market_data={},
             open_positions=[MagicMock()] * 10, # 10 open positions, which is the max
             portfolio_value=Decimal('1000'),
@@ -65,9 +67,9 @@ class TestCapitalManager(unittest.TestCase):
         """Should not buy if there is no buy signal."""
         self.config_values[('STRATEGY_RULES', 'use_dynamic_capital')] = True
         self.capital_manager = CapitalManager(self.mock_config_manager, self.mock_strategy_rules)
-        self.mock_strategy_rules.evaluate_buy_signal.return_value = (False, "unknown", "No signal")
+        self.mock_strategy_rules.evaluate_buy_signal.return_value = (False, "unknown", "No signal", Decimal('0'), Decimal('0'))
 
-        amount, mode, reason, _, _ = self.capital_manager.get_buy_order_details(
+        amount, mode, reason, _, _, _, _ = self.capital_manager.get_buy_order_details(
             market_data={},
             open_positions=[],
             portfolio_value=Decimal('1000'),
@@ -85,11 +87,11 @@ class TestCapitalManager(unittest.TestCase):
         """Should return base trade size in ACCUMULATION mode."""
         self.config_values[('STRATEGY_RULES', 'use_dynamic_capital')] = True
         self.capital_manager = CapitalManager(self.mock_config_manager, self.mock_strategy_rules)
-        self.mock_strategy_rules.evaluate_buy_signal.return_value = (True, "uptrend", "A standard buy signal")
+        self.mock_strategy_rules.evaluate_buy_signal.return_value = (True, "uptrend", "A standard buy signal", Decimal('100'), Decimal('101'))
 
         # This test is no longer about open positions, but about trade history.
         # Let's not check the difficulty factor here as it's tested separately.
-        amount, mode, reason, _, _ = self.capital_manager.get_buy_order_details(
+        amount, mode, reason, _, _, _, _ = self.capital_manager.get_buy_order_details(
             market_data={},
             open_positions=[MagicMock()] * 6, # More than max_open_positions / 4
             portfolio_value=Decimal('1000'),
@@ -106,9 +108,9 @@ class TestCapitalManager(unittest.TestCase):
         """Should return multiplied trade size in AGGRESSIVE mode."""
         self.config_values[('STRATEGY_RULES', 'use_dynamic_capital')] = True
         self.capital_manager = CapitalManager(self.mock_config_manager, self.mock_strategy_rules)
-        self.mock_strategy_rules.evaluate_buy_signal.return_value = (True, "uptrend", "Strong uptrend signal")
+        self.mock_strategy_rules.evaluate_buy_signal.return_value = (True, "uptrend", "Strong uptrend signal", Decimal('100'), Decimal('101'))
 
-        amount, mode, reason, _, _ = self.capital_manager.get_buy_order_details(
+        amount, mode, reason, _, _, _, _ = self.capital_manager.get_buy_order_details(
             market_data={},
             open_positions=[MagicMock()] * 2, # 2 is less than 10/4=2.5, difficulty 0
             portfolio_value=Decimal('1000'),
@@ -124,9 +126,9 @@ class TestCapitalManager(unittest.TestCase):
         """Should return larger trade size for a correction entry."""
         self.config_values[('STRATEGY_RULES', 'use_dynamic_capital')] = True
         self.capital_manager = CapitalManager(self.mock_config_manager, self.mock_strategy_rules)
-        self.mock_strategy_rules.evaluate_buy_signal.return_value = (True, "downtrend", "Potential bottom signal")
+        self.mock_strategy_rules.evaluate_buy_signal.return_value = (True, "downtrend", "Potential bottom signal", Decimal('100'), Decimal('101'))
 
-        amount, mode, reason, _, _ = self.capital_manager.get_buy_order_details(
+        amount, mode, reason, _, _, _, _ = self.capital_manager.get_buy_order_details(
             market_data={},
             open_positions=[], # 0 open positions, difficulty 0
             portfolio_value=Decimal('1000'),
@@ -140,9 +142,9 @@ class TestCapitalManager(unittest.TestCase):
 
     def test_insufficient_funds_logic(self):
         """Should not buy if free cash is less than the calculated amount."""
-        self.mock_strategy_rules.evaluate_buy_signal.return_value = (True, "uptrend", "A valid signal")
+        self.mock_strategy_rules.evaluate_buy_signal.return_value = (True, "uptrend", "A valid signal", Decimal('100'), Decimal('101'))
 
-        amount, mode, reason, _, _ = self.capital_manager.get_buy_order_details(
+        amount, mode, reason, _, _, _, _ = self.capital_manager.get_buy_order_details(
             market_data={},
             open_positions=[],
             portfolio_value=Decimal('1000'),
@@ -158,9 +160,9 @@ class TestCapitalManager(unittest.TestCase):
         """Should not buy if calculated amount is below min_trade_size."""
         self.capital_manager.min_trade_size = Decimal('25.0')
         self.params['order_size_usd'] = Decimal('20.0')
-        self.mock_strategy_rules.evaluate_buy_signal.return_value = (True, "accumulation", "A valid signal")
+        self.mock_strategy_rules.evaluate_buy_signal.return_value = (True, "accumulation", "A valid signal", Decimal('100'), Decimal('101'))
 
-        amount, mode, reason, _, _ = self.capital_manager.get_buy_order_details(
+        amount, mode, reason, _, _, _, _ = self.capital_manager.get_buy_order_details(
             market_data={},
             open_positions=[MagicMock()],
             portfolio_value=Decimal('1000'),

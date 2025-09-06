@@ -18,8 +18,8 @@ def mock_db_manager_with_trades():
     db_manager.get_open_positions.return_value = [trade1, trade2]
     return db_manager
 
-@patch('jules_bot.bot.trading_bot.logger')
-@patch('jules_bot.bot.trading_bot.config_manager')
+@patch('jules_bot.utils.logger.logger')
+@patch('jules_bot.utils.config_manager.config_manager')
 def test_insufficient_balance_logs_critical_and_skips_sell(mock_config, mock_logger, mock_db_manager_with_trades):
     """
     Verify that when the bot detects an insufficient balance for a sell, it logs
@@ -75,10 +75,10 @@ def test_insufficient_balance_logs_critical_and_skips_sell(mock_config, mock_log
 @pytest.fixture
 def mock_bot_components():
     """A fixture to create a set of mocked components for the TradingBot."""
-    with patch('jules_bot.bot.trading_bot.StateManager') as MockStateManager, \
-         patch('jules_bot.bot.trading_bot.Trader') as MockTrader, \
-         patch('jules_bot.bot.trading_bot.StrategyRules') as MockStrategyRules, \
-         patch('jules_bot.bot.trading_bot.logger') as MockLogger:
+    with patch('jules_bot.core_logic.state_manager.StateManager') as MockStateManager, \
+         patch('jules_bot.core_logic.trader.Trader') as MockTrader, \
+         patch('jules_bot.core_logic.strategy_rules.StrategyRules') as MockStrategyRules, \
+         patch('jules_bot.utils.logger.logger') as MockLogger:
 
         mock_state_manager = MockStateManager.return_value
         mock_trader = MockTrader.return_value

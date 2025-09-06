@@ -21,23 +21,3 @@ def _calculate_progress_pct(current_price: Decimal, start_price: Decimal, target
     except (InvalidOperation, ZeroDivisionError):
         return Decimal('0.0')
 
-def calculate_buy_progress(market_data: dict, current_params: dict, difficulty_factor: Decimal) -> tuple[Decimal, Decimal]:
-    """
-    Calculates the target price for the next buy and the progress towards it.
-    """
-    try:
-        current_price = Decimal(str(market_data.get('close')))
-        high_price = Decimal(str(market_data.get('high', current_price)))
-
-        # This logic must mirror `strategy_rules.py` to ensure TUI consistency
-        base_buy_dip = current_params.get('buy_dip_percentage', Decimal('0.02'))
-        adjusted_buy_dip_percentage = base_buy_dip + difficulty_factor
-        target_price = high_price * (Decimal('1') - adjusted_buy_dip_percentage)
-
-        # The "start price" for measuring progress is the recent high.
-        progress = _calculate_progress_pct(current_price, high_price, target_price)
-
-        return target_price, progress
-
-    except (InvalidOperation, TypeError):
-        return Decimal('0'), Decimal('0')
