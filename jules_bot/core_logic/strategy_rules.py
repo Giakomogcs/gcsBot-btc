@@ -1,7 +1,7 @@
 from decimal import Decimal, getcontext, InvalidOperation
 from jules_bot.utils.config_manager import ConfigManager
 from jules_bot.utils.logger import logger
-from typing import Dict
+from typing import Dict, Tuple
 
 # Set precision for Decimal calculations
 getcontext().prec = 28
@@ -223,3 +223,80 @@ class StrategyRules:
         except (TypeError, InvalidOperation) as e:
             logger.error(f"Error calculating unrealized PnL: {e}", exc_info=True)
             return Decimal('0.0')
+
+    def evaluate_smart_trailing_stop(
+        self,
+        position: Dict[str, any],
+        net_unrealized_pnl: Decimal
+    ) -> Tuple[str, str]:
+        """
+        Evaluates the state of a smart trailing stop for a given position.
+
+        This function centralizes the trailing stop logic previously in the TradingBot.
+        It returns a decision and a reason, which the caller can then act upon.
+
+        Args:
+            position (Dict): A dictionary-like object representing the trade,
+                             containing keys like 'is_smart_trailing_active' and
+                             'smart_trailing_highest_profit'.
+            net_unrealized_pnl (Decimal): The current net unrealized profit/loss.
+
+        Returns:
+            A tuple containing a decision string and a reason string.
+            Possible decisions: "SELL", "ACTIVATE", "DEACTIVATE", "UPDATE_PEAK", "HOLD"
+        """
+        is_active = position.get('is_smart_trailing_active', False)
+        min_profit_target = self.trailing_stop_profit
+        decision = "HOLD"
+        reason = "No action required."
+
+        # 1. Activation Check: If trailing is not active, see if it should be.
+        if not is_active:
+            if net_unrealized_pnl >= min_profit_target:
+                decision = "ACTIVATE"
+                reason = f"Trailing stop activated. PnL ({net_unrealized_pnl:.2f}) reached target ({min_profit_target:.2f})."
+            return decision, reason
+
+        # 2. Logic for already-active trailing stops.
+        highest_profit = position.get('smart_trailing_highest_profit')
+        if highest_profit is None:
+            # This case handles legacy positions that might not have the field set yet after activation.
+            # We treat the current PnL as the highest to avoid errors.
+            highest_profit = net_unrealized_pnl
+        else:
+            highest_profit = Decimal(str(highest_profit))
+
+        # 2a. Deactivation Check: If it becomes unprofitable, turn it off.
+        if net_unrealized_pnl < 0:
+            decision = "DEACTIVATE"
+            reason = f"Trailing stop deactivated. Position became unprofitable (PnL: {net_unrealized_pnl:.2f})."
+            return decision, reason
+
+        # 2b. Update Peak Profit: If we've reached a new high, record it.
+        if net_unrealized_pnl > highest_profit:
+            decision = "UPDATE_PEAK"
+            reason = f"New profit peak for trailing stop: {net_unrealized_pnl:.2f}."
+            return decision, reason
+
+        # 2c. Sell Trigger Check: Has the PnL dropped enough from the peak?
+        trail_percentage = self.dynamic_trail_percentage
+        stop_profit_level = highest_profit * (Decimal('1') - trail_percentage)
+        
+        # The final trigger is the higher of the trailed level or the initial activation target.
+        final_trigger_profit = max(stop_profit_level, min_profit_target)
+
+        if net_unrealized_pnl <= final_trigger_profit:
+            decision = "SELL"
+            reason = (
+                f"Trailing stop sell triggered. "
+                f"PnL ({net_unrealized_pnl:.2f}) <= Target ({final_trigger_profit:.2f})."
+            )
+        else:
+            reason = (
+                f"Monitoring active trail. "
+                f"Current PnL: {net_unrealized_pnl:.2f}, "
+                f"Peak: {highest_profit:.2f}, "
+                f"Stop Target: {final_trigger_profit:.2f}."
+            )
+            
+        return decision, reason

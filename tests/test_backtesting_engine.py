@@ -82,6 +82,9 @@ def test_backtester_pnl_calculation(mock_add_all_features, mock_summary, mock_co
         mock_capital_manager.return_value.get_buy_order_details.side_effect = [
                 (Decimal('100.0'), 'TEST_MODE', 'test buy reason', 'uptrend', Decimal('0.0'))
             ] + [(Decimal('0'), 'HOLD', 'no signal', 'no_signal', Decimal('0.0'))] * (len(feature_data) - 1)
+        
+        # Set the required attribute for the new logic
+        mock_capital_manager.return_value.difficulty_reset_timeout_hours = 2
 
         # Sell if price is >= 110 (the close of the second candle)
         mock_sell_target.return_value = Decimal("110.0")

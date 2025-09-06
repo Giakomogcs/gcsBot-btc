@@ -3,6 +3,8 @@ import sys
 import shutil
 import typer
 import subprocess
+import time
+import traceback
 from typing import Optional
 import glob
 from jules_bot.utils import process_manager
@@ -252,26 +254,48 @@ def run_bot_in_container(bot_name: str, mode: str) -> tuple[Optional[str], int]:
         return container_id, host_port
     except FileNotFoundError:
         print("❌ Erro: O comando 'docker' não foi encontrado. O Docker está instalado e no seu PATH?")
-        return None
+        return None, -1
     except subprocess.CalledProcessError as e:
         print(f"❌ Erro ao executar 'docker run'. Código de saída: {e.returncode}")
         print(f"   Stderr:\n{e.stderr}")
         print(f"   Stdout:\n{e.stdout}")
-        return None
-    return None
+        return None, -1
+    except Exception:
+        print("❌ Erro inesperado durante a execução do container.")
+        traceback.print_exc()
+        return None, -1
 
 def run_command_in_container(command: list, bot_name: str, interactive: bool = False):
-    run_command = SUDO_PREFIX + ["docker", "run", "--rm", "--network", DOCKER_NETWORK_NAME, "--env-file", ".env", "-e", f"BOT_NAME={bot_name}", "-e", "JULES_BOT_SCRIPT_MODE=1"]
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '.'))
+    
+    run_command = SUDO_PREFIX + [
+        "docker", "run", "--rm",
+        "--network", DOCKER_NETWORK_NAME,
+        "--env-file", ".env",
+        "-v", f"{project_root}:/app",
+        "-e", f"BOT_NAME={bot_name}",
+        "-e", "JULES_BOT_SCRIPT_MODE=1"
+    ]
+    
     if interactive:
         run_command.append("-it")
+        
     run_command.extend([DOCKER_IMAGE_NAME, "python"])
     run_command.extend(command)
+    
     print(f"   (executando: `{' '.join(run_command)}`)")
     try:
+        # Para scripts não interativos, é melhor mostrar o output diretamente
+        # em vez de capturá-lo. check=True ainda vai parar em caso de erro.
         subprocess.run(run_command, check=True)
         return True
+    except subprocess.CalledProcessError as e:
+        # A mensagem de erro do subprocess já é informativa,
+        # então não precisamos imprimir stderr/stdout manualmente.
+        print(f"❌ Falha ao executar comando no container. Código de saída: {e.returncode}")
+        return False
     except Exception as e:
-        print(f"❌ Falha ao executar comando no container: {e}")
+        print(f"❌ Falha inesperada ao executar comando no container: {e}")
         return False
 
 def _confirm_and_clear_data(bot_name: str):
@@ -511,6 +535,7 @@ def new_bot():
             f.write(f"\n{bot_config_block}")
         print(f"✅ Bot '{bot_name}' adicionado com sucesso ao seu arquivo {env_file}!")
         print(f"   -> Agora, edite o arquivo e preencha com as chaves de API do bot.")
+        print(f"   -> Lembre-se de preencher as chaves de TESTNET se for usar os comandos 'test' ou 'backtest'.")
     except Exception as e:
         print(f"❌ Ocorreu um erro ao escrever no arquivo {env_file}: {e}")
         raise typer.Exit(1)

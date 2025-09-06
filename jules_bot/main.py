@@ -47,16 +47,13 @@ def main():
         try:
             from jules_bot.core.exchange_connector import ExchangeManager
             from jules_bot.bot.synchronization_manager import SynchronizationManager
+            from binance.exceptions import BinanceAPIException
 
             logger.info("Iniciando a sincronização do histórico de trades com a Binance...")
             
-            # O SynchronizationManager precisa de um cliente de exchange autenticado
             exchange_manager = ExchangeManager(mode=bot_mode)
-            
-            # E precisa do nome do símbolo para buscar os trades corretos
             symbol = config_manager.get('APP', 'symbol')
 
-            # The sync manager needs the strategy rules to calculate PnL correctly
             from jules_bot.core_logic.strategy_rules import StrategyRules
             strategy_rules = StrategyRules(config_manager)
             sync_manager = SynchronizationManager(
@@ -69,10 +66,24 @@ def main():
             sync_manager.run_full_sync()
             logger.info("Sincronização do histórico de trades concluída com sucesso.")
 
+        except ValueError as e:
+            # Erro comum se as chaves de API não estiverem no .env
+            logger.error(f"Erro de configuração: {e}", exc_info=True)
+            bot_prefix = bot_name.upper()
+            if 'test' in str(e).lower():
+                logger.critical(f"DICA: Verifique se as variáveis '{bot_prefix}_BINANCE_TESTNET_API_KEY' e '{bot_prefix}_BINANCE_TESTNET_API_SECRET' estão definidas corretamente no seu arquivo .env")
+            else:
+                logger.critical(f"DICA: Verifique se as variáveis '{bot_prefix}_BINANCE_API_KEY' e '{bot_prefix}_BINANCE_API_SECRET' estão definidas corretamente no seu arquivo .env")
+            raise RuntimeError("Falha na configuração das chaves de API, abortando.")
+        
+        except BinanceAPIException as e:
+            # Erro se as chaves estiverem presentes mas forem inválidas/expiradas/etc.
+            logger.error(f"Erro de API da Binance: {e}", exc_info=True)
+            logger.critical("A conexão com a Binance falhou. Isso geralmente ocorre por chaves de API inválidas, expiradas ou sem as permissões corretas ('Enable Reading' e 'Enable Spot & Margin Trading').")
+            raise RuntimeError("Falha na conexão com a API da Binance, abortando.")
+
         except Exception as e:
-            logger.error(f"Ocorreu um erro durante a sincronização do histórico de trades: {e}", exc_info=True)
-            # Decide se o bot deve continuar mesmo com a falha na sincronização.
-            # Por segurança, é melhor parar.
+            logger.error(f"Ocorreu um erro inesperado durante a sincronização do histórico: {e}", exc_info=True)
             raise RuntimeError("Falha na sincronização do histórico, abortando a inicialização do bot.")
 
         # --- Instanciação do Bot ---
