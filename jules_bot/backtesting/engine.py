@@ -2,6 +2,7 @@ import logging
 import uuid
 import pandas as pd
 import os
+from datetime import timedelta
 from decimal import Decimal, getcontext
 from jules_bot.core.mock_exchange import MockTrader
 from jules_bot.database.postgres_manager import PostgresManager
@@ -181,8 +182,14 @@ class Backtester:
 
             # BUY LOGIC
             market_data = candle.to_dict()
-            # The list comprehension now correctly filters BacktestTrade objects
-            recent_trades_for_difficulty = [t for t in all_trades_for_run if t.timestamp <= current_time]
+            # Filter trade history to match the live bot's rolling window for difficulty calculation.
+            timeout_hours = self.capital_manager.difficulty_reset_timeout_hours
+            start_date_for_difficulty = current_time - timedelta(hours=timeout_hours)
+
+            recent_trades_for_difficulty = [
+                t for t in all_trades_for_run
+                if t.timestamp and t.timestamp >= start_date_for_difficulty
+            ]
 
             buy_amount_usdt, op_mode, reason, _, diff_factor = self.capital_manager.get_buy_order_details(
                 market_data=market_data, open_positions=list(open_positions.values()),
