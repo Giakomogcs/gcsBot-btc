@@ -1,18 +1,44 @@
-# Git / IDE / OS specific files
+# Git and DVC
 .git
 .gitignore
-.vscode/
-README.md
+.dvc
+.dvcignore
+data/
+data.dvc
 
-# Python cache and virtual environments
+# IDE and OS specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+Thumbs.db
+
+# Python virtual environments and cache
+.venv/
+venv/
+env/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-venv/
-env/
 
-# Local files that should not be in the container
+# Build artifacts
+/build/
+/dist/
+*.egg-info/
+
+# Local files and logs
 database.db
-jules_bot.log
 *.db-journal
+*.log
+.env
+
+# Test files
+/tests/
+pytest.ini
+.pytest_cache/
+
+# Documentation
+README.md
+docs/

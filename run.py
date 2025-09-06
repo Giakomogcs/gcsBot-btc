@@ -86,90 +86,126 @@ def run_docker_compose_command(command_args: list, **kwargs):
         print(f"❌ Erro inesperado ao executar comando docker-compose: {e}")
     return False
 
-def _ensure_env_is_running():
+def _check_image_exists() -> bool:
+    """Verifica se a imagem Docker da aplicação já existe."""
     try:
-        base_command = get_docker_compose_command()
-        check_command = base_command + ["ps", "-q", "postgres"]
-        result = subprocess.run(check_command, capture_output=True, text=True, check=False)
-        if not result.stdout.strip():
-            print("🚀 Ambiente Docker de serviços não detectado. Iniciando (PostgreSQL, etc.)...")
-
-            print("   -> Etapa 1: Iniciando os containers de serviço em background...")
-            # We only specify the services to avoid any potential conflict if 'app' was in the compose file
-            if not run_docker_compose_command(["up", "-d", "postgres", "pgadmin"], capture_output=False):
-                print("❌ Falha ao iniciar os containers de serviço. Verifique a sua instalação do Docker.")
-                return False
-            print("✅ Serviços de ambiente iniciados com sucesso.")
-
-    except Exception as e:
-        print(f"❌ Erro inesperado ao verificar ou iniciar o ambiente Docker: {e}")
+        cmd = SUDO_PREFIX + ["docker", "image", "inspect", DOCKER_IMAGE_NAME]
+        subprocess.run(cmd, check=True, capture_output=True)
+        return True
+    except subprocess.CalledProcessError:
+        return False
+    except Exception:
         return False
 
-    # Etapa 2: Build the application image separately, outside the initial environment check
-    print("\n   -> Etapa 2: Construindo a imagem da aplicação (isso pode levar um momento)...")
+def _build_app_image(force: bool = False) -> bool:
+    """Constrói a imagem Docker da aplicação, opcionalmente forçando a reconstrução."""
+    if not force and _check_image_exists():
+        print(f"✅ Imagem Docker '{DOCKER_IMAGE_NAME}' já existe. Pulando a construção.")
+        return True
+
+    print(f"\n{'🔧 Forçando a reconstrução' if force else '🔨 Construindo'} da imagem da aplicação (isso pode levar um momento)...")
     build_command = SUDO_PREFIX + ["docker", "build", "-t", DOCKER_IMAGE_NAME, "."]
+    if force:
+        build_command.append("--no-cache")
     print(f"   (usando comando: `{' '.join(build_command)}`)")
     try:
-        # Use streaming output for better user feedback
-        subprocess.run(build_command, check=True)
+        subprocess.run(build_command, check=True) # Stream output
         print(f"✅ Imagem '{DOCKER_IMAGE_NAME}' construída com sucesso.")
     except subprocess.CalledProcessError:
-        # The output is already streamed to the console, so we just need to indicate failure.
-        print(f"❌ Falha ao construir a imagem Docker. Verifique o output acima para mais detalhes.")
+        print(f"❌ Falha ao construir a imagem Docker. Verifique o output acima.")
         return False
     except Exception as e:
         print(f"❌ Erro inesperado ao construir a imagem Docker: {e}")
         return False
 
-    # Etapa 3: Prune dangling images
-    print("\n   -> Etapa 3: Limpando imagens antigas (dangling)...")
+    # Prune dangling images after a successful build
+    print("\n   -> Limpando imagens antigas (dangling)...")
     prune_command = SUDO_PREFIX + ["docker", "image", "prune", "-f"]
-    print(f"   (usando comando: `{' '.join(prune_command)}`)")
     try:
-        subprocess.run(prune_command, check=True, capture_output=True)
+        subprocess.run(prune_command, check=True, capture_output=True, text=True)
         print("✅ Limpeza de imagens antigas concluída.")
     except Exception as e:
         print(f"⚠️  Não foi possível limpar as imagens antigas: {e}")
 
     return True
 
+def _ensure_env_is_running(rebuild: bool = False):
+    """
+    Garante que o ambiente Docker (serviços e imagem da app) está pronto.
+    """
+    # Etapa 1: Construir a imagem da aplicação se necessário ou forçado
+    if rebuild or not _check_image_exists():
+        if not _build_app_image(force=rebuild):
+            return False # Para a execução se a construção da imagem falhar
+
+    # Etapa 2: Garantir que os serviços (Postgres, etc.) estão em execução
+    try:
+        base_command = get_docker_compose_command()
+        check_command = base_command + ["ps", "-q", "postgres"]
+        result = subprocess.run(check_command, capture_output=True, text=True, check=False)
+
+        if not result.stdout.strip():
+            print("🚀 Ambiente Docker de serviços não detectado. Iniciando (PostgreSQL, etc.)...")
+            if not run_docker_compose_command(["up", "-d", "postgres", "pgadmin"], capture_output=False):
+                print("❌ Falha ao iniciar os containers de serviço. Verifique a sua instalação do Docker.")
+                return False
+            print("✅ Serviços de ambiente iniciados com sucesso.")
+        else:
+            print("✅ Serviços Docker (PostgreSQL, etc.) já estão em execução.")
+
+    except Exception as e:
+        print(f"❌ Erro inesperado ao verificar ou iniciar o ambiente Docker: {e}")
+        return False
+
+    return True
+
 @app.command("start-env")
-def start_env():
-    if not _ensure_env_is_running():
+def start_env(rebuild: bool = typer.Option(False, "--rebuild", help="Força a reconstrução da imagem da aplicação.")):
+    """
+    Inicia o ambiente Docker (serviços e app) e constrói a imagem se necessário.
+    """
+    if not _ensure_env_is_running(rebuild=rebuild):
         raise typer.Exit(1)
-    print("✅ Ambiente Docker já está em execução ou foi iniciado com sucesso.")
+    print("✅ Ambiente Docker pronto para uso.")
+
+
+@app.command("rebuild-app")
+def rebuild_app():
+    """
+    Força a reconstrução (rebuild) da imagem Docker da aplicação.
+    """
+    print("Forçando a reconstrução da imagem da aplicação...")
+    if not _build_app_image(force=True):
+        print("❌ A reconstrução falhou. Verifique os logs acima.")
+        raise typer.Exit(1)
+    print("✅ Imagem da aplicação reconstruída com sucesso.")
+
 
 @app.command("stop-env")
 def stop_env():
+    """
+    Para todos os containers do projeto (bots e serviços), mas não remove a imagem da aplicação.
+    """
     print("🛑 Parando todos os serviços Docker...")
     running_bots = process_manager.sync_and_get_running_bots()
     if running_bots:
         print("   Parando containers de bot em execução...")
         for bot in running_bots:
             try:
+                # Silenciosamente para e remove o container
                 subprocess.run(SUDO_PREFIX + ["docker", "stop", bot.container_id], capture_output=True, check=False)
                 subprocess.run(SUDO_PREFIX + ["docker", "rm", bot.container_id], capture_output=True, check=False)
                 process_manager.remove_running_bot(bot.bot_name)
             except Exception:
-                pass
-    if run_docker_compose_command(["down", "-v"], capture_output=True):
-        print("✅ Ambiente Docker parado com sucesso.")
+                pass # Ignora erros se o container já foi removido
 
-    print(f"🗑️  Removendo a imagem Docker da aplicação '{DOCKER_IMAGE_NAME}'...")
-    try:
-        # Using -f to force removal, e.g. if there are dangling tags
-        remove_image_command = SUDO_PREFIX + ["docker", "rmi", "-f", DOCKER_IMAGE_NAME]
-        result = subprocess.run(remove_image_command, capture_output=True, text=True, check=False)
-        if result.returncode == 0:
-            # Docker's rmi output can be verbose, so we just confirm it worked.
-            print(f"✅ Imagem '{DOCKER_IMAGE_NAME}' removida.")
-        elif "No such image" in result.stderr:
-            print(f"ℹ️  Imagem '{DOCKER_IMAGE_NAME}' não encontrada, nada a fazer.")
-        else:
-            print(f"⚠️  Não foi possível remover a imagem '{DOCKER_IMAGE_NAME}'. Pode ser que esteja em uso por um container não relacionado. Erro:")
-            print(f"   {result.stderr.strip()}")
-    except Exception as e:
-        print(f"❌ Erro inesperado ao remover a imagem Docker: {e}")
+    # O comando 'down' para e remove containers, redes e volumes definidos no compose
+    if run_docker_compose_command(["down", "--volumes"], capture_output=True): # --volumes remove volumes anônimos
+        print("✅ Ambiente Docker (serviços) parado com sucesso.")
+    else:
+        print("⚠️  Houve um problema ao parar o ambiente de serviços com docker-compose.")
+
+    print(f"ℹ️  A imagem da aplicação '{DOCKER_IMAGE_NAME}' foi mantida. Use 'python run.py rebuild-app' para reconstruí-la.")
 
 @app.command("status")
 def status():
