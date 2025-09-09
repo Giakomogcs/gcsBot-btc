@@ -305,6 +305,17 @@ class StatusService:
             sao_paulo_tz = pytz.timezone('America/Sao_Paulo')
             aware_timestamp = trade.timestamp.replace(tzinfo=pytz.utc).astimezone(sao_paulo_tz)
 
+            # --- Trailing Stop Calculations for TUI ---
+            is_trailing_active = trade.is_smart_trailing_active
+            highest_profit = Decimal(str(trade.smart_trailing_highest_profit)) if trade.smart_trailing_highest_profit is not None else Decimal('0')
+            final_trigger_profit = Decimal('0')
+
+            if is_trailing_active:
+                min_profit_target = self.strategy.trailing_stop_profit
+                trail_percentage = self.strategy.dynamic_trail_percentage
+                stop_profit_level = highest_profit * (Decimal('1') - trail_percentage)
+                final_trigger_profit = max(stop_profit_level, min_profit_target)
+
             positions_status.append({
                 "trade_id": trade.trade_id,
                 "timestamp": aware_timestamp.isoformat(),
@@ -318,6 +329,10 @@ class StatusService:
                 "progress_to_sell_target_pct": progress_pct,
                 "price_to_target": price_to_target,
                 "usd_to_target": usd_to_target,
+                # --- Add Trailing Stop Data to the payload ---
+                "is_smart_trailing_active": is_trailing_active,
+                "smart_trailing_highest_profit": highest_profit,
+                "final_trigger_profit": final_trigger_profit,
             })
         return positions_status
 

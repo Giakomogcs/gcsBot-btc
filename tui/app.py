@@ -193,7 +193,7 @@ class TUIApp(App):
         self.log_display.write(f"[bold green]TUI Initialized for {self.bot_name}.[/bold green]")
         positions_table = self.query_one("#positions_table", DataTable)
         positions_table.cursor_type = "row"
-        positions_table.add_columns("ID", "Date", "Entry", "Value", "Unrealized PnL", "PnL %", "Target", "Target PnL", "Progress")
+        positions_table.add_columns("TS", "ID", "Date", "Entry", "Value", "Unrealized PnL", "PnL %", "Target", "Target PnL", "Progress")
         wallet_table = self.query_one("#wallet_table", DataTable)
         wallet_table.add_columns("Asset", "Available", "Total", "USD Value")
         history_table = self.query_one("#history_table", DataTable)
@@ -377,9 +377,8 @@ class TUIApp(App):
     @work(thread=True)
     def read_status_file_worker(self) -> None:
         """Worker to read the bot status from the JSON file."""
-        # O arquivo de status agora está em um diretório compartilhado via volume do Docker
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-        status_file_path = os.path.join(project_root, ".tui_files", f".bot_status_{self.bot_name}.json")
+        # Use a simple relative path, assuming TUI is run from the project root.
+        status_file_path = os.path.join(".tui_files", f".bot_status_{self.bot_name}.json")
         try:
             if os.path.exists(status_file_path):
                 with open(status_file_path, "r") as f:
@@ -638,16 +637,23 @@ class TUIApp(App):
             target_pnl = Decimal(pos.get("target_pnl", 0))
             target_pnl_color = "green" if target_pnl >= 0 else "red"
             target_pnl_str = f"[{target_pnl_color}]${target_pnl:,.2f}[/]"
-            progress = float(pos.get('progress_to_sell_target_pct', 0))
-            progress_bar = "█" * int(progress / 10) + "░" * (10 - int(progress / 10))
-            progress_str = f"[{progress_bar}] {progress:.1f}%"
+            is_trailing_active = pos.get("is_smart_trailing_active")
+            if is_trailing_active:
+                final_trigger_profit = Decimal(pos.get('final_trigger_profit', 0))
+                progress_str = f"Sell at ${final_trigger_profit:,.2f}"
+            else:
+                progress = float(pos.get('progress_to_sell_target_pct', 0))
+                progress_bar = "█" * int(progress / 10) + "░" * (10 - int(progress / 10))
+                progress_str = f"[{progress_bar}] {progress:.1f}%"
             current_value = pos['current_value']
             # O timestamp agora chega no fuso horário correto
             local_timestamp = datetime.fromisoformat(pos['timestamp'])
             timestamp = local_timestamp.strftime('%Y-%m-%d %H:%M')
 
+            trailing_icon = "🛡️" if pos.get("is_smart_trailing_active") else ""
+
             row_data = (
-                trade_id.split('-')[0], timestamp, f"${Decimal(pos.get('entry_price', 0)):,.2f}",
+                trailing_icon, trade_id.split('-')[0], timestamp, f"${Decimal(pos.get('entry_price', 0)):,.2f}",
                 f"${current_value:,.2f}", f"[{pnl_color}]${pnl:,.2f}[/]", pnl_pct_str,
                 f"${Decimal(pos.get('sell_target_price', 0)):,.2f}", target_pnl_str, progress_str,
             )

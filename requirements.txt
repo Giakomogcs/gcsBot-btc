@@ -1,12 +1,12 @@
 # Ficheiro: requirements.txt (VERSÃO DEFINITIVA E ALINHADA)
 
 # --- Core Libraries ---
-numpy==1.26.4
-pandas==2.2.0
+numpy
+pandas
 setuptools
 
 # --- Machine Learning & AI ---
-scikit-learn
+# scikit-learn
 # optuna-integration # Comentado - Descomente apenas se o seu código o usar explicitamente
 # stable-baselines3 # Comentado - Para uso futuro em Reinforcement Learning
 # gymnasium # Comentado - Para uso futuro em Reinforcement Learning

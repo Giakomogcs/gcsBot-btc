@@ -266,7 +266,7 @@ class TradingBot:
 
     def _check_and_handle_refresh_signal(self):
         """Checks for a TUI-initiated refresh signal and triggers a status update if found."""
-        signal_file_path = os.path.join("/app/.tui_files", f".force_refresh_{self.bot_name}")
+        signal_file_path = os.path.join(".tui_files", f".force_refresh_{self.bot_name}")
         if os.path.exists(signal_file_path):
             logger.info(f"Force refresh signal detected at '{signal_file_path}'. Updating status file now.")
             try:
@@ -459,7 +459,18 @@ class TradingBot:
                             sell_candidates.append((position, "trailing_stop"))
 
                         elif decision == "HOLD":
-                            logger.debug(f"Position {position.trade_id}: {reason}")
+                            # Add more detailed logging for visibility, especially when the trail is not yet active.
+                            is_trailing_active = position.is_smart_trailing_active
+                            if not is_trailing_active:
+                                min_profit_target = self.strategy_rules.trailing_stop_profit
+                                logger.debug(
+                                    f"Position {position.trade_id}: Trailing stop is not active. "
+                                    f"Current PnL: ${net_unrealized_pnl:,.2f}, "
+                                    f"Activation Target: ${min_profit_target:,.2f}."
+                                )
+                            else:
+                                # The reason from strategy_rules is already detailed for active trails.
+                                logger.debug(f"Position {position.trade_id}: {reason}")
 
 
                     # 3. Execute sales for all triggered positions
@@ -661,7 +672,8 @@ class TradingBot:
                     logger.info("\n[SHUTDOWN] Ctrl+C detected.")
                 except Exception as e:
                     logger.critical(f"❌ Critical error in main loop: {e}", exc_info=True)
-                    time.sleep(300)
+                    logger.warning("Bot entering 15-second cooldown due to critical error.")
+                    time.sleep(15)
         finally:
             self.shutdown()
 
@@ -712,7 +724,7 @@ class TradingBot:
             )
 
             # 7. Write the live status file
-            status_dir = "/app/.tui_files"
+            status_dir = ".tui_files"
             # Ensure the directory exists and has permissions that allow writing from different users (e.g., inside and outside Docker)
             os.makedirs(status_dir, mode=0o777, exist_ok=True)
             status_file_path = os.path.join(status_dir, f".bot_status_{self.bot_name}.json")
