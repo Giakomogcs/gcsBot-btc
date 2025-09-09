@@ -224,7 +224,18 @@ class StrategyRules:
                 reason = f"Trailing stop activated. PnL ({net_unrealized_pnl:.2f}) reached target ({min_profit_target:.2f})."
             return decision, reason, new_trail_percentage
 
-        highest_profit = Decimal(str(position.get('smart_trailing_highest_profit', net_unrealized_pnl)))
+        # --- Determine the highest profit peak ---
+        # Get the stored highest profit. It can be None if it was never set or was reset.
+        stored_highest_profit_raw = position.get('smart_trailing_highest_profit')
+
+        # If there is no stored profit or it's zero, the current PNL becomes the de-facto highest profit.
+        # This happens on the first run after activation or if the state is inconsistent.
+        if stored_highest_profit_raw is None or Decimal(str(stored_highest_profit_raw)) == 0:
+            highest_profit = net_unrealized_pnl
+        else:
+            # If there is a valid stored profit, use it. This is the peak to defend.
+            highest_profit = Decimal(str(stored_highest_profit_raw))
+            
         current_trail_pct = Decimal(str(position.get('current_trail_percentage') or self.fixed_trail_percentage))
 
         if net_unrealized_pnl < 0:
@@ -232,6 +243,7 @@ class StrategyRules:
             reason = f"Trailing stop deactivated. Position became unprofitable (PnL: {net_unrealized_pnl:.2f})."
             return decision, reason, new_trail_percentage
 
+        # The only time the highest_profit should be updated is when the current PNL is even higher.
         if net_unrealized_pnl > highest_profit:
             decision = "UPDATE_PEAK"
             reason = f"New profit peak for trailing stop: {net_unrealized_pnl:.2f}."
@@ -247,13 +259,19 @@ class StrategyRules:
                     reason += f" Trail updated to {new_trail_percentage:.2%}"
             return decision, reason, new_trail_percentage
 
+        # If profit has not increased, check if it has dropped enough to trigger a sale.
         trail_percentage_to_use = current_trail_pct
         if self.use_dynamic_trailing_stop:
+            # In dynamic mode, the current_trail_pct is already the calculated one.
             trail_percentage_to_use = current_trail_pct
         else:
+            # In fixed mode, always use the configured fixed percentage.
             trail_percentage_to_use = self.fixed_trail_percentage
 
+        # Calculate the profit level that would trigger a sale.
         stop_profit_level = highest_profit * (Decimal('1') - trail_percentage_to_use)
+        
+        # Ensure the trigger doesn't fall below the absolute minimum profit required to trail.
         final_trigger_profit = max(stop_profit_level, min_profit_target)
 
         if net_unrealized_pnl <= final_trigger_profit:
