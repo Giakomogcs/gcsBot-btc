@@ -6,7 +6,7 @@ pandas==2.2.0
 setuptools
 
 # --- Machine Learning & AI ---
-scikit-learn
+# scikit-learn
 # optuna-integration # Comentado - Descomente apenas se o seu código o usar explicitamente
 # stable-baselines3 # Comentado - Para uso futuro em Reinforcement Learning
 # gymnasium # Comentado - Para uso futuro em Reinforcement Learning
