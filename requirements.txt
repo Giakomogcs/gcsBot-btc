@@ -1,8 +1,8 @@
 # Ficheiro: requirements.txt (VERSÃO DEFINITIVA E ALINHADA)
 
 # --- Core Libraries ---
-numpy==1.26.4
-pandas==2.2.0
+numpy
+pandas
 setuptools
 
 # --- Machine Learning & AI ---
