@@ -69,6 +69,7 @@ class Trade(Base):
     is_smart_trailing_active = Column(Boolean, default=False, nullable=False)
     smart_trailing_activation_price = Column(Numeric(20, 8), nullable=True)
     smart_trailing_highest_profit = Column(Numeric(20, 8), nullable=True)
+    current_trail_percentage = Column(Numeric(10, 5), nullable=True)
 
 
 class BotStatus(Base):

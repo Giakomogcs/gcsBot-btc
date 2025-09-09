@@ -308,12 +308,23 @@ class StatusService:
             # --- Trailing Stop Calculations for TUI ---
             is_trailing_active = trade.is_smart_trailing_active
             highest_profit = Decimal(str(trade.smart_trailing_highest_profit)) if trade.smart_trailing_highest_profit is not None else Decimal('0')
+            current_trail_pct = Decimal(str(trade.current_trail_percentage)) if trade.current_trail_percentage is not None else self.strategy.fixed_trail_percentage
             final_trigger_profit = Decimal('0')
 
             if is_trailing_active:
                 min_profit_target = self.strategy.trailing_stop_profit
-                trail_percentage = self.strategy.dynamic_trail_percentage
-                stop_profit_level = highest_profit * (Decimal('1') - trail_percentage)
+                
+                trail_percentage_to_use = current_trail_pct
+                if self.strategy.use_dynamic_trailing_stop:
+                    # For display, we recalculate to show what the *next* trail would be if the peak increased.
+                    # The actual logic uses the stored value.
+                    trail_percentage_to_use = self.strategy._calculate_dynamic_trail_percentage(highest_profit, entry_price, quantity)
+                    # But for the trigger calculation, we use the one stored in the DB
+                    trail_percentage_to_use = max(trail_percentage_to_use, current_trail_pct)
+                else:
+                    trail_percentage_to_use = self.strategy.fixed_trail_percentage
+
+                stop_profit_level = highest_profit * (Decimal('1') - trail_percentage_to_use)
                 final_trigger_profit = max(stop_profit_level, min_profit_target)
 
             positions_status.append({
@@ -332,6 +343,7 @@ class StatusService:
                 # --- Add Trailing Stop Data to the payload ---
                 "is_smart_trailing_active": is_trailing_active,
                 "smart_trailing_highest_profit": highest_profit,
+                "current_trail_percentage": current_trail_pct,
                 "final_trigger_profit": final_trigger_profit,
             })
         return positions_status

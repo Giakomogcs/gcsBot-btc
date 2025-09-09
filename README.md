@@ -34,13 +34,27 @@ Para evitar a exaustão de capital durante tendências de baixa prolongadas, o r
 
 ### Trailing Stop Dinâmico com Trava de Lucro
 
-Para maximizar os ganhos e, ao mesmo tempo, proteger o capital, o robô utiliza uma estratégia de trailing stop de nível profissional.
+Para maximizar os ganhos e, ao mesmo tempo, proteger o capital, o robô utiliza uma estratégia de trailing stop de nível profissional, que se torna mais flexível à medida que o lucro aumenta.
 
 - **Como Funciona:**
-  1.  **Ativação (Trava de Lucro):** Quando uma posição atinge um lucro mínimo em dólar (configurado por `STRATEGY_RULES_TRAILING_STOP_PROFIT`), a "trava de segurança" é ativada. A partir desse ponto, o robô não permitirá que a operação feche com prejuízo.
-  2.  **Stop Dinâmico:** O robô calcula um preço de stop que sobe dinamicamente conforme o preço do ativo sobe. Este stop é mantido a uma distância percentual do preço mais alto atingido (configurado por `STRATEGY_RULES_DYNAMIC_TRAIL_PERCENTAGE`).
-  3.  **Execução:** Se o preço do ativo cair e atingir o preço de stop dinâmico, a venda é executada para realizar os lucros. O stop apenas sobe, nunca desce.
-- **Benefício:** Esta abordagem permite que o robô "surfe" as tendências de alta, capturando lucros muito maiores do que um alvo fixo permitiria, enquanto protege o lucro já obtido de forma inteligente.
+
+  1.  **Ativação (Trava de Lucro):** Quando uma posição atinge um lucro mínimo em dólar (configurado por `STRATEGY_RULES_TRAILING_STOP_PROFIT`), a "trava de segurança" é ativada. A partir desse ponto, o robô tentará sempre fechar a operação com lucro.
+  2.  **Cálculo do Trail Dinâmico:** Em vez de uma porcentagem fixa, o "trail" (a distância do stop ao preço máximo) começa com um valor mínimo e aumenta conforme o lucro da operação cresce. Isso permite um stop mais justo para lucros pequenos e um stop mais flexível para lucros maiores.
+  3.  **Lógica de "Não Retorno":** A porcentagem do trail, uma vez que aumenta, **nunca mais diminui** para aquela operação, mesmo que o lucro recue do seu pico. Isso garante que a proteção de lucro seja sempre mantida ou melhorada.
+  4.  **Execução:** Se o preço do ativo cair e atingir o preço de stop calculado, a venda é executada. Se, no momento da venda, a operação estiver com prejuízo (devido a uma queda extremamente rápida), a venda é cancelada e o trailing stop é resetado para aguardar uma nova oportunidade de lucro.
+
+- **Benefício:** Esta abordagem permite que o robô "surfe" as tendências de alta de forma mais inteligente. Ele protege lucros pequenos de forma agressiva (com um trail curto) e dá mais espaço para a operação respirar quando os lucros já são significativos (com um trail mais longo), evitando vendas prematuras.
+
+- **Variáveis de Configuração:**
+
+| Variável                                      | Descrição                                                                                                                                   | Valor Padrão |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `STRATEGY_RULES_USE_DYNAMIC_TRAILING_STOP`    | Ativa (`true`) ou desativa (`false`) a lógica de trailing stop dinâmico. Se `false`, usará a porcentagem fixa definida abaixo.              | `true`       |
+| `STRATEGY_RULES_TRAILING_STOP_PROFIT`         | O valor de lucro em USD que ativa a "trava de segurança" do trailing stop.                                                                  | `0.02`       |
+| `STRATEGY_RULES_DYNAMIC_TRAIL_PERCENTAGE`     | **(Legado/Fixo)** A distância percentual do stop se o modo dinâmico estiver desativado.                                                     | `0.02`       |
+| `STRATEGY_RULES_DYNAMIC_TRAIL_MIN_PCT`        | A **porcentagem mínima** inicial do trail quando ele é ativado.                                                                             | `0.01`       |
+| `STRATEGY_RULES_DYNAMIC_TRAIL_MAX_PCT`        | A **porcentagem máxima** que o trail pode atingir, não importa quão alto seja o lucro.                                                      | `0.05`       |
+| `STRATEGY_RULES_DYNAMIC_TRAIL_PROFIT_SCALING` | O fator que controla a rapidez com que o trail aumenta em relação ao lucro. Um valor maior torna o trail mais sensível ao aumento de lucro. | `0.1`        |
 
 ## Pré-requisitos
 
@@ -132,8 +146,6 @@ Estas variáveis controlam a lógica de alto nível e as salvaguardas da estrat�
 | `STRATEGY_RULES_CONSECUTIVE_BUYS_THRESHOLD`          | O número de compras consecutivas antes que o fator de dificuldade comece a ser aplicado.                                    | `5`          |
 | `STRATEGY_RULES_DIFFICULTY_ADJUSTMENT_FACTOR`        | O multiplicador usado para aumentar a exigência de compra a cada nível de dificuldade.                                      | `0.005`      |
 | `STRATEGY_RULES_DIFFICULTY_RESET_TIMEOUT_HOURS`      | O número de horas sem compras após o qual o fator de dificuldade é resetado.                                                | `2`          |
-| `STRATEGY_RULES_TRAILING_STOP_PROFIT`                | O valor de lucro em USD que ativa a "trava de segurança" do trailing stop, garantindo que a operação não feche com prejuízo. | `0.02`       |
-| `STRATEGY_RULES_DYNAMIC_TRAIL_PERCENTAGE`            | A distância percentual que o stop dinâmico manterá do preço mais alto atingido pela operação (ex: 0.02 para 2%).            | `0.02`       |
 
 ### Parâmetros por Regime de Mercado (`REGIME_*`)
 

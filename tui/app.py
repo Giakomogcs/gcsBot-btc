@@ -193,7 +193,7 @@ class TUIApp(App):
         self.log_display.write(f"[bold green]TUI Initialized for {self.bot_name}.[/bold green]")
         positions_table = self.query_one("#positions_table", DataTable)
         positions_table.cursor_type = "row"
-        positions_table.add_columns("TS", "ID", "Date", "Entry", "Value", "Unrealized PnL", "PnL %", "Target", "Target PnL", "Progress")
+        positions_table.add_columns("TS", "ID", "Date", "Entry", "Value", "Unrealized PnL", "PnL %", "Peak PnL", "Trail %", "Target", "Target PnL", "Progress")
         wallet_table = self.query_one("#wallet_table", DataTable)
         wallet_table.add_columns("Asset", "Available", "Total", "USD Value")
         history_table = self.query_one("#history_table", DataTable)
@@ -283,11 +283,16 @@ class TUIApp(App):
             sort_key_map = {
                 "ID": "trade_id", "Date": "timestamp", "Entry": "entry_price", "Value": "current_value",
                 "Unrealized PnL": "unrealized_pnl", "PnL %": "unrealized_pnl_pct",
+                "Peak PnL": "smart_trailing_highest_profit", "Trail %": "current_trail_percentage",
                 "Target": "sell_target_price", "Target PnL": "target_pnl",
                 "Progress": "progress_to_sell_target_pct"
             }
             sort_key = sort_key_map.get(sort_column, "unrealized_pnl")
-            numeric_keys = ["entry_price", "current_value", "unrealized_pnl", "unrealized_pnl_pct", "sell_target_price", "target_pnl", "progress_to_sell_target_pct"]
+            numeric_keys = [
+                "entry_price", "current_value", "unrealized_pnl", "unrealized_pnl_pct",
+                "smart_trailing_highest_profit", "current_trail_percentage",
+                "sell_target_price", "target_pnl", "progress_to_sell_target_pct"
+            ]
 
             def sort_func(p):
                 val = p.get(sort_key)
@@ -650,12 +655,25 @@ class TUIApp(App):
             local_timestamp = datetime.fromisoformat(pos['timestamp'])
             timestamp = local_timestamp.strftime('%Y-%m-%d %H:%M')
 
-            trailing_icon = "🛡️" if pos.get("is_smart_trailing_active") else "  "
+            trailing_icon = "🛡️" if pos.get("is_smart_trailing_active") else ""
+            peak_pnl = Decimal(pos.get('smart_trailing_highest_profit', 0))
+            peak_pnl_str = f"${peak_pnl:,.2f}" if peak_pnl > 0 else "N/A"
+            trail_pct = Decimal(pos.get('current_trail_percentage', 0))
+            trail_pct_str = f"{trail_pct:.2%}" if trail_pct > 0 else "N/A"
 
             row_data = (
-                trailing_icon, trade_id.split('-')[0], timestamp, f"${Decimal(pos.get('entry_price', 0)):,.2f}",
-                f"${current_value:,.2f}", f"[{pnl_color}]${pnl:,.2f}[/]", pnl_pct_str,
-                f"${Decimal(pos.get('sell_target_price', 0)):,.2f}", target_pnl_str, progress_str,
+                trailing_icon,
+                trade_id.split('-')[0],
+                timestamp,
+                f"${Decimal(pos.get('entry_price', 0)):,.2f}",
+                f"${current_value:,.2f}",
+                f"[{pnl_color}]${pnl:,.2f}[/]",
+                pnl_pct_str,
+                peak_pnl_str,
+                trail_pct_str,
+                f"${Decimal(pos.get('sell_target_price', 0)):,.2f}",
+                target_pnl_str,
+                progress_str,
             )
             rows_to_add.append((trade_id, row_data))
 

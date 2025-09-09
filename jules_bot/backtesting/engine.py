@@ -119,7 +119,7 @@ class Backtester:
                 )
 
                 # --- Unified Smart Trailing Stop Logic ---
-                decision, reason = self.strategy_rules.evaluate_smart_trailing_stop(
+                decision, reason, new_trail_percentage = self.strategy_rules.evaluate_smart_trailing_stop(
                     position, net_unrealized_pnl
                 )
 
@@ -132,10 +132,13 @@ class Backtester:
                     logger.warning(f"🟡 Backtest: {reason}")
                     position['is_smart_trailing_active'] = False
                     position['smart_trailing_highest_profit'] = None
+                    position['current_trail_percentage'] = None
 
                 elif decision == "UPDATE_PEAK":
                     logger.info(f"📈 Backtest: {reason}")
                     position['smart_trailing_highest_profit'] = net_unrealized_pnl
+                    if new_trail_percentage:
+                        position['current_trail_percentage'] = new_trail_percentage
 
                 elif decision == "SELL":
                     # --- UNIFIED PROFITABILITY GATE ---
@@ -216,6 +219,7 @@ class Backtester:
                         'is_smart_trailing_active': False,
                         'smart_trailing_highest_profit': None,
                         'activation_price': None,
+                        'current_trail_percentage': None,
                     }
                     open_positions[new_trade_id] = position_data
 

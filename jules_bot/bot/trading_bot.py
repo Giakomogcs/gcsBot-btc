@@ -419,7 +419,7 @@ class TradingBot:
                         )
 
                         # Use the centralized logic from StrategyRules
-                        decision, reason = self.strategy_rules.evaluate_smart_trailing_stop(
+                        decision, reason, new_trail_percentage = self.strategy_rules.evaluate_smart_trailing_stop(
                             position.to_dict(), # Pass position as a dict
                             net_unrealized_pnl
                         )
@@ -430,7 +430,9 @@ class TradingBot:
                                 trade_id=position.trade_id,
                                 is_active=True,
                                 highest_profit=net_unrealized_pnl,
-                                activation_price=current_price
+                                activation_price=current_price,
+                                # On first activation, the trail pct is calculated but not saved
+                                # until the next peak update. This is by design.
                             )
                             position.is_smart_trailing_active = True
                             position.smart_trailing_highest_profit = net_unrealized_pnl
@@ -441,19 +443,23 @@ class TradingBot:
                                 trade_id=position.trade_id,
                                 is_active=False,
                                 highest_profit=None,
-                                activation_price=None
+                                activation_price=None,
+                                current_trail_percentage=None # Reset trail percentage
                             )
                             position.is_smart_trailing_active = False
-                            position.smart_trailing_highest_profit = None
 
                         elif decision == "UPDATE_PEAK":
                             logger.info(f"📈 {reason}")
                             self.state_manager.update_trade_smart_trailing_state(
                                 trade_id=position.trade_id,
                                 is_active=True,
-                                highest_profit=net_unrealized_pnl
+                                highest_profit=net_unrealized_pnl,
+                                # Pass the new trail percentage to be saved in the DB
+                                current_trail_percentage=new_trail_percentage
                             )
                             position.smart_trailing_highest_profit = net_unrealized_pnl
+                            if new_trail_percentage:
+                                position.current_trail_percentage = new_trail_percentage
 
                         elif decision == "SELL":
                             logger.info(f"✅ {reason}")
