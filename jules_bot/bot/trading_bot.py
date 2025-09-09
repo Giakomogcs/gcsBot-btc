@@ -444,6 +444,7 @@ class TradingBot:
                                 activation_price=None
                             )
                             position.is_smart_trailing_active = False
+                            position.smart_trailing_highest_profit = None
 
                         elif decision == "UPDATE_PEAK":
                             logger.info(f"📈 {reason}")

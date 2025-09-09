@@ -650,7 +650,7 @@ class TUIApp(App):
             local_timestamp = datetime.fromisoformat(pos['timestamp'])
             timestamp = local_timestamp.strftime('%Y-%m-%d %H:%M')
 
-            trailing_icon = "🛡️" if pos.get("is_smart_trailing_active") else ""
+            trailing_icon = "🛡️" if pos.get("is_smart_trailing_active") else "  "
 
             row_data = (
                 trailing_icon, trade_id.split('-')[0], timestamp, f"${Decimal(pos.get('entry_price', 0)):,.2f}",
