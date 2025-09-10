@@ -34,9 +34,10 @@ class SynchronizationManager:
 
     def run_full_sync(self):
         """
-        Synchronizes the bot's state with the exchange using a two-pass approach.
+        Synchronizes the bot's state with the exchange using a three-pass approach.
         1. Mirror Pass: Ensures every trade from the exchange exists in the local DB.
-        2. Reconciliation Pass: Updates the status and links of local trades based on a full FIFO simulation.
+        2. Linking Pass: Links sell trades to their corresponding buy trades (non-destructive).
+        3. Status Sync Pass: Updates local trade statuses based on the live exchange balance (destructive).
         """
         logger.info("--- Starting State Synchronization (Two-Pass) ---")
         try:
@@ -54,10 +55,15 @@ class SynchronizationManager:
             self._mirror_binance_trades(all_binance_trades)
             logger.info("[Sync Pass 1/2] Mirroring complete.")
 
-            # --- Pass 2: Reconciliation ---
-            logger.info("[Sync Pass 2/2] Reconciling local trade state with exchange history...")
+            # --- Pass 2: Reconciliation (Phase 1 - Linking) ---
+            logger.info("[Sync Pass 2/3] Linking sell trades to buys...")
             self._reconcile_local_state(all_binance_trades)
-            logger.info("[Sync Pass 2/2] Reconciliation complete.")
+            logger.info("[Sync Pass 2/3] Linking complete.")
+
+            # --- Pass 3: Reconciliation (Phase 2 - Status Sync) ---
+            logger.info("[Sync Pass 3/3] Synchronizing open position status with exchange balance...")
+            self._sync_open_positions_status()
+            logger.info("[Sync Pass 3/3] Status sync complete.")
 
             logger.info("--- State Synchronization Finished ---")
 
@@ -94,88 +100,165 @@ class SynchronizationManager:
 
     def _reconcile_local_state(self, all_binance_trades: list):
         """
-        Performs a full FIFO simulation on the exchange data and updates the local
-        database records to match the simulated state (statuses, quantities, links).
+        (Phase 1 of Reconciliation)
+        Links sell trades to their corresponding buy trades using FIFO logic.
+        This method is non-destructive; it only establishes links and does not
+        change the status or quantity of any trade.
         """
         db_trades = self.db.get_all_trades_for_sync(environment=self.environment, symbol=self.symbol)
         db_trades_map = {t.binance_trade_id: t for t in db_trades if t.binance_trade_id}
-        logger.info(f"Reconciliation: Found {len(db_trades)} local trades in the database.")
-
-        if not all_binance_trades:
-            logger.info("No trade history on Binance. Verifying asset balance before taking action.")
-            try:
-                account_info = self.client.get_account()
-                base_asset_balance = Decimal('0')
-                for balance in account_info['balances']:
-                    if balance['asset'] == self.base_asset:
-                        base_asset_balance = Decimal(balance['free']) + Decimal(balance['locked'])
-                        break
-
-                # Only close local positions if the bot holds no base asset on the exchange
-                if base_asset_balance < Decimal('0.00001'): # Using a small dust threshold
-                    logger.warning("No base asset held on exchange. Closing any locally open positions.")
-                    for pos in db_trades:
-                        if pos.status == "OPEN":
-                            logger.warning(f"Closing stale local position {pos.trade_id} as no trades/assets exist on Binance.")
-                            self.db.update_trade_status(pos.trade_id, "CLOSED")
-                else:
-                    logger.critical(
-                        f"DANGEROUS STATE: Binance API returned NO trade history for {self.symbol}, "
-                        f"but the account holds {base_asset_balance:.8f} {self.base_asset}. "
-                        f"This indicates an incomplete trade history from the API. "
-                        f"Local positions will NOT be closed to prevent data loss."
-                    )
-            except Exception as e:
-                logger.error(f"Could not verify asset balance during reconciliation: {e}. Skipping closure of open positions to be safe.", exc_info=True)
-            return
         
         buys = sorted([t for t in all_binance_trades if t['isBuyer']], key=lambda t: t['time'])
         sells = sorted([t for t in all_binance_trades if not t['isBuyer']], key=lambda t: t['time'])
-        logger.info(f"Reconciliation: Processing {len(buys)} buys and {len(sells)} sells from Binance.")
 
-        buy_pool = {buy['id']: {**buy, 'remaining_qty': Decimal(str(buy['qty']))} for buy in buys}
+        if not sells:
+            logger.info("Reconciliation (Linker): No sells found, nothing to link.")
+            return
 
+        logger.info(f"Reconciliation (Linker): Attempting to link {len(sells)} sells to {len(buys)} buys.")
+
+        # Create a pool of buy quantities that can be consumed by sells
+        buy_pool = {buy['id']: Decimal(str(buy['qty'])) for buy in buys}
+        
+        link_updates = 0
         for sell in sells:
             sell_qty_to_match = Decimal(str(sell['qty']))
-            for buy_id in sorted(buy_pool.keys()):
-                if sell_qty_to_match <= Decimal('0'): break
-                buy = buy_pool[buy_id]
-                if buy['remaining_qty'] <= Decimal('0'): continue
+            local_sell = db_trades_map.get(sell['id'])
 
-                matched_qty = min(sell_qty_to_match, buy['remaining_qty'])
-                if matched_qty > 0:
-                    buy['remaining_qty'] -= matched_qty
+            # Skip if sell is not in DB or already linked
+            if not local_sell or local_sell.linked_trade_id:
+                continue
+
+            for buy in buys:
+                if sell_qty_to_match <= Decimal('0'):
+                    break # This sell has been fully matched
+
+                buy_id = buy['id']
+                if buy_pool.get(buy_id, Decimal('0')) > Decimal('0'):
+                    matched_qty = min(sell_qty_to_match, buy_pool[buy_id])
+                    
+                    buy_pool[buy_id] -= matched_qty
                     sell_qty_to_match -= matched_qty
-
-                    # Find the corresponding local sell and update its link
-                    local_sell = db_trades_map.get(sell['id'])
+                    
                     local_buy = db_trades_map.get(buy_id)
-                    if local_sell and local_buy:
-                        if local_sell.linked_trade_id != local_buy.trade_id:
-                             self.db.update_trade(local_sell.trade_id, {'linked_trade_id': local_buy.trade_id})
-                    else:
-                        logger.warning(f"Could not find local trade for sell {sell['id']} or buy {buy_id} during reconciliation linking.")
+                    if local_buy:
+                        # Link the sell to this buy. 
+                        # For simplicity, we link a sell to the first buy it matches with.
+                        # Complex partial fills could be handled by a separate linking table if needed.
+                        logger.info(f"Linking sell {local_sell.trade_id} (BinanceID: {sell['id']}) to buy {local_buy.trade_id} (BinanceID: {buy_id}).")
+                        self.db.update_trade(local_sell.trade_id, {'linked_trade_id': local_buy.trade_id})
+                        link_updates += 1
+                        # Once linked, break to the next sell
+                        break 
+        
+        if link_updates > 0:
+            logger.info(f"Reconciliation (Linker): Successfully created {link_updates} new trade links.")
 
+    def _sync_open_positions_status(self):
+        """
+        (Phase 2 of Reconciliation)
+        Ensures the status of local 'OPEN' trades matches the reality of the exchange account balance.
+        This is the only function that should change a trade's status to 'CLOSED'.
+        """
+        logger.info("Status Sync: Fetching current exchange balance...")
+        try:
+            account_info = self.client.get_account()
+            balance_info = next((item for item in account_info['balances'] if item['asset'] == self.base_asset), None)
+            
+            # Use a small tolerance for dust
+            exchange_balance = Decimal(balance_info['free']) + Decimal(balance_info['locked']) if balance_info else Decimal('0')
+            logger.info(f"Status Sync: Current exchange balance for {self.base_asset} is {exchange_balance:.8f}")
 
-        # Finally, update the status and quantity of all local buy trades based on the simulation
-        update_count = 0
-        for buy_id, buy_state in buy_pool.items():
-            final_quantity = buy_state['remaining_qty']
-            is_open_on_binance = final_quantity > Decimal('1e-9')
-            final_status = "OPEN" if is_open_on_binance else "CLOSED"
+        except Exception as e:
+            logger.error(f"Status Sync: Could not fetch account balance from Binance: {e}. Aborting status sync to be safe.", exc_info=True)
+            return
 
-            db_trade = db_trades_map.get(buy_id)
-            if db_trade:
-                if db_trade.status != final_status or not math.isclose(Decimal(str(db_trade.quantity)), final_quantity, rel_tol=1e-9):
-                    logger.info(f"Reconciling position {db_trade.trade_id} (BinanceID: {buy_id}): Status {db_trade.status}->{final_status}, Qty {db_trade.quantity}->{final_quantity:.8f}")
-                    self.db.update_trade_status_and_quantity(db_trade.trade_id, final_status, final_quantity)
-                    update_count += 1
-            else:
-                # This case should ideally not be hit because the mirror pass should have created it.
-                logger.error(f"Inconsistency detected: Buy trade {buy_id} exists on exchange but not in DB after mirror pass.")
+        local_open_trades = self.db.get_open_positions(self.environment, self.symbol)
+        if not local_open_trades:
+            logger.info("Status Sync: No open positions found in the local database.")
+            # If we have a balance on the exchange but no local trades, it's a discrepancy, but nothing to "close".
+            if exchange_balance > Decimal('0.00001'):
+                 logger.warning(f"Status Sync: Discrepancy detected. Exchange balance is {exchange_balance:.8f} but no open trades are in the DB.")
+            return
 
-        if update_count > 0:
-            logger.info(f"Reconciliation: Updated {update_count} local positions to match exchange state.")
+        # Sort trades by timestamp, oldest first, to close them in FIFO order if needed
+        local_open_trades.sort(key=lambda t: t.timestamp)
+        
+        local_total_quantity = sum(Decimal(str(t.quantity)) for t in local_open_trades)
+        logger.info(f"Status Sync: Found {len(local_open_trades)} open trades in DB with a total quantity of {local_total_quantity:.8f}")
+
+        # Using a tolerance for floating point comparisons
+        if math.isclose(local_total_quantity, exchange_balance, rel_tol=1e-9):
+            logger.info("Status Sync: Local state matches exchange balance. No status changes needed.")
+            return
+
+        if local_total_quantity > exchange_balance:
+            qty_to_close = local_total_quantity - exchange_balance
+            logger.warning(f"Status Sync: Local quantity ({local_total_quantity:.8f}) is greater than exchange balance ({exchange_balance:.8f}).\n"
+                           f"This means ~{qty_to_close:.8f} {self.base_asset} was sold outside the bot's knowledge. Closing oldest trades...")
+            
+            closed_count = 0
+            for trade in local_open_trades:
+                if qty_to_close <= Decimal('0'):
+                    break
+                
+                trade_qty = Decimal(str(trade.quantity))
+                
+                # This trade needs to be fully or partially closed
+                close_amount = min(trade_qty, qty_to_close)
+                
+                # For now, we only support closing full trades for simplicity.
+                # If a partial close is needed, we close the entire trade and log a warning.
+                if close_amount > 0:
+                    logger.warning(f"Status Sync: Closing trade {trade.trade_id} (Qty: {trade_qty}) to reconcile account balance.")
+                    self.db.update_trade_status(trade.trade_id, "CLOSED")
+                    self._calculate_and_update_realized_pnl(trade)
+                    qty_to_close -= trade_qty
+                    closed_count += 1
+            
+            logger.info(f"Status Sync: Closed {closed_count} trades to align with exchange balance.")
+
+        elif exchange_balance > local_total_quantity:
+            logger.warning(f"Status Sync: Exchange balance ({exchange_balance:.8f}) is greater than local open quantity ({local_total_quantity:.8f}).\n"
+                           f"This may indicate a buy happened outside the bot. A new 'sync_adopted_buy' trade should have been created in the mirror pass.")
+
+    def _calculate_and_update_realized_pnl(self, closed_buy_trade: Trade):
+        """
+        Calculates the realized PnL for a given buy trade that has just been closed
+        and updates the corresponding linked sell trade in the database.
+        """
+        sell_trade = self.db.find_linked_sell_trade(closed_buy_trade.trade_id)
+        if not sell_trade:
+            logger.warning(f"PnL Calc: Could not find a linked sell trade for closed buy {closed_buy_trade.trade_id}. PnL will not be calculated at this time. It may be calculated on a future run once the sell is synced.")
+            return
+
+        # Ensure the sell trade doesn't already have PnL calculated
+        if sell_trade.realized_pnl_usd is not None and sell_trade.realized_pnl_usd != 0:
+            logger.info(f"PnL Calc: PnL for sell trade {sell_trade.trade_id} is already calculated. Skipping.")
+            return
+
+        buy_price = Decimal(str(closed_buy_trade.price))
+        sell_price = Decimal(str(sell_trade.price))
+        quantity = Decimal(str(closed_buy_trade.quantity)) # Assuming the full quantity was sold
+        buy_commission = Decimal(str(closed_buy_trade.commission_usd))
+        sell_commission = Decimal(str(sell_trade.commission_usd))
+
+        realized_pnl = self.strategy_rules.calculate_realized_pnl(
+            buy_price=buy_price,
+            sell_price=sell_price,
+            quantity_sold=quantity,
+            buy_commission_usd=buy_commission,
+            sell_commission_usd=sell_commission,
+            buy_quantity=quantity
+        )
+        
+        logger.info(f"PnL Calc: Calculated realized PnL of ${realized_pnl:.4f} for sell trade {sell_trade.trade_id}.")
+        
+        # Update the sell trade with the calculated PNL
+        update_data = {'realized_pnl_usd': realized_pnl}
+        self.db.update_trade(sell_trade.trade_id, update_data)
+        logger.info(f"PnL Calc: Updated sell trade {sell_trade.trade_id} with realized PnL.")
+
 
     def _fetch_all_binance_trades(self) -> list:
         logger.info(f"Fetching all trades from Binance for symbol {self.symbol}...")

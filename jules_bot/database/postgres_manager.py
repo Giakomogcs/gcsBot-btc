@@ -737,6 +737,21 @@ class PostgresManager:
                 logger.error(f"Failed to perform dynamic update for trade_id '{trade_id}': {e}", exc_info=True)
                 raise
 
+    def find_linked_sell_trade(self, buy_trade_id: str) -> Optional[Trade]:
+        """
+        Finds the sell trade that is linked to a specific buy trade.
+        """
+        with self.get_db() as db:
+            try:
+                sell_trade = db.query(Trade).filter(
+                    Trade.linked_trade_id == buy_trade_id,
+                    Trade.order_type == 'sell'
+                ).first()
+                return sell_trade
+            except Exception as e:
+                logger.error(f"Failed to find linked sell trade for buy_trade_id '{buy_trade_id}': {e}", exc_info=True)
+                return None
+
     def clear_all_tables(self):
         with self.get_db() as db:
             try:
