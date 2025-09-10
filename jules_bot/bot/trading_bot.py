@@ -292,468 +292,234 @@ class TradingBot:
                 except OSError:
                     pass
 
+    def _execute_sell_candidates(self, sell_candidates, current_price, base_asset, market_data):
+        logger.info(f"Found {len(sell_candidates)} candidates for selling. Performing final profitability check...")
+        positions_to_sell_now = []
+        for position, reason in sell_candidates:
+            entry_price = Decimal(str(position.price))
+            break_even_price = self.strategy_rules.calculate_break_even_price(entry_price)
+            if current_price > break_even_price:
+                logger.info(f"✅ Position {position.trade_id} is PROFITABLE. Current price ${current_price:,.2f} > Break-even price ${break_even_price:,.2f}. Marking for sale.")
+                positions_to_sell_now.append(position)
+            else:
+                logger.warning(f"❌ SALE CANCELED for position {position.trade_id}. Reason: {reason}. Current price ${current_price:,.2f} is not above break-even price ${break_even_price:,.2f}.")
+                if reason == 'trailing_stop' and position.is_smart_trailing_active:
+                    logger.warning(f"RESETTING SMART TRAILING for {position.trade_id} to prevent loss.")
+                    self.state_manager.update_trade_smart_trailing_state(trade_id=position.trade_id, is_active=False, highest_profit=None, activation_price=None)
+                    position.is_smart_trailing_active = False
+
+        if not positions_to_sell_now:
+            return
+
+        logger.info(f"Found {len(positions_to_sell_now)} positions that passed the final profitability check.")
+        total_sell_quantity = sum(Decimal(str(p.quantity)) * self.strategy_rules.sell_factor for p in positions_to_sell_now)
+        available_balance = Decimal(self.trader.get_account_balance(asset=base_asset))
+
+        if total_sell_quantity > available_balance:
+            logger.critical(f"INSUFFICIENT BALANCE & STATE DESYNC: Attempting to sell {total_sell_quantity:.8f} {base_asset}, but only {available_balance:.8f} is available.")
+            return
+
+        for position in positions_to_sell_now:
+            trade_id = position.trade_id
+            original_quantity = Decimal(str(position.quantity))
+            sell_quantity = original_quantity * self.strategy_rules.sell_factor
+            hodl_asset_amount = original_quantity - sell_quantity
+            sell_position_data = position.to_dict()
+            sell_position_data['quantity'] = sell_quantity
+            success, sell_result = self.trader.execute_sell(sell_position_data, self.run_id, market_data)
+            if success:
+                buy_price = Decimal(str(position.price))
+                sell_price = Decimal(str(sell_result.get('price', '0')))
+                sell_commission_usd = Decimal(str(sell_result.get('commission_usd', '0')))
+                realized_pnl_usd = self.strategy_rules.calculate_realized_pnl(buy_price, sell_price, sell_quantity, Decimal(str(position.commission_usd or '0')), sell_commission_usd, original_quantity)
+                hodl_asset_value_at_sell = hodl_asset_amount * current_price
+                sell_result.update({"realized_pnl_usd": realized_pnl_usd, "hodl_asset_amount": hodl_asset_amount, "hodl_asset_value_at_sell": hodl_asset_value_at_sell})
+                self.state_manager.record_partial_sell(original_trade_id=trade_id, remaining_quantity=hodl_asset_amount, sell_data=sell_result)
+                self.live_portfolio_manager.get_total_portfolio_value(current_price, force_recalculation=True)
+            else:
+                logger.error(f"Sell execution failed for position {trade_id}.")
+
+    def _evaluate_and_execute_buy(self, market_data, open_positions, current_params, current_regime, current_price):
+        cash_balance = Decimal(self.trader.get_account_balance("USDT"))
+        buy_from_reversal = False
+
+        if self.is_monitoring_for_reversal:
+            if time.time() - self.monitoring_started_at > self.reversal_monitoring_timeout_seconds:
+                logger.info("Reversal monitoring timed out. Resetting state.")
+                self.is_monitoring_for_reversal = False
+            elif current_price < self.lowest_price_since_monitoring_started:
+                logger.info(f"New low detected during reversal monitoring: {current_price:.2f}")
+                self.lowest_price_since_monitoring_started = current_price
+                self.monitoring_started_at = time.time()
+            elif current_price >= self.lowest_price_since_monitoring_started * (1 + self.reversal_buy_threshold_percent):
+                logger.info(f"Reversal detected! Price {current_price:.2f} crossed target.")
+                buy_from_reversal = True
+                self.is_monitoring_for_reversal = False
+            else:
+                return # Skip normal buy evaluation this cycle
+
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(hours=self.capital_manager.difficulty_reset_timeout_hours)
+        trade_history = self.db_manager.get_all_trades_in_range(mode=self.mode, start_date=start_date, end_date=end_date, bot_id=self.run_id)
+
+        total_portfolio_value = self.live_portfolio_manager.cached_portfolio_value
+        buy_amount_usdt, operating_mode, reason, regime, difficulty_factor = self.capital_manager.get_buy_order_details(
+            market_data=market_data, open_positions=open_positions, portfolio_value=total_portfolio_value,
+            free_cash=cash_balance, params=current_params, trade_history=trade_history,
+            force_buy_signal=buy_from_reversal, forced_reason="Buy triggered by price reversal."
+        )
+        self.last_decision_reason, self.last_operating_mode, self.last_difficulty_factor = reason, operating_mode, difficulty_factor
+
+        if regime == "START_MONITORING" and not self.is_monitoring_for_reversal:
+            self.is_monitoring_for_reversal = True
+            self.lowest_price_since_monitoring_started = current_price
+            self.monitoring_started_at = time.time()
+            logger.info(f"Starting to monitor for buy reversal. Reason: {reason}")
+        elif buy_amount_usdt > 0:
+            logger.info(f"[{operating_mode}] Buy signal triggered: {reason}. Preparing to buy ${buy_amount_usdt:,.2f} USD.")
+            if buy_amount_usdt >= self.min_trade_size:
+                decision_context = {"operating_mode": operating_mode, "buy_trigger_reason": reason, "market_regime": int(current_regime)}
+                success, buy_result = self.trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
+                if success:
+                    purchase_price = Decimal(str(buy_result.get('price', '0')))
+                    quantity_bought = Decimal(str(buy_result.get('quantity', '0')))
+                    if purchase_price > 0 and quantity_bought > 0:
+                        sell_target_price = self.strategy_rules.calculate_sell_target_price(purchase_price, quantity_bought, params=current_params)
+                        self.state_manager.create_new_position(buy_result, sell_target_price)
+                        self.live_portfolio_manager.get_total_portfolio_value(purchase_price, force_recalculation=True)
+                    else:
+                        logger.critical(f"Could not execute buy. Invalid trade data received: price={purchase_price}, quantity={quantity_bought}")
+            else:
+                logger.warning(f"Proposed buy amount ${buy_amount_usdt:,.2f} is less than minimum trade size ${self.min_trade_size:,.2f}. Aborting.")
+
     def run(self):
         if self.mode not in ['trade', 'test']:
             logger.error(f"The 'run' method cannot be called in '{self.mode}' mode.")
             return
-
         base_asset = self.symbol.replace("USDT", "")
-
-        # Reversal strategy specific configs
         self.reversal_buy_threshold_percent = Decimal(config_manager.get('STRATEGY_RULES', 'reversal_buy_threshold_percent', fallback='0.005'))
         self.reversal_monitoring_timeout_seconds = int(config_manager.get('STRATEGY_RULES', 'reversal_monitoring_timeout_seconds', fallback='300'))
-
-        # The SituationalAwareness model is rule-based and doesn't require a separate training step.
-        # Its transform method calculates regimes dynamically based on the data provided.
         logger.info("Situational Awareness model is rule-based and ready.")
-
         if not self.trader.is_ready:
             logger.critical("Trader could not be initialized. Shutting down bot.")
-            self.shutdown()
             return
-
-        self.state_manager.sync_holdings_with_binance(self.account_manager, self.strategy_rules, self.trader)
-
-        # Perform an initial target recalculation after sync and before starting the main loop
+        self.sync_manager.run_full_sync()
         logger.info("Performing initial recalculation of sell targets before starting main loop...")
         self.state_manager.recalculate_open_position_targets(self.strategy_rules, self.sa_instance, self.dynamic_params)
         logger.info("Initial recalculation complete.")
-
-        # Now that initialization is complete, set the status to RUNNING
         self.status_service.set_bot_running(self.bot_name, self.mode)
-
-        # Start API server in a background thread
         uvicorn_config = uvicorn.Config(self.api_app, host="0.0.0.0", port=self.api_port, log_level="info")
         api_thread = threading.Thread(target=uvicorn.Server(config=uvicorn_config).run, daemon=True)
         api_thread.start()
         logger.info(f"🚀 --- TRADING BOT STARTED (API on port {self.api_port}) --- BOT NAME: {self.bot_name} --- RUN ID: {self.run_id} --- SYMBOL: {self.symbol} --- MODE: {self.mode.upper()} --- 🚀")
-
+        last_recalc_time = 0
+        last_status_update_time = 0
         try:
             while self.is_running:
                 try:
-                    # --- Periodic Trade Synchronization ---
                     now = datetime.now()
-                    # Run sync if it's the first time or if 30 minutes have passed.
+                    current_time = time.time()
                     if self.last_sync_time is None or (now - self.last_sync_time) > timedelta(minutes=30):
                         logger.info("Starting periodic trade history synchronization...")
-                        try:
-                            self.sync_manager.run_full_sync()
-                            self.last_sync_time = now
-                            logger.info("Periodic trade history synchronization complete.")
-                        except Exception as e:
-                            logger.error(f"An error occurred during the periodic sync: {e}", exc_info=True)
-                    
+                        self.sync_manager.run_full_sync()
+                        self.last_sync_time = now
+                        logger.info("Periodic trade history synchronization complete.")
+                    if current_time - last_recalc_time > 60:
+                        logger.info("--- Recalculating all open position sell targets ---")
+                        self.state_manager.recalculate_open_position_targets(self.strategy_rules, self.sa_instance, self.dynamic_params)
+                        last_recalc_time = current_time
                     self._check_and_handle_refresh_signal()
-                    
                     logger.info("--- Starting new trading cycle ---")
-                    self.state_manager.recalculate_open_position_targets(self.strategy_rules, self.sa_instance, self.dynamic_params)
-
                     features_df = self.feature_calculator.get_features_dataframe()
                     if features_df.empty:
                         logger.warning("Could not get features dataframe. Skipping cycle.")
                         time.sleep(10)
                         continue
-
                     final_candle = features_df.iloc[-1]
-
-                    # Defensively check for NaN values in the latest candle data.
-                    # This can happen if there's not enough historical data for an indicator.
                     if final_candle.isnull().any():
                         logger.warning(f"Final candle contains NaN values, skipping cycle. Data: {final_candle.to_dict()}")
                         time.sleep(10)
                         continue
-
-                    # --- DYNAMIC STRATEGY LOGIC ---
-                    current_regime = -1 # Default to fallback
-                    if self.sa_instance:
-                        try:
-                            # Pass the full dataframe to transform
-                            regime_df = self.sa_instance.transform(features_df)
-                            if not regime_df.empty:
-                                # Get the regime from the last row
-                                current_regime = int(regime_df['market_regime'].iloc[-1])
-                                logger.debug(f"Current market regime detected: {current_regime}")
-                            else:
-                                logger.warning("Could not determine market regime from candle.")
-                        except Exception as e:
-                            logger.error(f"Error getting market regime: {e}", exc_info=True)
-
-                    # If regime is -1 (undefined), log it and skip to the next cycle
+                    market_data = final_candle.to_dict()
+                    current_price = Decimal(final_candle['close'])
+                    regime_df = self.sa_instance.transform(features_df)
+                    current_regime = int(regime_df['market_regime'].iloc[-1]) if not regime_df.empty else -1
                     if current_regime == -1:
                         logger.warning("Market regime is -1 (undefined). Skipping buy/sell logic for this cycle.")
-                        time.sleep(10) # Wait before retrying
+                        time.sleep(10)
                         continue
-
                     self.dynamic_params.update_parameters(current_regime)
                     current_params = self.dynamic_params.parameters
-                    logger.debug(f"Using strategy parameters for Regime {current_regime}: {current_params}")
-
-                    current_price = Decimal(final_candle['close'])
                     open_positions = self.state_manager.get_open_positions()
-                    total_portfolio_value = self.live_portfolio_manager.get_total_portfolio_value(current_price)
-
-                    all_prices = self.trader.get_all_prices()
-                    wallet_balances = self.account_manager.get_all_account_balances(all_prices)
-
-                    # Fetch recent trades for difficulty calculation
-                    end_date = datetime.utcnow()
-                    start_date = end_date - timedelta(hours=self.capital_manager.difficulty_reset_timeout_hours)
-                    trade_history = self.db_manager.get_all_trades_in_range(
-                        mode=self.mode,
-                        start_date=start_date,
-                        end_date=end_date,
-                        bot_id=self.run_id
-                    )
-
-                    # For the state file, we might still want the full history
-                    full_trade_history = self.state_manager.get_trade_history_for_run()
-                    self._write_state_to_file(open_positions, current_price, wallet_balances, full_trade_history, total_portfolio_value)
-
-                    # --- SELL LOGIC (Intelligent Trailing Stop & Take Profit) ---
                     sell_candidates = []
                     for position in open_positions:
-                        # --- 1. Hard Take Profit Check ---
                         sell_target_price = Decimal(str(position.sell_target_price)) if position.sell_target_price is not None else Decimal('inf')
                         if current_price >= sell_target_price:
-                            logger.info(f"✅ TAKE PROFIT HIT for position {position.trade_id} at ${current_price:,.2f} (Target: ${sell_target_price:,.2f}). Adding to sell candidates.")
+                            logger.info(f"✅ TAKE PROFIT HIT for position {position.trade_id} at ${current_price:,.2f} (Target: ${sell_target_price:,.2f}).")
                             sell_candidates.append((position, "take_profit"))
-                            continue # Position will be evaluated, no need for further checks this cycle
-
-                        # --- 2. Intelligent Trailing Stop Logic (Profit-Based) ---
-                        net_unrealized_pnl = self.strategy_rules.calculate_net_unrealized_pnl(
-                            entry_price=Decimal(str(position.price)),
-                            current_price=current_price,
-                            total_quantity=Decimal(str(position.quantity)),
-                            buy_commission_usd=Decimal(str(position.commission_usd or '0'))
-                        )
-
-                        # Use the centralized logic from StrategyRules
-                        decision, reason, new_trail_percentage = self.strategy_rules.evaluate_smart_trailing_stop(
-                            position.to_dict(), # Pass position as a dict
-                            net_unrealized_pnl
-                        )
-
+                            continue
+                        net_unrealized_pnl = self.strategy_rules.calculate_net_unrealized_pnl(entry_price=Decimal(str(position.price)), current_price=current_price, total_quantity=Decimal(str(position.quantity)), buy_commission_usd=Decimal(str(position.commission_usd or '0')))
+                        decision, reason, new_trail_percentage = self.strategy_rules.evaluate_smart_trailing_stop(position.to_dict(), net_unrealized_pnl)
                         if decision == "ACTIVATE":
                             logger.info(f"🚀 {reason}")
-                            self.state_manager.update_trade_smart_trailing_state(
-                                trade_id=position.trade_id,
-                                is_active=True,
-                                highest_profit=net_unrealized_pnl,
-                                activation_price=current_price,
-                                # On first activation, the trail pct is calculated but not saved
-                                # until the next peak update. This is by design.
-                            )
+                            self.state_manager.update_trade_smart_trailing_state(trade_id=position.trade_id, is_active=True, highest_profit=net_unrealized_pnl, activation_price=current_price)
                             position.is_smart_trailing_active = True
                             position.smart_trailing_highest_profit = net_unrealized_pnl
-                        
-                        elif decision == "DEACTIVATE":
-                            logger.warning(f"🟡 {reason}")
-                            self.state_manager.update_trade_smart_trailing_state(
-                                trade_id=position.trade_id,
-                                is_active=False,
-                                highest_profit=None,
-                                activation_price=None,
-                                current_trail_percentage=None # Reset trail percentage
-                            )
-                            position.is_smart_trailing_active = False
-
+                            position.smart_trailing_activation_price = current_price
                         elif decision == "UPDATE_PEAK":
                             logger.info(f"📈 {reason}")
-                            self.state_manager.update_trade_smart_trailing_state(
-                                trade_id=position.trade_id,
-                                is_active=True,
-                                highest_profit=net_unrealized_pnl,
-                                # Pass the new trail percentage to be saved in the DB
-                                current_trail_percentage=new_trail_percentage
-                            )
+                            self.state_manager.update_trade_smart_trailing_state(trade_id=position.trade_id, is_active=True, highest_profit=net_unrealized_pnl, current_trail_percentage=new_trail_percentage)
                             position.smart_trailing_highest_profit = net_unrealized_pnl
                             if new_trail_percentage:
                                 position.current_trail_percentage = new_trail_percentage
-
                         elif decision == "SELL":
                             logger.info(f"✅ {reason}")
                             sell_candidates.append((position, "trailing_stop"))
-
-                        elif decision == "HOLD":
-                            # Add more detailed logging for visibility, especially when the trail is not yet active.
-                            is_trailing_active = position.is_smart_trailing_active
-                            if not is_trailing_active:
-                                min_profit_target = self.strategy_rules.trailing_stop_profit
-                                logger.debug(
-                                    f"Position {position.trade_id}: Trailing stop is not active. "
-                                    f"Current PnL: ${net_unrealized_pnl:,.2f}, "
-                                    f"Activation Target: ${min_profit_target:,.2f}."
-                                )
-                            else:
-                                # The reason from strategy_rules is already detailed for active trails.
-                                logger.debug(f"Position {position.trade_id}: {reason}")
-
-
-                    # 3. Execute sales for all triggered positions
-                    sell_executed_in_cycle = False
-                    positions_to_sell_now = [] # This list will be populated after the profitability check
-
                     if sell_candidates:
-                        logger.info(f"Found {len(sell_candidates)} candidates for selling. Performing final profitability check...")
-                        for position, reason in sell_candidates:
-                            # --- UNIFIED PROFITABILITY GATE ---
-                            # This is the single, authoritative check before any non-forced sale.
-                            # It uses the break-even price to provide an absolute guarantee against selling at a loss.
-                            entry_price = Decimal(str(position.price))
-                            break_even_price = self.strategy_rules.calculate_break_even_price(entry_price)
-
-                            if current_price > break_even_price:
-                                logger.info(f"✅ Position {position.trade_id} is PROFITABLE. Current price ${current_price:,.2f} > Break-even price ${break_even_price:,.2f}. Marking for sale.")
-                                positions_to_sell_now.append(position)
-                            else:
-                                # This is the critical safety net.
-                                logger.warning(
-                                    f"❌ SALE CANCELED for position {position.trade_id}. Reason: {reason}. "
-                                    f"Current price ${current_price:,.2f} is not above break-even price ${break_even_price:,.2f}."
-                                )
-                                # If the trigger was a trailing stop, reset it to prevent an immediate loss-making sale on the next cycle.
-                                if reason == 'trailing_stop' and position.is_smart_trailing_active:
-                                    logger.warning(f"RESETTING SMART TRAILING for {position.trade_id} to prevent loss.")
-                                    self.state_manager.update_trade_smart_trailing_state(
-                                        trade_id=position.trade_id,
-                                        is_active=False,
-                                        highest_profit=None,
-                                        activation_price=None
-                                    )
-                                    position.is_smart_trailing_active = False
-
-                    if positions_to_sell_now:
-                        logger.info(f"Found {len(positions_to_sell_now)} positions that passed the final profitability check.")
-                        total_sell_quantity = sum(Decimal(str(p.quantity)) * self.strategy_rules.sell_factor for p in positions_to_sell_now)
-                        available_balance = Decimal(self.trader.get_account_balance(asset=base_asset))
-
-                        if total_sell_quantity > available_balance:
-                            logger.critical(
-                                f"INSUFFICIENT BALANCE & STATE DESYNC: Attempting to sell {total_sell_quantity:.8f} {base_asset}, "
-                                f"but only {available_balance:.8f} is available on the exchange. "
-                                "This indicates a significant discrepancy. Waiting for the next sync cycle."
-                            )
-                        else:
-                            for position in positions_to_sell_now:
-                                trade_id = position.trade_id
-                                original_quantity = Decimal(str(position.quantity))
-                                sell_quantity = original_quantity * self.strategy_rules.sell_factor
-                                hodl_asset_amount = original_quantity - sell_quantity
-
-                                sell_position_data = position.to_dict()
-                                sell_position_data['quantity'] = sell_quantity
-
-                                success, sell_result = self.trader.execute_sell(sell_position_data, self.run_id, final_candle.to_dict())
-                                if success:
-                                    sell_executed_in_cycle = True # Mark that a sell occurred
-                                    buy_price = Decimal(str(position.price))
-                                    sell_price_raw = sell_result.get('price')
-                                    sell_price = Decimal(str(sell_price_raw)) if sell_price_raw is not None else Decimal('0.0')
-                                    sell_commission_raw = sell_result.get('commission_usd')
-                                    sell_commission_usd = Decimal(str(sell_commission_raw)) if sell_commission_raw is not None else Decimal('0.0')
-
-                                    realized_pnl_usd = self.strategy_rules.calculate_realized_pnl(
-                                        buy_price=buy_price,
-                                        sell_price=sell_price,
-                                        quantity_sold=sell_quantity,
-                                        buy_commission_usd=Decimal(str(position.commission_usd or '0')),
-                                        sell_commission_usd=sell_commission_usd,
-                                        buy_quantity=Decimal(str(position.quantity))
-                                    )
-                                    hodl_asset_value_at_sell = hodl_asset_amount * current_price
-
-                                    sell_result.update({
-                                        "realized_pnl_usd": realized_pnl_usd,
-                                        "hodl_asset_amount": hodl_asset_amount,
-                                        "hodl_asset_value_at_sell": hodl_asset_value_at_sell
-                                    })
-
-                                    self.state_manager.record_partial_sell(
-                                        original_trade_id=trade_id,
-                                        remaining_quantity=hodl_asset_amount,
-                                        sell_data=sell_result
-                                    )
-                                    self.live_portfolio_manager.get_total_portfolio_value(current_price, force_recalculation=True)
-                                else:
-                                    logger.error(f"Sell execution failed for position {trade_id}.")
-                    
-                    # If a sell happened, refetch history to ensure difficulty factor is reset in the same cycle
-                    if sell_executed_in_cycle:
-                        logger.debug("Re-fetching trade history after sell to update difficulty factor.")
-                        end_date = datetime.utcnow()
-                        start_date = end_date - timedelta(hours=self.capital_manager.difficulty_reset_timeout_hours)
-                        trade_history = self.db_manager.get_all_trades_in_range(
-                            mode=self.mode,
-                            start_date=start_date,
-                            end_date=end_date
-                        )
-
-                    # --- BUY LOGIC ---
-                    market_data = final_candle.to_dict()
-                    cash_balance = Decimal(self.trader.get_account_balance("USDT"))
-                    buy_from_reversal = False
-
-                    if self.is_monitoring_for_reversal:
-                        # Check for timeout
-                        if time.time() - self.monitoring_started_at > self.reversal_monitoring_timeout_seconds:
-                            logger.info("Reversal monitoring timed out. Resetting state.")
-                            self.is_monitoring_for_reversal = False
-                            self.lowest_price_since_monitoring_started = None
-                            self.monitoring_started_at = None
-                            continue
-
-                        # Check for new low
-                        if current_price < self.lowest_price_since_monitoring_started:
-                            logger.info(f"New low detected during reversal monitoring: {current_price:.2f}")
-                            self.lowest_price_since_monitoring_started = current_price
-                            self.monitoring_started_at = time.time()  # Reset timeout
-
-                        # Check for reversal
-                        reversal_target_price = self.lowest_price_since_monitoring_started * (1 + self.reversal_buy_threshold_percent)
-                        if current_price >= reversal_target_price:
-                            logger.info(f"Reversal detected! Price {current_price:.2f} crossed target {reversal_target_price:.2f}.")
-                            buy_from_reversal = True
-                            self.is_monitoring_for_reversal = False
-                        else:
-                            logger.info(f"Monitoring for reversal. Low: {self.lowest_price_since_monitoring_started:.2f}, Target: {reversal_target_price:.2f}")
-                            # Skip normal buy/sell evaluation this cycle
-                            time.sleep(30)
-                            continue
-
-                    # Determine buy amount and operating mode
-                    buy_amount_usdt, operating_mode, reason, regime, difficulty_factor = self.capital_manager.get_buy_order_details(
-                        market_data=market_data,
-                        open_positions=open_positions,
-                        portfolio_value=total_portfolio_value,
-                        free_cash=cash_balance,
-                        params=current_params,
-                        trade_history=trade_history,
-                        force_buy_signal=buy_from_reversal,
-                        forced_reason="Buy triggered by price reversal."
-                    )
-
-                    # Store the decision state for TUI synchronization
-                    self.last_decision_reason = reason
-                    self.last_operating_mode = operating_mode
-                    self.last_difficulty_factor = difficulty_factor
-
-                    # If the signal is to start monitoring, update state and skip buying this cycle
-                    if regime == "START_MONITORING" and not self.is_monitoring_for_reversal:
-                        self.is_monitoring_for_reversal = True
-                        self.lowest_price_since_monitoring_started = current_price
-                        self.monitoring_started_at = time.time()
-                        logger.info(f"Starting to monitor for buy reversal. Reason: {reason}")
-
-                    elif buy_amount_usdt > 0:
-                        logger.info(f"[{operating_mode}] Buy signal triggered: {reason}. Preparing to buy ${buy_amount_usdt:,.2f} USD.")
-                        if buy_amount_usdt < self.min_trade_size:
-                            logger.warning(f"Proposed buy amount ${buy_amount_usdt:,.2f} is less than minimum trade size ${self.min_trade_size:,.2f}. Aborting.")
-                        else:
-                            decision_context = {
-                                "operating_mode": operating_mode,
-                                "buy_trigger_reason": reason,
-                                "market_regime": int(current_regime)
-                            }
-                            success, buy_result = self.trader.execute_buy(buy_amount_usdt, self.run_id, decision_context)
-
-                            if success:
-                                purchase_price = Decimal(str(buy_result.get('price', '0')))
-                                quantity_bought = Decimal(str(buy_result.get('quantity', '0')))
-
-                                if purchase_price <= 0 or quantity_bought <= 0:
-                                    logger.critical(f"Could not execute buy. Invalid trade data received: price={purchase_price}, quantity={quantity_bought}")
-                                    continue
-                                
-                                logger.info(f"Buy successful: Qty={quantity_bought:.8f}, AvgPrice=${purchase_price:,.2f}")
-
-                                sell_target_price = self.strategy_rules.calculate_sell_target_price(purchase_price, quantity_bought, params=current_params)
-                                logger.info(f"Calculated sell target for strategy buy. Purchase price: ${purchase_price:,.2f}, Target price: ${sell_target_price:,.2f}, Params: {current_params}")
-                                self.state_manager.create_new_position(buy_result, sell_target_price)
-                                self.live_portfolio_manager.get_total_portfolio_value(purchase_price, force_recalculation=True)
-                    else:
-                        logger.debug(f"[{operating_mode}] No buy signal: {reason}")
-
-                    # Update the status file at the end of the regular cycle
-                    self._update_status_file()
-                    
-                    # Reduced sleep time to improve responsiveness to sell targets
+                        self._execute_sell_candidates(sell_candidates, current_price, base_asset, market_data)
+                    self._evaluate_and_execute_buy(market_data, open_positions, current_params, current_regime, current_price)
+                    if current_time - last_status_update_time > 15:
+                        total_portfolio_value = self.live_portfolio_manager.get_total_portfolio_value(current_price, force_recalculation=True)
+                        all_prices = self.trader.get_all_prices()
+                        wallet_balances = self.account_manager.get_all_account_balances(all_prices)
+                        full_trade_history = self.state_manager.get_trade_history_for_run()
+                        self._write_state_to_file(open_positions, current_price, wallet_balances, full_trade_history, total_portfolio_value)
+                        self._update_status_file(market_data, current_params, open_positions, total_portfolio_value, current_regime)
+                        last_status_update_time = current_time
                     logger.info("--- Cycle complete. Waiting 5 seconds...")
                     time.sleep(5)
-
-                except NameError as e:
-                    logger.critical(f"❌ A 'NameError' occurred in the main loop. This is often a typo in a variable name or an uninitialized variable.", exc_info=True)
-                    time.sleep(60) # Sleep for a bit to avoid spamming logs if the error is persistent
-                except KeyboardInterrupt:
-                    self.is_running = False
-                    logger.info("\n[SHUTDOWN] Ctrl+C detected.")
                 except Exception as e:
                     logger.critical(f"❌ Critical error in main loop: {e}", exc_info=True)
-                    logger.warning("Bot entering 15-second cooldown due to critical error.")
                     time.sleep(15)
         finally:
             self.shutdown()
 
-    def _update_status_file(self):
+    def _update_status_file(self, market_data, current_params, open_positions, total_portfolio_value, current_regime):
         """
-        Gathers the bot's current state by re-running calculations and writes it to the JSON file for the TUI.
-        This is a self-contained method that can be called at any time to refresh the status.
+        Gathers the bot's current state and writes it to the JSON file for the TUI.
+        This version receives pre-calculated data to avoid redundant computations.
         """
         logger.info("Starting status file update...")
         try:
-            # 1. Get latest market data
-            features_df = self.feature_calculator.get_features_dataframe()
-            if features_df.empty:
-                logger.warning("Could not get features dataframe for status update.")
-                return
-            final_candle = features_df.iloc[-1]
-            if final_candle.isnull().any():
-                logger.warning("Final candle contains NaN values during status update.")
-                return
-            market_data = final_candle.to_dict()
-            current_price = Decimal(final_candle['close'])
-
-            # 2. Get latest positions and portfolio value
-            open_positions = self.state_manager.get_open_positions()
-            total_portfolio_value = self.live_portfolio_manager.get_total_portfolio_value(current_price, force_recalculation=True)
-
-            # 3. Get latest regime and parameters
-            current_regime = -1
-            if self.sa_instance:
-                regime_df = self.sa_instance.transform(features_df)
-                if not regime_df.empty:
-                    current_regime = int(regime_df['market_regime'].iloc[-1])
-            self.dynamic_params.update_parameters(current_regime)
-            current_params = self.dynamic_params.parameters
-
-            # 4. Use the stored decision from the main loop for consistency
             reason = self.last_decision_reason
             operating_mode = self.last_operating_mode
-
-            # 5. Calculate buy progress using the same difficulty factor
             buy_target, buy_progress = calculate_buy_progress(market_data, current_params, self.last_difficulty_factor)
-
-            # 6. Persist the latest status to the database for the TUI
             self.status_service.update_bot_status(
                 bot_id=self.bot_name, mode=self.mode, reason=reason, open_positions=len(open_positions),
                 portfolio_value=total_portfolio_value, market_regime=current_regime, operating_mode=operating_mode,
                 buy_target=buy_target, buy_progress=buy_progress
             )
-
-            # 7. Write the live status file
             status_dir = ".tui_files"
-            # Ensure the directory exists and has permissions that allow writing from different users (e.g., inside and outside Docker)
             os.makedirs(status_dir, mode=0o777, exist_ok=True)
             status_file_path = os.path.join(status_dir, f".bot_status_{self.bot_name}.json")
             status_data = self.status_service.get_extended_status(self.mode, self.bot_name)
             portfolio_history = self.db_manager.get_portfolio_history(self.bot_name)
             status_data['portfolio_history'] = [p.to_dict() for p in portfolio_history]
-
             temp_path = status_file_path + ".tmp"
             with open(temp_path, "w") as f:
                 json.dump(status_data, f, default=str)
             os.rename(temp_path, status_file_path)
             logger.info("Status file update complete.")
-
         except Exception as e:
             logger.error(f"Failed to write status file for TUI during update: {e}", exc_info=True)
 

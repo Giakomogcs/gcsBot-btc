@@ -244,20 +244,24 @@ class StrategyRules:
             return decision, reason, new_trail_percentage
 
         # The only time the highest_profit should be updated is when the current PNL is even higher.
+        # The only time the highest_profit should be updated is when the current PNL is significantly higher.
         if net_unrealized_pnl > highest_profit:
-            decision = "UPDATE_PEAK"
-            reason = f"New profit peak for trailing stop: {net_unrealized_pnl:.2f}."
-            highest_profit = net_unrealized_pnl
-            if self.use_dynamic_trailing_stop:
-                calculated_trail = self._calculate_dynamic_trail_percentage(
-                    highest_profit_pnl=highest_profit,
-                    entry_price=Decimal(str(position['price'])),
-                    total_quantity=Decimal(str(position['quantity']))
-                )
-                if calculated_trail > current_trail_pct:
-                    new_trail_percentage = calculated_trail
-                    reason += f" Trail updated to {new_trail_percentage:.2%}"
-            return decision, reason, new_trail_percentage
+            # Add a threshold (e.g., 0.5% increase) to prevent tiny, frequent updates.
+            # This is critical for performance when many positions are in profit.
+            if highest_profit <= 0 or (net_unrealized_pnl - highest_profit) / highest_profit > Decimal('0.005'):
+                decision = "UPDATE_PEAK"
+                reason = f"New profit peak for trailing stop: {net_unrealized_pnl:.2f}."
+                highest_profit = net_unrealized_pnl
+                if self.use_dynamic_trailing_stop:
+                    calculated_trail = self._calculate_dynamic_trail_percentage(
+                        highest_profit_pnl=highest_profit,
+                        entry_price=Decimal(str(position['price'])),
+                        total_quantity=Decimal(str(position['quantity']))
+                    )
+                    if calculated_trail > current_trail_pct:
+                        new_trail_percentage = calculated_trail
+                        reason += f" Trail updated to {new_trail_percentage:.2%}"
+                return decision, reason, new_trail_percentage
 
         # If profit has not increased, check if it has dropped enough to trigger a sale.
         trail_percentage_to_use = current_trail_pct

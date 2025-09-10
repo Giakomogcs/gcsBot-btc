@@ -127,3 +127,49 @@ def test_evaluate_buy_signal_with_difficulty_factor(mock_config_manager):
     market_data['close'] = '99.4'
     should_buy, _, _ = strategy_rules.evaluate_buy_signal(market_data, 1, difficulty_factor=Decimal('0.005'), params=params)
     assert should_buy
+
+class TestSmartTrail:
+    @pytest.fixture
+    def strategy_rules(self, mock_config_manager):
+        """Provides StrategyRules with default settings for smart trail."""
+        # Ensure the mock returns specific values needed for these tests
+        mock_config_manager.getboolean.return_value = True # Enable dynamic trail
+        mock_config_manager.get.side_effect = lambda section, key, fallback: {
+            'trailing_stop_profit': '0.10',
+            'use_dynamic_trailing_stop': 'True',
+            'dynamic_trail_min_pct': '0.01',
+            'dynamic_trail_max_pct': '0.05',
+            'dynamic_trail_profit_scaling': '0.1'
+        }.get(key, fallback)
+
+        return StrategyRules(mock_config_manager)
+
+    def test_update_peak_has_threshold(self, strategy_rules):
+        """
+        Tests that UPDATE_PEAK is not triggered for tiny PnL increases,
+        but is triggered for significant ones.
+        """
+        position = {
+            'is_smart_trailing_active': True,
+            'smart_trailing_highest_profit': Decimal('0.20'), # 20 cents profit peak
+            'current_trail_percentage': Decimal('0.033'), # Assume a trail is set
+            'price': '100', # dummy values
+            'quantity': '1' # dummy values
+        }
+
+        # Scenario 1: Tiny PnL increase (less than 0.5%)
+        # 0.2001 is a 0.05% increase, which is below the 0.5% threshold
+        small_increase_pnl = Decimal('0.2001')
+        decision, reason, _ = strategy_rules.evaluate_smart_trailing_stop(position, small_increase_pnl)
+
+        # The decision should be HOLD, not UPDATE_PEAK
+        assert decision == "HOLD"
+        assert "Monitoring active trail" in reason
+
+        # Scenario 2: Significant PnL increase (more than 0.5%)
+        # 0.21 is a 5% increase
+        large_increase_pnl = Decimal('0.21')
+        decision, reason, _ = strategy_rules.evaluate_smart_trailing_stop(position, large_increase_pnl)
+
+        assert decision == "UPDATE_PEAK"
+        assert "New profit peak" in reason

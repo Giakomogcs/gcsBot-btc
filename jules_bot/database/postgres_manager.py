@@ -419,6 +419,27 @@ class PostgresManager:
                 # We re-raise the exception because this is an unexpected error (e.g., DB connection lost)
                 raise
 
+    def update_trade_status_and_quantity(self, trade_id: str, new_status: str, new_quantity: Decimal):
+        """Updates the status and quantity of a specific trade in a single transaction."""
+        with self.get_db() as db:
+            try:
+                trade_to_update = db.query(Trade).filter(Trade.trade_id == trade_id).first()
+
+                if not trade_to_update:
+                    logger.error(f"Could not find trade with trade_id '{trade_id}' to update status and quantity.")
+                    return
+
+                logger.info(f"Updating trade {trade_id}: Status -> {new_status}, Quantity -> {new_quantity:.8f}")
+                trade_to_update.status = new_status
+                trade_to_update.quantity = new_quantity
+                db.commit()
+                logger.info(f"Successfully updated status and quantity for trade {trade_id}.")
+
+            except Exception as e:
+                db.rollback()
+                logger.error(f"Failed to update status and quantity for trade_id '{trade_id}': {e}", exc_info=True)
+                raise
+
     def update_trade_status_and_context(self, trade_id: str, new_status: str, context_update: dict):
         """Updates the status and merges new data into the decision_context of a specific trade."""
         with self.get_db() as db:
@@ -515,10 +536,7 @@ class PostgresManager:
             try:
                 query = db.query(Trade).order_by(desc(Trade.timestamp))
 
-                # By default, filter out closed buy trades as they are represented by sell trades.
-                filters = [
-                    not_(and_(Trade.order_type == 'buy', Trade.status == 'CLOSED'))
-                ]
+                filters = []
                 if mode:
                     filters.append(Trade.environment == mode)
                 if symbol:
@@ -566,6 +584,24 @@ class PostgresManager:
                 logger.error(f"Failed to get trades by run_id '{run_id}': {e}", exc_info=True)
                 raise
 
+    def get_all_trades_for_sync(self, environment: str, symbol: str) -> list[Trade]:
+        """
+        Fetches all trades for a given environment and symbol, without any status filters.
+        This is crucial for the SynchronizationManager to get a complete history for its simulation.
+        """
+        with self.get_db() as db:
+            try:
+                filters = [
+                    Trade.environment == environment,
+                    Trade.symbol == symbol
+                ]
+                query = db.query(Trade).filter(and_(*filters)).order_by(Trade.timestamp)
+                trades = query.all()
+                return trades
+            except Exception as e:
+                logger.error(f"Failed to get all trades for sync from DB: {e}")
+                raise
+
     def get_last_binance_trade_id(self) -> int:
         """
         Fetches the ID of the most recent trade in the database based on binance_trade_id.
@@ -584,7 +620,7 @@ class PostgresManager:
                 logger.error(f"Failed to get last binance trade ID from DB: {e}", exc_info=True)
                 return 0
 
-    def update_trade_quantity(self, trade_id: str, new_quantity: float):
+    def update_trade_quantity(self, trade_id: str, new_quantity: Decimal):
         """
         Updates the quantity of a specific trade in the database.
         This is used for partial sell logic, where the original buy position's
@@ -608,7 +644,7 @@ class PostgresManager:
                 logger.error(f"Failed to update trade quantity for trade_id '{trade_id}': {e}", exc_info=True)
                 raise
 
-    def update_trade_quantity_and_context(self, trade_id: str, new_quantity: float, context_update: dict):
+    def update_trade_quantity_and_context(self, trade_id: str, new_quantity: Decimal, context_update: dict):
         """Updates the quantity and merges new data into the decision_context of a specific trade."""
         with self.get_db() as db:
             try:
