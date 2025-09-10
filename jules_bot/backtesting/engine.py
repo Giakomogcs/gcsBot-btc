@@ -58,7 +58,7 @@ class Backtester:
         logger.info("Feature calculation complete.")
 
         initial_balance_str = config_manager.get('BACKTEST', 'initial_balance') or '1000.0'
-        commission_fee_str = config_manager.get('BACKTEST', 'commission_fee') or '0.001'
+        commission_fee_str = config_manager.get('STRATEGY_RULES', 'commission_rate') or '0.001'
         self.mock_trader = MockTrader(
             initial_balance_usd=Decimal(initial_balance_str),
             commission_fee_rate=Decimal(commission_fee_str),

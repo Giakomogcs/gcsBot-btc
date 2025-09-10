@@ -185,7 +185,7 @@ class StateManager:
                     sell_trade_data = match['sell_trade_data']
 
                     # Check if this sell has already been recorded
-                    if self.db_manager.get_trade_by_binance_id(sell_trade_data['id']):
+                    if self.db_manager.get_trade_by_binance_trade_id(sell_trade_data['id']):
                         logger.info(f"Sell trade {sell_trade_data['id']} has already been recorded. Skipping.")
                         continue
 

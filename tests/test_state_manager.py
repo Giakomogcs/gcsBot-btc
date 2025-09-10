@@ -184,7 +184,7 @@ class TestSyncLogic:
 
         # Set up the mock to return a list of trade objects
         state_manager.db_manager.get_all_trades_in_range.return_value = [buy_trade_from_db]
-        state_manager.db_manager.get_trade_by_binance_id.return_value = None
+        state_manager.db_manager.get_trade_by_binance_trade_id.return_value = None
 
         binance_buy_trade = {
             'id': 12345, 'isBuyer': True, 'qty': '1.0', 'price': '100.0',
