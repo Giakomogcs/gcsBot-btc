@@ -213,6 +213,15 @@ class TradingBot:
         # The rest of the logic is similar to the file-based one, adapted for direct execution
         quantity_to_sell = Decimal(str(position.quantity)) * (percentage_decimal / Decimal("100"))
 
+        # --- MINIMUM QUANTITY VALIDATION ---
+        if self.trader.min_qty is not None and quantity_to_sell < self.trader.min_qty:
+            msg = (
+                f"Calculated quantity to sell ({quantity_to_sell:.8f}) is below the exchange minimum "
+                f"({self.trader.min_qty:.8f}). Please choose a larger percentage."
+            )
+            logger.error(f"Force sell aborted: {msg}")
+            return {"status": "error", "message": msg}
+
         # Validation checks
         current_price_str = self.trader.get_current_price(self.symbol)
         if current_price_str:

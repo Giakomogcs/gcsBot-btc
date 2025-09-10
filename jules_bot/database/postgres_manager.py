@@ -114,6 +114,11 @@ class PostgresManager:
                         logger.info(f"Running migration: Adding missing column 'smart_trailing_highest_profit' to table '{self.bot_name}.trades'")
                         with connection.begin():
                             connection.execute(text(f"ALTER TABLE {self.bot_name}.trades ADD COLUMN smart_trailing_highest_profit NUMERIC(20, 8)"))
+                    
+                    if 'current_trail_percentage' not in trade_columns:
+                        logger.info(f"Running migration: Adding missing column 'current_trail_percentage' to table '{self.bot_name}.trades'")
+                        with connection.begin():
+                            connection.execute(text(f"ALTER TABLE {self.bot_name}.trades ADD COLUMN current_trail_percentage NUMERIC(10, 5)"))
 
                 # Migration for 'bot_status' table
                 if inspector.has_table("bot_status", schema=self.bot_name):
