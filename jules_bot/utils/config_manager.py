@@ -42,9 +42,9 @@ class ConfigManager:
 
         # 1. Try to get bot-specific environment variable first
         if self.bot_name:
-            # e.g., GCS-BOT_BINANCE_API_KEY
-            # Normalize bot name to uppercase, keeping hyphens.
-            normalized_bot_name = self.bot_name.upper()
+            # e.g., GCS-BOT_BINANCE_API_KEY -> GCS_BOT_BINANCE_API_KEY
+            # Normalize bot name to uppercase, replacing hyphens with underscores.
+            normalized_bot_name = self.bot_name.upper().replace("-", "_")
             bot_specific_env_var = f"{normalized_bot_name}_{env_var_name}"
             env_var_value = os.getenv(bot_specific_env_var)
 
@@ -81,22 +81,39 @@ class ConfigManager:
 
     def get(self, section: str, key: str, fallback: str = None) -> str:
         """
-        Retrieves a specific key from a section, resolving env vars.
-        It correctly handles fallbacks for both missing keys and unresolved env vars.
+        Retrieves a specific key, prioritizing environment variables over the config file.
+        The lookup order is:
+        1. Bot-specific environment variable (e.g., MYBOT_MAX_TRADE_SIZE_USDT)
+        2. Generic environment variable (e.g., MAX_TRADE_SIZE_USDT)
+        3. Value from the .ini file (which can itself be an @env/ pointer)
+        4. The provided fallback value.
         """
-        # Use config.get with no fallback to see if the key exists in the .ini
+        env_key_name = key.upper()
+
+        # 1. Check for bot-specific environment variable (e.g., MY-BOT_MAX_TRADE_SIZE_USDT)
+        if self.bot_name:
+            bot_specific_env_key = f"{self.bot_name.upper().replace('-', '_')}_{env_key_name}"
+            value = os.getenv(bot_specific_env_key)
+            if value is not None:
+                return value
+
+        # 2. Check for generic environment variable
+        value = os.getenv(env_key_name)
+        if value is not None:
+            return value
+
+        # 3. If no direct env var, fall back to the existing .ini logic
         raw_value = self.config.get(section, key, fallback=None)
 
         if raw_value is None:
-            # The key was not found in the .ini file at all, so return the provided fallback.
+            # The key was not found in the .ini file at all.
             return fallback
 
-        # The key exists in the .ini, now try to resolve its value (e.g., from an env var).
+        # The key exists in the .ini, now try to resolve its value (e.g., from an @env/ pointer).
         resolved_value = self._resolve_value(raw_value)
 
         if resolved_value is None:
             # The key was in the .ini but pointed to an env var that was not set.
-            # In this case, we should also use the fallback.
             return fallback
 
         return resolved_value

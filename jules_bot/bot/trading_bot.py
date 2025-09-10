@@ -482,7 +482,7 @@ class TradingBot:
                     if sell_candidates:
                         self._execute_sell_candidates(sell_candidates, current_price, base_asset, market_data)
                     self._evaluate_and_execute_buy(market_data, open_positions, current_params, current_regime, current_price)
-                    if current_time - last_status_update_time > 15:
+                    if current_time - last_status_update_time > 4:
                         total_portfolio_value = self.live_portfolio_manager.get_total_portfolio_value(current_price, force_recalculation=True)
                         all_prices = self.trader.get_all_prices()
                         wallet_balances = self.account_manager.get_all_account_balances(all_prices)
@@ -490,8 +490,8 @@ class TradingBot:
                         self._write_state_to_file(open_positions, current_price, wallet_balances, full_trade_history, total_portfolio_value)
                         self._update_status_file(market_data, current_params, open_positions, total_portfolio_value, current_regime)
                         last_status_update_time = current_time
-                    logger.info("--- Cycle complete. Waiting 5 seconds...")
-                    time.sleep(5)
+                    logger.info("--- Cycle complete. Waiting 2 seconds...")
+                    time.sleep(2)
                 except Exception as e:
                     logger.critical(f"❌ Critical error in main loop: {e}", exc_info=True)
                     time.sleep(15)

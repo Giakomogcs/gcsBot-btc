@@ -10,6 +10,7 @@ import requests
 
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll, Horizontal, Vertical
+from textual.widgets.data_table import CellDoesNotExist, RowDoesNotExist
 from textual.widgets import Footer, DataTable, Input, Button, Label, Static, RichLog, TabbedContent, TabPane
 from textual.validation import Validator, ValidationResult
 from textual.worker import Worker, get_current_worker
@@ -202,7 +203,7 @@ class TUIApp(App):
         
         # Start the new, unified update worker
         self.update_from_status_file()
-        self.set_interval(5.0, self.update_from_status_file)
+        self.set_interval(2.0, self.update_from_status_file)
 
         self.query_one("#manual_buy_input").focus()
         self.stream_docker_logs()
@@ -321,6 +322,13 @@ class TUIApp(App):
             else:
                 status_filtered_trades = history_data
             
+            # --- Additional Filtering for Closed Buys ---
+            # Remove closed buy orders as they are represented by the sell record
+            status_filtered_trades = [
+                t for t in status_filtered_trades
+                if not (t.get('order_type') == 'buy' and t.get('status') == 'CLOSED')
+            ]
+
             final_filtered_history = []
             start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date() if start_date_str else None
             end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date() if end_date_str else None
@@ -474,20 +482,27 @@ class TUIApp(App):
         )
 
     def on_processed_history_data(self, message: ProcessedHistoryData) -> None:
-        """Renders the processed trade history data received from the worker."""
+        """Renders the processed trade history data received from the worker,
+        preserving scroll position."""
         table = self.query_one("#history_table", DataTable)
         self.query_one("#history_summary_label").update(message.summary_text)
-        
         self._update_table_headers(table, self.history_sort_column, self.history_sort_reverse)
-        
-        # Clear the table and add all rows at once for performance
+
+        # --- Preserve scroll position ---
+        cursor_row_key = None
+        if table.row_count > 0 and table.is_valid_coordinate(table.cursor_coordinate):
+            try:
+                cursor_row_key, _ = table.coordinate_to_cell_key(table.cursor_coordinate)
+            except CellDoesNotExist:
+                cursor_row_key = None
+
         table.clear()
-        
+
         if not message.sorted_history:
             table.add_row("No trades match the current filter.", key="placeholder_history")
             return
 
-        rows_to_add = []
+        # --- Repopulate the table with new data ---
         for trade in message.sorted_history:
             trade_id = trade.get("trade_id")
             if not trade_id: continue
@@ -499,7 +514,6 @@ class TUIApp(App):
             pnl_cell = f"[{pnl_color}]{pnl_str}[/]" if order_type == 'sell' else "N/A"
             type_color = "green" if order_type == 'buy' else "red"
             type_cell = f"[{type_color}]{order_type.upper()}[/]"
-            # O timestamp agora chega no fuso horário correto
             local_timestamp = datetime.fromisoformat(trade['timestamp'])
             timestamp = local_timestamp.strftime('%Y-%m-%d %H:%M')
             trade_id_short = trade_id.split('-')[0]
@@ -519,11 +533,16 @@ class TUIApp(App):
                 f"{Decimal(trade.get('quantity', 0)):.8f}", f"${Decimal(trade.get('usd_value', 0)):.2f}", 
                 pnl_cell, pnl_pct_cell if order_type == 'sell' else "N/A", trade_id_short
             )
-            rows_to_add.append(row_data)
+            # Add row with key to allow scroll restoration
+            table.add_row(*row_data, key=trade_id)
         
-        # Using add_rows is more performant for large amounts of data
-        if rows_to_add:
-            table.add_rows(rows_to_add)
+        # --- Restore scroll position ---
+        if cursor_row_key:
+            try:
+                new_row_index = table.get_row_index(cursor_row_key)
+                table.move_cursor(row=new_row_index, animate=False)
+            except RowDoesNotExist:
+                pass # The previously selected row might no longer be in view
 
     def on_command_output(self, message: CommandOutput) -> None:
         if message.success:
@@ -617,19 +636,28 @@ class TUIApp(App):
         self.process_positions_worker(self.open_positions_data, self.positions_sort_column, self.positions_sort_reverse)
 
     def on_processed_positions_data(self, message: ProcessedPositionsData) -> None:
-        """Renders the processed open positions data received from the worker."""
+        """Renders the processed open positions data received from the worker,
+        preserving scroll position."""
         pos_table = self.query_one("#positions_table", DataTable)
         self.query_one("#positions_summary_label").update(message.summary_text)
-
         self._update_table_headers(pos_table, self.positions_sort_column, self.positions_sort_reverse)
+
+        # --- Preserve scroll position by saving the key of the row at the cursor ---
+        cursor_row_key = None
+        if pos_table.row_count > 0 and pos_table.is_valid_coordinate(pos_table.cursor_coordinate):
+            try:
+                # coordinate_to_cell_key can fail if the cursor is on a header
+                cursor_row_key, _ = pos_table.coordinate_to_cell_key(pos_table.cursor_coordinate)
+            except CellDoesNotExist:
+                cursor_row_key = None # Cursor isn't on a cell, so we can't save the key
 
         pos_table.clear()
 
         if not message.sorted_positions:
             pos_table.add_row("No open positions.", key="placeholder_positions")
             return
-        
-        rows_to_add = []
+
+        # --- Repopulate the table with new data ---
         for pos in message.sorted_positions:
             trade_id = pos.get("trade_id")
             if trade_id is None: continue
@@ -643,6 +671,7 @@ class TUIApp(App):
             target_pnl_color = "green" if target_pnl >= 0 else "red"
             target_pnl_str = f"[{target_pnl_color}]${target_pnl:,.2f}[/]"
             is_trailing_active = pos.get("is_smart_trailing_active")
+
             if is_trailing_active:
                 final_trigger_profit = Decimal(pos.get('final_trigger_profit', 0))
                 progress_str = f"Sell at ${final_trigger_profit:,.2f}"
@@ -650,11 +679,10 @@ class TUIApp(App):
                 progress = float(pos.get('progress_to_sell_target_pct', 0))
                 progress_bar = "█" * int(progress / 10) + "░" * (10 - int(progress / 10))
                 progress_str = f"[{progress_bar}] {progress:.1f}%"
+
             current_value = pos['current_value']
-            # O timestamp agora chega no fuso horário correto
             local_timestamp = datetime.fromisoformat(pos['timestamp'])
             timestamp = local_timestamp.strftime('%Y-%m-%d %H:%M')
-
             trailing_icon = "🛡️" if pos.get("is_smart_trailing_active") else ""
             peak_pnl = Decimal(pos.get('smart_trailing_highest_profit', 0))
             peak_pnl_str = f"${peak_pnl:,.2f}" if peak_pnl > 0 else "N/A"
@@ -662,25 +690,23 @@ class TUIApp(App):
             trail_pct_str = f"{trail_pct:.2%}" if trail_pct > 0 else "N/A"
 
             row_data = (
-                trailing_icon,
-                trade_id.split('-')[0],
-                timestamp,
-                f"${Decimal(pos.get('entry_price', 0)):,.2f}",
-                f"${current_value:,.2f}",
-                f"[{pnl_color}]${pnl:,.2f}[/]",
-                pnl_pct_str,
-                peak_pnl_str,
-                trail_pct_str,
-                f"${Decimal(pos.get('sell_target_price', 0)):,.2f}",
-                target_pnl_str,
-                progress_str,
+                trailing_icon, trade_id.split('-')[0], timestamp,
+                f"${Decimal(pos.get('entry_price', 0)):,.2f}", f"${current_value:,.2f}",
+                f"[{pnl_color}]${pnl:,.2f}[/]", pnl_pct_str, peak_pnl_str,
+                trail_pct_str, f"${Decimal(pos.get('sell_target_price', 0)):,.2f}",
+                target_pnl_str, progress_str,
             )
-            rows_to_add.append((trade_id, row_data))
-
-        if rows_to_add:
-            # Using add_row with a key is better for selection, even if slightly slower.
-            for trade_id, row_data in rows_to_add:
-                pos_table.add_row(*row_data, key=trade_id)
+            pos_table.add_row(*row_data, key=trade_id)
+        
+        # --- Restore scroll position ---
+        if cursor_row_key:
+            try:
+                new_row_index = pos_table.get_row_index(cursor_row_key)
+                pos_table.move_cursor(row=new_row_index, animate=False)
+            except RowDoesNotExist:
+                # The row we were on might have been closed/removed.
+                # In this case, we can't restore the position, which is acceptable.
+                pass
 
     def update_portfolio_chart(self, history: list):
         chart = self.query_one("#portfolio_chart", PlotextPlot)
