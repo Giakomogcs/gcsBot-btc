@@ -68,11 +68,12 @@ class LivePortfolioManager:
     def _create_db_snapshot(self, usd_balance: Decimal, open_positions_value_usd: Decimal, current_price: Decimal):
         try:
             total_portfolio_value_usd = usd_balance + open_positions_value_usd
-            # Use the correct manager to fetch trades for the specific bot run
-            all_trades = self.db_manager.get_trades_by_run_id(run_id=self.state_manager.bot_id)
 
-            realized_pnl_usd = sum(Decimal(str(t.realized_pnl_usd or '0')) for t in all_trades)
-            btc_treasury_amount = sum(Decimal(str(t.hodl_asset_amount or '0')) for t in all_trades)
+            # Fetch ONLY closed sell trades for accurate PnL and treasury calculation
+            closed_sell_trades = self.db_manager.get_closed_sell_trades_for_run(run_id=self.state_manager.bot_id)
+
+            realized_pnl_usd = sum(Decimal(str(t.realized_pnl_usd or '0')) for t in closed_sell_trades)
+            btc_treasury_amount = sum(Decimal(str(t.hodl_asset_amount or '0')) for t in closed_sell_trades)
 
             # Ensure the price is fetched as a string to maintain precision with Decimal
             btc_price_str = self.trader.get_current_price('BTCUSDT')
@@ -337,7 +338,10 @@ class TradingBot:
                 self.state_manager.record_partial_sell(original_trade_id=trade_id, remaining_quantity=hodl_asset_amount, sell_data=sell_result)
                 self.live_portfolio_manager.get_total_portfolio_value(current_price, force_recalculation=True)
             else:
-                logger.error(f"Sell execution failed for position {trade_id}.")
+                logger.error(f"Sell execution failed for position {trade_id}. Recording failure in database.")
+                # If sell_result is None or doesn't contain an error, provide a default one.
+                error_reason = sell_result if (sell_result and 'error' in sell_result) else {"error": "Unknown error from trader"}
+                self.state_manager.record_sell_failure(trade_id, error_reason)
 
     def _evaluate_and_execute_buy(self, market_data, open_positions, current_params, current_regime, current_price):
         cash_balance = Decimal(self.trader.get_account_balance("USDT"))

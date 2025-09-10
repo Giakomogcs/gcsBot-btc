@@ -99,17 +99,39 @@ class SynchronizationManager:
         """
         db_trades = self.db.get_all_trades_for_sync(environment=self.environment, symbol=self.symbol)
         db_trades_map = {t.binance_trade_id: t for t in db_trades if t.binance_trade_id}
+        logger.info(f"Reconciliation: Found {len(db_trades)} local trades in the database.")
 
         if not all_binance_trades:
-            logger.info("No trade history on Binance. Closing any locally open positions.")
-            for pos in db_trades:
-                if pos.status == "OPEN":
-                    logger.warning(f"Closing stale local position {pos.trade_id} as no trades exist on Binance.")
-                    self.db.update_trade_status(pos.trade_id, "CLOSED")
+            logger.info("No trade history on Binance. Verifying asset balance before taking action.")
+            try:
+                account_info = self.client.get_account()
+                base_asset_balance = Decimal('0')
+                for balance in account_info['balances']:
+                    if balance['asset'] == self.base_asset:
+                        base_asset_balance = Decimal(balance['free']) + Decimal(balance['locked'])
+                        break
+
+                # Only close local positions if the bot holds no base asset on the exchange
+                if base_asset_balance < Decimal('0.00001'): # Using a small dust threshold
+                    logger.warning("No base asset held on exchange. Closing any locally open positions.")
+                    for pos in db_trades:
+                        if pos.status == "OPEN":
+                            logger.warning(f"Closing stale local position {pos.trade_id} as no trades/assets exist on Binance.")
+                            self.db.update_trade_status(pos.trade_id, "CLOSED")
+                else:
+                    logger.critical(
+                        f"DANGEROUS STATE: Binance API returned NO trade history for {self.symbol}, "
+                        f"but the account holds {base_asset_balance:.8f} {self.base_asset}. "
+                        f"This indicates an incomplete trade history from the API. "
+                        f"Local positions will NOT be closed to prevent data loss."
+                    )
+            except Exception as e:
+                logger.error(f"Could not verify asset balance during reconciliation: {e}. Skipping closure of open positions to be safe.", exc_info=True)
             return
         
         buys = sorted([t for t in all_binance_trades if t['isBuyer']], key=lambda t: t['time'])
         sells = sorted([t for t in all_binance_trades if not t['isBuyer']], key=lambda t: t['time'])
+        logger.info(f"Reconciliation: Processing {len(buys)} buys and {len(sells)} sells from Binance.")
 
         buy_pool = {buy['id']: {**buy, 'remaining_qty': Decimal(str(buy['qty']))} for buy in buys}
 
@@ -136,6 +158,7 @@ class SynchronizationManager:
 
 
         # Finally, update the status and quantity of all local buy trades based on the simulation
+        update_count = 0
         for buy_id, buy_state in buy_pool.items():
             final_quantity = buy_state['remaining_qty']
             is_open_on_binance = final_quantity > Decimal('1e-9')
@@ -146,9 +169,13 @@ class SynchronizationManager:
                 if db_trade.status != final_status or not math.isclose(Decimal(str(db_trade.quantity)), final_quantity, rel_tol=1e-9):
                     logger.info(f"Reconciling position {db_trade.trade_id} (BinanceID: {buy_id}): Status {db_trade.status}->{final_status}, Qty {db_trade.quantity}->{final_quantity:.8f}")
                     self.db.update_trade_status_and_quantity(db_trade.trade_id, final_status, final_quantity)
+                    update_count += 1
             else:
                 # This case should ideally not be hit because the mirror pass should have created it.
                 logger.error(f"Inconsistency detected: Buy trade {buy_id} exists on exchange but not in DB after mirror pass.")
+
+        if update_count > 0:
+            logger.info(f"Reconciliation: Updated {update_count} local positions to match exchange state.")
 
     def _fetch_all_binance_trades(self) -> list:
         logger.info(f"Fetching all trades from Binance for symbol {self.symbol}...")

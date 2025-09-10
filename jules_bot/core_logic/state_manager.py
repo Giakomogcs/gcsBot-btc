@@ -339,3 +339,18 @@ class StateManager:
         # 2. Update the original 'buy' trade to be closed
         self.db_manager.update_trade_status(trade_id, 'CLOSED')
         logger.info(f"Updated original BUY record {trade_id} status to 'CLOSED'.")
+
+    def record_sell_failure(self, trade_id: str, reason: dict):
+        """
+        Updates the status of a trade to 'SELL_ABORTED' after a failed execution.
+        """
+        logger.warning(f"Recording sell failure for trade {trade_id}. Reason: {reason}")
+        context_update = {
+            "sell_failure_reason": reason,
+            "last_update_time": datetime.utcnow().isoformat()
+        }
+        self.db_manager.update_trade_status_and_context(
+            trade_id=trade_id,
+            new_status='SELL_ABORTED',
+            context_update=context_update
+        )

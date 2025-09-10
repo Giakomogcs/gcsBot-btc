@@ -531,7 +531,7 @@ class PostgresManager:
                 logger.error(f"Failed to check for open positions: {e}", exc_info=True)
                 raise
 
-    def get_all_trades_in_range(self, mode: Optional[str] = None, symbol: Optional[str] = None, bot_id: Optional[str] = None, start_date: any = None, end_date: any = "now()"):
+    def get_all_trades_in_range(self, mode: Optional[str] = None, symbol: Optional[str] = None, bot_id: Optional[str] = None, start_date: any = None, end_date: any = "now()", order_type: Optional[str] = None, status: Optional[str] = None):
         with self.get_db() as db:
             try:
                 query = db.query(Trade).order_by(desc(Trade.timestamp))
@@ -541,6 +541,10 @@ class PostgresManager:
                     filters.append(Trade.environment == mode)
                 if symbol:
                     filters.append(Trade.symbol == symbol)
+                if order_type:
+                    filters.append(Trade.order_type == order_type)
+                if status:
+                    filters.append(Trade.status == status)
                 # NOTE: The bot_id filter (run_id) is used to isolate trades for a specific bot RUN.
                 # This is crucial for features like the CapitalManager's difficulty factor, which
                 # should not be influenced by previous runs of the same bot.
@@ -582,6 +586,26 @@ class PostgresManager:
                 return trades
             except Exception as e:
                 logger.error(f"Failed to get trades by run_id '{run_id}': {e}", exc_info=True)
+                raise
+
+    def get_closed_sell_trades_for_run(self, run_id: str) -> list[Trade]:
+        """
+        Fetches all successfully closed 'sell' trades for a specific run_id.
+        This is the definitive source for calculating realized PnL for a run.
+        """
+        with self.get_db() as db:
+            try:
+                query = db.query(Trade).filter(
+                    and_(
+                        Trade.run_id == run_id,
+                        Trade.order_type == 'sell',
+                        Trade.status == 'CLOSED'
+                    )
+                ).order_by(Trade.timestamp)
+                trades = query.all()
+                return trades
+            except Exception as e:
+                logger.error(f"Failed to get closed sell trades by run_id '{run_id}': {e}", exc_info=True)
                 raise
 
     def get_all_trades_for_sync(self, environment: str, symbol: str) -> list[Trade]:
