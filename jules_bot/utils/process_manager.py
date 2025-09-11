@@ -13,6 +13,7 @@ class BotProcess:
     bot_mode: str
     start_time: str
     host_port: int
+    process_type: str = "bot" # Add process_type with a default value
 
 # --- Constants ---
 PID_FILE_PATH = ".running_bots.json"
@@ -42,9 +43,9 @@ def save_running_bots(bots: List[BotProcess]):
         # Convert list of BotProcess objects to list of dicts
         json.dump([asdict(bot) for bot in bots], f, indent=4)
 
-def add_running_bot(bot_name: str, container_id: str, bot_mode: str, host_port: int):
+def add_running_bot(bot_name: str, container_id: str, bot_mode: str, host_port: int, process_type: str = "bot"):
     """
-    Adds a new running bot to the tracking file.
+    Adds a new running process (bot or optimizer) to the tracking file.
     """
     bots = get_running_bots()
     # Remove existing entry for the same bot name, if any
@@ -55,7 +56,8 @@ def add_running_bot(bot_name: str, container_id: str, bot_mode: str, host_port: 
         container_id=container_id,
         bot_mode=bot_mode,
         start_time=datetime.datetime.utcnow().isoformat(),
-        host_port=host_port
+        host_port=host_port,
+        process_type=process_type
     )
     bots.append(new_bot)
     save_running_bots(bots)

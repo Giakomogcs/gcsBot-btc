@@ -235,6 +235,51 @@ def run_bot_in_container(bot_name: str, mode: str) -> tuple[Optional[str], int]:
         traceback.print_exc()
         return None, -1
 
+def run_script_in_background_container(bot_name: str, command: list) -> Optional[str]:
+    """
+    Runs a given command in a new, detached Docker container and returns the container ID.
+    The container is named based on the bot_name to allow for easy identification.
+    """
+    container_name = f"{PROJECT_NAME}-instance-{bot_name}-optimizer"
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '.'))
+
+    # Clean up any old container with the same name
+    try:
+        subprocess.run(SUDO_PREFIX + ["docker", "stop", container_name], capture_output=True, text=True, check=False)
+        subprocess.run(SUDO_PREFIX + ["docker", "rm", container_name], capture_output=True, text=True, check=False)
+    except Exception:
+        pass  # Ignore errors if the container doesn't exist
+
+    docker_command = SUDO_PREFIX + [
+        "docker", "run", "--detach",
+        "--name", container_name,
+        "--network", DOCKER_NETWORK_NAME,
+        "--env-file", ".env",
+        "-e", f"BOT_NAME={bot_name}",
+        "-e", "JULES_BOT_SCRIPT_MODE=1",
+        "-v", f"{project_root}:/app",
+        DOCKER_IMAGE_NAME,
+        "python"
+    ] + command
+    
+    print(f"   (executando em background: `{' '.join(docker_command)}`)")
+    try:
+        result = subprocess.run(docker_command, capture_output=True, text=True, check=True)
+        container_id = result.stdout.strip()
+        if not container_id:
+            print("❌ Falha ao obter o ID do container do comando 'docker run'.")
+            print(f"   Stderr: {result.stderr}")
+            return None
+        return container_id
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Erro ao executar o container em background. Código de saída: {e.returncode}")
+        print(f"   Stderr:\n{e.stderr}")
+        return None
+    except Exception as e:
+        print(f"❌ Erro inesperado durante a execução do container: {e}")
+        traceback.print_exc()
+        return None
+
 def run_command_in_container(command: list, bot_name: str, interactive: bool = False, extra_env_files: Optional[List[str]] = None, non_blocking: bool = False, suppress_output: bool = False):
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '.'))
     
@@ -363,110 +408,128 @@ def test(bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="
 
 @app.command("list-bots")
 def list_bots():
-    print("🤖 Verificando bots em execução...")
-    running_bots = process_manager.sync_and_get_running_bots()
-    if not running_bots:
-        print("ℹ️ Nenhum bot em execução no momento.")
+    print("🤖 Verificando processos em execução...")
+    running_processes = process_manager.sync_and_get_running_bots()
+    if not running_processes:
+        print("ℹ️ Nenhum processo em execução no momento.")
         return
     from tabulate import tabulate
-    headers = ["Bot Name", "Mode", "Container ID", "Status", "Start Time"]
-    table_data = [[b.bot_name, b.bot_mode, b.container_id[:12], "Running", b.start_time] for b in running_bots]
+    headers = ["Process Name", "Type", "Mode", "Container ID", "Status", "Start Time"]
+    table_data = [[
+        b.bot_name,
+        b.process_type.upper(),
+        b.bot_mode,
+        b.container_id[:12],
+        "Running",
+        b.start_time
+    ] for b in running_processes]
     print(tabulate(table_data, headers=headers, tablefmt="heavy_grid"))
 
 @app.command("stop-bot")
-def stop_bot(bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="Nome do bot para parar.")):
-    running_bots = process_manager.sync_and_get_running_bots()
-    if not running_bots:
-        print("ℹ️ Nenhum bot em execução para parar.")
+def stop_bot(process_name: Optional[str] = typer.Option(None, "--name", "-n", help="Nome do processo para parar.")):
+    running_processes = process_manager.sync_and_get_running_bots()
+    if not running_processes:
+        print("ℹ️ Nenhum processo em execução para parar.")
         raise typer.Exit()
-    bot_to_stop = None
-    if bot_name:
-        bot_to_stop = next((b for b in running_bots if b.bot_name == bot_name), None)
-        if not bot_to_stop:
-            print(f"❌ Bot '{bot_name}' não está em execução.")
+    process_to_stop = None
+    if process_name:
+        process_to_stop = next((p for p in running_processes if p.bot_name == process_name), None)
+        if not process_to_stop:
+            print(f"❌ Processo '{process_name}' não está em execução.")
             raise typer.Exit(1)
     else:
-        bot_choices = [b.bot_name for b in running_bots]
-        selected_name = questionary.select("Selecione o bot para parar:", choices=sorted(bot_choices)).ask()
+        choices = [p.bot_name for p in running_processes]
+        selected_name = questionary.select("Selecione o processo para parar:", choices=sorted(choices)).ask()
         if not selected_name: raise typer.Exit()
-        bot_to_stop = next((b for b in running_bots if b.bot_name == selected_name), None)
-    if not bot_to_stop:
+        process_to_stop = next((p for p in running_processes if p.bot_name == selected_name), None)
+    if not process_to_stop:
         print("❌ Seleção inválida.")
         raise typer.Exit(1)
-    print(f"🛑 Parando e removendo o container do bot '{bot_to_stop.bot_name}'...")
+    print(f"🛑 Parando e removendo o container do processo '{process_to_stop.bot_name}'...")
     try:
-        subprocess.run(SUDO_PREFIX + ["docker", "stop", bot_to_stop.container_id], check=True, capture_output=True)
-        subprocess.run(SUDO_PREFIX + ["docker", "rm", bot_to_stop.container_id], check=True, capture_output=True)
-        process_manager.remove_running_bot(bot_to_stop.bot_name)
-        print(f"✅ Bot '{bot_to_stop.bot_name}' parado com sucesso.")
+        subprocess.run(SUDO_PREFIX + ["docker", "stop", process_to_stop.container_id], check=True, capture_output=True)
+        subprocess.run(SUDO_PREFIX + ["docker", "rm", process_to_stop.container_id], check=True, capture_output=True)
+        process_manager.remove_running_bot(process_to_stop.bot_name)
+        print(f"✅ Processo '{process_to_stop.bot_name}' parado com sucesso.")
     except subprocess.CalledProcessError as e:
         if "No such container" in e.stderr:
-            print(f"⚠️ Container para o bot '{bot_to_stop.bot_name}' já não existia. Removendo da lista.")
-            process_manager.remove_running_bot(bot_to_stop.bot_name)
+            print(f"⚠️ Container para o processo '{process_to_stop.bot_name}' já não existia. Removendo da lista.")
+            process_manager.remove_running_bot(process_to_stop.bot_name)
         else:
             print(f"❌ Erro ao parar o container: {e.stderr}")
 
 @app.command("logs")
-def logs(bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="Nome do bot para ver os logs.")):
-    running_bots = process_manager.sync_and_get_running_bots()
-    if not running_bots:
-        print("ℹ️ Nenhum bot em execução para ver os logs.")
+def logs(process_name: Optional[str] = typer.Option(None, "--name", "-n", help="Nome do processo para ver os logs.")):
+    running_processes = process_manager.sync_and_get_running_bots()
+    if not running_processes:
+        print("ℹ️ Nenhum processo em execução para ver os logs.")
         raise typer.Exit()
-    bot_to_log = None
-    if bot_name:
-        bot_to_log = next((b for b in running_bots if b.bot_name == bot_name), None)
-        if not bot_to_log:
-            print(f"❌ Bot '{bot_name}' não está em execução.")
+    process_to_log = None
+    if process_name:
+        process_to_log = next((p for p in running_processes if p.bot_name == process_name), None)
+        if not process_to_log:
+            print(f"❌ Processo '{process_name}' não está em execução.")
             raise typer.Exit(1)
     else:
-        bot_choices = [b.bot_name for b in running_bots]
-        selected_name = questionary.select("Selecione o bot para ver os logs:", choices=sorted(bot_choices)).ask()
+        choices = [p.bot_name for p in running_processes]
+        selected_name = questionary.select("Selecione o processo para ver os logs:", choices=sorted(choices)).ask()
         if not selected_name: raise typer.Exit()
-        bot_to_log = next((b for b in running_bots if b.bot_name == selected_name), None)
-    if not bot_to_log:
+        process_to_log = next((p for p in running_processes if p.bot_name == selected_name), None)
+    if not process_to_log:
         print("❌ Seleção inválida.")
         raise typer.Exit(1)
-    print(f"📄 Acompanhando logs do bot '{bot_to_log.bot_name}' (Container: {bot_to_log.container_id[:12]})...")
+    print(f"📄 Acompanhando logs do processo '{process_to_log.bot_name}' (Container: {process_to_log.container_id[:12]})...")
     print("   (Pressione Ctrl+C para parar)")
     try:
-        subprocess.run(SUDO_PREFIX + ["docker", "logs", "-f", bot_to_log.container_id])
+        subprocess.run(SUDO_PREFIX + ["docker", "logs", "-f", process_to_log.container_id])
     except KeyboardInterrupt:
         print("\n🛑 Acompanhamento de logs interrompido.")
     except Exception as e:
         print(f"❌ Erro ao obter logs: {e}")
 
 @app.command("display")
-def display(bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="Nome do bot para visualizar.")):
-    running_bots = process_manager.sync_and_get_running_bots()
-    if not running_bots:
-        print("ℹ️ Nenhum bot em execução para monitorar.")
+def display(process_name: Optional[str] = typer.Option(None, "--name", "-n", help="Nome do processo para visualizar.")):
+    running_processes = process_manager.sync_and_get_running_bots()
+    if not running_processes:
+        print("ℹ️ Nenhum processo em execução para monitorar.")
         raise typer.Exit()
-    bot_to_display = None
-    if bot_name:
-        bot_to_display = next((b for b in running_bots if b.bot_name == bot_name), None)
-        if not bot_to_display:
-            print(f"❌ Bot '{bot_name}' não está em execução.")
+    
+    process_to_display = None
+    if process_name:
+        process_to_display = next((p for p in running_processes if p.bot_name == process_name), None)
+        if not process_to_display:
+            print(f"❌ Processo '{process_name}' não está em execução.")
             raise typer.Exit(1)
     else:
-        bot_choices = [b.bot_name for b in running_bots]
-        selected_name = questionary.select("Selecione o bot para monitorar:", choices=sorted(bot_choices)).ask()
+        choices = [p.bot_name for p in running_processes]
+        selected_name = questionary.select("Selecione o processo para monitorar:", choices=sorted(choices)).ask()
         if not selected_name: raise typer.Exit()
-        bot_to_display = next((b for b in running_bots if b.bot_name == selected_name), None)
-    if not bot_to_display:
+        process_to_display = next((p for p in running_processes if p.bot_name == selected_name), None)
+
+    if not process_to_display:
         print("❌ Seleção inválida.")
         raise typer.Exit(1)
-    print(f"🚀 Iniciando o display para o bot '{bot_to_display.bot_name}'...")
-    try:
+
+    print(f"🚀 Iniciando o display para o processo '{process_to_display.bot_name}'...")
+
+    if process_to_display.process_type == "optimizer":
+        # Launch the optimizer dashboard
+        command = [sys.executable, "tui/optimizer_dashboard.py"]
         tui_env = os.environ.copy()
-        tui_env["BOT_NAME"] = bot_to_display.bot_name
+    else:
+        # Launch the bot TUI
+        tui_env = os.environ.copy()
+        tui_env["BOT_NAME"] = process_to_display.bot_name
         tui_env["DOCKER_NETWORK_NAME"] = DOCKER_NETWORK_NAME
         tui_env["PROJECT_NAME"] = PROJECT_NAME
         command = [
             sys.executable, "tui/app.py",
-            "--mode", bot_to_display.bot_mode,
-            "--container-id", bot_to_display.container_id,
-            "--host-port", str(bot_to_display.host_port)
+            "--mode", process_to_display.bot_mode,
+            "--container-id", process_to_display.container_id,
+            "--host-port", str(process_to_display.host_port)
         ]
+
+    try:
         print(f"   (executando: `{' '.join(command)}`)")
         subprocess.run(command, env=tui_env, check=True)
     except Exception as e:
@@ -486,14 +549,12 @@ def _get_bots_from_env(env_file_path: str = ".env") -> list[str]:
     return sorted(list(bots))
 
 def _clear_tui_files():
-    """Clears the JSON files from the .tui_files directory."""
+    """Clears all JSON files from the .tui_files directory."""
     tui_dir = ".tui_files"
     if os.path.exists(tui_dir):
-        files_to_delete = glob.glob(os.path.join(tui_dir, "trial_*.json"))
-        summary_file = os.path.join(tui_dir, "best_trial_summary.json")
-        if os.path.exists(summary_file):
-            files_to_delete.append(summary_file)
-
+        # Glob for all possible json files generated by the optimizers
+        files_to_delete = glob.glob(os.path.join(tui_dir, "*.json"))
+        
         if files_to_delete:
             print("🗑️  Limpando arquivos de dashboard da otimização anterior...")
             for f in files_to_delete:
@@ -690,46 +751,94 @@ def _get_optimizer_settings() -> dict:
         "SIZING": "Parâmetros de Dimensionamento de Ordem",
         "DIFFICULTY": "Parâmetros de Dificuldade de Compra"
     }
+    
+    # Adicionando a opção "Otimizar Todos"
+    all_param_keys = list(param_groups.keys())
+    choices = [
+        questionary.Choice(title=">> OTIMIZAR TODOS OS GRUPOS <<", value="ALL"),
+        questionary.Separator(),
+    ] + [
+        questionary.Choice(title=v, value=k, checked=True) 
+        for k, v in param_groups.items()
+    ]
 
     selected_keys = questionary.checkbox(
-        "Selecione os grupos de parâmetros para otimizar:",
-        choices=[
-            questionary.Choice(title=v, value=k, checked=True)
-            for k, v in param_groups.items()
-        ],
+        "Selecione os grupos de parâmetros para otimizar (use a barra de espaço para selecionar):",
+        choices=choices,
     ).ask()
 
-    if not selected_keys: raise typer.Exit()
-    settings["active_params"] = {key: True for key in selected_keys}
+
+    if not selected_keys: 
+        print("Nenhum grupo de parâmetros selecionado. Abortando.")
+        raise typer.Exit()
+
+    # Se "ALL" foi selecionado, usar todas as chaves de parâmetros
+    if "ALL" in selected_keys:
+        settings["active_params"] = {key: True for key in all_param_keys}
+    else:
+        settings["active_params"] = {key: True for key in selected_keys}
     return settings
 
-def _run_optimizer(bot_name: str, days: int) -> Optional[str]:
-    """Runs the full Genius Optimizer workflow."""
-    from jules_bot.genius_optimizer.genius_optimizer import GeniusOptimizer
-
+def _run_optimizer(bot_name: str, days: int):
+    """
+    Launches the Genius Optimizer in a background container.
+    """
+    # 1. Get settings from the user
     settings = _get_optimizer_settings()
 
+    # 2. Confirm with the user
     print("\n--- 🧠 Iniciando Otimizador ---")
     print(f"   - Bot: {bot_name}, Dias: {days}, Trials por Regime: {settings['n_trials']}")
     print(f"   - Parâmetros Ativos: {list(settings['active_params'].keys())}")
-
     if not typer.confirm("Deseja continuar com a otimização?", default=True):
         raise typer.Exit()
+    
+    # 3. Clear old TUI files
+    _clear_tui_files()
 
-    try:
-        config_manager.initialize(bot_name)
-        genius_optimizer = GeniusOptimizer(
-            bot_name=bot_name,
-            days=days,
-            n_trials=settings['n_trials'],
-            active_params=settings['active_params']
-        )
-        genius_optimizer.run()
-        return "optimize/genius/.best_params.genius.env"
-    except Exception as e:
-        print(f"❌ Ocorreu um erro catastrófico durante a execução do Otimizador: {e}")
-        traceback.print_exc()
-        return None
+    # 4. Check if another optimizer is already running
+    optimizer_process_name = "genius_optimizer"
+    existing_optimizer = process_manager.get_bot_by_name(optimizer_process_name)
+    if existing_optimizer:
+        print(f"⚠️  Um otimizador já está em execução (Container: {existing_optimizer.container_id[:12]}).")
+        if typer.confirm("Deseja pará-lo e iniciar um novo?"):
+            subprocess.run(SUDO_PREFIX + ["docker", "stop", existing_optimizer.container_id], capture_output=True)
+            process_manager.remove_running_bot(optimizer_process_name)
+            print("✅ Otimizador anterior parado.")
+        else:
+            print("👋 Operação cancelada.")
+            raise typer.Exit()
+
+    # 5. Launch the optimizer script in a background container
+    print("\n⚙️  Iniciando a otimização em segundo plano...")
+    active_params_json = json.dumps(settings['active_params'])
+    command = [
+        "scripts/run_genius_optimizer.py",
+        bot_name,
+        str(days),
+        str(settings['n_trials']),
+        active_params_json
+    ]
+    
+    container_id = run_script_in_background_container(optimizer_process_name, command)
+
+    if not container_id:
+        print("❌ Falha ao iniciar o container do otimizador. Abortando.")
+        raise typer.Exit(1)
+
+    # 6. Register the running optimizer process
+    process_manager.add_running_bot(
+        bot_name=optimizer_process_name,
+        container_id=container_id,
+        bot_mode="optimizer",
+        host_port=0,  # No port needed
+        process_type="optimizer"
+    )
+    
+    print(f"\n✅ Otimizador iniciado em segundo plano (Container: {container_id[:12]}).")
+    print(f"   Para acompanhar o progresso, use: 'python run.py display'")
+    print(f"   Para ver os logs, use:           'python run.py logs'")
+    print(f"   Para parar o otimizador, use:      'python run.py stop-bot'")
 
 @app.command()
 def backtest(
@@ -739,29 +848,24 @@ def backtest(
 ):
     """Executa um backtest, com a opção de otimizar os parâmetros."""
     final_bot_name = _setup_bot_run(bot_name)
-    env_files_for_final_run = None
+    
+    print("\n---  preparazione dei dati ---")
+    if not run_command_in_container(["scripts/prepare_backtest_data.py", str(days)], final_bot_name):
+        print("❌ Falha na preparação dos dados. Abortando backtest.")
+        return
 
     if optimize:
-        # The TUI for the old optimizer is no longer needed.
-        # We might add a new one for the Genius optimizer in the future.
-        _clear_tui_files()
-
-        env_path = _run_optimizer(final_bot_name, days)
-        if not env_path:
-            print("❌ A otimização falhou. Abortando backtest final.")
-            raise typer.Exit(1)
-        env_files_for_final_run = [env_path]
-        print("\n--- 🧠 Etapa Final: Rodando Backtest com os Parâmetros Otimizados ---")
+        # This command now just launches the optimizer in the background.
+        # The user must run a separate backtest command later with the results.
+        _run_optimizer(final_bot_name, days)
+        # After launching, we exit. The user will be informed by _run_optimizer.
+        raise typer.Exit()
 
     else:
         print(f"🚀 Iniciando execução de backtest padrão para {days} dias para o bot '{final_bot_name}'...")
-        print("\n--- Etapa 1 de 2: Preparando dados ---")
-        if not run_command_in_container(["scripts/prepare_backtest_data.py", str(days)], final_bot_name):
-            print("❌ Falha na preparação dos dados. Abortando backtest.")
-            return
         print("\n--- Etapa 2 de 2: Rodando o backtest ---")
 
-    if not run_command_in_container(["scripts/run_backtest.py", str(days)], final_bot_name, extra_env_files=env_files_for_final_run):
+    if not run_command_in_container(["scripts/run_backtest.py", str(days)], final_bot_name, extra_env_files=None):
         print("❌ Falha na execução do backtest.")
         return
 

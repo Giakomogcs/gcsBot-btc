@@ -31,7 +31,6 @@ class OptimizerDashboard(App):
         self.update_timer: Timer = None
         self.processed_files = set()
         self.regime_summaries = {}
-        self.current_regime = -1
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
@@ -88,11 +87,11 @@ class OptimizerDashboard(App):
                     data = json.load(f)
 
                 regime = data.get("regime", -1)
-                if regime > self.current_regime:
-                    self.current_regime = regime
-                    status_widget = self.query_one("#overall_status", Static)
-                    regime_name = REGIME_NAMES.get(regime, f"Unknown ({regime})")
-                    status_widget.update(f"OPTIMIZING: Regime {regime} - {regime_name}")
+                
+                # Atualiza o status geral para refletir a execução paralela
+                status_widget = self.query_one("#overall_status", Static)
+                if "OPTIMIZING IN PARALLEL" not in str(status_widget.renderable):
+                    status_widget.update("⚡ OPTIMIZING IN PARALLEL ACROSS ALL REGIMES ⚡")
 
                 score = data.get('score', 0) or 0.0
                 state = data.get('state', 'UNKNOWN')

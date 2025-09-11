@@ -1,1 +1,10 @@
-[]
+[
+    {
+        "bot_name": "genius_optimizer",
+        "container_id": "3ac99330deb2c643ba0d18df6dcef9ef834516cb86571ffaa7fa6d6692aa3cb2",
+        "bot_mode": "optimizer",
+        "start_time": "2025-09-11T18:50:28.107648",
+        "host_port": 0,
+        "process_type": "optimizer"
+    }
+]

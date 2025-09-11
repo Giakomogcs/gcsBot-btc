@@ -3,6 +3,7 @@ import pandas as pd
 import optuna
 from pathlib import Path
 import json
+import concurrent.futures
 from jules_bot.utils.logger import logger
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.genius_optimizer.objective import create_objective_function
@@ -138,10 +139,23 @@ class GeniusOptimizer:
             logger.error("No data segments were created. Aborting optimization.")
             return
 
-        # 2. Loop through regimes and run optimization for each
-        logger.info("STEP 2: Running optimization for each market regime...")
-        for regime, data_segment in segmented_data.items():
-            self.run_study_for_regime(regime, data_segment)
+        # 2. Run optimization for each regime in parallel
+        logger.info(f"STEP 2: Running optimization for {len(segmented_data)} market regimes in parallel...")
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(segmented_data)) as executor:
+            # Create a future for each regime optimization
+            futures = {
+                executor.submit(self.run_study_for_regime, regime, data_segment): regime
+                for regime, data_segment in segmented_data.items()
+            }
+
+            for future in concurrent.futures.as_completed(futures):
+                regime = futures[future]
+                try:
+                    # block and get the result, or exception
+                    future.result()  
+                except Exception as exc:
+                    logger.error(f"Regime {regime} optimization generated an exception: {exc}", exc_info=True)
 
         # 3. Aggregate final results
         logger.info("STEP 3: Aggregating best parameters from all regimes...")
