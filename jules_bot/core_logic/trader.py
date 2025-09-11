@@ -334,10 +334,9 @@ class Trader:
             # Parse the response to get accurate, standardized data
             trade_result = self._parse_order_response(order, trade_id, decision_context)
 
-            # Add PnL info from the input data, as the trader doesn't know this
+            # The trader layer is not responsible for PnL. The caller (bot) will calculate it.
+            # We pass through hodl info if it was provided by the backtester.
             trade_result.update({
-                "commission_usd": position_data.get("commission_usd"),
-                "realized_pnl_usd": position_data.get("realized_pnl_usd"),
                 "hodl_asset_amount": position_data.get("hodl_asset_amount"),
                 "hodl_asset_value_at_sell": position_data.get("hodl_asset_value_at_sell")
             })

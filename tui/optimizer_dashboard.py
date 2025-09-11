@@ -91,10 +91,135 @@ class RegimeSummaryWidget(Container):
                     value_str = str(value)
                 params_table.add_row(key, value_str)
 
+class BaselineSummaryWidget(Container):
+    """A widget to display the summary of the baseline backtest."""
+
+    def compose(self) -> ComposeResult:
+        yield Static("[b]📊 Baseline Performance (from .env)[/b]", classes="baseline_title")
+        yield DataTable(id="baseline_table")
+
+    def on_mount(self) -> None:
+        table = self.query_one(DataTable)
+        table.add_column("Metric", width=25)
+        table.add_column("Value", width=20)
+        table.add_row("[dim]Waiting for data...[/dim]", "")
+
+    def update_panel(self, summary_data: dict):
+        table = self.query_one(DataTable)
+        table.clear()
+        table.add_column("Metric", width=25)
+        table.add_column("Value", width=20)
+
+        if not summary_data:
+            table.add_row("[dim]Baseline run failed or not found.[/dim]", "")
+            return
+
+        # Key metrics to display from the backtest summary
+        key_metrics = {
+            "final_balance": "Final Balance",
+            "net_pnl_pct": "Net PnL %",
+            "win_rate": "Win Rate %",
+            "profit_factor": "Profit Factor",
+            "max_drawdown": "Max Drawdown %",
+            "sharpe_ratio": "Sharpe Ratio",
+            "sortino_ratio": "Sortino Ratio",
+            "sell_trades_count": "Total Trades",
+        }
+        
+        for key, name in key_metrics.items():
+            value = summary_data.get(key)
+            if value is None:
+                value_str = "[dim]N/A[/dim]"
+            else:
+                try:
+                    # Attempt to convert to float for formatting
+                    float_value = float(value)
+                    if "pct" in key or "win_rate" in key:
+                        value_str = f"{float_value:.2f}%"
+                    elif "balance" in key:
+                        value_str = f"${float_value:,.2f}"
+                    elif "drawdown" in key:
+                        value_str = f"{float_value * 100:.2f}%"
+                    elif "ratio" in key or "factor" in key:
+                        value_str = f"{float_value:.2f}"
+                    else:
+                        value_str = str(value)
+                except (ValueError, TypeError):
+                    value_str = str(value)
+            
+            table.add_row(name, value_str)
+
+
+class EvolvingStrategyWidget(Container):
+    """A widget to display the aggregated best parameters found so far."""
+
+    def compose(self) -> ComposeResult:
+        yield Static("[b]🧬 Evolving Best Strategy[/b]", classes="evolving_title")
+        yield DataTable(id="evolving_table")
+
+    def on_mount(self) -> None:
+        table = self.query_one(DataTable)
+        table.add_column("Parameter", width=35)
+        # Add columns for each regime
+        for i in range(4):
+            regime_name = REGIME_NAMES.get(i, f"R{i}")
+            table.add_column(regime_name, width=18)
+        
+        table.add_row("[dim]Waiting for first trial...[/dim]", "", "", "", "")
+
+    def update_panel(self, best_params_by_regime: dict):
+        table = self.query_one(DataTable)
+        table.clear()
+        table.add_column("Parameter", width=35)
+        for i in range(4):
+            regime_name = REGIME_NAMES.get(i, f"R{i}")
+            table.add_column(regime_name, width=18)
+
+        if not best_params_by_regime:
+            table.add_row("[dim]Waiting for first trial...[/dim]", "", "", "", "")
+            return
+
+        # Aggregate all unique parameter keys from all regimes
+        all_keys = set()
+        for regime_id, data in best_params_by_regime.items():
+            all_keys.update(data.get("params", {}).keys())
+        
+        sorted_keys = sorted(list(all_keys))
+
+        for key in sorted_keys:
+            row = [key]
+            for i in range(4):
+                regime_data = best_params_by_regime.get(i)
+                if regime_data and "params" in regime_data:
+                    value = regime_data["params"].get(key)
+                    if value is None:
+                        value_str = "[dim]-[/dim]"
+                    elif isinstance(value, float):
+                        value_str = f"{value:.4f}"
+                    else:
+                        value_str = str(value)
+                    row.append(value_str)
+                else:
+                    row.append("[dim]Pending...[/dim]")
+            table.add_row(*row)
+
+
 class OptimizerDashboard(App):
     """A Textual app to monitor the multi-regime Genius Optimizer."""
 
     CSS = """
+    #baseline_container, #evolving_container {
+        border: round white;
+        margin: 1 0;
+    }
+    #baseline_container { height: 12; }
+    #evolving_container { height: 14; }
+
+    .baseline_title, .evolving_title {
+        width: 100%;
+        text-align: center;
+        padding-top: 1;
+    }
     #main_container {
         layout: grid;
         grid-size: 2 2;
@@ -162,6 +287,10 @@ class OptimizerDashboard(App):
         yield Header(name="⚡ Genius Optimizer Dashboard ⚡")
         yield Static("⚪ Waiting for optimization to begin...", id="status_bar")
 
+        # Baseline and Evolving Strategy widgets
+        yield BaselineSummaryWidget(id="baseline_container")
+        yield EvolvingStrategyWidget(id="evolving_container")
+
         # Main grid for regime summaries
         yield Container(
             *[
@@ -186,6 +315,7 @@ class OptimizerDashboard(App):
 
         # Start polling for updates
         self.update_timer = self.set_interval(1.5, self.update_dashboard)
+        self.update_baseline() # Initial check for baseline file
 
     def _get_total_trials(self) -> int:
         """
@@ -251,6 +381,14 @@ class OptimizerDashboard(App):
             except (json.JSONDecodeError, IOError, KeyError):
                 continue
 
+        # --- Update Evolving Strategy Widget ---
+        if self.regime_summaries:
+            try:
+                evolving_widget = self.query_one(EvolvingStrategyWidget)
+                evolving_widget.update_panel(self.regime_summaries)
+            except Exception as e:
+                self.log(f"Error updating evolving strategy widget: {e}")
+
         # --- Update Live Trial Log ---
         trial_files = glob.glob(str(TUI_FILES_DIR / "genius_trial_*.json"))
         new_trial_files = sorted([f for f in trial_files if f not in self.processed_trial_files])
@@ -283,6 +421,21 @@ class OptimizerDashboard(App):
             except (json.JSONDecodeError, IOError, KeyError) as e:
                 trial_log.write(f"[{datetime.now():%H:%M:%S}] Error processing file {Path(file_path).name}: {e}")
                 continue
+    
+    def update_baseline(self) -> None:
+        """Checks for the baseline summary file and updates the widget."""
+        baseline_file = TUI_FILES_DIR / "baseline_summary.json"
+        try:
+            if baseline_file.exists():
+                with open(baseline_file, "r") as f:
+                    summary_data = json.load(f)
+                
+                baseline_widget = self.query_one(BaselineSummaryWidget)
+                baseline_widget.update_panel(summary_data)
+                # No need to poll for this file, so we don't set a timer for it.
+        except (json.JSONDecodeError, IOError, KeyError) as e:
+            self.log(f"Error processing baseline file: {e}")
+
 
 if __name__ == "__main__":
     time.sleep(1)

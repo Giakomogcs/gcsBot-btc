@@ -2,7 +2,7 @@
 
 # --- Core Libraries ---
 numpy
-pandas
+pandas==2.3.2
 setuptools
 
 # --- Machine Learning & AI ---

@@ -448,9 +448,13 @@ class Backtester:
                     merged_trades['pnl_pct'] = merged_trades.apply(
                         lambda row: (row['realized_pnl_usd_sell'] / row['usd_value_buy']) * 100 if row['usd_value_buy'] > 0 else Decimal(0), axis=1
                     )
-                    avg_gain_pct = Decimal(merged_trades[merged_trades['pnl_pct'] > 0]['pnl_pct'].mean() or 0)
+                    
+                    gaining_trades_pct = merged_trades[merged_trades['pnl_pct'] > 0]['pnl_pct']
                     losing_trades_pct = merged_trades[merged_trades['pnl_pct'] < 0]['pnl_pct']
+                    
+                    avg_gain_pct = Decimal(gaining_trades_pct.mean()) if not gaining_trades_pct.empty else Decimal(0)
                     avg_loss_pct = abs(Decimal(losing_trades_pct.mean())) if not losing_trades_pct.empty else Decimal(0)
+
 
                 gross_profit = winning_trades['realized_pnl_usd'].sum()
                 gross_loss = abs(losing_trades['realized_pnl_usd'].sum())
@@ -472,29 +476,36 @@ class Backtester:
             max_drawdown = Decimal(str(abs(drawdown.min()))) if not drawdown.empty else Decimal(0)
 
             # Ratios
-            # Ensure index is datetime for resampling
             if not isinstance(self.feature_data.index, pd.DatetimeIndex):
-                # If not, we can't reliably calculate annualized ratios.
-                # We'll use the raw returns but this is less accurate.
                 daily_returns = portfolio_float.pct_change().dropna()
             else:
-                 # Resample to daily returns to annualize correctly
                 daily_returns = portfolio_float.resample('D', on=self.feature_data.index[:len(portfolio_float)]).last().pct_change().dropna()
 
-            if not daily_returns.empty and daily_returns.std() != 0:
-                sharpe_ratio = Decimal(str(np.sqrt(365) * daily_returns.mean() / daily_returns.std()))
+            if not daily_returns.empty:
+                try:
+                    std_dev = daily_returns.std()
+                    if std_dev != 0:
+                        sharpe_ratio = Decimal(str(np.sqrt(365) * daily_returns.mean() / std_dev))
+                except (ValueError, TypeError):
+                    sharpe_ratio = Decimal(0)
 
-                downside_returns = daily_returns[daily_returns < 0]
-                if not downside_returns.empty:
-                    downside_std = downside_returns.std()
-                    if downside_std != 0:
-                        sortino_ratio = Decimal(str(np.sqrt(365) * daily_returns.mean() / downside_std))
+                try:
+                    downside_returns = daily_returns[daily_returns < 0]
+                    if not downside_returns.empty:
+                        downside_std = downside_returns.std()
+                        if downside_std != 0 and not np.isnan(downside_std):
+                            sortino_ratio = Decimal(str(np.sqrt(365) * daily_returns.mean() / downside_std))
+                except (ValueError, TypeError):
+                    sortino_ratio = Decimal(0)
 
-            if max_drawdown > 0:
-                total_days = (self.feature_data.index[-1] - self.feature_data.index[0]).days
-                if total_days > 0:
-                    annualized_return = (final_balance / initial_balance) ** (Decimal('365.0') / Decimal(total_days)) - 1
-                    calmar_ratio = annualized_return / max_drawdown if max_drawdown > 0 else Decimal(0)
+            try:
+                if max_drawdown > 0:
+                    total_days = (self.feature_data.index[-1] - self.feature_data.index[0]).days
+                    if total_days > 0:
+                        annualized_return = (final_balance / initial_balance) ** (Decimal('365.0') / Decimal(total_days)) - 1
+                        calmar_ratio = annualized_return / max_drawdown
+            except (ZeroDivisionError, ValueError, TypeError):
+                calmar_ratio = Decimal(0)
 
         results = {
             "initial_balance": initial_balance,

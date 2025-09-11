@@ -44,10 +44,13 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(log_object, ensure_ascii=False)
 
 # --- CONFIGURAÇÃO DO LOGGER ---
-# Get bot name from environment variable for log isolation
+# Get bot name and mode from environment variables for log isolation
 bot_name = os.getenv("BOT_NAME", "jules_bot")
+bot_mode = os.getenv("BOT_MODE", "main") # 'main' as default for scripts without a mode
 
-logger = logging.getLogger(f"gcsBot.{bot_name}")
+# Create a unique logger name for each bot instance and mode
+logger_name = f"gcsBot.{bot_name}.{bot_mode}"
+logger = logging.getLogger(logger_name)
 logger.setLevel(logging.DEBUG)
 logger.propagate = False # Impede que os logs sejam passados para o logger root
 
@@ -59,14 +62,14 @@ if not logger.handlers:
     # Handler para o CONSOLE
     console_handler = logging.StreamHandler(sys.stderr)
     console_handler.setFormatter(json_formatter)
-    # Define o nível para DEBUG para capturar tudo. O controle de verbosidade
-    # pode ser feito no ambiente de visualização, se necessário.
+    # Define o nível para DEBUG para capturar tudo.
     console_handler.setLevel(logging.DEBUG)
     logger.addHandler(console_handler)
 
-    logger.info(f"Logger configurado para output de console (stderr). Bot: {bot_name}")
+    logger.info(f"Logger configurado para output de console (stderr). Logger Name: '{logger_name}'")
 
 def log_table(title, data, headers="keys", tablefmt="heavy_grid"):
+    """Helper function to log tabular data using the correct logger instance."""
     try:
         is_empty = False
         if isinstance(data, pd.DataFrame): is_empty = data.empty
@@ -78,6 +81,8 @@ def log_table(title, data, headers="keys", tablefmt="heavy_grid"):
             return
         
         table = tabulate(data, headers=headers, tablefmt=tablefmt, stralign="right", numalign="right")
-        logging.getLogger(f"gcsBot.{bot_name}").info(f"\n--- {title} ---\n{table}")
+        # Use the already configured logger instance
+        logger.info(f"\n--- {title} ---\n{table}")
     except Exception as e:
-        logging.getLogger(f"gcsBot.{bot_name}").error(f"Erro ao gerar a tabela '{title}': {e}")
+        # Use the already configured logger instance
+        logger.error(f"Erro ao gerar a tabela '{title}': {e}")

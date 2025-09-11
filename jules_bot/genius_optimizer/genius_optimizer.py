@@ -101,6 +101,7 @@ class GeniusOptimizer:
                     "regime": regime,
                     "number": best_trial.number,
                     "score": best_trial.value,
+                    "params": best_trial.params,
                     "final_balance": best_trial.user_attrs.get("final_balance", 0.0),
                     "max_drawdown": best_trial.user_attrs.get("max_drawdown", 0.0),
                     "win_rate": best_trial.user_attrs.get("win_rate", 0.0),

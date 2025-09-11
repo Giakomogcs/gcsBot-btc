@@ -9,11 +9,50 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+from pathlib import Path
+from decimal import Decimal
 from jules_bot.genius_optimizer.genius_optimizer import GeniusOptimizer
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.utils.logger import logger
+from jules_bot.database.postgres_manager import PostgresManager
+from jules_bot.backtesting.engine import Backtester
 
 app = typer.Typer()
+
+def run_baseline_backtest(bot_name: str, days: int):
+    """
+    Runs a single backtest using the bot's current .env configuration
+    and saves the results for the TUI to display as a baseline.
+    """
+    logger.info("--- Running Baseline Backtest (using current .env settings) ---")
+    try:
+        db_manager = PostgresManager()
+        
+        # We use the globally initialized config_manager
+        backtester = Backtester(
+            db_manager=db_manager,
+            days=days,
+            config_manager=config_manager
+        )
+        
+        results = backtester.run(return_full_results=True)
+
+        # Serialize results to be JSON-friendly (convert Decimals to strings)
+        serializable_results = {k: str(v) if isinstance(v, Decimal) else v for k, v in results.items()}
+
+        tui_files_dir = Path(".tui_files")
+        tui_files_dir.mkdir(exist_ok=True)
+        baseline_file = tui_files_dir / "baseline_summary.json"
+        
+        with open(baseline_file, "w") as f:
+            json.dump(serializable_results, f, indent=4)
+            
+        logger.info(f"✅ Baseline backtest summary saved to {baseline_file}")
+
+    except Exception as e:
+        logger.error(f"❌ Failed to run baseline backtest: {e}", exc_info=True)
+        # We don't re-raise the exception, as failing the baseline run
+        # should not prevent the main optimization from starting.
 
 @app.command()
 def main(
@@ -36,14 +75,17 @@ def main(
         logger.info(f"   - Active Parameters: {list(active_params.keys())}")
 
         config_manager.initialize(bot_name)
+
+        # 1. Run baseline backtest before starting the optimization
+        run_baseline_backtest(bot_name, days)
         
+        # 2. Run the main optimization process
         genius_optimizer = GeniusOptimizer(
             bot_name=bot_name,
             days=days,
             n_trials=n_trials,
             active_params=active_params
         )
-        
         genius_optimizer.run()
 
         logger.info("--- ✅ Genius Optimizer Runner Script Finished Successfully ---")
