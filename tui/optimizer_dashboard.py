@@ -40,7 +40,10 @@ class OptimizerDashboard(App):
 
         table = self.query_one(DataTable)
         table.cursor_type = "row"
-        table.add_columns("Trial", "Status", "Value ($)", "Duration (s)")
+        table.add_column("Trial", key="trial")
+        table.add_column("Status", key="status")
+        table.add_column("Value ($)", key="value")
+        table.add_column("Duration (s)", key="duration")
 
         # Start a timer to poll for file updates
         self.update_timer = self.set_interval(1, self.update_dashboard)
@@ -98,13 +101,13 @@ class OptimizerDashboard(App):
 
                 # Use a unique key for each row to update it in place
                 try:
-                    # If the row exists, update it
-                    coordinate = table.get_row_coordinate(row_key)
-                    table.update_cell_at(coordinate._replace(column=1), status)
-                    table.update_cell_at(coordinate._replace(column=2), value_str)
-                    table.update_cell_at(coordinate._replace(column=3), duration_str)
+                    # update_cell will raise a KeyError if the row doesn't exist.
+                    table.update_cell(row_key, "status", status, update_width=True)
+                    table.update_cell(row_key, "value", value_str, update_width=True)
+                    table.update_cell(row_key, "duration", duration_str, update_width=True)
                 except KeyError:
-                    # If the row does not exist, add it
+                    # If the row does not exist, add it.
+                    # The values must be in the same order as the columns were added.
                     table.add_row(
                         str(trial_num),
                         status,
