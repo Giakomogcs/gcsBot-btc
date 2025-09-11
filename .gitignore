@@ -10,6 +10,9 @@
 /logs/*
 !/logs/.gitkeep
 
+# Ignora a pasta de otimização e TUDO dentro dela.
+/optimize/
+
 
 # ===================================================
 # Arquivos de Cache e Ambiente Python

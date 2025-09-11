@@ -21,8 +21,10 @@ WALLET_PROFILES = {
     "advanced": "10000.0"
 }
 
+# Diretório para salvar todos os outputs da otimização
+OPTIMIZE_OUTPUT_DIR = "optimize/"
 # Arquivo para salvar os melhores parâmetros encontrados
-BEST_PARAMS_FILE = ".best_params.env"
+BEST_PARAMS_FILE = f"{OPTIMIZE_OUTPUT_DIR}.best_params.env"
 
 def define_search_space(trial: optuna.Trial, wallet_profile: str) -> None:
     """
@@ -42,6 +44,10 @@ def define_search_space(trial: optuna.Trial, wallet_profile: str) -> None:
     os.environ["STRATEGY_RULES_MIN_ORDER_PERCENTAGE"] = str(trial.suggest_float("STRATEGY_RULES_MIN_ORDER_PERCENTAGE", 0.003, 0.01, log=True))
     os.environ["STRATEGY_RULES_MAX_ORDER_PERCENTAGE"] = str(trial.suggest_float("STRATEGY_RULES_MAX_ORDER_PERCENTAGE", 0.01, 0.05, log=True))
     os.environ["STRATEGY_RULES_LOG_SCALING_FACTOR"] = str(trial.suggest_float("STRATEGY_RULES_LOG_SCALING_FACTOR", 0.001, 0.005, log=True))
+
+    # --- Dificuldade de Compra ---
+    os.environ["STRATEGY_RULES_CONSECUTIVE_BUYS_THRESHOLD"] = str(trial.suggest_int("STRATEGY_RULES_CONSECUTIVE_BUYS_THRESHOLD", 3, 10))
+    os.environ["STRATEGY_RULES_DIFFICULTY_ADJUSTMENT_FACTOR"] = str(trial.suggest_float("STRATEGY_RULES_DIFFICULTY_ADJUSTMENT_FACTOR", 0.001, 0.01, log=True))
 
     # --- Parâmetros Específicos por Regime ---
     base_profit_target = float(os.environ["STRATEGY_RULES_TARGET_PROFIT"])
@@ -70,8 +76,9 @@ def objective(trial: optuna.Trial, bot_name: str, days: int, wallet_profile: str
         define_search_space(trial, wallet_profile)
         config_manager.initialize(bot_name)
 
+        # A limpeza de trades agora é feita opcionalmente no início do processo em run.py.
+        # Removido daqui para evitar race conditions em execuções paralelas.
         db_manager = PostgresManager()
-        db_manager.clear_backtest_trades()
 
         backtester = Backtester(db_manager=db_manager, days=days)
         # Passa o 'trial' para o backtester para permitir o pruning
@@ -98,8 +105,11 @@ def run_optimization(bot_name: str, n_trials: int, days: int, wallet_profile: st
     """
     Orquestra o processo de otimização.
     """
+    # Garante que o diretório de output exista
+    os.makedirs(OPTIMIZE_OUTPUT_DIR, exist_ok=True)
+
     study_name = f"optimization_{bot_name}"
-    storage_url = "sqlite:///jules_bot_optimization.db"
+    storage_url = f"sqlite:///{OPTIMIZE_OUTPUT_DIR}jules_bot_optimization.db"
 
     logger.info(f"Starting optimization study '{study_name}'...")
     logger.info(f"Storage: {storage_url}, Trials: {n_trials}, Days: {days}, Profile: {wallet_profile}")

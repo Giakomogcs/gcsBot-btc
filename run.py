@@ -229,7 +229,7 @@ def run_bot_in_container(bot_name: str, mode: str) -> tuple[Optional[str], int]:
         traceback.print_exc()
         return None, -1
 
-def run_command_in_container(command: list, bot_name: str, interactive: bool = False, extra_env_files: Optional[List[str]] = None):
+def run_command_in_container(command: list, bot_name: str, interactive: bool = False, extra_env_files: Optional[List[str]] = None, non_blocking: bool = False):
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '.'))
     
     run_command = SUDO_PREFIX + [
@@ -260,6 +260,10 @@ def run_command_in_container(command: list, bot_name: str, interactive: bool = F
     run_command.extend(command)
     
     print(f"   (executando: `{' '.join(run_command)}`)")
+
+    if non_blocking:
+        return subprocess.Popen(run_command)
+
     try:
         subprocess.run(run_command, check=True)
         return True
@@ -567,7 +571,6 @@ def _interactive_bot_selection() -> str:
 
 @app.command()
 def validate(bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="O nome do bot para validar.")):
-    """Executa o script de validação de dados no container."""
     if not _ensure_env_is_running():
         raise typer.Exit(1)
     
@@ -578,15 +581,14 @@ def validate(bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", he
     else:
         print("✅ Script de validação concluído.")
 
-def _get_optimizer_settings_interactively() -> tuple[int, str]:
-    """Function to ask for optimizer settings using questionary."""
+def _get_optimizer_settings_interactively(jobs: int) -> tuple[int, str]:
     if questionary is None:
         print("❌ A biblioteca 'questionary' é necessária para a otimização. Instale com 'pip install questionary'")
         raise typer.Exit(1)
 
     print("\n--- Configurações da Otimização ---")
     trials_str = questionary.text(
-        "Quantas combinações de parâmetros (trials) você deseja testar?",
+        "Quantas combinações de parâmetros (trials) no total você deseja testar?",
         default="100",
         validate=lambda text: text.isdigit() and int(text) > 0 or "Por favor, insira um número inteiro positivo."
     ).ask()
@@ -611,18 +613,24 @@ def _get_optimizer_settings_interactively() -> tuple[int, str]:
 def backtest(
     bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="O nome do bot para executar."),
     days: int = typer.Option(30, "--days", "-d", help="Número de dias de dados recentes para o backtest."),
-    optimize: bool = typer.Option(False, "--optimize", help="Rodar o otimizador para encontrar os melhores parâmetros antes do backtest final.")
+    optimize: bool = typer.Option(False, "--optimize", help="Rodar o otimizador para encontrar os melhores parâmetros antes do backtest final."),
+    jobs: int = typer.Option(os.cpu_count() or 1, "--jobs", "-j", help="Número de processos de otimização para rodar em paralelo. Padrão: usa todos os núcleos de CPU disponíveis.")
 ):
     """Executa um backtest, com a opção de rodar um otimizador de parâmetros antes."""
     final_bot_name = _setup_bot_run(bot_name)
     env_files_for_final_run = None
 
     if optimize:
-        n_trials, wallet_profile = _get_optimizer_settings_interactively()
+        n_trials, wallet_profile = _get_optimizer_settings_interactively(jobs)
 
         print("\n--- Iniciando Otimização ---")
-        print(f"   - Bot: {final_bot_name}, Dias: {days}, Trials: {n_trials}, Perfil: {wallet_profile}")
-        if not typer.confirm("Deseja continuar?"):
+        print(f"   - Bot: {final_bot_name}, Dias: {days}, Total de Trials: {n_trials}, Perfil: {wallet_profile}, Processos Paralelos: {jobs}")
+
+        if typer.confirm("Limpar resultados de otimizações anteriores?", default=False):
+             print("🗑️ Limpando dados de backtests anteriores...")
+             run_command_in_container(["scripts/clear_backtest_trades.py"], final_bot_name)
+
+        if not typer.confirm("Deseja continuar com a otimização?"):
             raise typer.Exit()
 
         print("\n--- Etapa 1 de 3: Preparando dados históricos ---")
@@ -630,14 +638,27 @@ def backtest(
             print("❌ Falha na preparação dos dados. Abortando.")
             return
 
-        print(f"\n--- Etapa 2 de 3: Rodando a otimização para {n_trials} tentativas ---")
-        optimizer_args = ["scripts/run_optimizer.py", final_bot_name, str(n_trials), str(days), wallet_profile]
-        if not run_command_in_container(optimizer_args, final_bot_name):
-            print("❌ Falha na execução da otimização.")
-            return
+        print(f"\n--- Etapa 2 de 3: Rodando a otimização com {jobs} processo(s) em paralelo ---")
 
-        print("✅ Otimização finalizada. Os melhores parâmetros foram salvos em '.best_params.env'.")
-        env_files_for_final_run = [".best_params.env"]
+        base_trials = n_trials // jobs
+        remainder = n_trials % jobs
+
+        processes = []
+        for i in range(jobs):
+            trials_for_job = base_trials + (1 if i < remainder else 0)
+            if trials_for_job == 0:
+                continue
+
+            optimizer_args = ["scripts/run_optimizer.py", final_bot_name, str(trials_for_job), str(days), wallet_profile]
+            print(f"   -> Iniciando job #{i+1} com {trials_for_job} trials...")
+            p = run_command_in_container(optimizer_args, final_bot_name, non_blocking=True)
+            processes.append(p)
+
+        for p in processes:
+            p.wait()
+
+        print("\n✅ Otimização finalizada. Os melhores parâmetros foram salvos em 'optimize/.best_params.env'.")
+        env_files_for_final_run = ["optimize/.best_params.env"]
 
         print("\n--- Etapa 3 de 3: Rodando Backtest Final com os Melhores Parâmetros ---")
 

@@ -383,6 +383,7 @@ python run.py backtest [OPÇÕES]
 | `--bot-name, -n` | O nome do bot para o qual o backtest será executado. Se omitido, será interativo. | `jules_bot` |
 | `--days, -d` | O número de dias de dados históricos a serem usados no backtest. | `30` |
 | `--optimize` | Se esta flag for usada, ativa o modo de otimização antes do backtest final. | `False` |
+| `--jobs, -j` | Número de processos de otimização para rodar em paralelo. | Nº de CPUs da máquina |
 
 **Exemplos de Uso:**
 

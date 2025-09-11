@@ -1,6 +1,7 @@
 import logging
 import uuid
 import pandas as pd
+import numpy as np
 try:
     import optuna
 except ImportError:
@@ -285,82 +286,129 @@ class Backtester:
             all_trades_df = pd.DataFrame()
         else:
             all_trades_df = pd.DataFrame([t.to_dict() for t in all_trades_for_run])
-            for col in ['price', 'quantity', 'usd_value', 'commission', 'commission_usd', 'realized_pnl_usd', 'hodl_asset_amount', 'hodl_asset_value_at_sell']:
+            numeric_cols = ['price', 'quantity', 'usd_value', 'commission', 'commission_usd', 'realized_pnl_usd', 'hodl_asset_amount', 'hodl_asset_value_at_sell']
+            for col in numeric_cols:
                 if col in all_trades_df.columns:
                     all_trades_df[col] = all_trades_df[col].apply(lambda x: Decimal(str(x)) if pd.notna(x) else Decimal(0))
 
+        # --- Basic Performance ---
         initial_balance = self.mock_trader.initial_balance
         final_balance = self.mock_trader.get_total_portfolio_value()
         net_pnl = final_balance - initial_balance
         net_pnl_percent = (net_pnl / initial_balance) * 100 if initial_balance > 0 else Decimal(0)
 
-        unrealized_pnl = sum(
-            self.strategy_rules.calculate_net_unrealized_pnl(
-                entry_price=pos['price'], current_price=self.mock_trader.get_current_price(),
-                total_quantity=pos['quantity'], buy_commission_usd=pos.get('commission_usd', Decimal('0'))
-            ) for pos in open_positions.values()
-        )
-
+        # --- Trade Analysis ---
         total_realized_pnl = Decimal(0)
         total_fees_usd = Decimal(0)
         win_rate = Decimal(0)
-        payoff_ratio = Decimal(0)
-        avg_gain = Decimal(0)
-        avg_loss = Decimal(0)
+        avg_gain_pct = Decimal(0)
+        avg_loss_pct = Decimal(0)
         buy_trades_count = 0
         sell_trades_count = 0
+        avg_trade_duration = timedelta(0)
+        profit_factor = Decimal(0)
 
         if not all_trades_df.empty:
-            sell_trades = all_trades_df[all_trades_df['status'] == 'CLOSED']
-            buy_trades_count = len(all_trades_df[all_trades_df['order_type'] == 'buy'])
+            sell_trades = all_trades_df[all_trades_df['status'] == 'CLOSED'].copy()
+            buy_trades = all_trades_df[all_trades_df['order_type'] == 'buy'].copy()
+            buy_trades_count = len(buy_trades)
             sell_trades_count = len(sell_trades)
 
-            total_realized_pnl = sell_trades['realized_pnl_usd'].sum()
             total_fees_usd = all_trades_df['commission_usd'].sum()
 
-            winning_trades = sell_trades[sell_trades['realized_pnl_usd'] > 0]
-            losing_trades = sell_trades[sell_trades['realized_pnl_usd'] <= 0]
-
             if sell_trades_count > 0:
-                win_rate = (len(winning_trades) / sell_trades_count) * 100
+                total_realized_pnl = sell_trades['realized_pnl_usd'].sum()
+                winning_trades = sell_trades[sell_trades['realized_pnl_usd'] > 0]
+                losing_trades = sell_trades[sell_trades['realized_pnl_usd'] < 0]
 
-            if len(winning_trades) > 0:
-                avg_gain = Decimal(str(winning_trades['realized_pnl_usd'].mean()))
+                win_rate = (len(winning_trades) / sell_trades_count) * 100 if sell_trades_count > 0 else Decimal(0)
 
-            if len(losing_trades) > 0:
-                avg_loss = Decimal(str(abs(losing_trades['realized_pnl_usd'].mean())))
+                # Link sells to buys to calculate durations and percentage gains/losses
+                merged_trades = pd.merge(
+                    sell_trades,
+                    buy_trades,
+                    left_on='linked_trade_id',
+                    right_on='trade_id',
+                    suffixes=('_sell', '_buy')
+                )
 
-            if avg_loss > 0:
-                payoff_ratio = avg_gain / avg_loss
+                if not merged_trades.empty:
+                    durations = merged_trades['timestamp_sell'] - merged_trades['timestamp_buy']
+                    avg_trade_duration = durations.mean()
 
+                    # Calculate gain/loss percentage relative to the initial investment of that trade
+                    merged_trades['pnl_pct'] = merged_trades.apply(
+                        lambda row: (row['realized_pnl_usd_sell'] / row['usd_value_buy']) * 100, axis=1
+                    )
+                    avg_gain_pct = merged_trades[merged_trades['pnl_pct'] > 0]['pnl_pct'].mean() or Decimal(0)
+                    avg_loss_pct = abs(merged_trades[merged_trades['pnl_pct'] < 0]['pnl_pct'].mean() or Decimal(0))
+
+                gross_profit = winning_trades['realized_pnl_usd'].sum()
+                gross_loss = abs(losing_trades['realized_pnl_usd'].sum())
+                profit_factor = gross_profit / gross_loss if gross_loss > 0 else Decimal('inf')
+
+        # --- Risk and Return Analysis ---
         max_drawdown = Decimal(0)
-        peak = -Decimal('inf')
-        if portfolio_history:
-            peak = portfolio_history[0]
-            for value in portfolio_history:
-                if value > peak:
-                    peak = value
-                drawdown = (peak - value) / peak if peak > 0 else Decimal(0)
-                if drawdown > max_drawdown:
-                    max_drawdown = drawdown
+        sharpe_ratio = Decimal(0)
+        sortino_ratio = Decimal(0)
+        calmar_ratio = Decimal(0)
 
+        if portfolio_history:
+            portfolio_df = pd.DataFrame(portfolio_history, columns=['value'])
+            portfolio_df['returns'] = portfolio_df['value'].pct_change().fillna(0)
+
+            # Max Drawdown
+            peak = portfolio_df['value'].expanding(min_periods=1).max()
+            drawdown = (portfolio_df['value'] - peak) / peak
+            max_drawdown = abs(drawdown.min())
+
+            # Sharpe Ratio (assuming daily returns if data is granular, and 0 risk-free rate)
+            # To be more accurate, we should resample to daily returns
+            daily_returns = portfolio_df['value'].resample('D').last().pct_change().dropna() if isinstance(portfolio_df.index, pd.DatetimeIndex) else portfolio_df['returns']
+            if len(daily_returns) > 1 and daily_returns.std() != 0:
+                sharpe_ratio = np.sqrt(365) * daily_returns.mean() / daily_returns.std()
+
+            # Sortino Ratio
+            downside_returns = daily_returns[daily_returns < 0]
+            if len(downside_returns) > 1:
+                downside_std = downside_returns.std()
+                if downside_std != 0:
+                    sortino_ratio = np.sqrt(365) * daily_returns.mean() / downside_std
+
+            # Calmar Ratio
+            if max_drawdown > 0:
+                total_days = (self.feature_data.index[-1] - self.feature_data.index[0]).days
+                if total_days > 0:
+                    annualized_return = (final_balance / initial_balance) ** (Decimal('365.0') / Decimal(total_days)) - 1
+                    calmar_ratio = annualized_return / max_drawdown
+
+        # --- Logging ---
         logger.info("="*30 + " BACKTEST RESULTS " + "="*30)
-        logger.info(f" Backtest Run ID: {self.run_id}")
         if not self.feature_data.empty:
-            start_time = self.feature_data.index[0].date()
-            end_time = self.feature_data.index[-1].date()
-            logger.info(f" Period: {start_time} to {end_time}")
-        logger.info(f" Initial Balance: ${initial_balance:,.2f}")
-        logger.info(f" Final Balance:   ${final_balance:,.2f}")
-        logger.info(f" Net P&L:         ${net_pnl:,.2f} ({net_pnl_percent:.2f}%%)")
-        logger.info(f"   - Realized PnL:   ${total_realized_pnl:,.2f}")
-        logger.info(f"   - Unrealized PnL: ${unrealized_pnl:,.2f}")
-        logger.info(f" Total Buy Trades:    {buy_trades_count}")
-        logger.info(f" Total Sell Trades:   {sell_trades_count} (Completed Trades)")
-        logger.info(f" Success Rate:        {win_rate:.2f}%%")
-        logger.info(f" Payoff Ratio:        {payoff_ratio:.2f}")
-        logger.info(f" Maximum Drawdown:    {max_drawdown * 100:.2f}%%")
-        logger.info(f" Total Fees Paid:     ${total_fees_usd:,.2f}")
+            logger.info(f" Period: {self.feature_data.index[0].date()} to {self.feature_data.index[-1].date()}")
+        logger.info(f" Backtest Run ID: {self.run_id}")
+
+        logger.info("\n--- Resumo da Performance ---")
+        logger.info(f" Saldo Inicial:     ${initial_balance:,.2f}")
+        logger.info(f" Saldo Final:       ${final_balance:,.2f}")
+        logger.info(f" Lucro/Prejuízo Líquido: ${net_pnl:,.2f} ({net_pnl_percent:.2f}%)")
+        logger.info(f" Lucro Realizado:   ${total_realized_pnl:,.2f}")
+
+        logger.info("\n--- Análise de Trades ---")
+        logger.info(f" Total de Trades (Compra): {buy_trades_count}")
+        logger.info(f" Total de Trades (Venda):  {sell_trades_count}")
+        logger.info(f" Taxa de Sucesso:          {win_rate:.2f}%")
+        logger.info(f" Fator de Lucro:           {profit_factor:.2f}")
+        logger.info(f" Ganho Médio por Trade:    {avg_gain_pct:.2f}%")
+        logger.info(f" Perda Média por Trade:    {avg_loss_pct:.2f}%")
+        logger.info(f" Duração Média do Trade:   {str(avg_trade_duration).split('.')[0] if avg_trade_duration else 'N/A'}")
+        logger.info(f" Total de Taxas Pagas:     ${total_fees_usd:,.2f}")
+
+        logger.info("\n--- Análise de Risco ---")
+        logger.info(f" Drawdown Máximo:          {max_drawdown * 100:.2f}%")
+        logger.info(f" Sharpe Ratio (Anualiz.):  {sharpe_ratio:.2f}")
+        logger.info(f" Sortino Ratio (Anualiz.): {sortino_ratio:.2f}")
+        logger.info(f" Calmar Ratio (Anualiz.):  {calmar_ratio:.2f}")
         logger.info("="*80)
 
         return final_balance
