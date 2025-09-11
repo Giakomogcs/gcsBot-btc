@@ -1,6 +1,8 @@
 import os
 import pandas as pd
 import optuna
+from pathlib import Path
+import json
 from jules_bot.utils.logger import logger
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.genius_optimizer.objective import create_objective_function

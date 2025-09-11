@@ -1,9 +1,1 @@
-[
-    {
-        "bot_name": "gcs-bot",
-        "container_id": "83da9b9adedce1873129e34ff9d11c16a8ac9251187b5fc5362fbf9dc80223e1",
-        "bot_mode": "test",
-        "start_time": "2025-09-10T23:09:09.424149",
-        "host_port": 8766
-    }
-]
+[]

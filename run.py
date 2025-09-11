@@ -693,8 +693,10 @@ def _get_optimizer_settings() -> dict:
 
     selected_keys = questionary.checkbox(
         "Selecione os grupos de parâmetros para otimizar:",
-        choices=[questionary.Choice(title=v, value=k) for k, v in param_groups.items()],
-        default=",".join(param_groups.keys())
+        choices=[
+            questionary.Choice(title=v, value=k, checked=True)
+            for k, v in param_groups.items()
+        ],
     ).ask()
 
     if not selected_keys: raise typer.Exit()
@@ -711,10 +713,11 @@ def _run_optimizer(bot_name: str, days: int) -> Optional[str]:
     print(f"   - Bot: {bot_name}, Dias: {days}, Trials por Regime: {settings['n_trials']}")
     print(f"   - Parâmetros Ativos: {list(settings['active_params'].keys())}")
 
-    if not typer.confirm("Deseja continuar com a otimização?"):
+    if not typer.confirm("Deseja continuar com a otimização?", default=True):
         raise typer.Exit()
 
     try:
+        config_manager.initialize(bot_name)
         genius_optimizer = GeniusOptimizer(
             bot_name=bot_name,
             days=days,
