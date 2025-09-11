@@ -104,7 +104,7 @@ class OptimizerDashboard(App):
     .regime_widget_panel {
         height: 100%;
         padding: 0 1;
-        border: heavy grey50; /* Default border for pending/completed */
+        border: heavy gray; /* Default border for pending/completed */
     }
     .regime_title {
         width: 100%;
@@ -270,7 +270,7 @@ class OptimizerDashboard(App):
                 balance = data.get('final_balance', 0)
                 params_str = ", ".join([f"{k.split('_')[-1]}={v:.3f}" if isinstance(v, float) else f"{k.split('_')[-1]}={v}" for k, v in data.get("params", {}).items()])
 
-                log_line = Text.from_markup(
+                log_line = (
                     f"[{datetime.now():%H:%M:%S}] "
                     f"[[{REGIME_COLORS[regime]}]]{regime_name:<15}[/]] "
                     f"Trial {trial_num:<4} | "
