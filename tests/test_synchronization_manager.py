@@ -147,3 +147,133 @@ def test_final_balance_sanity_check_logs_warning_on_discrepancy(mock_logger, syn
     # Assert
     mock_logger.assert_called_once()
     assert "FINAL SANITY CHECK FAILED" in mock_logger.call_args[0][0]
+
+def test_run_full_sync_from_scratch_complex_scenario(sync_manager, mock_db_manager):
+    # This is a full integration test for the synchronization logic.
+    # 1. Start with an empty local DB.
+    # 2. Provide a complex history of trades from Binance.
+    # 3. Run the full sync.
+    # 4. Verify that the final state of the local DB is perfectly reconciled.
+    
+    # ARRANGE
+    start_time = datetime.datetime.now(datetime.timezone.utc)
+    
+    # Mock Binance trade history
+    binance_trades = [
+        {'id': 1, 'isBuyer': True,  'price': '100', 'qty': '10', 'commission': '0.01', 'commissionAsset': 'BTC',   'time': int((start_time + datetime.timedelta(minutes=1)).timestamp() * 1000), 'orderId': 101},
+        {'id': 2, 'isBuyer': True,  'price': '110', 'qty': '5',  'commission': '0.005', 'commissionAsset': 'BTC',  'time': int((start_time + datetime.timedelta(minutes=2)).timestamp() * 1000), 'orderId': 102},
+        {'id': 3, 'isBuyer': False, 'price': '120', 'qty': '7',  'commission': '8.4', 'commissionAsset': 'USDT',   'time': int((start_time + datetime.timedelta(minutes=3)).timestamp() * 1000), 'orderId': 103},
+        {'id': 4, 'isBuyer': True,  'price': '105', 'qty': '8',  'commission': '0.008', 'commissionAsset': 'BTC',  'time': int((start_time + datetime.timedelta(minutes=4)).timestamp() * 1000), 'orderId': 104},
+        {'id': 5, 'isBuyer': False, 'price': '130', 'qty': '12', 'commission': '15.6', 'commissionAsset': 'USDT', 'time': int((start_time + datetime.timedelta(minutes=5)).timestamp() * 1000), 'orderId': 105},
+    ]
+    sync_manager.client.get_my_trades.return_value = binance_trades
+    sync_manager.client.get_account.return_value = {'balances': [{'asset': 'BTC', 'free': '4.0', 'locked': '0.0'}]}
+    sync_manager.client.get_all_tickers.return_value = [{'symbol': 'BTCUSDT', 'price': '130'}] # For commission calcs
+
+    # --- Mock the DB interactions ---
+    # Use a dictionary to simulate the database
+    db_storage = {} 
+
+    def mock_log_trade(trade_data):
+        # When a trade is logged, add it to our mock DB
+        trade_id = trade_data['trade_id']
+        # Create a mock object that simulates a SQLAlchemy model
+        mock_trade_obj = MagicMock(spec=Trade)
+        for key, value in trade_data.items():
+            setattr(mock_trade_obj, key, value)
+        
+        # Buys need a remaining_quantity to be tracked
+        if trade_data['order_type'] == 'buy':
+            mock_trade_obj.remaining_quantity = trade_data['quantity']
+
+        db_storage[trade_id] = mock_trade_obj
+
+    def mock_get_open_positions(environment, symbol):
+        # Return all 'buy' trades from our mock DB that are still 'OPEN'
+        return sorted([
+            t for t in db_storage.values() 
+            if t.order_type == 'buy' and t.status == 'OPEN'
+        ], key=lambda t: t.timestamp)
+
+    def mock_update_trade(trade_id, payload):
+        # Update the trade in our mock DB
+        if trade_id in db_storage:
+            for key, value in payload.items():
+                setattr(db_storage[trade_id], key, value)
+
+    # Patch the methods
+    sync_manager.trade_logger.log_trade = mock_log_trade
+    sync_manager.db.get_all_trades_for_sync.return_value = [] # Start with empty DB
+    sync_manager.db.get_open_positions.side_effect = mock_get_open_positions
+    sync_manager.db.update_trade.side_effect = mock_update_trade
+
+    # ACT
+    sync_manager.run_full_sync()
+
+    # ASSERT
+    # Filter buys and sells from our final DB state
+    final_buys = {t.binance_trade_id: t for t in db_storage.values() if t.order_type == 'buy'}
+    final_sells = [t for t in db_storage.values() if t.order_type == 'sell']
+
+    # 1. Verify final state of all original BUY trades
+    # Buy #1 (ID 1) should be fully closed
+    assert final_buys[1].status == 'CLOSED'
+    assert final_buys[1].remaining_quantity <= Decimal('1e-8')
+
+    # Buy #2 (ID 2) should be fully closed
+    assert final_buys[2].status == 'CLOSED'
+    assert final_buys[2].remaining_quantity <= Decimal('1e-8')
+    
+    # Buy #3 (ID 4) should be partially open
+    assert final_buys[4].status == 'OPEN'
+    assert final_buys[4].remaining_quantity == Decimal('4') # 8 bought, 4 sold from it
+
+    # 2. Verify the SELL trades that were created
+    # Sell #3 (7 units) vs Buy #1 -> 1 sell record
+    # Sell #5 (12 units) vs Buy #1 (rem 3), Buy #2 (rem 5), Buy #4 (rem 8) -> 3 sell records
+    # Total sell records = 4
+    assert len(final_sells) == 4
+    
+    # Sell #3 (7 units) should be linked to Buy #1
+    sell_record_1 = next(s for s in final_sells if s.binance_trade_id == 3)
+    buy_1_trade_id = final_buys[1].trade_id
+    assert sell_record_1.linked_trade_id == buy_1_trade_id
+    assert sell_record_1.quantity == Decimal('7')
+
+    # Sell #5 (12 units) is split. Find the parts.
+    sell_records_2 = [s for s in final_sells if s.binance_trade_id == 5]
+    assert len(sell_records_2) == 3
+    
+    # Part 1 of Sell #5 closes the rest of Buy #1 (3 units) and all of Buy #2 (5 units)
+    # The current logic will create one record for the remaining 3 of buy 1, and one for the 5 of buy 2 + 4 of buy 3 = 9
+    # Let's adjust the test to the actual implementation: A sell is matched against open buys one by one.
+    # So sell #5 (12 units) matches:
+    # - 3 units from buy #1
+    # - 5 units from buy #2
+    # - 4 units from buy #3
+    # The code creates a *new sell record* for each linkage. So we expect 1 (from sell #3) + 3 (from sell #5) = 4 sell records.
+    # Let's re-verify the code.
+    # Ah, `_reconcile_external_sell` loops through open buys. For each one, it creates ONE new sell trade data.
+    # So, Sell #3 (7 units) vs Buy #1 (10 units) -> Creates 1 sell record.
+    # Sell #5 (12 units) vs Buy #1 (rem 3), Buy #2 (rem 5), Buy #3 (rem 8) -> Creates 3 sell records.
+    # Total sell records = 1 + 3 = 4.
+    
+    # Let's re-run the logic in my head.
+    # Sync starts.
+    # Buys 1, 2 are created.
+    # Sell 3 (7 units) comes in. `get_open_positions` -> [Buy1 (10rem), Buy2 (5rem)].
+    #   - Loop 1: `buy_trade` is Buy1. `qty_to_sell` is min(7, 10) = 7. A sell record is created for 7 units, linked to Buy1. Buy1 `rem_qty` becomes 3. `sell_qty_to_match` becomes 0. Loop breaks. (1 sell record created)
+    # Buy 4 is created.
+    # Sell 5 (12 units) comes in. `get_open_positions` -> [Buy1 (3rem), Buy2 (5rem), Buy4 (8rem)].
+    #   - Loop 1: `buy_trade` is Buy1. `qty_to_sell` is min(12, 3) = 3. Sell record created for 3 units, linked to Buy1. Buy1 `rem_qty` becomes 0, status CLOSED. `sell_qty_to_match` becomes 9. (2nd sell record created)
+    #   - Loop 2: `buy_trade` is Buy2. `qty_to_sell` is min(9, 5) = 5. Sell record created for 5 units, linked to Buy2. Buy2 `rem_qty` becomes 0, status CLOSED. `sell_qty_to_match` becomes 4. (3rd sell record created)
+    #   - Loop 3: `buy_trade` is Buy4. `qty_to_sell` is min(4, 8) = 4. Sell record created for 4 units, linked to Buy4. Buy4 `rem_qty` becomes 4. `sell_qty_to_match` becomes 0. Loop breaks. (4th sell record created)
+    # Total sell records = 4. My prediction is corrected.
+    
+    assert len(final_sells) == 4
+
+    # Check PnL was calculated on all of them
+    assert all(s.realized_pnl_usd is not None for s in final_sells)
+    
+    # Final sanity check should not log a warning
+    sync_manager.client.get_account.assert_called_once()

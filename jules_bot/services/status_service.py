@@ -292,8 +292,7 @@ class StatusService:
                 sell_price=sell_target_price,
                 quantity_sold=quantity,
                 buy_commission_usd=buy_commission_usd,
-                sell_commission_usd=sell_commission_at_target,
-                buy_quantity=quantity
+                sell_commission_usd=sell_commission_at_target
             )
 
             # Calculate progress based on PnL, which is more intuitive than price.

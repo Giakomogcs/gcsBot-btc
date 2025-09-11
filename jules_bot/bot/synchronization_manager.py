@@ -68,9 +68,6 @@ class SynchronizationManager:
                     else:
                         self._reconcile_external_sell(trade, all_prices)
             
-            logger.info("Performing post-sync linking for any remaining unlinked bot-initiated trades...")
-            self._reconcile_local_state(all_binance_trades)
-
             self._final_balance_sanity_check()
             logger.info("--- State Synchronization Finished ---")
 
@@ -83,9 +80,10 @@ class SynchronizationManager:
         It finds the corresponding open buy positions, calculates PnL,
         creates a local sell record, and updates the buy positions' remaining quantities.
         """
-        logger.info(f"Reconciling external sell (Binance Trade ID: {sell_trade_data['id']})...")
+        sell_id = sell_trade_data['id']
         sell_qty_to_match = Decimal(str(sell_trade_data['qty']))
         sell_price = Decimal(str(sell_trade_data['price']))
+        logger.info(f"-> Reconciling external sell (Binance Trade ID: {sell_id}, Qty: {sell_qty_to_match}, Price: {sell_price})")
         sell_commission = Decimal(str(sell_trade_data['commission']))
         sell_commission_asset = sell_trade_data['commissionAsset']
         
@@ -115,8 +113,7 @@ class SynchronizationManager:
                     sell_price=sell_price,
                     quantity_sold=qty_to_sell_from_this_buy,
                     buy_commission_usd=prorated_buy_commission,
-                    sell_commission_usd=prorated_sell_commission,
-                    buy_quantity=qty_to_sell_from_this_buy
+                    sell_commission_usd=prorated_sell_commission
                 )
 
                 new_sell_trade_data = {
@@ -138,14 +135,23 @@ class SynchronizationManager:
 
                 new_remaining_qty = buy_trade.remaining_quantity - qty_to_sell_from_this_buy
                 update_payload = {'remaining_quantity': new_remaining_qty}
+                
+                log_msg = (
+                    f"   - Matched {qty_to_sell_from_this_buy:.8f} qty against Buy Trade ID: {str(buy_trade.trade_id)} "
+                    f"(bought at ${Decimal(buy_trade.price):.4f})"
+                )
+                logger.info(log_msg)
+                logger.info(f"   - Calculated Realized PnL for this portion: {float(realized_pnl):.4f}")
+
                 if new_remaining_qty <= Decimal('1e-8'):
                     update_payload['status'] = 'CLOSED'
-                    logger.info(f"Closing buy trade {buy_trade.trade_id} as its remaining quantity is now zero.")
-                
+                    logger.info(f"   - Buy Trade {buy_trade.trade_id} is now fully closed.")
+                else:
+                    logger.info(f"   - Buy Trade {buy_trade.trade_id} has new remaining quantity: {new_remaining_qty:.8f}")
+
                 self.db.update_trade(buy_trade.trade_id, update_payload)
                 
                 sell_qty_to_match -= qty_to_sell_from_this_buy
-                logger.info(f"Reconciled {qty_to_sell_from_this_buy:.8f} of external sell against buy {buy_trade.trade_id}. PnL: ${realized_pnl:.4f}")
 
     def _final_balance_sanity_check(self):
         """
@@ -173,30 +179,6 @@ class SynchronizationManager:
                 logger.info("Final balance sanity check passed. Local state is aligned with exchange balance.")
         except Exception as e:
             logger.error(f"Could not perform final balance sanity check: {e}", exc_info=True)
-
-    def _reconcile_local_state(self, all_binance_trades: list):
-        db_trades = self.db.get_all_trades_for_sync(environment=self.environment, symbol=self.symbol)
-        db_trades_map = {t.binance_trade_id: t for t in db_trades if t.binance_trade_id}
-        
-        buys = sorted([t for t in all_binance_trades if t['isBuyer']], key=lambda t: t['time'])
-        sells = sorted([t for t in all_binance_trades if not t['isBuyer']], key=lambda t: t['time'])
-
-        if not sells:
-            return
-
-        buy_pool = {buy['id']: Decimal(str(buy['qty'])) for buy in buys}
-        
-        for sell in sells:
-            local_sell = db_trades_map.get(sell['id'])
-            if not local_sell or local_sell.linked_trade_id:
-                continue
-
-            for buy in buys:
-                buy_id = buy['id']
-                if buy_pool.get(buy_id, Decimal('0')) > Decimal('0'):
-                    self.db.update_trade(local_sell.trade_id, {'linked_trade_id': local_sell.trade_id})
-                    buy_pool[buy_id] = 0 
-                    break 
 
     def _calculate_and_update_realized_pnl(self, closed_buy_trade: Trade):
         sell_trade = self.db.find_linked_sell_trade(closed_buy_trade.trade_id)

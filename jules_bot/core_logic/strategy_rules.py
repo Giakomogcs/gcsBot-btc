@@ -171,11 +171,14 @@ class StrategyRules:
         sell_price: Decimal,
         quantity_sold: Decimal,
         buy_commission_usd: Decimal,
-        sell_commission_usd: Decimal,
-        buy_quantity: Decimal
+        sell_commission_usd: Decimal
     ) -> Decimal:
-        if any(v is None for v in [buy_price, sell_price, quantity_sold, buy_commission_usd, sell_commission_usd, buy_quantity]):
-            logger.warning(f"Cannot calculate PnL with missing values.")
+        """
+        Calculates the net realized profit or loss for a transaction.
+        Assumes that the commissions passed in are already correctly prorated for the quantity sold.
+        """
+        if any(v is None for v in [buy_price, sell_price, quantity_sold, buy_commission_usd, sell_commission_usd]):
+            logger.warning("Cannot calculate PnL with missing values. buy_price, sell_price, quantity_sold, buy_commission_usd, or sell_commission_usd is None.")
             return Decimal('0.0')
         try:
             buy_price = Decimal(buy_price)
@@ -183,10 +186,9 @@ class StrategyRules:
             quantity_sold = Decimal(quantity_sold)
             buy_commission_usd = Decimal(buy_commission_usd)
             sell_commission_usd = Decimal(sell_commission_usd)
-            buy_quantity = Decimal(buy_quantity)
+
             gross_pnl = (sell_price - buy_price) * quantity_sold
-            buy_commission_prorated = (quantity_sold / buy_quantity) * buy_commission_usd if buy_quantity > 0 else Decimal('0')
-            net_pnl = gross_pnl - buy_commission_prorated - sell_commission_usd
+            net_pnl = gross_pnl - buy_commission_usd - sell_commission_usd
             return net_pnl
         except (TypeError, InvalidOperation) as e:
             logger.error(f"Error calculating realized PnL: {e}", exc_info=True)
