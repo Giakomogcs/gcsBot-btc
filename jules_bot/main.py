@@ -3,16 +3,15 @@ import sys
 import uuid
 
 # --- EARLY INITIALIZATION ---
-# The ConfigManager must be initialized BEFORE any other application modules are imported.
-# This ensures that any module that relies on the config (e.g., logger, db_manager)
-# gets the correct bot-specific settings from the environment.
+# The ConfigManager is imported here. Its __init__ method runs immediately,
+# making it fully configured and ready for use by any subsequent module.
 from jules_bot.utils.config_manager import config_manager
 
-bot_name = os.getenv("BOT_NAME", "jules_bot")
-config_manager.initialize(bot_name)
+# The bot_name is now retrieved from the singleton after it has been initialized.
+bot_name = config_manager.bot_name
 # --- END EARLY INITIALIZATION ---
 
-# Now that the config is initialized, we can safely import other modules.
+# Now that the config is guaranteed to be initialized, we can safely import other modules.
 from jules_bot.bot.trading_bot import TradingBot
 from jules_bot.utils.logger import logger
 from jules_bot.database.postgres_manager import PostgresManager
@@ -34,8 +33,8 @@ def main():
     # Garante que qualquer espaço em branco seja removido antes de comparar
     bot_mode = bot_mode.strip().lower()
 
-    # The bot_name was already read at the top of the script for initialization.
-    # The config_manager has already been initialized.
+    # The config_manager is now initialized atomically at import time.
+    # The bot_name is retrieved from it directly.
 
     logger.info(f"--- INICIANDO O BOT '{bot_name}' EM MODO '{bot_mode.upper()}' (via variável de ambiente) ---")
 

@@ -13,23 +13,23 @@ class ConfigManager:
     def __init__(self, config_file: Path = Path('config.ini')):
         """
         Initializes the ConfigManager and loads the configuration file.
+        The bot_name is determined immediately from environment variables for robust,
+        atomic initialization.
+
         Args:
             config_file: The path to the configuration file.
         """
-        self.bot_name: Optional[str] = None
-        self.overrides: Optional[Dict[str, str]] = None
-        # Load environment variables from the specified .env file
+        # Load environment variables from the specified .env file first.
         load_dotenv(dotenv_path=os.getenv("ENV_FILE", ".env"))
+
+        # Determine the bot name immediately from the environment.
+        self.bot_name: str = os.getenv("BOT_NAME", "jules_bot")
+        
+        self.overrides: Optional[Dict[str, str]] = None
         self.config = configparser.ConfigParser(interpolation=None)
         if not config_file.exists():
             raise FileNotFoundError(f"Configuration file not found: {config_file}")
         self.config.read(config_file)
-
-    def initialize(self, bot_name: str):
-        """
-        Initializes the manager with a specific bot name to resolve bot-specific env vars.
-        """
-        self.bot_name = bot_name
 
     def apply_overrides(self, override_dict: Dict[str, str]):
         """
