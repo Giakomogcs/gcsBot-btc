@@ -1,153 +1,273 @@
 import json
 import glob
+import time
 from pathlib import Path
 from rich.text import Text
+from rich.panel import Panel
+from rich.progress_bar import ProgressBar
 from datetime import datetime
-from textual.app import App, ComposeResult
-from textual.widgets import Header, Footer, DataTable, Static, Log
-from textual.containers import Container, Vertical
-from textual.timer import Timer
-import time
 
+from textual.app import App, ComposeResult
+from textual.widgets import Header, Footer, Static, Log, DataTable
+from textual.containers import Container, Horizontal, Vertical
+from textual.timer import Timer
+
+# Directory where the optimizer drops its progress files
 TUI_FILES_DIR = Path(".tui_files")
+
+# Mapping from regime index to a human-readable name
 REGIME_NAMES = {
     0: "RANGING",
     1: "UPTREND",
     2: "HIGH_VOLATILITY",
     3: "DOWNTREND"
 }
+# A simple color cycle for the regime panels
+REGIME_COLORS = ["cyan", "green", "magenta", "red"]
+
+class RegimeSummaryWidget(Static):
+    """A widget to display the summary for a single optimization regime."""
+
+    def __init__(self, regime_id: int, **kwargs):
+        super().__init__(**kwargs)
+        self.regime_id = regime_id
+        self.regime_name = REGIME_NAMES.get(regime_id, f"UNKNOWN_{regime_id}")
+        self.color = REGIME_COLORS[regime_id % len(REGIME_COLORS)]
+
+        # Internal state
+        self.status = "PENDING"
+        self.best_score = 0.0
+        self.trials_completed = 0
+        self.trials_total = 0
+        self.best_params = {}
+
+    def compose(self) -> ComposeResult:
+        yield Vertical(
+            Static(f"Best Parameters for {self.regime_name}", classes="param_header"),
+            DataTable(id=f"params_table_{self.regime_id}", classes="params_table"),
+            id=f"regime_params_container_{self.regime_id}"
+        )
+
+    def update_summary(self, summary_data: dict, total_trials: int):
+        """Updates the widget's display with new summary data."""
+        self.status = "RUNNING"
+        self.best_score = summary_data.get('score', 0) or 0.0
+        self.best_params = summary_data.get('params', {})
+        self.trials_total = total_trials
+
+        # Get the number of completed trials for this regime
+        trial_files = glob.glob(str(TUI_FILES_DIR / f"genius_trial_{self.regime_id}_*.json"))
+        self.trials_completed = len(trial_files)
+
+        if self.trials_completed >= self.trials_total:
+            self.status = "COMPLETED"
+
+        # --- Update Panel Border and Title ---
+        progress = f"{self.trials_completed}/{self.trials_total}"
+        title = f" [bold]{self.regime_name}[/] [dim]({self.status})[/] "
+        subtitle = f" Best Score: [bold]{self.best_score:.4f}[/] | Trials: {progress} "
+
+        panel = self.query_one(f"#regime_panel_{self.regime_id}", Panel)
+        panel.border_style = self.color if self.status == "RUNNING" else "grey50"
+        panel.title = title
+        panel.subtitle = subtitle
+
+        # --- Update Progress Bar ---
+        progress_bar = self.query_one(f"#progress_{self.regime_id}", ProgressBar)
+        progress_bar.update(total=self.trials_total, completed=self.trials_completed)
+
+        # --- Update Parameters Table ---
+        params_table = self.query_one(f"#params_table_{self.regime_id}", DataTable)
+        params_table.clear()
+        params_table.add_column("Parameter", width=35)
+        params_table.add_column("Value", width=20)
+
+        if not self.best_params:
+            params_table.add_row("[dim]Waiting for first trial...[/dim]", "")
+        else:
+            for key, value in sorted(self.best_params.items()):
+                if isinstance(value, float):
+                    value_str = f"{value:.6f}"
+                else:
+                    value_str = str(value)
+                params_table.add_row(key, value_str)
 
 class OptimizerDashboard(App):
     """A Textual app to monitor the multi-regime Genius Optimizer."""
 
-    CSS_PATH = "app.css"
-    BINDINGS = [
-        ("d", "toggle_dark", "Toggle Dark Mode"),
-        ("q", "quit", "Quit")
-    ]
+    CSS = """
+    #main_container {
+        layout: grid;
+        grid-size: 2 2;
+        grid-gutter: 1;
+        padding: 1;
+    }
+    .regime_widget {
+        height: 100%;
+    }
+    Panel {
+        height: 100%;
+        border: heavy;
+    }
+    .param_header {
+        width: 100%;
+        text-align: center;
+        text-style: bold underline;
+        margin-bottom: 1;
+    }
+    .params_table {
+        height: 100%;
+    }
+    #status_bar {
+        dock: top;
+        height: 3;
+        content-align: center middle;
+        background: $panel;
+        border: round white;
+    }
+    #trial_log_container {
+        column-span: 2;
+        height: 15;
+        border: heavy white;
+        padding: 1;
+    }
+    .log_header {
+        width: 100%;
+        text-align: center;
+        text-style: bold;
+    }
+    .log_box {
+        height: 100%;
+        border: none;
+    }
+    """
+    BINDINGS = [("q", "quit", "Quit")]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.update_timer: Timer = None
-        self.processed_files = set()
+        self.processed_trial_files = set()
         self.regime_summaries = {}
+        self.total_trials_per_regime = 0
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
-        yield Header(name="🧠 Genius Optimizer Dashboard")
+        yield Header(name="⚡ Genius Optimizer Dashboard ⚡")
+        yield Static("⚪ Waiting for optimization to begin...", id="status_bar")
+
+        # Main grid for regime summaries
         yield Container(
-            Static("⚪ Waiting for optimization to begin...", id="overall_status", classes="box"),
-            Static("🕒 Last check: N/A", id="polling_status", classes="box"),
-            DataTable(id="regime_summary_table", classes="box"),
-            Vertical(
-                Static("Live Trial Log", classes="log_header"),
-                Log(id="live_trial_log", auto_scroll=True, classes="log_box"),
-                id="trial_log_container"
-            ),
+            *[Panel(
+                RegimeSummaryWidget(regime_id=i),
+                id=f"regime_panel_{i}",
+                title=f" [bold]{REGIME_NAMES.get(i)}[/] [dim](PENDING)[/] "
+            ) for i in range(4)],
             id="main_container"
+        )
+
+        # Log for individual trial updates
+        yield Vertical(
+            Static("Live Trial Log", classes="log_header"),
+            Log(id="live_trial_log", auto_scroll=True, classes="log_box"),
+            id="trial_log_container"
         )
         yield Footer()
 
     def on_mount(self) -> None:
         """Called when the app is mounted."""
+        # Create the directory if it doesn't exist to prevent errors
         TUI_FILES_DIR.mkdir(exist_ok=True)
 
-        summary_table = self.query_one("#regime_summary_table", DataTable)
-        summary_table.cursor_type = "row"
-        summary_table.add_column("Regime", key="regime", width=20)
-        summary_table.add_column("Status", key="status", width=15)
-        summary_table.add_column("Best Score", key="score", width=15)
-        summary_table.add_column("Trials", key="trials", width=10)
-        summary_table.add_column("Best Balance", key="balance", width=20)
-        summary_table.add_column("Best Drawdown", key="drawdown", width=15)
-
-        # Initialize rows for all regimes
+        # Initialize parameter tables for all regimes
         for i in range(4):
-            regime_name = REGIME_NAMES.get(i, f"Unknown ({i})")
-            summary_table.add_row(regime_name, "PENDING", "N/A", "0", "N/A", "N/A", key=f"regime-{i}")
+            table = self.query_one(f"#params_table_{i}", DataTable)
+            table.add_column("Parameter", width=35)
+            table.add_column("Value", width=20)
+            table.add_row("[dim]Waiting for data...[/dim]", "")
 
-        self.update_timer = self.set_interval(1, self.update_dashboard)
+        # Start polling for updates
+        self.update_timer = self.set_interval(1.5, self.update_dashboard)
+
+    def _get_total_trials(self) -> int:
+        """
+        A bit of a hack to find the total number of trials by inspecting
+        the optimizer process arguments if available.
+        """
+        try:
+            import psutil
+            for p in psutil.process_iter(['name', 'cmdline']):
+                if p.info['cmdline'] and 'run_genius_optimizer.py' in ' '.join(p.info['cmdline']):
+                    cmd = p.info['cmdline']
+                    # Expected command: ['python', 'scripts/run_genius_optimizer.py', bot, days, n_trials, json_params]
+                    if len(cmd) >= 5 and cmd[-2].isdigit():
+                        return int(cmd[-2])
+        except (ImportError, psutil.Error):
+            pass # psutil not available or permission error
+        return 0 # Fallback
 
     def update_dashboard(self) -> None:
         """Polls the directory for JSON files and updates the dashboard."""
-        status_widget = self.query_one("#overall_status", Static)
-        polling_widget = self.query_one("#polling_status", Static)
-        now = datetime.now().strftime("%H:%M:%S")
-
-        try:
-            json_files = glob.glob(str(TUI_FILES_DIR / "genius_trial_*.json"))
-            new_files = sorted([f for f in json_files if f not in self.processed_files])
-            
-            polling_widget.update(f"🕒 Last check: {now} | Found {len(new_files)} new trial(s).")
-
-            if not new_files and not self.processed_files:
-                if list(TUI_FILES_DIR.glob("*.json")):
-                    status_widget.update(Text("⚠️ Found old data files. Please clear the '.tui_files' directory before starting a new run.", style="bold yellow"))
-                else:
-                    status_widget.update("⚪ Waiting for optimization to begin...")
-                return # Early exit if nothing to do
-
-            trial_log = self.query_one("#live_trial_log", Log)
-            for file_path in new_files:
-                self.processed_files.add(file_path)
-                try:
-                    with open(file_path, "r") as f:
-                        data = json.load(f)
-
-                    status_widget.update("⚡ OPTIMIZING IN PARALLEL ACROSS ALL REGIMES ⚡")
-
-                    regime = data.get("regime", -1)
-                    score = data.get('score', 0) or 0.0
-                    state = data.get('state', 'UNKNOWN')
-                    trial_num = data.get('number', -1)
-                    timestamp = datetime.now().strftime("%H:%M:%S")
-
-                    log_line = f"[{timestamp}] Regime {regime} | Trial {trial_num:<4} | Score: {score:10.4f} | Status: {state}"
-                    trial_log.write_line(log_line)
-
-                except (json.JSONDecodeError, IOError, KeyError) as e:
-                    trial_log.write_line(f"[{datetime.now().strftime('%H:%M:%S')}] Error processing file {Path(file_path).name}: {e}")
-                    continue # Ignore partially written files or malformed data
+        status_bar = self.query_one("#status_bar", Static)
         
-        except Exception as e:
-            polling_widget.update(f"🕒 Last check: {now} | ❌ Error polling directory: {e}")
+        if not self.total_trials_per_regime:
+            self.total_trials_per_regime = self._get_total_trials()
 
-
-        # Update summary table from summary files
+        # --- Update Summaries for Each Regime ---
         summary_files = glob.glob(str(TUI_FILES_DIR / "genius_summary_regime_*.json"))
-        summary_table = self.query_one("#regime_summary_table", DataTable)
+        if summary_files:
+             status_bar.update("⚡ OPTIMIZING IN PARALLEL ACROSS ALL REGIMES ⚡")
 
         for file_path in summary_files:
             try:
                 with open(file_path, "r") as f:
                     summary_data = json.load(f)
 
-                regime = summary_data.get("regime")
-                if regime is None: continue
+                regime_id = summary_data.get("regime")
+                if regime_id is None: continue
 
-                # Update the table if new data is available
-                if self.regime_summaries.get(regime) != summary_data:
-                    self.regime_summaries[regime] = summary_data
-
-                    score = summary_data.get('score', 0) or 0.0
-                    balance = summary_data.get('final_balance', 0.0)
-                    drawdown = summary_data.get('max_drawdown', 0.0) * 100
-
-                    # Get number of trials completed for this regime
-                    trial_count = len(glob.glob(str(TUI_FILES_DIR / f"genius_trial_{regime}_*.json")))
-
-                    summary_table.update_cell(f"regime-{regime}", "status", "RUNNING", update_width=False)
-                    summary_table.update_cell(f"regime-{regime}", "score", f"{score:.4f}", update_width=False)
-                    summary_table.update_cell(f"regime-{regime}", "trials", str(trial_count), update_width=False)
-                    summary_table.update_cell(f"regime-{regime}", "balance", f"${balance:,.2f}", update_width=False)
-                    summary_table.update_cell(f"regime-{regime}", "drawdown", f"{drawdown:.2f}%", update_width=False)
+                # Update widget if data is new
+                if self.regime_summaries.get(regime_id) != summary_data:
+                    self.regime_summaries[regime_id] = summary_data
+                    widget = self.query_one(f"#regime_panel_{regime_id} RegimeSummaryWidget")
+                    widget.update_summary(summary_data, self.total_trials_per_regime)
 
             except (json.JSONDecodeError, IOError, KeyError):
                 continue
 
+        # --- Update Live Trial Log ---
+        trial_files = glob.glob(str(TUI_FILES_DIR / "genius_trial_*.json"))
+        new_trial_files = sorted([f for f in trial_files if f not in self.processed_trial_files])
+
+        trial_log = self.query_one("#live_trial_log", Log)
+        for file_path in new_trial_files:
+            self.processed_trial_files.add(file_path)
+            try:
+                with open(file_path, "r") as f:
+                    data = json.load(f)
+
+                regime = data.get("regime", -1)
+                regime_name = REGIME_NAMES.get(regime, "N/A")
+                score = data.get('score', 0) or 0.0
+                state = data.get('state', 'UNKNOWN')
+                trial_num = data.get('number', -1)
+                balance = data.get('final_balance', 0)
+                params_str = ", ".join([f"{k.split('_')[-1]}={v:.3f}" if isinstance(v, float) else f"{k.split('_')[-1]}={v}" for k, v in data.get("params", {}).items()])
+
+                log_line = Text.from_markup(
+                    f"[{datetime.now():%H:%M:%S}] "
+                    f"[[{REGIME_COLORS[regime]}]]{regime_name:<15}[/]] "
+                    f"Trial {trial_num:<4} | "
+                    f"Score: {score:10.4f} | "
+                    f"Balance: ${balance:9,.2f} | "
+                    f"Params: [dim]({params_str})[/dim]"
+                )
+                trial_log.write(log_line)
+
+            except (json.JSONDecodeError, IOError, KeyError) as e:
+                trial_log.write(f"[{datetime.now():%H:%M:%S}] Error processing file {Path(file_path).name}: {e}")
+                continue
+
 if __name__ == "__main__":
-    # This part is important for the `run.py` script to be able to launch it
-    # We add a small delay to ensure the directory can be cleaned up first if needed.
     time.sleep(1)
     app = OptimizerDashboard()
     app.run()

@@ -16,6 +16,10 @@ from jules_bot.core_logic.strategy_rules import StrategyRules
 from jules_bot.core_logic.capital_manager import CapitalManager
 from jules_bot.core_logic.dynamic_parameters import DynamicParameters
 from jules_bot.bot.situational_awareness import SituationalAwareness
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from rich.text import Text
 from jules_bot.utils.logger import logger
 from jules_bot.core.schemas import TradePoint
 from jules_bot.research.feature_engineering import add_all_features
@@ -288,8 +292,100 @@ class Backtester:
             else:
                 logger.warning(f"Unknown order type in backtest log: {trade_data.get('order_type')}")
 
+    def _display_results_table(self, results: dict):
+        """
+        Uses the rich library to display backtest results in a clean, formatted table.
+        """
+        console = Console()
+
+        # Helper to format values
+        def format_value(value, type):
+            if value is None or (isinstance(value, Decimal) and not value.is_finite()):
+                return "[dim]---[/dim]"
+            if type == 'money':
+                return f"${value:,.2f}"
+            if type == 'percent':
+                style = "bold green" if value > 0 else "bold red" if value < 0 else "default"
+                return f"[{style}]{value:.2f}%[/{style}]"
+            if type == 'percent_dd':
+                return f"{value * 100:.2f}%"
+            if type == 'ratio':
+                return f"{value:.2f}"
+            if type == 'string':
+                return str(value)
+            if type == 'integer':
+                return str(value)
+            return str(value)
+
+        # --- Header Panel ---
+        if not self.feature_data.empty:
+            start_date = self.feature_data.index[0].date()
+            end_date = self.feature_data.index[-1].date()
+            header_text = f"Period: [bold]{start_date}[/] to [bold]{end_date}[/]\nRun ID: [dim]{self.run_id}[/dim]"
+        else:
+            header_text = f"Run ID: [dim]{self.run_id}[/dim]"
+
+        console.print(Panel(header_text, title="[bold cyan]Backtest Results[/bold cyan]", expand=False))
+
+        # --- Main Tables ---
+        perf_table = Table(title="[bold]Performance Summary[/bold]", show_header=False, box=None, padding=(0, 2))
+        perf_table.add_column(style="cyan")
+        perf_table.add_column(style="bold", justify="right")
+
+        trade_table = Table(title="[bold]Trade Analysis[/bold]", show_header=False, box=None, padding=(0, 2))
+        trade_table.add_column(style="cyan")
+        trade_table.add_column(style="bold", justify="right")
+
+        risk_table = Table(title="[bold]Risk & Return Analysis[/bold]", show_header=False, box=None, padding=(0, 2))
+        risk_table.add_column(style="cyan")
+        risk_table.add_column(style="bold", justify="right")
+
+        # --- Populating Data ---
+        # Performance
+        pnl_style = "bold green" if results['net_pnl_usd'] > 0 else "bold red" if results['net_pnl_usd'] < 0 else "default"
+        perf_table.add_row("Initial Balance", format_value(results['initial_balance'], 'money'))
+        perf_table.add_row("Final Balance", format_value(results['final_balance'], 'money'))
+        perf_table.add_row("Net PnL", f"[{pnl_style}]{format_value(results['net_pnl_usd'], 'money')} ({format_value(results['net_pnl_pct'], 'percent')})[/{pnl_style}]")
+        perf_table.add_row("Total Realized PnL", format_value(results['total_realized_pnl'], 'money'))
+
+        # Trades
+        profit_factor = results['profit_factor']
+        if profit_factor.is_infinite():
+            profit_factor_str = "[bold green]∞ (No Losses)[/bold green]"
+        else:
+            profit_factor_str = format_value(profit_factor, 'ratio')
+
+        duration_sec = results['avg_trade_duration_seconds']
+        if duration_sec > 0:
+            days, remainder = divmod(duration_sec, 86400)
+            hours, remainder = divmod(remainder, 3600)
+            minutes, _ = divmod(remainder, 60)
+            duration_str = f"{int(days)}d {int(hours)}h {int(minutes)}m"
+        else:
+            duration_str = "[dim]---[/dim]"
+
+        trade_table.add_row("Total Buy Trades", format_value(results['buy_trades_count'], 'integer'))
+        trade_table.add_row("Total Sell Trades", format_value(results['sell_trades_count'], 'integer'))
+        trade_table.add_row("Win Rate", format_value(results['win_rate'], 'percent'))
+        trade_table.add_row("Profit Factor", profit_factor_str)
+        trade_table.add_row("Avg. Gain %", format_value(results['avg_gain_pct'], 'percent'))
+        trade_table.add_row("Avg. Loss %", format_value(results['avg_loss_pct'], 'percent'))
+        trade_table.add_row("Avg. Trade Duration", duration_str)
+        trade_table.add_row("Total Fees Paid", format_value(results['total_fees_usd'], 'money'))
+
+        # Risk
+        risk_table.add_row("Max Drawdown", format_value(results['max_drawdown'], 'percent_dd'))
+        risk_table.add_row("Sharpe Ratio (Ann.)", format_value(results['sharpe_ratio'], 'ratio'))
+        risk_table.add_row("Sortino Ratio (Ann.)", format_value(results['sortino_ratio'], 'ratio'))
+        risk_table.add_row("Calmar Ratio (Ann.)", format_value(results['calmar_ratio'], 'ratio'))
+
+        # --- Print Tables ---
+        console.print(perf_table)
+        console.print(trade_table)
+        console.print(risk_table)
+
     def _generate_and_save_summary(self, open_positions: dict, portfolio_history: list[Decimal]):
-        logger.info("--- Generating and saving backtest summary ---")
+        logger.info("--- Generating backtest summary ---")
 
         all_trades_for_run = self.db_manager.get_trades_by_run_id(self.run_id)
         
@@ -335,7 +431,6 @@ class Backtester:
 
                 win_rate = (Decimal(len(winning_trades)) / Decimal(sell_trades_count)) * 100 if sell_trades_count > 0 else Decimal(0)
 
-                # Link sells to buys to calculate durations and percentage gains/losses
                 merged_trades = pd.merge(
                     sell_trades,
                     buy_trades,
@@ -345,22 +440,17 @@ class Backtester:
                 )
 
                 if not merged_trades.empty:
-                    # BUG FIX: Ensure timestamps are datetime objects before subtraction
                     merged_trades['timestamp_sell'] = pd.to_datetime(merged_trades['timestamp_sell'])
                     merged_trades['timestamp_buy'] = pd.to_datetime(merged_trades['timestamp_buy'])
-
                     durations = merged_trades['timestamp_sell'] - merged_trades['timestamp_buy']
-                    avg_trade_duration = durations.mean()
+                    avg_trade_duration = durations.mean() if not durations.empty else timedelta(0)
 
-                    # Calculate gain/loss percentage relative to the initial investment of that trade
                     merged_trades['pnl_pct'] = merged_trades.apply(
                         lambda row: (row['realized_pnl_usd_sell'] / row['usd_value_buy']) * 100 if row['usd_value_buy'] > 0 else Decimal(0), axis=1
                     )
                     avg_gain_pct = Decimal(merged_trades[merged_trades['pnl_pct'] > 0]['pnl_pct'].mean() or 0)
-
                     losing_trades_pct = merged_trades[merged_trades['pnl_pct'] < 0]['pnl_pct']
                     avg_loss_pct = abs(Decimal(losing_trades_pct.mean())) if not losing_trades_pct.empty else Decimal(0)
-
 
                 gross_profit = winning_trades['realized_pnl_usd'].sum()
                 gross_loss = abs(losing_trades['realized_pnl_usd'].sum())
@@ -372,70 +462,39 @@ class Backtester:
         sortino_ratio = Decimal(0)
         calmar_ratio = Decimal(0)
 
-        if portfolio_history:
+        if portfolio_history and len(portfolio_history) > 1:
             portfolio_df = pd.DataFrame(portfolio_history, columns=['value'])
-            # Convert Decimal to float for numpy/pandas stats, but be careful with division
             portfolio_float = portfolio_df['value'].astype(float)
-            portfolio_df['returns'] = portfolio_float.pct_change().fillna(0)
 
             # Max Drawdown
             peak = portfolio_float.expanding(min_periods=1).max()
             drawdown = (portfolio_float - peak) / peak
-            max_drawdown_float = abs(drawdown.min())
-            max_drawdown = Decimal(str(max_drawdown_float))
+            max_drawdown = Decimal(str(abs(drawdown.min()))) if not drawdown.empty else Decimal(0)
 
-            # Sharpe Ratio (assuming daily returns if data is granular, and 0 risk-free rate)
-            # To be more accurate, we should resample to daily returns
-            daily_returns = portfolio_float.resample('D').last().pct_change().dropna() if isinstance(portfolio_df.index, pd.DatetimeIndex) else portfolio_df['returns']
-            if len(daily_returns) > 1 and daily_returns.std() != 0:
+            # Ratios
+            # Ensure index is datetime for resampling
+            if not isinstance(self.feature_data.index, pd.DatetimeIndex):
+                # If not, we can't reliably calculate annualized ratios.
+                # We'll use the raw returns but this is less accurate.
+                daily_returns = portfolio_float.pct_change().dropna()
+            else:
+                 # Resample to daily returns to annualize correctly
+                daily_returns = portfolio_float.resample('D', on=self.feature_data.index[:len(portfolio_float)]).last().pct_change().dropna()
+
+            if not daily_returns.empty and daily_returns.std() != 0:
                 sharpe_ratio = Decimal(str(np.sqrt(365) * daily_returns.mean() / daily_returns.std()))
 
-            # Sortino Ratio
-            downside_returns = daily_returns[daily_returns < 0]
-            if len(downside_returns) > 1:
-                downside_std = downside_returns.std()
-                if downside_std != 0:
-                    sortino_ratio = Decimal(str(np.sqrt(365) * daily_returns.mean() / downside_std))
+                downside_returns = daily_returns[daily_returns < 0]
+                if not downside_returns.empty:
+                    downside_std = downside_returns.std()
+                    if downside_std != 0:
+                        sortino_ratio = Decimal(str(np.sqrt(365) * daily_returns.mean() / downside_std))
 
-            # Calmar Ratio
             if max_drawdown > 0:
                 total_days = (self.feature_data.index[-1] - self.feature_data.index[0]).days
                 if total_days > 0:
                     annualized_return = (final_balance / initial_balance) ** (Decimal('365.0') / Decimal(total_days)) - 1
-                    calmar_ratio = annualized_return / max_drawdown
-
-        # --- Logging ---
-        logger.info("="*30 + " BACKTEST RESULTS " + "="*30)
-        if not self.feature_data.empty:
-            logger.info(f" Period: {self.feature_data.index[0].date()} to {self.feature_data.index[-1].date()}")
-        logger.info(f" Backtest Run ID: {self.run_id}")
-
-        logger.info("\n--- Resumo da Performance ---")
-        logger.info(f" Saldo Inicial:     ${initial_balance:,.2f}")
-        logger.info(f" Saldo Final:       ${final_balance:,.2f}")
-        logger.info(f" Lucro/Prejuízo Líquido: ${net_pnl:,.2f} ({net_pnl_percent:.2f}%)")
-        logger.info(f" Lucro Realizado:   ${total_realized_pnl:,.2f}")
-
-        logger.info("\n--- Análise de Trades ---")
-        logger.info(f" Total de Trades (Compra): {buy_trades_count}")
-        logger.info(f" Total de Trades (Venda):  {sell_trades_count}")
-        logger.info(f" Taxa de Sucesso:          {win_rate:.2f}%")
-        if profit_factor.is_infinite():
-            logger.info(" Fator de Lucro:           Inf. (Sem Perdas)")
-        else:
-            logger.info(f" Fator de Lucro:           {profit_factor:.2f}")
-        logger.info(f" Ganho Médio por Trade:    {avg_gain_pct:.2f}%")
-        logger.info(f" Perda Média por Trade:    {avg_loss_pct:.2f}%")
-        avg_trade_duration_str = str(avg_trade_duration).split('.')[0] if pd.notna(avg_trade_duration) and avg_trade_duration.total_seconds() > 0 else 'N/A'
-        logger.info(f" Duração Média do Trade:   {avg_trade_duration_str}")
-        logger.info(f" Total de Taxas Pagas:     ${total_fees_usd:,.2f}")
-
-        logger.info("\n--- Análise de Risco ---")
-        logger.info(f" Drawdown Máximo:          {max_drawdown * 100:.2f}%")
-        logger.info(f" Sharpe Ratio (Anualiz.):  {sharpe_ratio:.2f}")
-        logger.info(f" Sortino Ratio (Anualiz.): {sortino_ratio:.2f}")
-        logger.info(f" Calmar Ratio (Anualiz.):  {calmar_ratio:.2f}")
-        logger.info("="*80)
+                    calmar_ratio = annualized_return / max_drawdown if max_drawdown > 0 else Decimal(0)
 
         results = {
             "initial_balance": initial_balance,
@@ -456,6 +515,10 @@ class Backtester:
             "sortino_ratio": sortino_ratio,
             "calmar_ratio": calmar_ratio,
         }
+
+        # Display the results in a clean table format
+        self._display_results_table(results)
+
         return results
 
 def trade_point_to_dict(self):

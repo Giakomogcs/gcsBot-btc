@@ -46,3 +46,4 @@ pytz
 # --- Testing ---
 pytest
 aiocsv
+psutil

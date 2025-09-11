@@ -849,32 +849,64 @@ def _run_optimizer(bot_name: str, days: int):
 def backtest(
     bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="O nome do bot para executar."),
     days: int = typer.Option(30, "--days", "-d", help="Número de dias de dados recentes para o backtest."),
-    optimize: bool = typer.Option(False, "--optimize", help="Rodar o otimizador para encontrar os melhores parâmetros por regime de mercado.")
+    optimize: bool = typer.Option(False, "--optimize", help="Rodar o otimizador para encontrar os melhores parâmetros por regime de mercado."),
+    use_genius: bool = typer.Option(False, "--use-genius", help="Rodar backtests usando os .env de resultados do Genius Optimizer.")
 ):
-    """Executa um backtest, com a opção de otimizar os parâmetros."""
+    """Executa um backtest, com a opção de otimizar ou usar resultados da otimização."""
     final_bot_name = _setup_bot_run(bot_name)
+
+    if optimize and use_genius:
+        print("❌ Erro: As opções '--optimize' e '--use-genius' são mutuamente exclusivas.")
+        raise typer.Exit(1)
     
-    print("\n---  preparazione dei dati ---")
+    print("\n--- Etapa 1 de 2: Preparando dados históricos ---")
     if not run_command_in_container(["scripts/prepare_backtest_data.py", str(days)], final_bot_name):
         print("❌ Falha na preparação dos dados. Abortando backtest.")
         return
 
     if optimize:
-        # This command now just launches the optimizer in the background.
-        # The user must run a separate backtest command later with the results.
         _run_optimizer(final_bot_name, days)
-        # After launching, we exit. The user will be informed by _run_optimizer.
         raise typer.Exit()
 
+    if use_genius:
+        print("\n--- Etapa 2 de 2: Rodando backtests com os resultados do Genius Optimizer ---")
+        genius_dir = "optimize/genius"
+        env_files = glob.glob(os.path.join(genius_dir, ".env.*"))
+
+        if not env_files:
+            print(f"❌ Nenhum arquivo de resultado do Genius Optimizer (.env.*) encontrado em '{genius_dir}'.")
+            print("   Você precisa rodar a otimização primeiro com a flag '--optimize'.")
+            raise typer.Exit(1)
+
+        print(f"✅ Encontrados {len(env_files)} arquivos de resultado. Rodando um backtest para cada um...")
+
+        for env_file in sorted(env_files):
+            regime_name = os.path.basename(env_file).replace('.env.', '').upper()
+            print("\n" + "="*80)
+            print(f"⚡️ INICIANDO BACKTEST PARA O REGIME: {regime_name} ⚡️")
+            print(f"   (usando arquivo de parâmetros: {env_file})")
+            print("="*80 + "\n")
+
+            # Rodar o backtest com o arquivo .env específico do regime
+            success = run_command_in_container(
+                ["scripts/run_backtest.py", str(days)],
+                final_bot_name,
+                extra_env_files=[env_file]
+            )
+
+            if not success:
+                print(f"⚠️  Backtest para o regime {regime_name} falhou. Verifique os logs acima.")
+
+            print(f"\n--- ✅ Backtest para o regime {regime_name} finalizado ---")
+
+        print("\n🎉 Todos os backtests baseados no Genius Optimizer foram concluídos.")
+
     else:
-        print(f"🚀 Iniciando execução de backtest padrão para {days} dias para o bot '{final_bot_name}'...")
-        print("\n--- Etapa 2 de 2: Rodando o backtest ---")
-
-    if not run_command_in_container(["scripts/run_backtest.py", str(days)], final_bot_name, extra_env_files=None):
-        print("❌ Falha na execução do backtest.")
-        return
-
-    print("\n✅ Backtest finalizado com sucesso.")
+        print(f"\n--- Etapa 2 de 2: Rodando backtest padrão para {days} dias ---")
+        if not run_command_in_container(["scripts/run_backtest.py", str(days)], final_bot_name, extra_env_files=None):
+            print("❌ Falha na execução do backtest.")
+            return
+        print("\n✅ Backtest finalizado com sucesso.")
 
 @app.command("clean")
 def clean():

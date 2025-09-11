@@ -121,7 +121,7 @@ class GeniusOptimizer:
         logger.info(f"Best score: {study.best_value}")
         logger.info(f"Best params: {study.best_params}")
 
-        save_best_params_for_regime(study, regime)
+        save_best_params_for_regime(study, regime, self.bot_name)
         generate_importance_report(study, regime)
 
     def run(self):
