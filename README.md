@@ -394,17 +394,18 @@ python run.py backtest [OPÇÕES]
     ```
 
 2.  **Backtest com Otimização:**
-    Ativa o fluxo de otimização profissional.
+    Ativa o fluxo de otimização profissional com um dashboard de monitoramento em tempo real.
     ```bash
     python run.py backtest --optimize
     ```
     - **O que acontece:**
         1.  **Configuração Interativa:** O script fará perguntas para configurar a otimização (número de testes, perfil de carteira, etc.).
-        2.  **Otimização:** O Optuna rodará vários backtests em segundo plano, de forma eficiente (usando "pruning" para descartar testes ruins), para encontrar a melhor combinação de parâmetros. O progresso é salvo em `jules_bot_optimization.db`.
-        3.  **Salvar Resultados:** Os melhores parâmetros são salvos automaticamente no arquivo `.best_params.env`.
-        4.  **Backtest Final:** Um último backtest, com relatório detalhado e limpo, é executado usando os parâmetros do `.best_params.env`.
+        2.  **Dashboard de Otimização:** Um painel de controle (TUI) será iniciado no seu terminal, mostrando o progresso de todos os jobs de otimização em tempo real.
+        3.  **Otimização Paralela:** O Optuna rodará vários backtests em segundo plano, de forma eficiente (usando "pruning" para descartar testes ruins), para encontrar a melhor combinação de parâmetros. O progresso é salvo em `optimize/jules_bot_optimization.db` e pode ser retomado de onde parou.
+        4.  **Salvar Resultados:** Os melhores parâmetros são salvos automaticamente no arquivo `optimize/.best_params.env`.
+        5.  **Backtest Final:** Um último backtest, com relatório detalhado e limpo, é executado usando os parâmetros do `optimize/.best_params.env`.
 
-Este fluxo integrado garante que você possa encontrar e testar a melhor estratégia de forma robusta e profissional com um único comando.
+Este fluxo integrado garante que você possa encontrar e testar a melhor estratégia de forma robusta e profissional com um único comando, agora com visibilidade total do processo.
 
 ### Scripts de Utilidade
 
