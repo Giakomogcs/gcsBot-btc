@@ -365,6 +365,16 @@ def trade(bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help=
         raise typer.Exit(1)
     was_interactive = bot_name is None
     final_bot_name = _setup_bot_run(bot_name)
+
+    # Check if an optimizer for this bot is already running.
+    optimizer_process_name = f"{final_bot_name}-optimizer"
+    existing_optimizer = process_manager.get_bot_by_name(optimizer_process_name)
+    if existing_optimizer:
+        print(f"❌ Erro: Uma otimização para o bot '{final_bot_name}' já está em execução.")
+        print("   Você não pode iniciar o bot em modo TRADE enquanto a otimização está ativa.")
+        print(f"   Para parar a otimização, use: python run.py stop-bot --name {optimizer_process_name}")
+        raise typer.Exit(1)
+
     mode = "trade"
     final_detached = detached
     if was_interactive and final_detached is None:
@@ -392,6 +402,16 @@ def test(bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="
         raise typer.Exit(1)
     was_interactive = bot_name is None
     final_bot_name = _setup_bot_run(bot_name)
+
+    # Check if an optimizer for this bot is already running.
+    optimizer_process_name = f"{final_bot_name}-optimizer"
+    existing_optimizer = process_manager.get_bot_by_name(optimizer_process_name)
+    if existing_optimizer:
+        print(f"❌ Erro: Uma otimização para o bot '{final_bot_name}' já está em execução.")
+        print("   Você não pode iniciar o bot em modo TEST enquanto a otimização está ativa.")
+        print(f"   Para parar a otimização, use: python run.py stop-bot --name {optimizer_process_name}")
+        raise typer.Exit(1)
+
     mode = "test"
     final_detached = detached
     if was_interactive and final_detached is None:
@@ -790,6 +810,14 @@ def _run_optimizer(bot_name: str, days: int):
     """
     Launches the Genius Optimizer in a background container.
     """
+    # Check if a bot with the same name is already running in test/trade mode.
+    existing_bot_process = process_manager.get_bot_by_name(bot_name)
+    if existing_bot_process and existing_bot_process.process_type == 'bot':
+        print(f"❌ Erro: O bot '{bot_name}' já está em execução no modo '{existing_bot_process.bot_mode.upper()}'.")
+        print("   Você não pode iniciar uma otimização para um bot que já está ativo.")
+        print(f"   Para parar o bot, use: python run.py stop-bot --name {bot_name}")
+        raise typer.Exit(1)
+
     # 1. Get settings from the user
     settings = _get_optimizer_settings()
 

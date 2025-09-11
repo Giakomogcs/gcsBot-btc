@@ -74,7 +74,9 @@ def main(
         logger.info(f"   - Trials per Regime: {n_trials}")
         logger.info(f"   - Active Parameters: {list(active_params.keys())}")
 
-        config_manager.initialize(bot_name)
+        # The config_manager is a singleton that initializes itself on import,
+        # using the BOT_NAME environment variable. No explicit re-initialization is needed.
+        # config_manager.initialize(bot_name) # This was the source of the crash.
 
         # 1. Run baseline backtest before starting the optimization
         run_baseline_backtest(bot_name, days)
