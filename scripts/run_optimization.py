@@ -170,7 +170,17 @@ if __name__ == "__main__":
         default=None,
         help="Specify the initial balance for Smart Tune mode. Overrides config.ini."
     )
+    parser.add_argument(
+        "--bot-name",
+        type=str,
+        default="jules_bot",
+        help="The name of the bot configuration to use."
+    )
     args = parser.parse_args()
+
+    # Initialize the global config manager with the specified bot name
+    # This is crucial for components like PostgresManager that rely on it.
+    config_manager.initialize(args.bot_name)
 
     if not args.smart_tune and not args.config:
         logger.error("You must either specify a --config file for manual mode or use --smart-tune for automatic mode.")
