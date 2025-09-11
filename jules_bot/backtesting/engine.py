@@ -333,6 +333,10 @@ class Backtester:
                 )
 
                 if not merged_trades.empty:
+                    # BUG FIX: Ensure timestamps are datetime objects before subtraction
+                    merged_trades['timestamp_sell'] = pd.to_datetime(merged_trades['timestamp_sell'])
+                    merged_trades['timestamp_buy'] = pd.to_datetime(merged_trades['timestamp_buy'])
+
                     durations = merged_trades['timestamp_sell'] - merged_trades['timestamp_buy']
                     avg_trade_duration = durations.mean()
 
