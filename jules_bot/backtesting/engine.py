@@ -34,38 +34,48 @@ class BacktestTrade:
         return self.__dict__
 
 class Backtester:
-    def __init__(self, db_manager: PostgresManager, days: int = None, start_date: str = None, end_date: str = None, config_manager=None):
+    def __init__(self, db_manager: PostgresManager, days: int = None, start_date: str = None, end_date: str = None, config_manager=None, data: pd.DataFrame = None):
         if config_manager is None:
             from jules_bot.utils.config_manager import config_manager as global_config_manager
             config_manager = global_config_manager
 
         self.run_id = f"backtest_{uuid.uuid4()}"
         self.db_manager = db_manager
-        
-        log_msg = ""
-        if days:
-            self.start_date_str = f"-{days}d"
-            self.end_date_str = "now()"
-            log_msg = f"Initializing new backtest run with ID: {self.run_id} for the last {days} days."
-        elif start_date and end_date:
-            self.start_date_str = f"{start_date}T00:00:00Z"
-            self.end_date_str = f"{end_date}T23:59:59Z"
-            log_msg = f"Initializing new backtest run with ID: {self.run_id} from {start_date} to {end_date}."
-        else:
-            raise ValueError("Backtester must be initialized with either 'days' or both 'start_date' and 'end_date'.")
-
-        logger.info(log_msg)
         self.trade_logger = TradeLogger(mode='backtest', db_manager=self.db_manager)
         symbol = config_manager.get('APP', 'symbol')
-        
-        price_data = self.db_manager.get_price_data(measurement=symbol, start_date=self.start_date_str, end_date=self.end_date_str)
-        if price_data.empty:
-            raise ValueError("No price data found for the specified period. Cannot run backtest.")
 
-        logger.info("Calculating features for the entire backtest period...")
-        self.feature_data = add_all_features(price_data, live_mode=False).dropna()
-        logger.info("Feature calculation complete.")
+        if data is not None:
+            logger.info(f"Initializing backtest run {self.run_id} with pre-loaded data ({len(data)} rows).")
+            self.feature_data = data
+            # Data is already processed, so we can skip fetching and feature calculation.
+        else:
+            log_msg = ""
+            if days:
+                self.start_date_str = f"-{days}d"
+                self.end_date_str = "now()"
+                log_msg = f"Initializing new backtest run with ID: {self.run_id} for the last {days} days."
+            elif start_date and end_date:
+                self.start_date_str = f"{start_date}T00:00:00Z"
+                self.end_date_str = f"{end_date}T23:59:59Z"
+                log_msg = f"Initializing new backtest run with ID: {self.run_id} from {start_date} to {end_date}."
+            else:
+                raise ValueError("Backtester must be initialized with 'days' or 'start_date'/'end_date' if no data is provided.")
 
+            logger.info(log_msg)
+            price_data = self.db_manager.get_price_data(measurement=symbol, start_date=self.start_date_str, end_date=self.end_date_str)
+            if price_data.empty:
+                raise ValueError("No price data found for the specified period. Cannot run backtest.")
+
+            logger.info("Calculating features for the entire backtest period...")
+            features = add_all_features(price_data, live_mode=False).dropna()
+            logger.info("Feature calculation complete.")
+
+            logger.info("Initializing the Situational Awareness model...")
+            sa_model = SituationalAwareness()
+            self.feature_data = sa_model.transform(features)
+            logger.info("Market regimes calculated for the entire backtest period.")
+
+        # Common initialization logic
         initial_balance_str = config_manager.get('BACKTEST', 'initial_balance') or '1000.0'
         commission_fee_str = config_manager.get('STRATEGY_RULES', 'commission_rate') or '0.001'
         self.mock_trader = MockTrader(
@@ -75,17 +85,9 @@ class Backtester:
         )
         self.strategy_rules = StrategyRules(config_manager)
         self.capital_manager = CapitalManager(config_manager, self.strategy_rules, db_manager=self.db_manager)
-
-        # --- Dynamic Strategy Components ---
         self.dynamic_params = DynamicParameters(config_manager)
-        
-        logger.info("Initializing the Situational Awareness model...")
-        self.sa_model = SituationalAwareness()
-        
-        self.feature_data = self.sa_model.transform(self.feature_data)
-        logger.info("Market regimes calculated for the entire backtest period.")
 
-    def run(self, trial: 'optuna.Trial' = None):
+    def run(self, trial: 'optuna.Trial' = None, return_full_results: bool = False):
         logger.info(f"--- Starting backtest run {self.run_id} ---")
 
         strategy_rules = self.strategy_rules
@@ -255,9 +257,15 @@ class Backtester:
                     all_trades_for_run.append(BacktestTrade(**trade_data))
 
         self._log_trades_to_db(all_trades_for_run)
-        final_balance = self._generate_and_save_summary(open_positions, portfolio_history)
+        results = self._generate_and_save_summary(open_positions, portfolio_history)
         logger.info(f"--- Backtest {self.run_id} finished ---")
-        return final_balance
+
+        if return_full_results:
+            return results
+        else:
+            # For backward compatibility with the old optimizer, return only the final balance as a float.
+            final_balance = results.get("final_balance", Decimal("0.0"))
+            return float(final_balance)
 
     def _log_trades_to_db(self, trades: list):
         """
@@ -429,7 +437,26 @@ class Backtester:
         logger.info(f" Calmar Ratio (Anualiz.):  {calmar_ratio:.2f}")
         logger.info("="*80)
 
-        return final_balance
+        results = {
+            "initial_balance": initial_balance,
+            "final_balance": final_balance,
+            "net_pnl_usd": net_pnl,
+            "net_pnl_pct": net_pnl_percent,
+            "total_realized_pnl": total_realized_pnl,
+            "buy_trades_count": buy_trades_count,
+            "sell_trades_count": sell_trades_count,
+            "win_rate": win_rate,
+            "profit_factor": profit_factor,
+            "avg_gain_pct": avg_gain_pct,
+            "avg_loss_pct": avg_loss_pct,
+            "avg_trade_duration_seconds": avg_trade_duration.total_seconds() if pd.notna(avg_trade_duration) else 0,
+            "total_fees_usd": total_fees_usd,
+            "max_drawdown": max_drawdown,
+            "sharpe_ratio": sharpe_ratio,
+            "sortino_ratio": sortino_ratio,
+            "calmar_ratio": calmar_ratio,
+        }
+        return results
 
 def trade_point_to_dict(self):
     from dataclasses import asdict

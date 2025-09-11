@@ -665,108 +665,90 @@ def validate(bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", he
     else:
         print("✅ Script de validação concluído.")
 
-def _get_optimizer_settings_interactively(jobs: int) -> tuple[int, str]:
+def _get_optimizer_settings() -> dict:
+    """Gets settings for the Genius Optimizer interactively."""
     if questionary is None:
         print("❌ A biblioteca 'questionary' é necessária para a otimização. Instale com 'pip install questionary'")
         raise typer.Exit(1)
 
-    print("\n--- Configurações da Otimização ---")
+    settings = {}
+    print("\n--- 🧠 Configurações do Otimizador ---")
+
     trials_str = questionary.text(
-        "Quantas combinações de parâmetros (trials) no total você deseja testar?",
-        default="100",
+        "Quantas combinações de parâmetros (trials) você deseja testar por regime?",
+        default="50",
         validate=lambda text: text.isdigit() and int(text) > 0 or "Por favor, insira um número inteiro positivo."
     ).ask()
     if not trials_str: raise typer.Exit()
-    n_trials = int(trials_str)
+    settings["n_trials"] = int(trials_str)
 
-    profile_map = {
-        "Iniciante ($100)": "beginner",
-        "Intermediário ($1,000)": "intermediate",
-        "Avançado ($10,000)": "advanced"
+    param_groups = {
+        "USE_DYNAMIC_TRAILING_STOP": "Lógica de Trailing Stop Dinâmico",
+        "USE_REVERSAL_BUY_STRATEGY": "Lógica de Compra por Reversão",
+        "DYNAMIC_TRAIL": "Parâmetros do Trailing Stop",
+        "REVERSAL_BUY": "Parâmetros da Compra por Reversão",
+        "SIZING": "Parâmetros de Dimensionamento de Ordem",
+        "DIFFICULTY": "Parâmetros de Dificuldade de Compra"
     }
-    profile_choice = questionary.select(
-        "Qual o perfil de carteira para a otimização?",
-        choices=list(profile_map.keys())
-    ).ask()
-    if not profile_choice: raise typer.Exit()
-    wallet_profile = profile_map[profile_choice]
 
-    return n_trials, wallet_profile
+    selected_keys = questionary.checkbox(
+        "Selecione os grupos de parâmetros para otimizar:",
+        choices=[questionary.Choice(title=v, value=k) for k, v in param_groups.items()],
+        default=",".join(param_groups.keys())
+    ).ask()
+
+    if not selected_keys: raise typer.Exit()
+    settings["active_params"] = {key: True for key in selected_keys}
+    return settings
+
+def _run_optimizer(bot_name: str, days: int) -> Optional[str]:
+    """Runs the full Genius Optimizer workflow."""
+    from jules_bot.genius_optimizer.genius_optimizer import GeniusOptimizer
+
+    settings = _get_optimizer_settings()
+
+    print("\n--- 🧠 Iniciando Otimizador ---")
+    print(f"   - Bot: {bot_name}, Dias: {days}, Trials por Regime: {settings['n_trials']}")
+    print(f"   - Parâmetros Ativos: {list(settings['active_params'].keys())}")
+
+    if not typer.confirm("Deseja continuar com a otimização?"):
+        raise typer.Exit()
+
+    try:
+        genius_optimizer = GeniusOptimizer(
+            bot_name=bot_name,
+            days=days,
+            n_trials=settings['n_trials'],
+            active_params=settings['active_params']
+        )
+        genius_optimizer.run()
+        return "optimize/genius/.best_params.genius.env"
+    except Exception as e:
+        print(f"❌ Ocorreu um erro catastrófico durante a execução do Otimizador: {e}")
+        traceback.print_exc()
+        return None
 
 @app.command()
 def backtest(
     bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="O nome do bot para executar."),
     days: int = typer.Option(30, "--days", "-d", help="Número de dias de dados recentes para o backtest."),
-    optimize: bool = typer.Option(False, "--optimize", help="Rodar o otimizador para encontrar os melhores parâmetros antes do backtest final."),
-    jobs: int = typer.Option(os.cpu_count() or 1, "--jobs", "-j", help="Número de processos de otimização para rodar em paralelo. Padrão: usa todos os núcleos de CPU disponíveis.")
+    optimize: bool = typer.Option(False, "--optimize", help="Rodar o otimizador para encontrar os melhores parâmetros por regime de mercado.")
 ):
-    """Executa um backtest, com a opção de rodar um otimizador de parâmetros antes."""
+    """Executa um backtest, com a opção de otimizar os parâmetros."""
     final_bot_name = _setup_bot_run(bot_name)
     env_files_for_final_run = None
 
     if optimize:
+        # The TUI for the old optimizer is no longer needed.
+        # We might add a new one for the Genius optimizer in the future.
         _clear_tui_files()
-        n_trials, wallet_profile = _get_optimizer_settings_interactively(jobs)
 
-        print("\n--- Iniciando Otimização ---")
-        print(f"   - Bot: {final_bot_name}, Dias: {days}, Total de Trials: {n_trials}, Perfil: {wallet_profile}, Processos Paralelos: {jobs}")
-
-        if typer.confirm("Limpar resultados de otimizações anteriores?", default=False):
-             print("🗑️ Limpando dados de backtests anteriores...")
-             run_command_in_container(["scripts/clear_backtest_trades.py"], final_bot_name)
-
-        if not typer.confirm("Deseja continuar com a otimização?"):
-            raise typer.Exit()
-
-        print("\n--- Etapa 1 de 3: Preparando dados históricos ---")
-        if not run_command_in_container(["scripts/prepare_backtest_data.py", str(days)], final_bot_name):
-            print("❌ Falha na preparação dos dados. Abortando.")
-            return
-
-        print(f"\n--- Etapa 2 de 3: Rodando a otimização com {jobs} processo(s) em paralelo ---")
-
-        # Iniciar o dashboard TUI em um processo separado
-        tui_process = None
-        try:
-            print("   -> Iniciando Dashboard de Otimização...")
-            tui_env = os.environ.copy()
-            tui_command = [sys.executable, "tui/optimizer_dashboard.py"]
-            tui_process = subprocess.Popen(tui_command, env=tui_env)
-            time.sleep(2) # Dá um tempo para a TUI iniciar
-        except Exception as e:
-            print(f"⚠️  Aviso: Não foi possível iniciar o dashboard de otimização: {e}")
-
-        base_trials = n_trials // jobs
-        remainder = n_trials % jobs
-
-        processes = []
-        for i in range(jobs):
-            trials_for_job = base_trials + (1 if i < remainder else 0)
-            if trials_for_job == 0:
-                continue
-
-            optimizer_args = ["scripts/run_optimizer.py", final_bot_name, str(trials_for_job), str(days), wallet_profile]
-            print(f"   -> Iniciando job #{i+1} com {trials_for_job} trials...")
-            p = run_command_in_container(optimizer_args, final_bot_name, non_blocking=True, suppress_output=True)
-            processes.append(p)
-
-        for p in processes:
-            p.wait()
-
-        if tui_process:
-            print("\n🛑 Encerrando o Dashboard de Otimização...")
-            tui_process.terminate()
-            try:
-                tui_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                tui_process.kill()
-
-        _save_best_params(final_bot_name)
-
-        print("\n✅ Otimização finalizada.")
-        env_files_for_final_run = ["optimize/.best_params.env"]
-
-        print("\n--- Etapa 3 de 3: Rodando Backtest Final com os Melhores Parâmetros ---")
+        env_path = _run_optimizer(final_bot_name, days)
+        if not env_path:
+            print("❌ A otimização falhou. Abortando backtest final.")
+            raise typer.Exit(1)
+        env_files_for_final_run = [env_path]
+        print("\n--- 🧠 Etapa Final: Rodando Backtest com os Parâmetros Otimizados ---")
 
     else:
         print(f"🚀 Iniciando execução de backtest padrão para {days} dias para o bot '{final_bot_name}'...")

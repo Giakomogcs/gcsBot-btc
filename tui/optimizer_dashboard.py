@@ -1,125 +1,144 @@
 import json
+import glob
 from pathlib import Path
-from rich.pretty import Pretty
+from rich.text import Text
 from datetime import datetime
 from textual.app import App, ComposeResult
-from textual.widgets import Header, Footer, DataTable, Static
-from textual.widgets._data_table import CellDoesNotExist
-from textual.containers import Container, VerticalScroll
+from textual.widgets import Header, Footer, DataTable, Static, Log
+from textual.containers import Container, Vertical
 from textual.timer import Timer
+import time
 
 TUI_FILES_DIR = Path(".tui_files")
+REGIME_NAMES = {
+    0: "RANGING",
+    1: "UPTREND",
+    2: "HIGH_VOLATILITY",
+    3: "DOWNTREND"
+}
 
 class OptimizerDashboard(App):
-    """A Textual app to monitor Optuna optimization runs."""
+    """A Textual app to monitor the multi-regime Genius Optimizer."""
 
     CSS_PATH = "app.css"
     BINDINGS = [
-        ("d", "toggle_dark", "Toggle dark mode"),
+        ("d", "toggle_dark", "Toggle Dark Mode"),
         ("q", "quit", "Quit")
     ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.trial_data = {}
         self.update_timer: Timer = None
+        self.processed_files = set()
+        self.regime_summaries = {}
+        self.current_regime = -1
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
-        yield Header()
+        yield Header(name="🧠 Genius Optimizer Dashboard")
         yield Container(
-            Static("Waiting for optimization to start...", id="best_trial_header"),
-            VerticalScroll(Static(id="best_trial_content")),
-            DataTable(id="trials_table"),
+            Static("Starting...", id="overall_status", classes="box"),
+            DataTable(id="regime_summary_table", classes="box"),
+            Vertical(
+                Static("Live Trial Log", classes="log_header"),
+                Log(id="live_trial_log", auto_scroll=True, classes="log_box"),
+                id="trial_log_container"
+            ),
             id="main_container"
         )
         yield Footer()
 
     def on_mount(self) -> None:
         """Called when the app is mounted."""
-        # Ensure the directory exists
         TUI_FILES_DIR.mkdir(exist_ok=True)
 
-        table = self.query_one(DataTable)
-        table.cursor_type = "row"
-        table.add_column("Trial", key="trial")
-        table.add_column("Status", key="status")
-        table.add_column("Value ($)", key="value")
-        table.add_column("Duration (s)", key="duration")
+        summary_table = self.query_one("#regime_summary_table", DataTable)
+        summary_table.cursor_type = "row"
+        summary_table.add_column("Regime", key="regime", width=20)
+        summary_table.add_column("Status", key="status", width=15)
+        summary_table.add_column("Best Score", key="score", width=15)
+        summary_table.add_column("Trials", key="trials", width=10)
+        summary_table.add_column("Best Balance", key="balance", width=20)
+        summary_table.add_column("Best Drawdown", key="drawdown", width=15)
 
-        # Start a timer to poll for file updates
-        self.update_timer = self.set_interval(1, self.update_dashboard)
-        self.update_dashboard() # Initial update
+        # Initialize rows for all regimes
+        for i in range(4):
+            regime_name = REGIME_NAMES.get(i, f"Unknown ({i})")
+            summary_table.add_row(regime_name, "PENDING", "N/A", "0", "N/A", "N/A", key=f"regime-{i}")
+
+        self.update_timer = self.set_interval(0.5, self.update_dashboard)
 
     def update_dashboard(self) -> None:
         """Polls the directory for JSON files and updates the dashboard."""
-        # Update best trial
-        best_trial_file = TUI_FILES_DIR / "best_trial_summary.json"
-        if best_trial_file.exists():
-            try:
-                with open(best_trial_file, "r") as f:
-                    best_trial_data = json.load(f)
+        json_files = glob.glob(str(TUI_FILES_DIR / "genius_trial_*.json"))
 
-                header = self.query_one("#best_trial_header", Static)
-                header.update(f"🏆 Best Trial: #{best_trial_data.get('number')} | Final Balance: ${best_trial_data.get('value', 0):,.2f}")
+        new_files = sorted([f for f in json_files if f not in self.processed_files])
 
-                content = self.query_one("#best_trial_content", Static)
-                content.update(Pretty(best_trial_data.get("params", {})))
-            except (json.JSONDecodeError, IOError):
-                pass # Ignore errors from partially written files
+        if not new_files and not self.processed_files:
+             # Check for old files if we are just starting
+             if list(TUI_FILES_DIR.glob("*.json")):
+                 status_widget = self.query_one("#overall_status", Static)
+                 status_widget.update(Text("⚠️ Found old data files. Please clear the '.tui_files' directory before starting a new run.", style="bold yellow"))
 
-        # Update trials table
-        table = self.query_one(DataTable)
-
-        json_files = list(TUI_FILES_DIR.glob("trial_*.json"))
-
-        for file_path in json_files:
+        trial_log = self.query_one("#live_trial_log", Log)
+        for file_path in new_files:
+            self.processed_files.add(file_path)
             try:
                 with open(file_path, "r") as f:
                     data = json.load(f)
 
-                trial_num = data.get("number")
-                if trial_num is None:
-                    continue
+                regime = data.get("regime", -1)
+                if regime > self.current_regime:
+                    self.current_regime = regime
+                    status_widget = self.query_one("#overall_status", Static)
+                    regime_name = REGIME_NAMES.get(regime, f"Unknown ({regime})")
+                    status_widget.update(f"OPTIMIZING: Regime {regime} - {regime_name}")
 
-                # Check if we have seen this trial before and if the data has changed
-                if self.trial_data.get(trial_num) == data:
-                    continue # Skip if data is the same
+                score = data.get('score', 0) or 0.0
+                state = data.get('state', 'UNKNOWN')
+                trial_num = data.get('number', -1)
 
-                self.trial_data[trial_num] = data
+                log_line = f"Regime {regime} | Trial {trial_num:<4} | Score: {score:10.4f} | Status: {state}"
+                trial_log.write_line(log_line)
 
-                row_key = f"trial-{trial_num}"
-                status = data.get("state", "UNKNOWN")
-                value = data.get("value")
-                value_str = f"{value:,.2f}" if value is not None else "N/A"
+            except (json.JSONDecodeError, IOError, KeyError):
+                continue # Ignore partially written files or malformed data
 
-                start_time = data.get("datetime_start")
-                end_time = data.get("datetime_complete")
-                duration_str = "N/A"
-                if start_time and end_time:
-                    duration = datetime.fromisoformat(end_time) - datetime.fromisoformat(start_time)
-                    duration_str = f"{duration.total_seconds():.2f}"
+        # Update summary table from summary files
+        summary_files = glob.glob(str(TUI_FILES_DIR / "genius_summary_regime_*.json"))
+        summary_table = self.query_one("#regime_summary_table", DataTable)
 
-                # Use a unique key for each row to update it in place
-                try:
-                    # update_cell will raise a CellDoesNotExist if the row doesn't exist.
-                    table.update_cell(row_key, "status", status, update_width=True)
-                    table.update_cell(row_key, "value", value_str, update_width=True)
-                    table.update_cell(row_key, "duration", duration_str, update_width=True)
-                except CellDoesNotExist:
-                    # If the row does not exist, add it.
-                    # The values must be in the same order as the columns were added.
-                    table.add_row(
-                        str(trial_num),
-                        status,
-                        value_str,
-                        duration_str,
-                        key=row_key
-                    )
-            except (json.JSONDecodeError, IOError):
-                # Could be that the file is being written, just skip for now
+        for file_path in summary_files:
+            try:
+                with open(file_path, "r") as f:
+                    summary_data = json.load(f)
+
+                regime = summary_data.get("regime")
+                if regime is None: continue
+
+                # Update the table if new data is available
+                if self.regime_summaries.get(regime) != summary_data:
+                    self.regime_summaries[regime] = summary_data
+
+                    score = summary_data.get('score', 0) or 0.0
+                    balance = summary_data.get('final_balance', 0.0)
+                    drawdown = summary_data.get('max_drawdown', 0.0) * 100
+
+                    # Get number of trials completed for this regime
+                    trial_count = len(glob.glob(str(TUI_FILES_DIR / f"genius_trial_{regime}_*.json")))
+
+                    summary_table.update_cell(f"regime-{regime}", "status", "RUNNING", update_width=False)
+                    summary_table.update_cell(f"regime-{regime}", "score", f"{score:.4f}", update_width=False)
+                    summary_table.update_cell(f"regime-{regime}", "trials", str(trial_count), update_width=False)
+                    summary_table.update_cell(f"regime-{regime}", "balance", f"${balance:,.2f}", update_width=False)
+                    summary_table.update_cell(f"regime-{regime}", "drawdown", f"{drawdown:.2f}%", update_width=False)
+
+            except (json.JSONDecodeError, IOError, KeyError):
                 continue
 
 if __name__ == "__main__":
+    # This part is important for the `run.py` script to be able to launch it
+    # We add a small delay to ensure the directory can be cleaned up first if needed.
+    time.sleep(1)
     app = OptimizerDashboard()
     app.run()
