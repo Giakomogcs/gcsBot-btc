@@ -113,7 +113,8 @@ class SynchronizationManager:
                     sell_price=sell_price,
                     quantity_sold=qty_to_sell_from_this_buy,
                     buy_commission_usd=prorated_buy_commission,
-                    sell_commission_usd=prorated_sell_commission
+                    sell_commission_usd=prorated_sell_commission,
+                    buy_quantity=buy_trade.quantity
                 )
 
                 new_sell_trade_data = {

@@ -654,7 +654,7 @@ def new_bot():
     if bot_name in available_bots:
         print(f"❌ O bot '{bot_name}' já existe no arquivo {env_file}.")
         raise typer.Exit(1)
-    prefix = bot_name.upper()
+    prefix = bot_name.upper().replace('-', '_')
     bot_config_block = NEW_BOT_TEMPLATE.format(bot_name=bot_name, prefix=prefix)
     try:
         with open(env_file, "a", encoding='utf-8') as f:

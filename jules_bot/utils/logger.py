@@ -44,9 +44,18 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(log_object, ensure_ascii=False)
 
 # --- CONFIGURAÇÃO DO LOGGER ---
-# Get bot name and mode from environment variables for log isolation
-bot_name = os.getenv("BOT_NAME", "jules_bot")
-bot_mode = os.getenv("BOT_MODE", "main") # 'main' as default for scripts without a mode
+# The config_manager is now initialized in main.py before this module is imported.
+# We can safely use it to get the bot_name.
+from jules_bot.utils.config_manager import config_manager
+
+# Get bot name and mode for log isolation
+bot_name = config_manager.bot_name
+if not bot_name:
+    # This case can happen if a script imports the logger without initializing
+    # the config_manager first. We fall back to a default name to avoid crashing.
+    bot_name = "unknown_bot"
+
+bot_mode = os.getenv("BOT_MODE", "main")  # 'main' as default for scripts without a mode
 
 # Create a unique logger name for each bot instance and mode
 logger_name = f"gcsBot.{bot_name}.{bot_mode}"

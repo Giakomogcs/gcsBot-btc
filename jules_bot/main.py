@@ -1,11 +1,23 @@
 import os
 import sys
 import uuid
+
+# --- EARLY INITIALIZATION ---
+# The ConfigManager must be initialized BEFORE any other application modules are imported.
+# This ensures that any module that relies on the config (e.g., logger, db_manager)
+# gets the correct bot-specific settings from the environment.
+from jules_bot.utils.config_manager import config_manager
+
+bot_name = os.getenv("BOT_NAME", "jules_bot")
+config_manager.initialize(bot_name)
+# --- END EARLY INITIALIZATION ---
+
+# Now that the config is initialized, we can safely import other modules.
 from jules_bot.bot.trading_bot import TradingBot
 from jules_bot.utils.logger import logger
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.core.market_data_provider import MarketDataProvider
-from jules_bot.utils.config_manager import config_manager
+
 
 def main():
     """
@@ -15,20 +27,18 @@ def main():
     # O modo do bot é obrigatório e deve ser definido via variável de ambiente.
     bot_mode = os.getenv('BOT_MODE')
     if not bot_mode:
-        logger.error("A variável de ambiente BOT_MODE não está definida. Defina-a como 'trade' ou 'test' para executar o bot.")
+        # The logger might not be fully configured here, so we use print/stderr for this critical error.
+        print("CRITICAL ERROR: The BOT_MODE environment variable is not set.", file=sys.stderr)
         sys.exit(1)
-    
+
     # Garante que qualquer espaço em branco seja removido antes de comparar
     bot_mode = bot_mode.strip().lower()
-    
-    # Get bot name from environment variable
-    bot_name = os.getenv("BOT_NAME", "jules_bot")
 
-    # Initialize the config manager with the bot name to load correct .env variables
-    config_manager.initialize(bot_name)
+    # The bot_name was already read at the top of the script for initialization.
+    # The config_manager has already been initialized.
 
     logger.info(f"--- INICIANDO O BOT '{bot_name}' EM MODO '{bot_mode.upper()}' (via variável de ambiente) ---")
-    
+
     if bot_mode not in ['trade', 'test']:
         logger.error(f"Modo inválido '{bot_mode}'. Deve ser 'trade', 'test'.")
         sys.exit(1)
@@ -36,8 +46,7 @@ def main():
     bot = None
     try:
         # --- Service Instantiation ---
-        # Services that depend on the configuration (like the database) must be
-        # instantiated only AFTER the config_manager has been initialized.
+        # The config_manager initialization is already done.
         db_manager = PostgresManager()
         market_data_provider = MarketDataProvider(db_manager=db_manager)
 
@@ -50,7 +59,7 @@ def main():
             from binance.exceptions import BinanceAPIException
 
             logger.info("Iniciando a sincronização do histórico de trades com a Binance...")
-            
+
             exchange_manager = ExchangeManager(mode=bot_mode)
             symbol = config_manager.get('APP', 'symbol')
 
@@ -69,13 +78,13 @@ def main():
         except ValueError as e:
             # Erro comum se as chaves de API não estiverem no .env
             logger.error(f"Erro de configuração: {e}", exc_info=True)
-            bot_prefix = bot_name.upper()
+            bot_prefix = bot_name.upper().replace('-', '_')
             if 'test' in str(e).lower():
                 logger.critical(f"DICA: Verifique se as variáveis '{bot_prefix}_BINANCE_TESTNET_API_KEY' e '{bot_prefix}_BINANCE_TESTNET_API_SECRET' estão definidas corretamente no seu arquivo .env")
             else:
                 logger.critical(f"DICA: Verifique se as variáveis '{bot_prefix}_BINANCE_API_KEY' e '{bot_prefix}_BINANCE_API_SECRET' estão definidas corretamente no seu arquivo .env")
             raise RuntimeError("Falha na configuração das chaves de API, abortando.")
-        
+
         except BinanceAPIException as e:
             # Erro se as chaves estiverem presentes mas forem inválidas/expiradas/etc.
             logger.error(f"Erro de API da Binance: {e}", exc_info=True)
@@ -100,7 +109,7 @@ def main():
             market_data_provider=market_data_provider,
             db_manager=db_manager
         )
-        
+
         logger.info(f"Bot instanciado com sucesso em modo '{bot_mode}'.")
         bot.run()
 
