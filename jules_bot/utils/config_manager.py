@@ -170,16 +170,5 @@ class ConfigManager:
             raise ValueError(f"Invalid database type: {db_type}")
 
 
-    def update_from_dict(self, config_dict: Dict[str, Dict[str, str]]):
-        """
-        Updates the config parser from a dictionary. Useful for testing or programmatic overrides.
-        """
-        for section, values in config_dict.items():
-            if not self.config.has_section(section):
-                self.config.add_section(section)
-            for key, value in values.items():
-                self.config.set(section, key, str(value))
-
-
 # Instantiate the config manager for global use
 config_manager = ConfigManager()
