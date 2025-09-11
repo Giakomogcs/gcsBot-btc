@@ -235,12 +235,14 @@ def run_bot_in_container(bot_name: str, mode: str) -> tuple[Optional[str], int]:
         traceback.print_exc()
         return None, -1
 
-def run_script_in_background_container(bot_name: str, command: list) -> Optional[str]:
+def run_script_in_background_container(process_name: str, context_bot_name: str, command: list) -> Optional[str]:
     """
     Runs a given command in a new, detached Docker container and returns the container ID.
-    The container is named based on the bot_name to allow for easy identification.
+    The container is named based on the process_name for easy identification and tracking.
+    The BOT_NAME environment variable is set to context_bot_name to ensure the script
+    runs with the correct data and configuration context.
     """
-    container_name = f"{PROJECT_NAME}-instance-{bot_name}-optimizer"
+    container_name = f"{PROJECT_NAME}-instance-{process_name}"
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '.'))
 
     # Clean up any old container with the same name
@@ -259,7 +261,7 @@ def run_script_in_background_container(bot_name: str, command: list) -> Optional
         "--name", container_name,
         "--network", DOCKER_NETWORK_NAME,
         "--env-file", ".env",
-        "-e", f"BOT_NAME={bot_name}",
+        "-e", f"BOT_NAME={context_bot_name}",  # Use the context name for the env var
         "-e", "JULES_BOT_SCRIPT_MODE=1",
         "-v", f"{project_root}:/app",
         "-v", f"{tui_files_dir}:/app/.tui_files",  # Monta o diretório .tui_files
@@ -801,11 +803,11 @@ def _run_optimizer(bot_name: str, days: int):
     # 3. Clear old TUI files
     _clear_tui_files()
 
-    # 4. Check if another optimizer is already running
-    optimizer_process_name = "genius_optimizer"
+    # 4. Check if an optimizer for THIS bot is already running
+    optimizer_process_name = f"{bot_name}-optimizer"
     existing_optimizer = process_manager.get_bot_by_name(optimizer_process_name)
     if existing_optimizer:
-        print(f"⚠️  Um otimizador já está em execução (Container: {existing_optimizer.container_id[:12]}).")
+        print(f"⚠️  Um otimizador para o bot '{bot_name}' já está em execução (Container: {existing_optimizer.container_id[:12]}).")
         if typer.confirm("Deseja pará-lo e iniciar um novo?"):
             subprocess.run(SUDO_PREFIX + ["docker", "stop", existing_optimizer.container_id], capture_output=True)
             process_manager.remove_running_bot(optimizer_process_name)
@@ -825,7 +827,11 @@ def _run_optimizer(bot_name: str, days: int):
         active_params_json
     ]
     
-    container_id = run_script_in_background_container(optimizer_process_name, command)
+    container_id = run_script_in_background_container(
+        process_name=optimizer_process_name,
+        context_bot_name=bot_name,
+        command=command
+    )
 
     if not container_id:
         print("❌ Falha ao iniciar o container do otimizador. Abortando.")

@@ -107,7 +107,10 @@ class TUIApp(App):
         self.log_display: RichLog | None = None
         self.bot_name = bot_name
         logger.info(f"TUI is initializing for bot: {self.bot_name} (Container: {self.container_id}, Port: {self.host_port})")
-        config_manager.initialize(self.bot_name)
+        # The TUI runs in its own process and the bot_name is passed as an argument.
+        # We must manually update the config_manager singleton's state to ensure
+        # any components it uses (none currently, but good practice) have the right context.
+        config_manager.bot_name = self.bot_name
         self.log_filter = ""
         self.open_positions_data = []
         self._last_positions_data: str | None = None
