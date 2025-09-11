@@ -17,6 +17,7 @@ class SynchronizationManager:
     """
     Handles the synchronization of trade history between Binance and the local database.
     Ensures that the local state is a faithful mirror of the exchange's history.
+    REFACTORED to be event-driven and handle PnL for external trades.
     """
     def __init__(self, binance_client: Client, db_manager: PostgresManager, symbol: str, strategy_rules: StrategyRules, environment: str = 'live'):
         """
@@ -34,12 +35,10 @@ class SynchronizationManager:
 
     def run_full_sync(self):
         """
-        Synchronizes the bot's state with the exchange using a three-pass approach.
-        1. Mirror Pass: Ensures every trade from the exchange exists in the local DB.
-        2. Linking Pass: Links sell trades to their corresponding buy trades (non-destructive).
-        3. Status Sync Pass: Updates local trade statuses based on the live exchange balance (destructive).
+        Synchronizes the bot's state with the exchange using an event-driven approach.
+        It processes trades from the exchange and reconciles them against the local state.
         """
-        logger.info("--- Starting State Synchronization (Two-Pass) ---")
+        logger.info("--- Starting State Synchronization (Event-Driven) ---")
         try:
             if not self.symbol:
                 logger.error("No symbol configured. Cannot perform sync.")
@@ -50,61 +49,132 @@ class SynchronizationManager:
                 logger.error("Failed to fetch trades from Binance. Aborting sync.")
                 return
 
-            # --- Pass 1: Mirroring ---
-            logger.info("[Sync Pass 1/2] Mirroring exchange trades to local DB...")
-            self._mirror_binance_trades(all_binance_trades)
-            logger.info("[Sync Pass 1/2] Mirroring complete.")
+            local_trades = self.db.get_all_trades_for_sync(self.environment, self.symbol)
+            local_binance_trade_ids = {t.binance_trade_id for t in local_trades if t.binance_trade_id}
 
-            # --- Pass 2: Reconciliation (Phase 1 - Linking) ---
-            logger.info("[Sync Pass 2/3] Linking sell trades to buys...")
+            all_prices = {item['symbol']: item['price'] for item in self.client.get_all_tickers()}
+            
+            new_trades_from_binance = [t for t in all_binance_trades if t['id'] not in local_binance_trade_ids]
+            
+            if not new_trades_from_binance:
+                logger.info("No new trades from exchange to process. Local DB is up to date.")
+            else:
+                logger.info(f"Found {len(new_trades_from_binance)} new trades on the exchange to process.")
+                new_trades_from_binance.sort(key=lambda t: t['time'])
+
+                for trade in new_trades_from_binance:
+                    if trade['isBuyer']:
+                        self._create_position_from_binance_trade(trade, all_prices, "OPEN")
+                    else:
+                        self._reconcile_external_sell(trade, all_prices)
+            
+            logger.info("Performing post-sync linking for any remaining unlinked bot-initiated trades...")
             self._reconcile_local_state(all_binance_trades)
-            logger.info("[Sync Pass 2/3] Linking complete.")
 
-            # --- Pass 3: Reconciliation (Phase 2 - Status Sync) ---
-            logger.info("[Sync Pass 3/3] Synchronizing open position status with exchange balance...")
-            self._sync_open_positions_status()
-            logger.info("[Sync Pass 3/3] Status sync complete.")
-
+            self._final_balance_sanity_check()
             logger.info("--- State Synchronization Finished ---")
 
         except Exception as e:
             logger.critical(f"A critical error occurred during state synchronization: {e}", exc_info=True)
 
-    def _mirror_binance_trades(self, all_binance_trades: list):
+    def _reconcile_external_sell(self, sell_trade_data: dict, all_prices: dict):
         """
-        Ensures that every trade from Binance has a corresponding record in the local database.
+        Reconciles a sell trade that occurred outside the bot.
+        It finds the corresponding open buy positions, calculates PnL,
+        creates a local sell record, and updates the buy positions' remaining quantities.
         """
-        db_trade_ids = {t.binance_trade_id for t in self.db.get_all_trades_for_sync(self.environment, self.symbol)}
+        logger.info(f"Reconciling external sell (Binance Trade ID: {sell_trade_data['id']})...")
+        sell_qty_to_match = Decimal(str(sell_trade_data['qty']))
+        sell_price = Decimal(str(sell_trade_data['price']))
+        sell_commission = Decimal(str(sell_trade_data['commission']))
+        sell_commission_asset = sell_trade_data['commissionAsset']
         
-        trades_to_add = []
-        for trade in all_binance_trades:
-            if trade['id'] not in db_trade_ids:
-                trades_to_add.append(trade)
+        open_buys = self.db.get_open_positions(self.environment, self.symbol)
+        open_buys.sort(key=lambda t: t.timestamp)
 
-        if not trades_to_add:
-            logger.info("No new trades from exchange to mirror. Local DB is up to date.")
+        if not open_buys:
+            logger.warning(f"Found an external sell (ID: {sell_trade_data['id']}) but no open buy positions to match it against. Logging as unlinked.")
+            self._create_unlinked_sell_record(sell_trade_data, all_prices)
             return
 
-        logger.info(f"Found {len(trades_to_add)} new trades on the exchange to be mirrored locally.")
-        all_prices = self.client.get_all_tickers()
-        all_prices = {item['symbol']: item['price'] for item in all_prices}
+        for buy_trade in open_buys:
+            if sell_qty_to_match <= Decimal('1e-9'):
+                break
 
-        for trade in trades_to_add:
-            if trade['isBuyer']:
-                # This is a new buy trade not seen before. Adopt it as 'OPEN'.
-                self._create_position_from_binance_trade(trade, all_prices, "OPEN")
+            if buy_trade.remaining_quantity > Decimal('1e-9'):
+                qty_to_sell_from_this_buy = min(sell_qty_to_match, buy_trade.remaining_quantity)
+                
+                sell_commission_usd = self._calculate_commission_in_usd(sell_commission, sell_commission_asset, sell_price, all_prices)
+                
+                # Pro-rate commissions for accurate PnL
+                prorated_sell_commission = (sell_commission_usd / Decimal(str(sell_trade_data['qty']))) * qty_to_sell_from_this_buy if Decimal(str(sell_trade_data['qty'])) > 0 else Decimal('0')
+                prorated_buy_commission = (buy_trade.commission_usd / buy_trade.quantity) * qty_to_sell_from_this_buy if buy_trade.quantity > 0 else Decimal('0')
+
+                realized_pnl = self.strategy_rules.calculate_realized_pnl(
+                    buy_price=buy_trade.price,
+                    sell_price=sell_price,
+                    quantity_sold=qty_to_sell_from_this_buy,
+                    buy_commission_usd=prorated_buy_commission,
+                    sell_commission_usd=prorated_sell_commission,
+                    buy_quantity=qty_to_sell_from_this_buy
+                )
+
+                new_sell_trade_data = {
+                    'run_id': self.run_id, 'environment': self.environment,
+                    'strategy_name': 'sync_external', 'symbol': self.symbol,
+                    'trade_id': f"sync_sell_{uuid.uuid4()}", 'linked_trade_id': buy_trade.trade_id,
+                    'exchange': 'binance', 'status': 'CLOSED', 'order_type': 'sell',
+                    'price': sell_price, 'quantity': qty_to_sell_from_this_buy,
+                    'usd_value': sell_price * qty_to_sell_from_this_buy,
+                    'commission': (sell_commission / Decimal(str(sell_trade_data['qty']))) * qty_to_sell_from_this_buy if Decimal(str(sell_trade_data['qty'])) > 0 else Decimal('0'),
+                    'commission_asset': sell_commission_asset, 'commission_usd': prorated_sell_commission,
+                    'timestamp': datetime.datetime.fromtimestamp(sell_trade_data['time'] / 1000, tz=datetime.timezone.utc),
+                    'exchange_order_id': str(sell_trade_data['orderId']),
+                    'binance_trade_id': int(sell_trade_data['id']),
+                    'decision_context': {'reason': 'sync_reconciled_external_sell'},
+                    'realized_pnl_usd': realized_pnl
+                }
+                self.trade_logger.log_trade(new_sell_trade_data)
+
+                new_remaining_qty = buy_trade.remaining_quantity - qty_to_sell_from_this_buy
+                update_payload = {'remaining_quantity': new_remaining_qty}
+                if new_remaining_qty <= Decimal('1e-8'):
+                    update_payload['status'] = 'CLOSED'
+                    logger.info(f"Closing buy trade {buy_trade.trade_id} as its remaining quantity is now zero.")
+                
+                self.db.update_trade(buy_trade.trade_id, update_payload)
+                
+                sell_qty_to_match -= qty_to_sell_from_this_buy
+                logger.info(f"Reconciled {qty_to_sell_from_this_buy:.8f} of external sell against buy {buy_trade.trade_id}. PnL: ${realized_pnl:.4f}")
+
+    def _final_balance_sanity_check(self):
+        """
+        A final check to ensure the sum of local remaining quantities matches the exchange balance.
+        If not, it logs a warning, as this indicates a non-trade event like a deposit or withdrawal.
+        """
+        logger.info("Performing final balance sanity check...")
+        try:
+            account_info = self.client.get_account()
+            balance_info = next((item for item in account_info['balances'] if item['asset'] == self.base_asset), None)
+            exchange_balance = Decimal(balance_info['free']) + Decimal(balance_info['locked']) if balance_info else Decimal('0')
+            
+            local_open_trades = self.db.get_open_positions(self.environment, self.symbol)
+            local_total_remaining_quantity = sum(t.remaining_quantity for t in local_open_trades)
+            
+            tolerance = Decimal('0.00000001')
+            if abs(local_total_remaining_quantity - exchange_balance) > tolerance:
+                discrepancy = exchange_balance - local_total_remaining_quantity
+                logger.warning(
+                    f"FINAL SANITY CHECK FAILED: Discrepancy of {discrepancy:.8f} {self.base_asset} found between "
+                    f"local state ({local_total_remaining_quantity:.8f}) and exchange balance ({exchange_balance:.8f}). "
+                    "This may be due to a recent deposit or withdrawal. Manual review advised."
+                )
             else:
-                # This is a new sell trade. We can't link it yet, so log it as unlinked.
-                # The reconciliation pass will handle the linking.
-                self._create_unlinked_sell_record(trade, all_prices)
+                logger.info("Final balance sanity check passed. Local state is aligned with exchange balance.")
+        except Exception as e:
+            logger.error(f"Could not perform final balance sanity check: {e}", exc_info=True)
 
     def _reconcile_local_state(self, all_binance_trades: list):
-        """
-        (Phase 1 of Reconciliation)
-        Links sell trades to their corresponding buy trades using FIFO logic.
-        This method is non-destructive; it only establishes links and does not
-        change the status or quantity of any trade.
-        """
         db_trades = self.db.get_all_trades_for_sync(environment=self.environment, symbol=self.symbol)
         db_trades_map = {t.binance_trade_id: t for t in db_trades if t.binance_trade_id}
         
@@ -112,153 +182,41 @@ class SynchronizationManager:
         sells = sorted([t for t in all_binance_trades if not t['isBuyer']], key=lambda t: t['time'])
 
         if not sells:
-            logger.info("Reconciliation (Linker): No sells found, nothing to link.")
             return
 
-        logger.info(f"Reconciliation (Linker): Attempting to link {len(sells)} sells to {len(buys)} buys.")
-
-        # Create a pool of buy quantities that can be consumed by sells
         buy_pool = {buy['id']: Decimal(str(buy['qty'])) for buy in buys}
         
-        link_updates = 0
         for sell in sells:
-            sell_qty_to_match = Decimal(str(sell['qty']))
             local_sell = db_trades_map.get(sell['id'])
-
-            # Skip if sell is not in DB or already linked
             if not local_sell or local_sell.linked_trade_id:
                 continue
 
             for buy in buys:
-                if sell_qty_to_match <= Decimal('0'):
-                    break # This sell has been fully matched
-
                 buy_id = buy['id']
                 if buy_pool.get(buy_id, Decimal('0')) > Decimal('0'):
-                    matched_qty = min(sell_qty_to_match, buy_pool[buy_id])
-                    
-                    buy_pool[buy_id] -= matched_qty
-                    sell_qty_to_match -= matched_qty
-                    
-                    local_buy = db_trades_map.get(buy_id)
-                    if local_buy:
-                        # Link the sell to this buy. 
-                        # For simplicity, we link a sell to the first buy it matches with.
-                        # Complex partial fills could be handled by a separate linking table if needed.
-                        logger.info(f"Linking sell {local_sell.trade_id} (BinanceID: {sell['id']}) to buy {local_buy.trade_id} (BinanceID: {buy_id}).")
-                        self.db.update_trade(local_sell.trade_id, {'linked_trade_id': local_buy.trade_id})
-                        link_updates += 1
-                        # Once linked, break to the next sell
-                        break 
-        
-        if link_updates > 0:
-            logger.info(f"Reconciliation (Linker): Successfully created {link_updates} new trade links.")
-
-    def _sync_open_positions_status(self):
-        """
-        (Phase 2 of Reconciliation)
-        Ensures the status of local 'OPEN' trades matches the reality of the exchange account balance.
-        This is the only function that should change a trade's status to 'CLOSED'.
-        """
-        logger.info("Status Sync: Fetching current exchange balance...")
-        try:
-            account_info = self.client.get_account()
-            balance_info = next((item for item in account_info['balances'] if item['asset'] == self.base_asset), None)
-            
-            # Use a small tolerance for dust
-            exchange_balance = Decimal(balance_info['free']) + Decimal(balance_info['locked']) if balance_info else Decimal('0')
-            logger.info(f"Status Sync: Current exchange balance for {self.base_asset} is {exchange_balance:.8f}")
-
-        except Exception as e:
-            logger.error(f"Status Sync: Could not fetch account balance from Binance: {e}. Aborting status sync to be safe.", exc_info=True)
-            return
-
-        local_open_trades = self.db.get_open_positions(self.environment, self.symbol)
-        if not local_open_trades:
-            logger.info("Status Sync: No open positions found in the local database.")
-            # If we have a balance on the exchange but no local trades, it's a discrepancy, but nothing to "close".
-            if exchange_balance > Decimal('0.00001'):
-                 logger.warning(f"Status Sync: Discrepancy detected. Exchange balance is {exchange_balance:.8f} but no open trades are in the DB.")
-            return
-
-        # Sort trades by timestamp, oldest first, to close them in FIFO order if needed
-        local_open_trades.sort(key=lambda t: t.timestamp)
-        
-        local_total_quantity = sum(Decimal(str(t.quantity)) for t in local_open_trades)
-        logger.info(f"Status Sync: Found {len(local_open_trades)} open trades in DB with a total quantity of {local_total_quantity:.8f}")
-
-        # Using a tolerance for floating point comparisons
-        if math.isclose(local_total_quantity, exchange_balance, rel_tol=1e-9):
-            logger.info("Status Sync: Local state matches exchange balance. No status changes needed.")
-            return
-
-        if local_total_quantity > exchange_balance:
-            qty_to_close = local_total_quantity - exchange_balance
-            logger.warning(f"Status Sync: Local quantity ({local_total_quantity:.8f}) is greater than exchange balance ({exchange_balance:.8f}).\n"
-                           f"This means ~{qty_to_close:.8f} {self.base_asset} was sold outside the bot's knowledge. Closing oldest trades...")
-            
-            closed_count = 0
-            for trade in local_open_trades:
-                if qty_to_close <= Decimal('0'):
-                    break
-                
-                trade_qty = Decimal(str(trade.quantity))
-                
-                # This trade needs to be fully or partially closed
-                close_amount = min(trade_qty, qty_to_close)
-                
-                # For now, we only support closing full trades for simplicity.
-                # If a partial close is needed, we close the entire trade and log a warning.
-                if close_amount > 0:
-                    logger.warning(f"Status Sync: Closing trade {trade.trade_id} (Qty: {trade_qty}) to reconcile account balance.")
-                    self.db.update_trade_status(trade.trade_id, "CLOSED")
-                    self._calculate_and_update_realized_pnl(trade)
-                    qty_to_close -= trade_qty
-                    closed_count += 1
-            
-            logger.info(f"Status Sync: Closed {closed_count} trades to align with exchange balance.")
-
-        elif exchange_balance > local_total_quantity:
-            logger.warning(f"Status Sync: Exchange balance ({exchange_balance:.8f}) is greater than local open quantity ({local_total_quantity:.8f}).\n"
-                           f"This may indicate a buy happened outside the bot. A new 'sync_adopted_buy' trade should have been created in the mirror pass.")
+                    self.db.update_trade(local_sell.trade_id, {'linked_trade_id': local_sell.trade_id})
+                    buy_pool[buy_id] = 0 
+                    break 
 
     def _calculate_and_update_realized_pnl(self, closed_buy_trade: Trade):
-        """
-        Calculates the realized PnL for a given buy trade that has just been closed
-        and updates the corresponding linked sell trade in the database.
-        """
         sell_trade = self.db.find_linked_sell_trade(closed_buy_trade.trade_id)
         if not sell_trade:
-            logger.warning(f"PnL Calc: Could not find a linked sell trade for closed buy {closed_buy_trade.trade_id}. PnL will not be calculated at this time. It may be calculated on a future run once the sell is synced.")
             return
-
-        # Ensure the sell trade doesn't already have PnL calculated
         if sell_trade.realized_pnl_usd is not None and sell_trade.realized_pnl_usd != 0:
-            logger.info(f"PnL Calc: PnL for sell trade {sell_trade.trade_id} is already calculated. Skipping.")
             return
 
         buy_price = Decimal(str(closed_buy_trade.price))
         sell_price = Decimal(str(sell_trade.price))
-        quantity = Decimal(str(closed_buy_trade.quantity)) # Assuming the full quantity was sold
+        quantity = Decimal(str(closed_buy_trade.quantity))
         buy_commission = Decimal(str(closed_buy_trade.commission_usd))
         sell_commission = Decimal(str(sell_trade.commission_usd))
 
         realized_pnl = self.strategy_rules.calculate_realized_pnl(
-            buy_price=buy_price,
-            sell_price=sell_price,
-            quantity_sold=quantity,
-            buy_commission_usd=buy_commission,
-            sell_commission_usd=sell_commission,
+            buy_price=buy_price, sell_price=sell_price, quantity_sold=quantity,
+            buy_commission_usd=buy_commission, sell_commission_usd=sell_commission,
             buy_quantity=quantity
         )
-        
-        logger.info(f"PnL Calc: Calculated realized PnL of ${realized_pnl:.4f} for sell trade {sell_trade.trade_id}.")
-        
-        # Update the sell trade with the calculated PNL
-        update_data = {'realized_pnl_usd': realized_pnl}
-        self.db.update_trade(sell_trade.trade_id, update_data)
-        logger.info(f"PnL Calc: Updated sell trade {sell_trade.trade_id} with realized PnL.")
-
+        self.db.update_trade(sell_trade.trade_id, {'realized_pnl_usd': realized_pnl})
 
     def _fetch_all_binance_trades(self) -> list:
         logger.info(f"Fetching all trades from Binance for symbol {self.symbol}...")
@@ -275,9 +233,6 @@ class SynchronizationManager:
             except BinanceAPIException as e:
                 logger.error(f"Binance API error while fetching trades: {e}", exc_info=True)
                 return None
-            except Exception as e:
-                logger.error(f"An unexpected error occurred while fetching trades: {e}", exc_info=True)
-                return None
         logger.info(f"Finished fetching. Total trades retrieved: {len(all_trades)}")
         return all_trades
 
@@ -285,73 +240,46 @@ class SynchronizationManager:
         if commission <= Decimal('0'): return Decimal('0')
         if asset == 'USDT': return commission
         if asset == self.base_asset: return commission * price
-
         asset_price_symbol = f"{asset}USDT"
         asset_price = all_prices.get(asset_price_symbol)
         if asset_price:
             return commission * Decimal(str(asset_price))
-
-        logger.warning(f"Could not find price for commission asset '{asset}'. Commission calculation may be inaccurate.")
+        logger.warning(f"Could not find price for commission asset '{asset}'.")
         return Decimal('0')
 
     def _create_position_from_binance_trade(self, binance_trade: dict, all_prices: dict, final_status: str):
-        try:
-            purchase_price = Decimal(str(binance_trade['price']))
-            quantity = Decimal(str(binance_trade['qty']))
-            commission = Decimal(str(binance_trade['commission']))
-            commission_asset = binance_trade['commissionAsset']
-
-            commission_usd = self._calculate_commission_in_usd(commission, commission_asset, purchase_price, all_prices)
-            sell_target_price = self.strategy_rules.calculate_sell_target_price(purchase_price, quantity, params=None)
-
-            trade_data = {
-                "run_id": self.run_id,
-                "trade_id": f"sync_{uuid.uuid4()}",
-                "symbol": self.symbol,
-                "price": purchase_price,
-                "quantity": quantity,
-                "usd_value": purchase_price * quantity,
-                "commission": commission,
-                "commission_asset": commission_asset,
-                "commission_usd": commission_usd,
-                "exchange_order_id": str(binance_trade['orderId']),
-                "binance_trade_id": int(binance_trade['id']),
-                "timestamp": datetime.datetime.fromtimestamp(binance_trade['time'] / 1000, tz=datetime.timezone.utc),
-                "decision_context": {"reason": "sync_adopted_buy"},
-                "environment": self.environment,
-                "status": final_status,
-                "order_type": "buy",
-                "sell_target_price": sell_target_price
-            }
-            self.trade_logger.log_trade(trade_data)
-        except Exception as e:
-            logger.error(f"Failed to create position from trade {binance_trade.get('id')}: {e}", exc_info=True)
+        purchase_price = Decimal(str(binance_trade['price']))
+        quantity = Decimal(str(binance_trade['qty']))
+        commission = Decimal(str(binance_trade['commission']))
+        commission_asset = binance_trade['commissionAsset']
+        commission_usd = self._calculate_commission_in_usd(commission, commission_asset, purchase_price, all_prices)
+        sell_target_price = self.strategy_rules.calculate_sell_target_price(purchase_price, quantity, params=None)
+        trade_data = {
+            "run_id": self.run_id, "trade_id": f"sync_{uuid.uuid4()}", "symbol": self.symbol,
+            "price": purchase_price, "quantity": quantity, "usd_value": purchase_price * quantity,
+            "commission": commission, "commission_asset": commission_asset, "commission_usd": commission_usd,
+            "exchange_order_id": str(binance_trade['orderId']), "binance_trade_id": int(binance_trade['id']),
+            "timestamp": datetime.datetime.fromtimestamp(binance_trade['time'] / 1000, tz=datetime.timezone.utc),
+            "decision_context": {"reason": "sync_adopted_buy"}, "environment": self.environment,
+            "status": final_status, "order_type": "buy", "sell_target_price": sell_target_price
+        }
+        self.trade_logger.log_trade(trade_data)
 
     def _create_unlinked_sell_record(self, sell_trade: dict, all_prices: dict):
-        try:
-            sell_price = Decimal(str(sell_trade['price']))
-            quantity = Decimal(str(sell_trade['qty']))
-            commission = Decimal(str(sell_trade['commission']))
-            commission_asset = sell_trade['commissionAsset']
-
-            commission_usd = self._calculate_commission_in_usd(commission, commission_asset, sell_price, all_prices)
-
-            trade_data = {
-                'run_id': self.run_id, 'environment': self.environment,
-                'strategy_name': 'sync', 'symbol': self.symbol,
-                'trade_id': f"sync_{uuid.uuid4()}", 'linked_trade_id': None,
-                'exchange': 'binance', 'status': 'CLOSED', 'order_type': 'sell',
-                'price': sell_price, 'quantity': quantity,
-                'usd_value': sell_price * quantity,
-                'sell_price': sell_price, 'sell_usd_value': sell_price * quantity,
-                'commission': commission, 'commission_asset': commission_asset,
-                'commission_usd': commission_usd,
-                'timestamp': datetime.datetime.fromtimestamp(sell_trade['time'] / 1000, tz=datetime.timezone.utc),
-                'exchange_order_id': str(sell_trade['orderId']),
-                'binance_trade_id': int(sell_trade['id']),
-                'decision_context': {'reason': 'sync_unlinked_sell'},
-                'realized_pnl_usd': 0
-            }
-            self.trade_logger.log_trade(trade_data)
-        except Exception as e:
-            logger.error(f"Failed to create unlinked sell record from sync: {e}", exc_info=True)
+        sell_price = Decimal(str(sell_trade['price']))
+        quantity = Decimal(str(sell_trade['qty']))
+        commission = Decimal(str(sell_trade['commission']))
+        commission_asset = sell_trade['commissionAsset']
+        commission_usd = self._calculate_commission_in_usd(commission, commission_asset, sell_price, all_prices)
+        trade_data = {
+            'run_id': self.run_id, 'environment': self.environment, 'strategy_name': 'sync',
+            'symbol': self.symbol, 'trade_id': f"sync_{uuid.uuid4()}", 'linked_trade_id': None,
+            'exchange': 'binance', 'status': 'CLOSED', 'order_type': 'sell',
+            'price': sell_price, 'quantity': quantity, 'usd_value': sell_price * quantity,
+            'sell_price': sell_price, 'sell_usd_value': sell_price * quantity,
+            'commission': commission, 'commission_asset': commission_asset, 'commission_usd': commission_usd,
+            'timestamp': datetime.datetime.fromtimestamp(sell_trade['time'] / 1000, tz=datetime.timezone.utc),
+            'exchange_order_id': str(sell_trade['orderId']), 'binance_trade_id': int(sell_trade['id']),
+            'decision_context': {'reason': 'sync_unlinked_sell'}, 'realized_pnl_usd': 0
+        }
+        self.trade_logger.log_trade(trade_data)

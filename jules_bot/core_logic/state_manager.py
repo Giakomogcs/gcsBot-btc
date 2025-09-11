@@ -213,7 +213,7 @@ class StateManager:
     def record_partial_sell(self, original_trade_id: str, remaining_quantity: Decimal, sell_data: dict):
         """
         Records a partial sell by creating a new 'sell' record for the sold portion
-        and updating the quantity of the original 'buy' record.
+        and updating the 'remaining_quantity' of the original 'buy' record.
         """
         logger.info(f"Recording partial sell for original trade: {original_trade_id}")
 
@@ -225,7 +225,6 @@ class StateManager:
         # 1. Create a new 'sell' record for the sold portion
         sell_trade_id = str(uuid.uuid4())
         
-        # Explicitly construct the dictionary to ensure type safety and handle the timestamp correctly.
         # Calculate PnL percentage
         buy_usd_value = original_trade.price * Decimal(str(sell_data['quantity']))
         pnl_percentage = (sell_data.get('realized_pnl_usd', 0) / buy_usd_value) * 100 if buy_usd_value != 0 else 0
@@ -233,21 +232,13 @@ class StateManager:
         decision_context = sell_data.get('decision_context', {})
         decision_context['pnl_percentage'] = f"{pnl_percentage:.2f}"
 
-        # Explicitly construct the dictionary to ensure type safety and handle the timestamp correctly.
         sell_record_data = {
-            'run_id': self.bot_id,
-            'environment': self.mode,
-            'strategy_name': original_trade.strategy_name,
-            'symbol': original_trade.symbol,
-            'trade_id': sell_trade_id,
-            'linked_trade_id': original_trade_id,
-            'exchange': original_trade.exchange,
-            'status': 'CLOSED',  # A sell action is always final
-            'order_type': 'sell',
-            'price': original_trade.price,
-            'quantity': Decimal(str(sell_data['quantity'])),
-            'usd_value': buy_usd_value,
-            'sell_price': Decimal(str(sell_data['price'])),
+            'run_id': self.bot_id, 'environment': self.mode,
+            'strategy_name': original_trade.strategy_name, 'symbol': original_trade.symbol,
+            'trade_id': sell_trade_id, 'linked_trade_id': original_trade_id,
+            'exchange': original_trade.exchange, 'status': 'CLOSED', 'order_type': 'sell',
+            'price': original_trade.price, 'quantity': Decimal(str(sell_data['quantity'])),
+            'usd_value': buy_usd_value, 'sell_price': Decimal(str(sell_data['price'])),
             'sell_usd_value': Decimal(str(sell_data['usd_value'])),
             'commission': Decimal(str(sell_data.get('commission', '0'))),
             'commission_asset': sell_data.get('commission_asset'),
@@ -263,22 +254,26 @@ class StateManager:
         self.trade_logger.log_trade(sell_record_data)
         logger.info(f"Created new SELL record {sell_trade_id} for partial sell of {original_trade_id} with PnL: ${sell_record_data.get('realized_pnl_usd', 0):.2f}.")
 
-        # 2. Update the original 'buy' trade's quantity to reflect the remainder
+        # 2. Update the original 'buy' trade's remaining_quantity
         if remaining_quantity > Decimal('1e-8'): # Use tolerance
-            logger.info(f"Updating quantity of original trade {original_trade_id} to remaining {remaining_quantity:.8f}.")
-            context_update = {
+            logger.info(f"Updating remaining quantity of original trade {original_trade_id} to {remaining_quantity:.8f}.")
+            
+            new_context_info = {
                 "partial_sell_info": f"Partial sell executed. New sell record: {sell_trade_id}",
                 "last_update_time": datetime.utcnow().isoformat()
             }
-            self.db_manager.update_trade_quantity_and_context(
-                trade_id=original_trade_id,
-                new_quantity=remaining_quantity,
-                context_update=context_update
-            )
+            existing_context = original_trade.decision_context or {}
+            existing_context.update(new_context_info)
+
+            update_data = {
+                "remaining_quantity": remaining_quantity,
+                "decision_context": existing_context
+            }
+            self.db_manager.update_trade(trade_id=original_trade_id, update_data=update_data)
         else:
             # If the remaining quantity is zero, close the original trade
             logger.info(f"Remaining quantity for {original_trade_id} is zero. Marking as CLOSED.")
-            self.db_manager.update_trade_status(original_trade_id, 'CLOSED')
+            self.db_manager.update_trade(original_trade_id, {'status': 'CLOSED', 'remaining_quantity': Decimal('0')})
 
     def close_forced_position(self, trade_id: str, sell_result: dict, realized_pnl_usd: Decimal):
         """

@@ -36,7 +36,8 @@ class OptimizerDashboard(App):
         """Create child widgets for the app."""
         yield Header(name="🧠 Genius Optimizer Dashboard")
         yield Container(
-            Static("Starting...", id="overall_status", classes="box"),
+            Static("⚪ Waiting for optimization to begin...", id="overall_status", classes="box"),
+            Static("🕒 Last check: N/A", id="polling_status", classes="box"),
             DataTable(id="regime_summary_table", classes="box"),
             Vertical(
                 Static("Live Trial Log", classes="log_header"),
@@ -65,43 +66,52 @@ class OptimizerDashboard(App):
             regime_name = REGIME_NAMES.get(i, f"Unknown ({i})")
             summary_table.add_row(regime_name, "PENDING", "N/A", "0", "N/A", "N/A", key=f"regime-{i}")
 
-        self.update_timer = self.set_interval(0.5, self.update_dashboard)
+        self.update_timer = self.set_interval(1, self.update_dashboard)
 
     def update_dashboard(self) -> None:
         """Polls the directory for JSON files and updates the dashboard."""
-        json_files = glob.glob(str(TUI_FILES_DIR / "genius_trial_*.json"))
+        status_widget = self.query_one("#overall_status", Static)
+        polling_widget = self.query_one("#polling_status", Static)
+        now = datetime.now().strftime("%H:%M:%S")
 
-        new_files = sorted([f for f in json_files if f not in self.processed_files])
+        try:
+            json_files = glob.glob(str(TUI_FILES_DIR / "genius_trial_*.json"))
+            new_files = sorted([f for f in json_files if f not in self.processed_files])
+            
+            polling_widget.update(f"🕒 Last check: {now} | Found {len(new_files)} new trial(s).")
 
-        if not new_files and not self.processed_files:
-             # Check for old files if we are just starting
-             if list(TUI_FILES_DIR.glob("*.json")):
-                 status_widget = self.query_one("#overall_status", Static)
-                 status_widget.update(Text("⚠️ Found old data files. Please clear the '.tui_files' directory before starting a new run.", style="bold yellow"))
+            if not new_files and not self.processed_files:
+                if list(TUI_FILES_DIR.glob("*.json")):
+                    status_widget.update(Text("⚠️ Found old data files. Please clear the '.tui_files' directory before starting a new run.", style="bold yellow"))
+                else:
+                    status_widget.update("⚪ Waiting for optimization to begin...")
+                return # Early exit if nothing to do
 
-        trial_log = self.query_one("#live_trial_log", Log)
-        for file_path in new_files:
-            self.processed_files.add(file_path)
-            try:
-                with open(file_path, "r") as f:
-                    data = json.load(f)
+            trial_log = self.query_one("#live_trial_log", Log)
+            for file_path in new_files:
+                self.processed_files.add(file_path)
+                try:
+                    with open(file_path, "r") as f:
+                        data = json.load(f)
 
-                regime = data.get("regime", -1)
-                
-                # Atualiza o status geral para refletir a execução paralela
-                status_widget = self.query_one("#overall_status", Static)
-                if "OPTIMIZING IN PARALLEL" not in str(status_widget.renderable):
                     status_widget.update("⚡ OPTIMIZING IN PARALLEL ACROSS ALL REGIMES ⚡")
 
-                score = data.get('score', 0) or 0.0
-                state = data.get('state', 'UNKNOWN')
-                trial_num = data.get('number', -1)
+                    regime = data.get("regime", -1)
+                    score = data.get('score', 0) or 0.0
+                    state = data.get('state', 'UNKNOWN')
+                    trial_num = data.get('number', -1)
+                    timestamp = datetime.now().strftime("%H:%M:%S")
 
-                log_line = f"Regime {regime} | Trial {trial_num:<4} | Score: {score:10.4f} | Status: {state}"
-                trial_log.write_line(log_line)
+                    log_line = f"[{timestamp}] Regime {regime} | Trial {trial_num:<4} | Score: {score:10.4f} | Status: {state}"
+                    trial_log.write_line(log_line)
 
-            except (json.JSONDecodeError, IOError, KeyError):
-                continue # Ignore partially written files or malformed data
+                except (json.JSONDecodeError, IOError, KeyError) as e:
+                    trial_log.write_line(f"[{datetime.now().strftime('%H:%M:%S')}] Error processing file {Path(file_path).name}: {e}")
+                    continue # Ignore partially written files or malformed data
+        
+        except Exception as e:
+            polling_widget.update(f"🕒 Last check: {now} | ❌ Error polling directory: {e}")
+
 
         # Update summary table from summary files
         summary_files = glob.glob(str(TUI_FILES_DIR / "genius_summary_regime_*.json"))

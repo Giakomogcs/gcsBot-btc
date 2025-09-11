@@ -2,6 +2,8 @@ import pytest
 import sys
 import os
 from unittest.mock import Mock, patch
+from decimal import Decimal
+import datetime
 
 # Add project root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -148,4 +150,57 @@ def test_get_last_purchase_price_with_no_open_positions(state_manager):
 
     # Assert
     assert last_price == float('inf')
+
+def test_record_partial_sell_updates_remaining_quantity(state_manager):
+    """
+    Verify that `record_partial_sell` correctly updates the original trade's
+    `remaining_quantity` instead of its original quantity.
+    """
+    # Arrange
+    original_trade_id = 'buy_trade_001'
+    sell_data = {
+        'quantity': '0.4', # Selling 0.4 of the original 1.0
+        'price': '55000',
+        'usd_value': '22000',
+        'timestamp': datetime.datetime.now().timestamp() * 1000,
+        'decision_context': {'reason': 'take_profit'},
+        'realized_pnl_usd': Decimal('2000')
+    }
+    # The remaining quantity after selling 0.4 from 1.0 is 0.6
+    new_remaining_quantity = Decimal('0.6')
+
+    mock_original_trade = Mock()
+    mock_original_trade.price = Decimal('50000')
+    mock_original_trade.quantity = Decimal('1.0') # Original quantity
+    mock_original_trade.remaining_quantity = Decimal('1.0') # Remaining before this sell
+    mock_original_trade.decision_context = {}
+    mock_original_trade.strategy_name = 'test'
+    mock_original_trade.symbol = 'BTCUSDT'
+    mock_original_trade.exchange = 'binance'
+
+    state_manager.db_manager.get_trade_by_trade_id.return_value = mock_original_trade
+
+    # Act
+    state_manager.record_partial_sell(original_trade_id, new_remaining_quantity, sell_data)
+
+    # Assert
+    # 1. A new 'sell' trade was logged
+    state_manager.trade_logger.log_trade.assert_called_once()
+    logged_sell_data = state_manager.trade_logger.log_trade.call_args[0][0]
+    assert logged_sell_data['order_type'] == 'sell'
+    assert logged_sell_data['linked_trade_id'] == original_trade_id
+
+    # 2. The original trade was updated with the new remaining_quantity
+    state_manager.db_manager.update_trade.assert_called_once()
+    
+    # Correctly access keyword arguments
+    update_call_kwargs = state_manager.db_manager.update_trade.call_args.kwargs
+    assert 'trade_id' in update_call_kwargs
+    assert update_call_kwargs['trade_id'] == original_trade_id
+    
+    assert 'update_data' in update_call_kwargs
+    update_payload = update_call_kwargs['update_data']
+    
+    assert 'remaining_quantity' in update_payload
+    assert update_payload['remaining_quantity'] == new_remaining_quantity
 

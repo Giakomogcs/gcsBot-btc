@@ -50,7 +50,7 @@ class LivePortfolioManager:
                 open_positions = self.state_manager.get_open_positions()
 
                 open_positions_value = sum(
-                    Decimal(p.quantity) * current_price for p in open_positions
+                    Decimal(p.remaining_quantity) * current_price for p in open_positions
                 )
 
                 self.cached_portfolio_value = cash_balance + open_positions_value
@@ -104,6 +104,7 @@ class TradingBot:
         self.run_id = bot_id
         self.bot_name = config_manager.bot_name # Use the already-initialized bot name
         self.is_running = True
+        self.is_syncing = True  # Start in syncing state
         self.market_data_provider = market_data_provider
         self.db_manager = db_manager
 
@@ -212,7 +213,7 @@ class TradingBot:
             return {"status": "error", "message": f"Trade ID '{trade_id}' not found."}
 
         # The rest of the logic is similar to the file-based one, adapted for direct execution
-        quantity_to_sell = Decimal(str(position.quantity)) * (percentage_decimal / Decimal("100"))
+        quantity_to_sell = Decimal(str(position.remaining_quantity)) * (percentage_decimal / Decimal("100"))
 
         # --- MINIMUM QUANTITY VALIDATION ---
         if self.trader.min_qty is not None and quantity_to_sell < self.trader.min_qty:
@@ -313,7 +314,8 @@ class TradingBot:
             return
 
         logger.info(f"Found {len(positions_to_sell_now)} positions that passed the final profitability check.")
-        total_sell_quantity = sum(Decimal(str(p.quantity)) * self.strategy_rules.sell_factor for p in positions_to_sell_now)
+        # Use remaining_quantity for accurate sell calculation
+        total_sell_quantity = sum(Decimal(str(p.remaining_quantity)) * self.strategy_rules.sell_factor for p in positions_to_sell_now)
         available_balance = Decimal(self.trader.get_account_balance(asset=base_asset))
 
         if total_sell_quantity > available_balance:
@@ -322,9 +324,14 @@ class TradingBot:
 
         for position in positions_to_sell_now:
             trade_id = position.trade_id
-            original_quantity = Decimal(str(position.quantity))
-            sell_quantity = original_quantity * self.strategy_rules.sell_factor
-            hodl_asset_amount = original_quantity - sell_quantity
+            # Use REMAINING quantity for sell calculation
+            remaining_quantity = Decimal(str(position.remaining_quantity))
+            sell_quantity = remaining_quantity * self.strategy_rules.sell_factor
+            hodl_asset_amount = remaining_quantity - sell_quantity
+            
+            # The ORIGINAL quantity is still needed for PnL calculation cost basis
+            original_buy_quantity = Decimal(str(position.quantity))
+
             sell_position_data = position.to_dict()
             sell_position_data['quantity'] = sell_quantity
             success, sell_result = self.trader.execute_sell(sell_position_data, self.run_id, market_data)
@@ -332,7 +339,7 @@ class TradingBot:
                 buy_price = Decimal(str(position.price))
                 sell_price = Decimal(str(sell_result.get('price', '0')))
                 sell_commission_usd = Decimal(str(sell_result.get('commission_usd', '0')))
-                realized_pnl_usd = self.strategy_rules.calculate_realized_pnl(buy_price, sell_price, sell_quantity, Decimal(str(position.commission_usd or '0')), sell_commission_usd, original_quantity)
+                realized_pnl_usd = self.strategy_rules.calculate_realized_pnl(buy_price, sell_price, sell_quantity, Decimal(str(position.commission_usd or '0')), sell_commission_usd, original_buy_quantity)
                 hodl_asset_value_at_sell = hodl_asset_amount * current_price
                 sell_result.update({"realized_pnl_usd": realized_pnl_usd, "hodl_asset_amount": hodl_asset_amount, "hodl_asset_value_at_sell": hodl_asset_value_at_sell})
                 self.state_manager.record_partial_sell(original_trade_id=trade_id, remaining_quantity=hodl_asset_amount, sell_data=sell_result)
@@ -407,7 +414,15 @@ class TradingBot:
         if not self.trader.is_ready:
             logger.critical("Trader could not be initialized. Shutting down bot.")
             return
+
+        logger.info("Bot is starting initial synchronization. Trading is paused.")
+        self.is_syncing = True
+        self._update_sync_status_file()
         self.sync_manager.run_full_sync()
+        self.is_syncing = False
+        self._update_sync_status_file()
+        logger.info("Initial synchronization complete. Trading is now enabled.")
+
         logger.info("Performing initial recalculation of sell targets before starting main loop...")
         self.state_manager.recalculate_open_position_targets(self.strategy_rules, self.sa_instance, self.dynamic_params)
         logger.info("Initial recalculation complete.")
@@ -424,64 +439,72 @@ class TradingBot:
                     now = datetime.now()
                     current_time = time.time()
                     if self.last_sync_time is None or (now - self.last_sync_time) > timedelta(minutes=30):
-                        logger.info("Starting periodic trade history synchronization...")
+                        logger.info("Starting periodic trade history synchronization. Pausing trading.")
+                        self.is_syncing = True
+                        self._update_sync_status_file()
                         self.sync_manager.run_full_sync()
                         self.last_sync_time = now
-                        logger.info("Periodic trade history synchronization complete.")
-                    if current_time - last_recalc_time > 60:
-                        logger.info("--- Recalculating all open position sell targets ---")
-                        self.state_manager.recalculate_open_position_targets(self.strategy_rules, self.sa_instance, self.dynamic_params)
-                        last_recalc_time = current_time
-                    self._check_and_handle_refresh_signal()
-                    logger.info("--- Starting new trading cycle ---")
-                    features_df = self.feature_calculator.get_features_dataframe()
-                    if features_df.empty:
-                        logger.warning("Could not get features dataframe. Skipping cycle.")
-                        time.sleep(10)
-                        continue
-                    final_candle = features_df.iloc[-1]
-                    if final_candle.isnull().any():
-                        logger.warning(f"Final candle contains NaN values, skipping cycle. Data: {final_candle.to_dict()}")
-                        time.sleep(10)
-                        continue
-                    market_data = final_candle.to_dict()
-                    current_price = Decimal(final_candle['close'])
-                    regime_df = self.sa_instance.transform(features_df)
-                    current_regime = int(regime_df['market_regime'].iloc[-1]) if not regime_df.empty else -1
-                    if current_regime == -1:
-                        logger.warning("Market regime is -1 (undefined). Skipping buy/sell logic for this cycle.")
-                        time.sleep(10)
-                        continue
-                    self.dynamic_params.update_parameters(current_regime)
-                    current_params = self.dynamic_params.parameters
-                    open_positions = self.state_manager.get_open_positions()
-                    sell_candidates = []
-                    for position in open_positions:
-                        sell_target_price = Decimal(str(position.sell_target_price)) if position.sell_target_price is not None else Decimal('inf')
-                        if current_price >= sell_target_price:
-                            logger.info(f"✅ TAKE PROFIT HIT for position {position.trade_id} at ${current_price:,.2f} (Target: ${sell_target_price:,.2f}).")
-                            sell_candidates.append((position, "take_profit"))
+                        self.is_syncing = False
+                        self._update_sync_status_file()
+                        logger.info("Periodic synchronization complete. Resuming trading.")
+                    # Only run trading logic if the bot is not currently syncing
+                    if not self.is_syncing:
+                        if current_time - last_recalc_time > 60:
+                            logger.info("--- Recalculating all open position sell targets ---")
+                            self.state_manager.recalculate_open_position_targets(self.strategy_rules, self.sa_instance, self.dynamic_params)
+                            last_recalc_time = current_time
+                        self._check_and_handle_refresh_signal()
+                        logger.info("--- Starting new trading cycle ---")
+                        features_df = self.feature_calculator.get_features_dataframe()
+                        if features_df.empty:
+                            logger.warning("Could not get features dataframe. Skipping cycle.")
+                            time.sleep(10)
                             continue
-                        net_unrealized_pnl = self.strategy_rules.calculate_net_unrealized_pnl(entry_price=Decimal(str(position.price)), current_price=current_price, total_quantity=Decimal(str(position.quantity)), buy_commission_usd=Decimal(str(position.commission_usd or '0')))
-                        decision, reason, new_trail_percentage = self.strategy_rules.evaluate_smart_trailing_stop(position.to_dict(), net_unrealized_pnl)
-                        if decision == "ACTIVATE":
-                            logger.info(f"🚀 {reason}")
-                            self.state_manager.update_trade_smart_trailing_state(trade_id=position.trade_id, is_active=True, highest_profit=net_unrealized_pnl, activation_price=current_price)
-                            position.is_smart_trailing_active = True
-                            position.smart_trailing_highest_profit = net_unrealized_pnl
-                            position.smart_trailing_activation_price = current_price
-                        elif decision == "UPDATE_PEAK":
-                            logger.info(f"📈 {reason}")
-                            self.state_manager.update_trade_smart_trailing_state(trade_id=position.trade_id, is_active=True, highest_profit=net_unrealized_pnl, current_trail_percentage=new_trail_percentage)
-                            position.smart_trailing_highest_profit = net_unrealized_pnl
-                            if new_trail_percentage:
-                                position.current_trail_percentage = new_trail_percentage
-                        elif decision == "SELL":
-                            logger.info(f"✅ {reason}")
-                            sell_candidates.append((position, "trailing_stop"))
-                    if sell_candidates:
-                        self._execute_sell_candidates(sell_candidates, current_price, base_asset, market_data)
-                    self._evaluate_and_execute_buy(market_data, open_positions, current_params, current_regime, current_price)
+                        final_candle = features_df.iloc[-1]
+                        if final_candle.isnull().any():
+                            logger.warning(f"Final candle contains NaN values, skipping cycle. Data: {final_candle.to_dict()}")
+                            time.sleep(10)
+                            continue
+                        market_data = final_candle.to_dict()
+                        current_price = Decimal(final_candle['close'])
+                        regime_df = self.sa_instance.transform(features_df)
+                        current_regime = int(regime_df['market_regime'].iloc[-1]) if not regime_df.empty else -1
+                        if current_regime == -1:
+                            logger.warning("Market regime is -1 (undefined). Skipping buy/sell logic for this cycle.")
+                            time.sleep(10)
+                            continue
+                        self.dynamic_params.update_parameters(current_regime)
+                        current_params = self.dynamic_params.parameters
+                        open_positions = self.state_manager.get_open_positions()
+                        sell_candidates = []
+                        for position in open_positions:
+                            sell_target_price = Decimal(str(position.sell_target_price)) if position.sell_target_price is not None else Decimal('inf')
+                            if current_price >= sell_target_price:
+                                logger.info(f"✅ TAKE PROFIT HIT for position {position.trade_id} at ${current_price:,.2f} (Target: ${sell_target_price:,.2f}).")
+                                sell_candidates.append((position, "take_profit"))
+                                continue
+                            net_unrealized_pnl = self.strategy_rules.calculate_net_unrealized_pnl(entry_price=Decimal(str(position.price)), current_price=current_price, total_quantity=Decimal(str(position.remaining_quantity)), buy_commission_usd=Decimal(str(position.commission_usd or '0')))
+                            decision, reason, new_trail_percentage = self.strategy_rules.evaluate_smart_trailing_stop(position.to_dict(), net_unrealized_pnl)
+                            if decision == "ACTIVATE":
+                                logger.info(f"🚀 {reason}")
+                                self.state_manager.update_trade_smart_trailing_state(trade_id=position.trade_id, is_active=True, highest_profit=net_unrealized_pnl, activation_price=current_price)
+                                position.is_smart_trailing_active = True
+                                position.smart_trailing_highest_profit = net_unrealized_pnl
+                                position.smart_trailing_activation_price = current_price
+                            elif decision == "UPDATE_PEAK":
+                                logger.info(f"📈 {reason}")
+                                self.state_manager.update_trade_smart_trailing_state(trade_id=position.trade_id, is_active=True, highest_profit=net_unrealized_pnl, current_trail_percentage=new_trail_percentage)
+                                position.smart_trailing_highest_profit = net_unrealized_pnl
+                                if new_trail_percentage:
+                                    position.current_trail_percentage = new_trail_percentage
+                            elif decision == "SELL":
+                                logger.info(f"✅ {reason}")
+                                sell_candidates.append((position, "trailing_stop"))
+                        if sell_candidates:
+                            self._execute_sell_candidates(sell_candidates, current_price, base_asset, market_data)
+                        self._evaluate_and_execute_buy(market_data, open_positions, current_params, current_regime, current_price)
+                    else:
+                        logger.info("Trading logic is paused while the bot is synchronizing.")
                     if current_time - last_status_update_time > 4:
                         total_portfolio_value = self.live_portfolio_manager.get_total_portfolio_value(current_price, force_recalculation=True)
                         all_prices = self.trader.get_all_prices()
@@ -526,6 +549,46 @@ class TradingBot:
             logger.info("Status file update complete.")
         except Exception as e:
             logger.error(f"Failed to write status file for TUI during update: {e}", exc_info=True)
+
+    def _update_sync_status_file(self):
+        """A lightweight status update for showing sync status in the TUI."""
+        logger.info("Updating TUI with sync status...")
+        try:
+            status_dir = ".tui_files"
+            os.makedirs(status_dir, mode=0o777, exist_ok=True)
+            status_file_path = os.path.join(status_dir, f".bot_status_{self.bot_name}.json")
+            
+            status_data = {}
+            # Read existing data if possible to not overwrite everything
+            if os.path.exists(status_file_path):
+                try:
+                    with open(status_file_path, "r") as f:
+                        status_data = json.load(f)
+                except (json.JSONDecodeError, IOError):
+                    logger.warning(f"Could not read existing status file at {status_file_path}. A new one will be created.")
+
+            # Override only the necessary fields for sync status
+            if self.is_syncing:
+                status_data['bot_status'] = "SYNCHRONIZING..."
+                # Ensure nested dict exists
+                if 'buy_signal_status' not in status_data:
+                    status_data['buy_signal_status'] = {}
+                status_data['buy_signal_status']['operating_mode'] = "SYNCHRONIZING..."
+                status_data['buy_signal_status']['reason'] = "Performing state synchronization with the exchange."
+            else:
+                # Revert to last known operating mode after sync
+                status_data['bot_status'] = "RUNNING"
+                if 'buy_signal_status' in status_data:
+                    status_data['buy_signal_status']['operating_mode'] = self.last_operating_mode
+                    status_data['buy_signal_status']['reason'] = self.last_decision_reason
+
+            temp_path = status_file_path + ".tmp"
+            with open(temp_path, "w") as f:
+                json.dump(status_data, f, default=str)
+            os.rename(temp_path, status_file_path)
+            logger.info("Sync status file update complete.")
+        except Exception as e:
+            logger.error(f"Failed to write sync status file for TUI: {e}", exc_info=True)
 
     def shutdown(self):
         logger.info("[SHUTDOWN] Initiating graceful shutdown...")

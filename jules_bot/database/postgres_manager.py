@@ -124,6 +124,28 @@ class PostgresManager:
                         logger.info(f"Running migration: Adding missing column 'current_trail_percentage' to table '{self.bot_name}.trades'")
                         with connection.begin():
                             connection.execute(text(f"ALTER TABLE {self.bot_name}.trades ADD COLUMN current_trail_percentage NUMERIC(10, 5)"))
+                    
+                    if 'remaining_quantity' not in trade_columns:
+                        logger.info(f"Running migration: Adding and backfilling 'remaining_quantity' to table '{self.bot_name}.trades'")
+                        with connection.begin():
+                            # 1. Add the column, allowing nulls for back-filling
+                            connection.execute(text(f'ALTER TABLE {self.bot_name}.trades ADD COLUMN remaining_quantity NUMERIC(20, 8)'))
+                            
+                            # 2. Set a baseline of 0 for all trades
+                            logger.info("Back-filling 'remaining_quantity': setting to 0 for all trades initially.")
+                            connection.execute(text(f'UPDATE {self.bot_name}.trades SET remaining_quantity = 0'))
+
+                            # 3. For open buy trades, set remaining_quantity to the original quantity
+                            logger.info("Back-filling 'remaining_quantity': setting to full quantity for open buys.")
+                            connection.execute(text(f'''
+                                UPDATE {self.bot_name}.trades
+                                SET remaining_quantity = quantity
+                                WHERE status = 'OPEN' AND order_type = 'buy'
+                            '''))
+                            
+                            # 4. Now that all rows are populated, enforce the NOT NULL constraint
+                            logger.info("Finalizing 'remaining_quantity' migration: setting column to NOT NULL.")
+                            connection.execute(text(f'ALTER TABLE {self.bot_name}.trades ALTER COLUMN remaining_quantity SET NOT NULL'))
 
                 # Migration for 'bot_status' table
                 if inspector.has_table("bot_status", schema=self.bot_name):
@@ -252,6 +274,17 @@ class PostgresManager:
                 else:
                     # Create new trade
                     logger.info(f"Creating new trade record for trade_id: {trade_point.trade_id}")
+                    
+                    # --- ADDED LOGIC for remaining_quantity ---
+                    # For new trades, remaining_quantity is initialized.
+                    if trade_data_for_db.get('order_type') == 'buy':
+                        # For a new buy, the remaining quantity is the full quantity.
+                        trade_data_for_db['remaining_quantity'] = trade_data_for_db.get('quantity')
+                    else:
+                        # For sells or other initial types, remaining quantity is 0.
+                        trade_data_for_db['remaining_quantity'] = Decimal('0')
+                    # --- END ADDED LOGIC ---
+
                     logger.debug(f"Data for new Trade model: {trade_data_for_db}")
                     
                     new_trade = Trade(**trade_data_for_db)

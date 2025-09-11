@@ -68,7 +68,7 @@ class ProcessedHistoryData(Message):
 class StatusIndicator(Static):
     status = reactive("OFF")
     def render(self) -> str:
-        colors = {"RUNNING": "green", "ERROR": "red", "STOPPED": "gray", "OFF": "gray"}
+        colors = {"RUNNING": "green", "ERROR": "red", "STOPPED": "gray", "OFF": "gray", "SYNCHRONIZING...": "yellow"}
         return f"[{colors.get(self.status, 'gray')}]●[/] {self.status}"
     def watch_status(self, new_status: str) -> None:
         self.refresh()

@@ -250,6 +250,10 @@ def run_script_in_background_container(bot_name: str, command: list) -> Optional
     except Exception:
         pass  # Ignore errors if the container doesn't exist
 
+    # Garante que o diretório .tui_files exista no host
+    tui_files_dir = os.path.join(project_root, ".tui_files")
+    os.makedirs(tui_files_dir, mode=0o777, exist_ok=True)
+
     docker_command = SUDO_PREFIX + [
         "docker", "run", "--detach",
         "--name", container_name,
@@ -258,6 +262,7 @@ def run_script_in_background_container(bot_name: str, command: list) -> Optional
         "-e", f"BOT_NAME={bot_name}",
         "-e", "JULES_BOT_SCRIPT_MODE=1",
         "-v", f"{project_root}:/app",
+        "-v", f"{tui_files_dir}:/app/.tui_files",  # Monta o diretório .tui_files
         DOCKER_IMAGE_NAME,
         "python"
     ] + command

@@ -12,8 +12,9 @@ def mock_db_manager_with_trades():
     """Fixture for a mocked PostgresManager that returns some mock trades."""
     db_manager = MagicMock()
 
-    trade1 = Trade(trade_id='1', symbol='BTCUSDT', quantity=Decimal('0.1'), price=Decimal('50000'), sell_target_price=Decimal('51000'), status='OPEN')
-    trade2 = Trade(trade_id='2', symbol='BTCUSDT', quantity=Decimal('0.2'), price=Decimal('50100'), sell_target_price=Decimal('51100'), status='OPEN')
+    # Add remaining_quantity to the mock trades
+    trade1 = Trade(trade_id='1', symbol='BTCUSDT', quantity=Decimal('0.1'), remaining_quantity=Decimal('0.1'), price=Decimal('50000'), sell_target_price=Decimal('51000'), status='OPEN')
+    trade2 = Trade(trade_id='2', symbol='BTCUSDT', quantity=Decimal('0.2'), remaining_quantity=Decimal('0.2'), price=Decimal('50100'), sell_target_price=Decimal('51100'), status='OPEN')
 
     db_manager.get_open_positions.return_value = [trade1, trade2]
     return db_manager
@@ -48,7 +49,7 @@ def test_insufficient_balance_logs_critical_and_skips_sell(mock_config, mock_log
     # This is an isolated logic block from TradingBot.run()
     positions_to_sell = [p for p in open_positions if current_price >= Decimal(str(p.sell_target_price or 'inf'))]
     if positions_to_sell:
-        total_sell_quantity = sum(Decimal(str(p.quantity)) * strategy_rules.sell_factor for p in positions_to_sell)
+        total_sell_quantity = sum(Decimal(str(p.remaining_quantity)) * strategy_rules.sell_factor for p in positions_to_sell)
         available_balance = Decimal(mock_trader.get_account_balance(asset=base_asset))
 
         if total_sell_quantity > available_balance:

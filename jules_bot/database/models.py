@@ -45,6 +45,7 @@ class Trade(Base):
     order_type = Column(String, nullable=False)
     price = Column(Numeric(20, 8), nullable=False)
     quantity = Column(Numeric(20, 8), nullable=False)
+    remaining_quantity = Column(Numeric(20, 8), nullable=True)
     usd_value = Column(Numeric(20, 8), nullable=False)
     commission = Column(Numeric(20, 8))
     commission_asset = Column(String)
