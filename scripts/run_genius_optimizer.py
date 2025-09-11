@@ -27,14 +27,14 @@ def run_baseline_backtest(bot_name: str, days: int):
     logger.info("--- Running Baseline Backtest (using current .env settings) ---")
     try:
         db_manager = PostgresManager()
-        
+
         # We use the globally initialized config_manager
         backtester = Backtester(
             db_manager=db_manager,
             days=days,
             config_manager=config_manager
         )
-        
+
         results = backtester.run(return_full_results=True)
 
         # Serialize results to be JSON-friendly (convert Decimals to strings)
@@ -43,10 +43,10 @@ def run_baseline_backtest(bot_name: str, days: int):
         tui_files_dir = Path(".tui_files")
         tui_files_dir.mkdir(exist_ok=True)
         baseline_file = tui_files_dir / "baseline_summary.json"
-        
+
         with open(baseline_file, "w") as f:
             json.dump(serializable_results, f, indent=4)
-            
+
         logger.info(f"✅ Baseline backtest summary saved to {baseline_file}")
 
     except Exception as e:

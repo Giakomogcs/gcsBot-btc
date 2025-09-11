@@ -9,7 +9,7 @@ from datetime import datetime
 
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, Static, Log, DataTable
-from textual.containers import Container, Horizontal, Vertical
+from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
 from textual.timer import Timer
 
 # Directory where the optimizer drops its progress files
@@ -125,7 +125,7 @@ class BaselineSummaryWidget(Container):
             "sortino_ratio": "Sortino Ratio",
             "sell_trades_count": "Total Trades",
         }
-        
+
         for key, name in key_metrics.items():
             value = summary_data.get(key)
             if value is None:
@@ -146,7 +146,7 @@ class BaselineSummaryWidget(Container):
                         value_str = str(value)
                 except (ValueError, TypeError):
                     value_str = str(value)
-            
+
             table.add_row(name, value_str)
 
 
@@ -164,7 +164,7 @@ class EvolvingStrategyWidget(Container):
         for i in range(4):
             regime_name = REGIME_NAMES.get(i, f"R{i}")
             table.add_column(regime_name, width=18)
-        
+
         table.add_row("[dim]Waiting for first trial...[/dim]", "", "", "", "")
 
     def update_panel(self, best_params_by_regime: dict):
@@ -183,7 +183,7 @@ class EvolvingStrategyWidget(Container):
         all_keys = set()
         for regime_id, data in best_params_by_regime.items():
             all_keys.update(data.get("params", {}).keys())
-        
+
         sorted_keys = sorted(list(all_keys))
 
         for key in sorted_keys:
@@ -281,31 +281,33 @@ class OptimizerDashboard(App):
         self.processed_trial_files = set()
         self.regime_summaries = {}
         self.total_trials_per_regime = 0
+        self.baseline_loaded = False # Add flag for baseline
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
         yield Header(name="⚡ Genius Optimizer Dashboard ⚡")
         yield Static("⚪ Waiting for optimization to begin...", id="status_bar")
 
-        # Baseline and Evolving Strategy widgets
-        yield BaselineSummaryWidget(id="baseline_container")
-        yield EvolvingStrategyWidget(id="evolving_container")
+        with ScrollableContainer():
+            # Baseline and Evolving Strategy widgets
+            yield BaselineSummaryWidget(id="baseline_container")
+            yield EvolvingStrategyWidget(id="evolving_container")
 
-        # Main grid for regime summaries
-        yield Container(
-            *[
-                RegimeSummaryWidget(regime_id=i, id=f"regime_panel_{i}")
-                for i in range(4)
-            ],
-            id="main_container",
-        )
+            # Main grid for regime summaries
+            yield Container(
+                *[
+                    RegimeSummaryWidget(regime_id=i, id=f"regime_panel_{i}")
+                    for i in range(4)
+                ],
+                id="main_container",
+            )
 
-        # Log for individual trial updates
-        yield Vertical(
-            Static("Live Trial Log", classes="log_header"),
-            Log(id="live_trial_log", auto_scroll=True, classes="log_box"),
-            id="trial_log_container"
-        )
+            # Log for individual trial updates
+            yield Vertical(
+                Static("Live Trial Log", classes="log_header"),
+                Log(id="live_trial_log", auto_scroll=True, classes="log_box"),
+                id="trial_log_container"
+            )
         yield Footer()
 
     def on_mount(self) -> None:
@@ -315,7 +317,6 @@ class OptimizerDashboard(App):
 
         # Start polling for updates
         self.update_timer = self.set_interval(1.5, self.update_dashboard)
-        self.update_baseline() # Initial check for baseline file
 
     def _get_total_trials(self) -> int:
         """
@@ -337,6 +338,22 @@ class OptimizerDashboard(App):
     def update_dashboard(self) -> None:
         """Polls the directory for JSON files and updates the dashboard."""
         status_bar = self.query_one("#status_bar", Static)
+
+        # --- Load Baseline Summary (once) ---
+        if not self.baseline_loaded:
+            baseline_file = TUI_FILES_DIR / "baseline_summary.json"
+            if baseline_file.exists():
+                try:
+                    with open(baseline_file, "r") as f:
+                        summary_data = json.load(f)
+                    baseline_widget = self.query_one(BaselineSummaryWidget)
+                    baseline_widget.update_panel(summary_data)
+                    self.baseline_loaded = True # Mark as loaded
+                except (json.JSONDecodeError, IOError, KeyError) as e:
+                    self.log(f"Error processing baseline file: {e}")
+                    # Mark as loaded even on error to stop polling
+                    self.baseline_loaded = True
+
 
         if not self.total_trials_per_regime:
             self.total_trials_per_regime = self._get_total_trials()
@@ -421,21 +438,6 @@ class OptimizerDashboard(App):
             except (json.JSONDecodeError, IOError, KeyError) as e:
                 trial_log.write(f"[{datetime.now():%H:%M:%S}] Error processing file {Path(file_path).name}: {e}")
                 continue
-    
-    def update_baseline(self) -> None:
-        """Checks for the baseline summary file and updates the widget."""
-        baseline_file = TUI_FILES_DIR / "baseline_summary.json"
-        try:
-            if baseline_file.exists():
-                with open(baseline_file, "r") as f:
-                    summary_data = json.load(f)
-                
-                baseline_widget = self.query_one(BaselineSummaryWidget)
-                baseline_widget.update_panel(summary_data)
-                # No need to poll for this file, so we don't set a timer for it.
-        except (json.JSONDecodeError, IOError, KeyError) as e:
-            self.log(f"Error processing baseline file: {e}")
-
 
 if __name__ == "__main__":
     time.sleep(1)

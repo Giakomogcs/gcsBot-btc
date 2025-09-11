@@ -448,10 +448,10 @@ class Backtester:
                     merged_trades['pnl_pct'] = merged_trades.apply(
                         lambda row: (row['realized_pnl_usd_sell'] / row['usd_value_buy']) * 100 if row['usd_value_buy'] > 0 else Decimal(0), axis=1
                     )
-                    
+
                     gaining_trades_pct = merged_trades[merged_trades['pnl_pct'] > 0]['pnl_pct']
                     losing_trades_pct = merged_trades[merged_trades['pnl_pct'] < 0]['pnl_pct']
-                    
+
                     avg_gain_pct = Decimal(gaining_trades_pct.mean()) if not gaining_trades_pct.empty else Decimal(0)
                     avg_loss_pct = abs(Decimal(losing_trades_pct.mean())) if not losing_trades_pct.empty else Decimal(0)
 

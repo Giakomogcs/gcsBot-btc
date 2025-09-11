@@ -171,14 +171,15 @@ class StrategyRules:
         sell_price: Decimal,
         quantity_sold: Decimal,
         buy_commission_usd: Decimal,
-        sell_commission_usd: Decimal
+        sell_commission_usd: Decimal,
+        buy_quantity: Decimal
     ) -> Decimal:
         """
         Calculates the net realized profit or loss for a transaction.
-        Assumes that the commissions passed in are already correctly prorated for the quantity sold.
+        It correctly prorates the original buy commission for partial sells.
         """
-        if any(v is None for v in [buy_price, sell_price, quantity_sold, buy_commission_usd, sell_commission_usd]):
-            logger.warning("Cannot calculate PnL with missing values. buy_price, sell_price, quantity_sold, buy_commission_usd, or sell_commission_usd is None.")
+        if any(v is None for v in [buy_price, sell_price, quantity_sold, buy_commission_usd, sell_commission_usd, buy_quantity]):
+            logger.warning("Cannot calculate PnL with missing values.")
             return Decimal('0.0')
         try:
             buy_price = Decimal(buy_price)
@@ -186,9 +187,18 @@ class StrategyRules:
             quantity_sold = Decimal(quantity_sold)
             buy_commission_usd = Decimal(buy_commission_usd)
             sell_commission_usd = Decimal(sell_commission_usd)
+            buy_quantity = Decimal(buy_quantity)
+
+            # Prorate the buy commission for the quantity being sold.
+            # This is crucial for partial sell scenarios.
+            if buy_quantity > 0:
+                prorated_buy_commission = (buy_commission_usd * quantity_sold) / buy_quantity
+            else:
+                # Avoid division by zero if buy_quantity is invalid, though this shouldn't happen.
+                prorated_buy_commission = Decimal('0')
 
             gross_pnl = (sell_price - buy_price) * quantity_sold
-            net_pnl = gross_pnl - buy_commission_usd - sell_commission_usd
+            net_pnl = gross_pnl - prorated_buy_commission - sell_commission_usd
             return net_pnl
         except (TypeError, InvalidOperation) as e:
             logger.error(f"Error calculating realized PnL: {e}", exc_info=True)
