@@ -26,19 +26,19 @@ REGIME_NAMES = {
 REGIME_COLORS = ["cyan", "green", "magenta", "red"]
 
 
-class RegimeSummaryWidget(Static):
+class RegimeSummaryWidget(Container):
     """A widget to display the summary for a single optimization regime."""
 
     def __init__(self, regime_id: int, **kwargs):
         super().__init__(**kwargs)
         self.regime_id = regime_id
         self.regime_name = REGIME_NAMES.get(regime_id, f"UNKNOWN_{regime_id}")
-
-        # Internal state
-        self.trials_total = 0
-        self.best_params = {}
+        # Set a default border title, which will be updated
+        self.border_title = f" [bold]{self.regime_name}[/] [dim](PENDING)[/] "
 
     def compose(self) -> ComposeResult:
+        """Compose the widget's layout."""
+        yield Static(self.border_title, classes="regime_title")
         yield Vertical(
             Static(f"Best Parameters for {self.regime_name}", classes="param_header"),
             DataTable(id=f"params_table_{self.regime_id}", classes="params_table"),
@@ -51,22 +51,40 @@ class RegimeSummaryWidget(Static):
         table.add_column("Parameter", width=35)
         table.add_column("Value", width=20)
         table.add_row("[dim]Waiting for data...[/dim]", "")
+        # Add a class for default border color and specific regime styling
+        self.add_class("regime_widget_panel", f"regime-color-{self.regime_id}")
 
-    def update_summary(self, summary_data: dict, total_trials: int):
+    def update_panel(self, summary_data: dict, status: str, trials_completed: int, total_trials: int):
         """Updates the widget's display with new summary data."""
-        self.best_params = summary_data.get('params', {})
-        self.trials_total = total_trials
+        score = summary_data.get('score', 0) or 0.0
+        best_params = summary_data.get('params', {})
+        progress = f"{trials_completed}/{total_trials or '?'}"
 
-        # --- Update Parameters Table ---
-        params_table = self.query_one(f"#params_table_{self.regime_id}", DataTable)
+        # Update title and subtitle in the Static header
+        title = f"[bold]{self.regime_name}[/]"
+        status_text = f"[dim]({status})[/]"
+        details = f"Best Score: [bold]{score:.4f}[/] | Trials: {progress}"
+        self.query_one(".regime_title").update(f"{title} {status_text} - {details}")
+
+        # Update border style by managing classes
+        self.remove_class("status-running", "status-completed", "status-pending")
+        if status == "RUNNING":
+            self.add_class("status-running")
+        elif status == "COMPLETED":
+            self.add_class("status-completed")
+        else:
+            self.add_class("status-pending")
+
+        # Update Parameters Table
+        params_table = self.query_one(DataTable)
         params_table.clear()
         params_table.add_column("Parameter", width=35)
         params_table.add_column("Value", width=20)
 
-        if not self.best_params:
+        if not best_params:
             params_table.add_row("[dim]Waiting for first trial...[/dim]", "")
         else:
-            for key, value in sorted(self.best_params.items()):
+            for key, value in sorted(best_params.items()):
                 if isinstance(value, float):
                     value_str = f"{value:.6f}"
                 else:
@@ -83,13 +101,21 @@ class OptimizerDashboard(App):
         grid-gutter: 1;
         padding: 1;
     }
-    .regime_widget {
+    .regime_widget_panel {
         height: 100%;
+        padding: 0 1;
+        border: heavy grey50; /* Default border for pending/completed */
     }
-    Panel {
-        height: 100%;
-        border: heavy;
+    .regime_title {
+        width: 100%;
+        text-align: center;
+        padding: 1 0;
+        text-style: bold;
     }
+    .regime_widget_panel.status-running.regime-color-0 { border: heavy cyan; }
+    .regime_widget_panel.status-running.regime-color-1 { border: heavy green; }
+    .regime_widget_panel.status-running.regime-color-2 { border: heavy magenta; }
+    .regime_widget_panel.status-running.regime-color-3 { border: heavy red; }
     .param_header {
         width: 100%;
         text-align: center;
@@ -130,7 +156,6 @@ class OptimizerDashboard(App):
         self.processed_trial_files = set()
         self.regime_summaries = {}
         self.total_trials_per_regime = 0
-        self.regime_widgets = {}
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
@@ -139,15 +164,11 @@ class OptimizerDashboard(App):
 
         # Main grid for regime summaries
         yield Container(
-            *[Static(
-                Panel(
-                    RegimeSummaryWidget(regime_id=i),
-                    title=f" [bold]{REGIME_NAMES.get(i)}[/] [dim](PENDING)[/] ",
-                    border_style="grey50"
-                ),
-                id=f"regime_panel_{i}"
-            ) for i in range(4)],
-            id="main_container"
+            *[
+                RegimeSummaryWidget(regime_id=i, id=f"regime_panel_{i}")
+                for i in range(4)
+            ],
+            id="main_container",
         )
 
         # Log for individual trial updates
@@ -162,11 +183,6 @@ class OptimizerDashboard(App):
         """Called when the app is mounted."""
         # Create the directory if it doesn't exist to prevent errors
         TUI_FILES_DIR.mkdir(exist_ok=True)
-
-        # Store references to the summary widgets
-        self.regime_widgets = {
-            widget.regime_id: widget for widget in self.query(RegimeSummaryWidget)
-        }
 
         # Start polling for updates
         self.update_timer = self.set_interval(1.5, self.update_dashboard)
@@ -191,14 +207,14 @@ class OptimizerDashboard(App):
     def update_dashboard(self) -> None:
         """Polls the directory for JSON files and updates the dashboard."""
         status_bar = self.query_one("#status_bar", Static)
-        
+
         if not self.total_trials_per_regime:
             self.total_trials_per_regime = self._get_total_trials()
 
         # --- Update Summaries for Each Regime ---
         summary_files = glob.glob(str(TUI_FILES_DIR / "genius_summary_regime_*.json"))
         if summary_files:
-             status_bar.update("⚡ OPTIMIZING IN PARALLEL ACROSS ALL REGIMES ⚡")
+            status_bar.update("⚡ OPTIMIZING IN PARALLEL ACROSS ALL REGIMES ⚡")
 
         for file_path in summary_files:
             try:
@@ -206,41 +222,31 @@ class OptimizerDashboard(App):
                     summary_data = json.load(f)
 
                 regime_id = summary_data.get("regime")
-                if regime_id is None: continue
+                if regime_id is None:
+                    continue
 
                 # Update widget if data is new
                 if self.regime_summaries.get(regime_id) != summary_data:
                     self.regime_summaries[regime_id] = summary_data
 
-                    # --- Get widgets ---
-                    panel_static = self.query_one(f"#regime_panel_{regime_id}", Static)
-                    summary_widget = self.regime_widgets[regime_id]
+                    # --- Get widget ---
+                    try:
+                        summary_widget = self.query_one(f"#regime_panel_{regime_id}", RegimeSummaryWidget)
+                    except Exception:
+                        continue # Widget might not be mounted yet
 
-                    # --- Calculate new style and status ---
-                    regime_name = REGIME_NAMES.get(regime_id)
+                    # --- Calculate new status ---
                     trial_files = glob.glob(str(TUI_FILES_DIR / f"genius_trial_{regime_id}_*.json"))
                     trials_completed = len(trial_files)
                     status = "COMPLETED" if self.total_trials_per_regime and trials_completed >= self.total_trials_per_regime else "RUNNING"
-                    score = summary_data.get('score', 0) or 0.0
-                    progress = f"{trials_completed}/{self.total_trials_per_regime or '?'}"
-                    title = f" [bold]{regime_name}[/] [dim]({status})[/] "
-                    subtitle = f" Best Score: [bold]{score:.4f}[/] | Trials: {progress} "
-                    border_style = REGIME_COLORS[regime_id % len(REGIME_COLORS)] if status == "RUNNING" else "grey50"
 
-                    # --- IMPORTANT: Remove widget from its parent before re-attaching ---
-                    summary_widget.remove()
-
-                    # --- Create a new Panel with updated style and update the Static widget ---
-                    new_panel = Panel(
-                        summary_widget,
-                        title=title,
-                        subtitle=subtitle,
-                        border_style=border_style
+                    # --- Update the summary widget's content and appearance ---
+                    summary_widget.update_panel(
+                        summary_data=summary_data,
+                        status=status,
+                        trials_completed=trials_completed,
+                        total_trials=self.total_trials_per_regime,
                     )
-                    panel_static.update(new_panel)
-
-                    # --- Update the summary widget's content ---
-                    summary_widget.update_summary(summary_data, self.total_trials_per_regime)
 
             except (json.JSONDecodeError, IOError, KeyError):
                 continue
