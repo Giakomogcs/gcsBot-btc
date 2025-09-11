@@ -229,7 +229,7 @@ def run_bot_in_container(bot_name: str, mode: str) -> tuple[Optional[str], int]:
         traceback.print_exc()
         return None, -1
 
-def run_command_in_container(command: list, bot_name: str, interactive: bool = False, extra_env_files: Optional[List[str]] = None, non_blocking: bool = False):
+def run_command_in_container(command: list, bot_name: str, interactive: bool = False, extra_env_files: Optional[List[str]] = None, non_blocking: bool = False, suppress_output: bool = False):
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '.'))
     
     run_command = SUDO_PREFIX + [
@@ -259,19 +259,27 @@ def run_command_in_container(command: list, bot_name: str, interactive: bool = F
     run_command.extend([DOCKER_IMAGE_NAME, "python"])
     run_command.extend(command)
     
-    print(f"   (executando: `{' '.join(run_command)}`)")
+    if not suppress_output:
+        print(f"   (executando: `{' '.join(run_command)}`)")
+
+    popen_kwargs = {}
+    if suppress_output:
+        popen_kwargs['stdout'] = subprocess.DEVNULL
+        popen_kwargs['stderr'] = subprocess.DEVNULL
 
     if non_blocking:
-        return subprocess.Popen(run_command)
+        return subprocess.Popen(run_command, **popen_kwargs)
 
     try:
-        subprocess.run(run_command, check=True)
+        subprocess.run(run_command, check=True, **popen_kwargs)
         return True
     except subprocess.CalledProcessError as e:
-        print(f"❌ Falha ao executar comando no container. Código de saída: {e.returncode}")
+        if not suppress_output:
+            print(f"❌ Falha ao executar comando no container. Código de saída: {e.returncode}")
         return False
     except Exception as e:
-        print(f"❌ Falha inesperada ao executar comando no container: {e}")
+        if not suppress_output:
+            print(f"❌ Falha inesperada ao executar comando no container: {e}")
         return False
 
 def _confirm_and_clear_data(bot_name: str):
@@ -471,6 +479,24 @@ def _get_bots_from_env(env_file_path: str = ".env") -> list[str]:
                 bots.add(match.group(1).lower())
     return sorted(list(bots))
 
+def _clear_tui_files():
+    """Clears the JSON files from the .tui_files directory."""
+    tui_dir = ".tui_files"
+    if os.path.exists(tui_dir):
+        files_to_delete = glob.glob(os.path.join(tui_dir, "trial_*.json"))
+        summary_file = os.path.join(tui_dir, "best_trial_summary.json")
+        if os.path.exists(summary_file):
+            files_to_delete.append(summary_file)
+
+        if files_to_delete:
+            print("🗑️  Limpando arquivos de dashboard da otimização anterior...")
+            for f in files_to_delete:
+                try:
+                    os.remove(f)
+                except OSError as e:
+                    print(f"⚠️  Aviso: Não foi possível deletar o arquivo {f}: {e}")
+            print("✅ Limpeza concluída.")
+
 NEW_BOT_TEMPLATE = """
 # ==============================================================================
 # BOT: {bot_name}
@@ -621,6 +647,7 @@ def backtest(
     env_files_for_final_run = None
 
     if optimize:
+        _clear_tui_files()
         n_trials, wallet_profile = _get_optimizer_settings_interactively(jobs)
 
         print("\n--- Iniciando Otimização ---")
@@ -662,7 +689,7 @@ def backtest(
 
             optimizer_args = ["scripts/run_optimizer.py", final_bot_name, str(trials_for_job), str(days), wallet_profile]
             print(f"   -> Iniciando job #{i+1} com {trials_for_job} trials...")
-            p = run_command_in_container(optimizer_args, final_bot_name, non_blocking=True)
+            p = run_command_in_container(optimizer_args, final_bot_name, non_blocking=True, suppress_output=True)
             processes.append(p)
 
         for p in processes:

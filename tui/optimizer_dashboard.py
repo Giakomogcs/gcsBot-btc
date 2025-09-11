@@ -97,11 +97,14 @@ class OptimizerDashboard(App):
                     duration_str = f"{duration.total_seconds():.2f}"
 
                 # Use a unique key for each row to update it in place
-                if table.is_valid_row_key(row_key):
-                    table.update_cell_at(table.get_row_coordinate(row_key), 1, status)
-                    table.update_cell_at(table.get_row_coordinate(row_key), 2, value_str)
-                    table.update_cell_at(table.get_row_coordinate(row_key), 3, duration_str)
-                else:
+                try:
+                    # If the row exists, update it
+                    coordinate = table.get_row_coordinate(row_key)
+                    table.update_cell_at(coordinate._replace(column=1), status)
+                    table.update_cell_at(coordinate._replace(column=2), value_str)
+                    table.update_cell_at(coordinate._replace(column=3), duration_str)
+                except KeyError:
+                    # If the row does not exist, add it
                     table.add_row(
                         str(trial_num),
                         status,
