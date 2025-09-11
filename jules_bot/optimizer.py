@@ -189,23 +189,5 @@ def run_optimization(bot_name: str, n_trials: int, days: int, wallet_profile: st
 
     logger.info("="*30 + " OPTIMIZATION FINISHED " + "="*30)
 
-    try:
-        best_trial = study.best_trial
-        logger.info(f"Best trial: #{best_trial.number} -> Final Balance: ${best_trial.value:,.2f}")
-
-        logger.info("  -> Saving best parameters to " + BEST_PARAMS_FILE)
-        with open(BEST_PARAMS_FILE, 'w') as f:
-            f.write(f"# Best parameters for bot '{bot_name}' from study '{study_name}'\n")
-            f.write(f"# Final Balance: {best_trial.value:.2f}\n\n")
-            for key, value in best_trial.params.items():
-                if "PROFIT_MULTIPLIER" in key:
-                    base_profit = best_trial.params.get("STRATEGY_RULES_TARGET_PROFIT", 0.005)
-                    original_key = key.replace("_PROFIT_MULTIPLIER", "_TARGET_PROFIT")
-                    final_value = base_profit * value
-                    f.write(f"{original_key.upper()}={final_value}\n")
-                else:
-                    f.write(f"{key.upper()}={value}\n")
-        logger.info(f"✅ Best parameters saved successfully.")
-
-    except ValueError:
-        logger.warning("No successful trials were completed. Could not determine best parameters.")
+    # The logic for saving the best parameters has been moved to the main run.py script
+    # to prevent race conditions when running in parallel.

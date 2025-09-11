@@ -12,6 +12,10 @@ try:
     import questionary
 except ImportError:
     questionary = None
+try:
+    import optuna
+except ImportError:
+    optuna = None
 
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.utils.config_manager import config_manager
@@ -497,6 +501,46 @@ def _clear_tui_files():
                     print(f"⚠️  Aviso: Não foi possível deletar o arquivo {f}: {e}")
             print("✅ Limpeza concluída.")
 
+def _save_best_params(bot_name: str):
+    """
+    Loads the completed study, finds the best trial, and saves its parameters.
+    """
+    if optuna is None:
+        print("❌ A biblioteca 'optuna' não está instalada. Não foi possível salvar os melhores parâmetros.")
+        return
+
+    print("💾 Salvando os melhores parâmetros encontrados...")
+    try:
+        # We need to import these here as they are not top-level dependencies of run.py
+        from jules_bot.optimizer import OPTIMIZE_OUTPUT_DIR, BEST_PARAMS_FILE
+
+        study_name = f"optimization_{bot_name}"
+        storage_url = f"sqlite:///{OPTIMIZE_OUTPUT_DIR}jules_bot_optimization.db"
+
+        study = optuna.load_study(study_name=study_name, storage=storage_url)
+        best_trial = study.best_trial
+
+        print(f"🏆 Melhor trial: #{best_trial.number} -> Saldo Final: ${best_trial.value:,.2f}")
+
+        with open(BEST_PARAMS_FILE, 'w') as f:
+            f.write(f"# Best parameters for bot '{bot_name}' from study '{study_name}'\n")
+            f.write(f"# Final Balance: {best_trial.value:.2f}\n\n")
+            for key, value in best_trial.params.items():
+                # This logic is copied from the original optimizer.py
+                if "PROFIT_MULTIPLIER" in key:
+                    base_profit = best_trial.params.get("STRATEGY_RULES_TARGET_PROFIT", 0.005)
+                    original_key = key.replace("_PROFIT_MULTIPLIER", "_TARGET_PROFIT")
+                    final_value = base_profit * value
+                    f.write(f"{original_key.upper()}={final_value}\n")
+                else:
+                    f.write(f"{key.upper()}={value}\n")
+        print(f"✅ Melhores parâmetros salvos com sucesso em '{BEST_PARAMS_FILE}'.")
+
+    except ValueError:
+        print("⚠️  Aviso: Nenhum trial foi completado com sucesso. Não foi possível determinar os melhores parâmetros.")
+    except Exception as e:
+        print(f"❌ Erro ao salvar os melhores parâmetros: {e}")
+
 NEW_BOT_TEMPLATE = """
 # ==============================================================================
 # BOT: {bot_name}
@@ -703,7 +747,9 @@ def backtest(
             except subprocess.TimeoutExpired:
                 tui_process.kill()
 
-        print("\n✅ Otimização finalizada. Os melhores parâmetros foram salvos em 'optimize/.best_params.env'.")
+        _save_best_params(final_bot_name)
+
+        print("\n✅ Otimização finalizada.")
         env_files_for_final_run = ["optimize/.best_params.env"]
 
         print("\n--- Etapa 3 de 3: Rodando Backtest Final com os Melhores Parâmetros ---")
