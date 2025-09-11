@@ -23,19 +23,39 @@ def _calculate_progress_pct(current_price: Decimal, start_price: Decimal, target
 
 def calculate_buy_progress(market_data: dict, current_params: dict, difficulty_factor: Decimal) -> tuple[Decimal, Decimal]:
     """
-    Calculates the target price for the next buy and the progress towards it.
+    Calculates the target price for the next buy and the progress towards it,
+    considering the correct market regime (uptrend vs. downtrend).
     """
     try:
         current_price = Decimal(str(market_data.get('close')))
         high_price = Decimal(str(market_data.get('high', current_price)))
+        ema_100 = market_data.get('ema_100')
+        bbl = market_data.get('bbl_20_2_0')
 
-        # This logic must mirror `strategy_rules.py` to ensure TUI consistency
-        base_buy_dip = current_params.get('buy_dip_percentage', Decimal('0.02'))
-        adjusted_buy_dip_percentage = base_buy_dip + difficulty_factor
-        target_price = high_price * (Decimal('1') - adjusted_buy_dip_percentage)
+        # If essential data is missing, can't determine target
+        if any(v is None for v in [current_price, high_price, ema_100, bbl]):
+            return Decimal('0'), Decimal('0')
 
-        # The "start price" for measuring progress is the recent high.
-        progress = _calculate_progress_pct(current_price, high_price, target_price)
+        ema_100 = Decimal(str(ema_100))
+        bbl = Decimal(str(bbl))
+
+        # Determine which target is active based on market trend (mirroring strategy_rules.py)
+        if current_price > ema_100:
+            # UPTREND LOGIC: Target is based on a dip from the high price.
+            base_buy_dip = current_params.get('buy_dip_percentage', Decimal('0.02'))
+            adjusted_buy_dip_percentage = base_buy_dip + difficulty_factor
+            target_price = high_price * (Decimal('1') - adjusted_buy_dip_percentage)
+            # The "start price" for measuring progress is the recent high.
+            start_price = high_price
+        else:
+            # DOWNTREND LOGIC: Target is the adjusted lower Bollinger Band.
+            difficulty_multiplier = Decimal('1') - difficulty_factor
+            target_price = bbl * difficulty_multiplier
+            # The "start price" for measuring progress is the recent high.
+            # When the current price drops from the high to the target, progress goes from 0 to 100.
+            start_price = high_price
+
+        progress = _calculate_progress_pct(current_price, start_price, target_price)
 
         return target_price, progress
 

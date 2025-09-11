@@ -1,0 +1,44 @@
+{
+  "description": "Configuration for the strategy optimization script. Define parameters and their ranges to be tested.",
+  "parameters": {
+    "sell_factor": {
+      "section": "STRATEGY_RULES",
+      "values": [ "0.8", "0.9", "1.0" ],
+      "description": "Percentage of the position to sell when a sell signal is triggered."
+    },
+    "buy_dip_percentage": {
+      "section": "STRATEGY_RULES",
+      "range": {
+        "min": 0.01,
+        "max": 0.05,
+        "step": 0.01
+      },
+      "description": "The percentage drop from the high required to trigger a buy in an uptrend."
+    },
+    "base_difficulty_percentage": {
+      "section": "STRATEGY_RULES",
+      "values": ["0.005", "0.01"],
+      "description": "Base difficulty applied after the consecutive buy threshold is met."
+    },
+    "per_buy_difficulty_increment": {
+      "section": "STRATEGY_RULES",
+      "range": {
+        "min": 0.001,
+        "max": 0.003,
+        "step": 0.001
+      },
+      "description": "Additional difficulty added for each consecutive buy over the threshold."
+    },
+    "use_dynamic_trailing_stop": {
+      "section": "STRATEGY_RULES",
+      "values": [ "true", "false" ],
+      "type": "bool",
+      "description": "Enable or disable the dynamic trailing stop feature."
+    }
+  },
+  "settings": {
+    "sort_by": "Net P&L",
+    "ascending": false,
+    "top_n_results": 10
+  }
+}
