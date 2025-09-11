@@ -359,6 +359,8 @@ class Backtester:
 
         if portfolio_history:
             portfolio_df = pd.DataFrame(portfolio_history, columns=['value'])
+            # BUG FIX: Convert Decimal to float for compatibility with numpy/pandas stats
+            portfolio_df['value'] = portfolio_df['value'].astype(float)
             portfolio_df['returns'] = portfolio_df['value'].pct_change().fillna(0)
 
             # Max Drawdown
