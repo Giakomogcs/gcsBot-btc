@@ -26,11 +26,11 @@ def main():
     args = parser.parse_args()
 
     try:
-        # Get bot name from environment variable and initialize the config manager
-        bot_name = os.getenv("BOT_NAME", "jules_bot")
-        config_manager.initialize(bot_name)
+        # The config_manager singleton is initialized on import, reading BOT_NAME
+        # from the environment. Any component that uses it will have the correct bot context.
+        bot_name = config_manager.bot_name
 
-        logger.info(f"Starting backtest data preparation for the last {args.days} days...")
+        logger.info(f"Starting backtest data preparation for bot '{bot_name}' for the last {args.days} days...")
         
         prepare_backtest_data(days=args.days)
         

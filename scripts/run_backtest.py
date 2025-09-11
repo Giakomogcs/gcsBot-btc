@@ -69,9 +69,10 @@ def main():
     try:
         logger.info("--- Starting New Backtest Simulation ---")
         
-        # Initialize ConfigManager first
-        bot_name = os.getenv("BOT_NAME", "jules_bot")
-        config_manager.initialize(bot_name)
+        # The config_manager singleton initializes itself on import, using the
+        # BOT_NAME from the environment. PostgresManager will then use this
+        # singleton to get the correct bot context and connect to the right schema.
+        logger.info(f"Running backtest for bot: '{config_manager.bot_name}'")
 
         db_manager = PostgresManager()
 

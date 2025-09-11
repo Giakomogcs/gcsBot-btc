@@ -25,10 +25,13 @@ def main(bot_name: str = typer.Argument(..., help="The name of the bot to valida
     logger.info(f"Starting data validation for bot: {bot_name}")
 
     try:
-        config_manager.initialize(bot_name)
+        # This script is run manually with a bot_name argument, so the config_manager
+        # singleton may have initialized with the wrong context. We must manually
+        # update its state before proceeding.
+        config_manager.bot_name = bot_name
         db_manager = PostgresManager()
 
-        logger.info("Fetching all trades from the database (no date limit)...")
+        logger.info(f"Fetching all trades from the database for schema '{db_manager.bot_name}' (no date limit)...")
         # Because we changed the default start_date to None, this gets all trades
         all_trades = db_manager.get_all_trades_in_range()
         logger.info(f"Found a total of {len(all_trades)} trades.")

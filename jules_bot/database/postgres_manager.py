@@ -20,16 +20,13 @@ from jules_bot.utils.config_manager import config_manager
 class PostgresManager:
     def __init__(self, config_manager=None):
         if config_manager is None:
+            # Import the global singleton if no specific instance is provided.
             from jules_bot.utils.config_manager import config_manager as global_config_manager
             config_manager = global_config_manager
 
-        # The config_manager MUST be initialized before this class is instantiated.
-        if not config_manager.bot_name:
-            raise RuntimeError(
-                "ConfigManager has not been initialized. "
-                "Please call config_manager.initialize(bot_name) before instantiating PostgresManager."
-            )
-
+        # The global config_manager is a singleton that initializes itself on import.
+        # It reads the BOT_NAME environment variable at that time, so we can trust
+        # that config_manager.bot_name is already correctly set.
         self.config_manager = config_manager
         db_config = self.config_manager.get_section("POSTGRES")
 
