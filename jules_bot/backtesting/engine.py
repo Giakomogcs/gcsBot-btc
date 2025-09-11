@@ -1,6 +1,10 @@
 import logging
 import uuid
 import pandas as pd
+try:
+    import optuna
+except ImportError:
+    optuna = None
 import os
 from datetime import timedelta
 from decimal import Decimal, getcontext
@@ -76,7 +80,7 @@ class Backtester:
         self.feature_data = self.sa_model.transform(self.feature_data)
         logger.info("Market regimes calculated for the entire backtest period.")
 
-    def run(self):
+    def run(self, trial: 'optuna.Trial' = None):
         logger.info(f"--- Starting backtest run {self.run_id} ---")
 
         strategy_rules = self.strategy_rules
@@ -88,7 +92,10 @@ class Backtester:
         portfolio_history = []
         all_trades_for_run = []
 
-        for current_time, candle in self.feature_data.iterrows():
+        # Define a pruning frequency to avoid checking on every single candle
+        pruning_frequency = 1000  # Check every 1000 candles (approx. 16 hours of 1m data)
+
+        for i, (current_time, candle) in enumerate(self.feature_data.iterrows()):
             current_price = Decimal(str(candle['close']))
             self.mock_trader.set_current_time_and_price(current_time, current_price)
 
@@ -100,6 +107,14 @@ class Backtester:
             current_open_positions_value = sum(pos['quantity'] * current_price for pos in open_positions.values())
             total_portfolio_value = cash_balance + current_open_positions_value
             portfolio_history.append(total_portfolio_value)
+
+            # --- Pruning Check ---
+            if trial and i > 0 and i % pruning_frequency == 0:
+                trial.report(float(total_portfolio_value), i)
+                if trial.should_prune():
+                    # If the trial is unpromising, Optuna will tell us to stop early.
+                    if optuna:
+                        raise optuna.TrialPruned()
 
             positions_to_sell_now = []
             for trade_id, position in list(open_positions.items()):
@@ -235,8 +250,9 @@ class Backtester:
                     all_trades_for_run.append(BacktestTrade(**trade_data))
 
         self._log_trades_to_db(all_trades_for_run)
-        self._generate_and_save_summary(open_positions, portfolio_history)
+        final_balance = self._generate_and_save_summary(open_positions, portfolio_history)
         logger.info(f"--- Backtest {self.run_id} finished ---")
+        return final_balance
 
     def _log_trades_to_db(self, trades: list):
         """
@@ -346,6 +362,8 @@ class Backtester:
         logger.info(f" Maximum Drawdown:    {max_drawdown * 100:.2f}%%")
         logger.info(f" Total Fees Paid:     ${total_fees_usd:,.2f}")
         logger.info("="*80)
+
+        return final_balance
 
 def trade_point_to_dict(self):
     from dataclasses import asdict

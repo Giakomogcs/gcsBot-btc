@@ -370,9 +370,9 @@ python run.py display --bot-name meu-primeiro-bot
 
 #### `backtest`
 
-**Descrição:** Executa um processo de backtesting completo para um bot, que inclui a preparação dos dados históricos e a simulação da estratégia.
-**Uso:**
+**Descrição:** Executa um processo de backtesting. Pode ser um backtest simples com os parâmetros atuais ou um fluxo completo de otimização para encontrar os melhores parâmetros antes da simulação final.
 
+**Uso:**
 ```bash
 python run.py backtest [OPÇÕES]
 ```
@@ -380,13 +380,30 @@ python run.py backtest [OPÇÕES]
 **Argumentos:**
 | Nome | Descrição | Padrão |
 | --- | --- | --- |
-| `--bot-name, -n` | O nome do bot para o qual o backtest será executado. | `jules_bot` (padrão) |
+| `--bot-name, -n` | O nome do bot para o qual o backtest será executado. Se omitido, será interativo. | `jules_bot` |
 | `--days, -d` | O número de dias de dados históricos a serem usados no backtest. | `30` |
-**Exemplo:**
+| `--optimize` | Se esta flag for usada, ativa o modo de otimização antes do backtest final. | `False` |
 
-````bash
-# Executar um backtest de 90 dias para 'meu-primeiro-bot'
-python run.py backtest --bot-name meu-primeiro-bot --days 90
+**Exemplos de Uso:**
+
+1.  **Backtest Padrão:**
+    Executa um backtest simples usando as configurações atuais do seu arquivo `.env`.
+    ```bash
+    python run.py backtest --bot-name meu-primeiro-bot --days 90
+    ```
+
+2.  **Backtest com Otimização:**
+    Ativa o fluxo de otimização profissional.
+    ```bash
+    python run.py backtest --optimize
+    ```
+    - **O que acontece:**
+        1.  **Configuração Interativa:** O script fará perguntas para configurar a otimização (número de testes, perfil de carteira, etc.).
+        2.  **Otimização:** O Optuna rodará vários backtests em segundo plano, de forma eficiente (usando "pruning" para descartar testes ruins), para encontrar a melhor combinação de parâmetros. O progresso é salvo em `jules_bot_optimization.db`.
+        3.  **Salvar Resultados:** Os melhores parâmetros são salvos automaticamente no arquivo `.best_params.env`.
+        4.  **Backtest Final:** Um último backtest, com relatório detalhado e limpo, é executado usando os parâmetros do `.best_params.env`.
+
+Este fluxo integrado garante que você possa encontrar e testar a melhor estratégia de forma robusta e profissional com um único comando.
 
 ### Scripts de Utilidade
 

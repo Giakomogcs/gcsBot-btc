@@ -5,7 +5,7 @@ import typer
 import subprocess
 import time
 import traceback
-from typing import Optional
+from typing import Optional, List
 import glob
 from jules_bot.utils import process_manager
 try:
@@ -34,10 +34,6 @@ import socket
 import errno
 
 def find_free_port(start_port=8766, exclude_ports=None):
-    """
-    Finds an available TCP port on the host, starting from start_port.
-    Skips any ports mentioned in the exclude_ports list.
-    """
     if exclude_ports is None:
         exclude_ports = []
     port = start_port
@@ -50,7 +46,6 @@ def find_free_port(start_port=8766, exclude_ports=None):
                 s.bind(('0.0.0.0', port))
                 return port
         except OSError as e:
-            # Check for 'address already in use' error on both Linux/macOS and Windows
             if e.errno == errno.EADDRINUSE or (hasattr(e, 'winerror') and e.winerror == 10048):
                 port += 1
             else:
@@ -89,7 +84,6 @@ def run_docker_compose_command(command_args: list, **kwargs):
     return False
 
 def _check_image_exists() -> bool:
-    """Verifica se a imagem Docker da aplicação já existe."""
     try:
         cmd = SUDO_PREFIX + ["docker", "image", "inspect", DOCKER_IMAGE_NAME]
         subprocess.run(cmd, check=True, capture_output=True)
@@ -100,7 +94,6 @@ def _check_image_exists() -> bool:
         return False
 
 def _build_app_image(force: bool = False) -> bool:
-    """Constrói a imagem Docker da aplicação, opcionalmente forçando a reconstrução."""
     if not force and _check_image_exists():
         print(f"✅ Imagem Docker '{DOCKER_IMAGE_NAME}' já existe. Pulando a construção.")
         return True
@@ -111,7 +104,7 @@ def _build_app_image(force: bool = False) -> bool:
         build_command.append("--no-cache")
     print(f"   (usando comando: `{' '.join(build_command)}`)")
     try:
-        subprocess.run(build_command, check=True) # Stream output
+        subprocess.run(build_command, check=True)
         print(f"✅ Imagem '{DOCKER_IMAGE_NAME}' construída com sucesso.")
     except subprocess.CalledProcessError:
         print(f"❌ Falha ao construir a imagem Docker. Verifique o output acima.")
@@ -120,7 +113,6 @@ def _build_app_image(force: bool = False) -> bool:
         print(f"❌ Erro inesperado ao construir a imagem Docker: {e}")
         return False
 
-    # Prune dangling images after a successful build
     print("\n   -> Limpando imagens antigas (dangling)...")
     prune_command = SUDO_PREFIX + ["docker", "image", "prune", "-f"]
     try:
@@ -132,15 +124,9 @@ def _build_app_image(force: bool = False) -> bool:
     return True
 
 def _ensure_env_is_running(rebuild: bool = False):
-    """
-    Garante que o ambiente Docker (serviços e imagem da app) está pronto.
-    """
-    # Etapa 1: Construir a imagem da aplicação se necessário ou forçado
     if rebuild or not _check_image_exists():
         if not _build_app_image(force=rebuild):
-            return False # Para a execução se a construção da imagem falhar
-
-    # Etapa 2: Garantir que os serviços (Postgres, etc.) estão em execução
+            return False
     try:
         base_command = get_docker_compose_command()
         check_command = base_command + ["ps", "-q", "postgres"]
@@ -154,59 +140,42 @@ def _ensure_env_is_running(rebuild: bool = False):
             print("✅ Serviços de ambiente iniciados com sucesso.")
         else:
             print("✅ Serviços Docker (PostgreSQL, etc.) já estão em execução.")
-
     except Exception as e:
         print(f"❌ Erro inesperado ao verificar ou iniciar o ambiente Docker: {e}")
         return False
-
     return True
 
 @app.command("start-env")
 def start_env(rebuild: bool = typer.Option(False, "--rebuild", help="Força a reconstrução da imagem da aplicação.")):
-    """
-    Inicia o ambiente Docker (serviços e app) e constrói a imagem se necessário.
-    """
     if not _ensure_env_is_running(rebuild=rebuild):
         raise typer.Exit(1)
     print("✅ Ambiente Docker pronto para uso.")
 
-
 @app.command("rebuild-app")
 def rebuild_app():
-    """
-    Força a reconstrução (rebuild) da imagem Docker da aplicação.
-    """
     print("Forçando a reconstrução da imagem da aplicação...")
     if not _build_app_image(force=True):
         print("❌ A reconstrução falhou. Verifique os logs acima.")
         raise typer.Exit(1)
     print("✅ Imagem da aplicação reconstruída com sucesso.")
 
-
 @app.command("stop-env")
 def stop_env():
-    """
-    Para todos os containers do projeto (bots e serviços), mas não remove a imagem da aplicação.
-    """
     print("🛑 Parando todos os serviços Docker...")
     running_bots = process_manager.sync_and_get_running_bots()
     if running_bots:
         print("   Parando containers de bot em execução...")
         for bot in running_bots:
             try:
-                # Silenciosamente para e remove o container
                 subprocess.run(SUDO_PREFIX + ["docker", "stop", bot.container_id], capture_output=True, check=False)
                 subprocess.run(SUDO_PREFIX + ["docker", "rm", bot.container_id], capture_output=True, check=False)
                 process_manager.remove_running_bot(bot.bot_name)
             except Exception:
-                pass # Ignora erros se o container já foi removido
-
-    # O comando 'down' para e remove containers, redes e volumes definidos no compose
-    if run_docker_compose_command(["down", "--volumes"], capture_output=True): # --volumes remove volumes anônimos
+                pass
+    if run_docker_compose_command(["down", "--volumes"], capture_output=True):
         print("✅ Ambiente Docker (serviços) parado com sucesso.")
     else:
         print("⚠️  Houve um problema ao parar o ambiente de serviços com docker-compose.")
-
     print(f"ℹ️  A imagem da aplicação '{DOCKER_IMAGE_NAME}' foi mantida. Use 'python run.py rebuild-app' para reconstruí-la.")
 
 @app.command("status")
@@ -224,17 +193,12 @@ def run_bot_in_container(bot_name: str, mode: str) -> tuple[Optional[str], int]:
     except Exception:
         pass
     
-    # Adicionando o volume mount (-v) para que o arquivo de status seja visível no host
-    # Garante que o diretório de arquivos da TUI exista no host
     tui_files_dir = os.path.join(project_root, ".tui_files")
     os.makedirs(tui_files_dir, mode=0o777, exist_ok=True)
 
-    # Find a free port for the bot's API
     try:
-        # Get ports already in use by our managed bots to avoid conflicts
         running_bots = process_manager.sync_and_get_running_bots()
         used_ports = [bot.host_port for bot in running_bots]
-
         host_port = find_free_port(exclude_ports=used_ports)
         print(f"   API do bot será exposta na porta do host: {host_port}")
     except IOError as e:
@@ -265,17 +229,29 @@ def run_bot_in_container(bot_name: str, mode: str) -> tuple[Optional[str], int]:
         traceback.print_exc()
         return None, -1
 
-def run_command_in_container(command: list, bot_name: str, interactive: bool = False):
+def run_command_in_container(command: list, bot_name: str, interactive: bool = False, extra_env_files: Optional[List[str]] = None):
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '.'))
     
     run_command = SUDO_PREFIX + [
         "docker", "run", "--rm",
         "--network", DOCKER_NETWORK_NAME,
-        "--env-file", ".env",
+    ]
+
+    env_files = [".env"]
+    if extra_env_files:
+        env_files.extend(extra_env_files)
+
+    for env_file in env_files:
+        if os.path.exists(env_file):
+            run_command.extend(["--env-file", env_file])
+        else:
+            print(f"⚠️  Aviso: Arquivo de ambiente '{env_file}' não encontrado e será ignorado.")
+
+    run_command.extend([
         "-v", f"{project_root}:/app",
         "-e", f"BOT_NAME={bot_name}",
         "-e", "JULES_BOT_SCRIPT_MODE=1"
-    ]
+    ])
     
     if interactive:
         run_command.append("-it")
@@ -285,13 +261,9 @@ def run_command_in_container(command: list, bot_name: str, interactive: bool = F
     
     print(f"   (executando: `{' '.join(run_command)}`)")
     try:
-        # Para scripts não interativos, é melhor mostrar o output diretamente
-        # em vez de capturá-lo. check=True ainda vai parar em caso de erro.
         subprocess.run(run_command, check=True)
         return True
     except subprocess.CalledProcessError as e:
-        # A mensagem de erro do subprocess já é informativa,
-        # então não precisamos imprimir stderr/stdout manualmente.
         print(f"❌ Falha ao executar comando no container. Código de saída: {e.returncode}")
         return False
     except Exception as e:
@@ -606,19 +578,81 @@ def validate(bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", he
     else:
         print("✅ Script de validação concluído.")
 
+def _get_optimizer_settings_interactively() -> tuple[int, str]:
+    """Function to ask for optimizer settings using questionary."""
+    if questionary is None:
+        print("❌ A biblioteca 'questionary' é necessária para a otimização. Instale com 'pip install questionary'")
+        raise typer.Exit(1)
+
+    print("\n--- Configurações da Otimização ---")
+    trials_str = questionary.text(
+        "Quantas combinações de parâmetros (trials) você deseja testar?",
+        default="100",
+        validate=lambda text: text.isdigit() and int(text) > 0 or "Por favor, insira um número inteiro positivo."
+    ).ask()
+    if not trials_str: raise typer.Exit()
+    n_trials = int(trials_str)
+
+    profile_map = {
+        "Iniciante ($100)": "beginner",
+        "Intermediário ($1,000)": "intermediate",
+        "Avançado ($10,000)": "advanced"
+    }
+    profile_choice = questionary.select(
+        "Qual o perfil de carteira para a otimização?",
+        choices=list(profile_map.keys())
+    ).ask()
+    if not profile_choice: raise typer.Exit()
+    wallet_profile = profile_map[profile_choice]
+
+    return n_trials, wallet_profile
 
 @app.command()
-def backtest(bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="O nome do bot para executar."), days: int = typer.Option(30, "--days", "-d", help="Número de dias de dados recentes para o backtest.")):
+def backtest(
+    bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="O nome do bot para executar."),
+    days: int = typer.Option(30, "--days", "-d", help="Número de dias de dados recentes para o backtest."),
+    optimize: bool = typer.Option(False, "--optimize", help="Rodar o otimizador para encontrar os melhores parâmetros antes do backtest final.")
+):
+    """Executa um backtest, com a opção de rodar um otimizador de parâmetros antes."""
     final_bot_name = _setup_bot_run(bot_name)
-    print(f"🚀 Iniciando execução de backtest para {days} dias para o bot '{final_bot_name}'...")
-    print("\n--- Etapa 1 de 2: Preparando dados ---")
-    if not run_command_in_container(["scripts/prepare_backtest_data.py", str(days)], final_bot_name):
-        print("❌ Falha na preparação dos dados. Abortando backtest.")
-        return
-    print("\n--- Etapa 2 de 2: Rodando o backtest ---")
-    if not run_command_in_container(["scripts/run_backtest.py", str(days)], final_bot_name):
+    env_files_for_final_run = None
+
+    if optimize:
+        n_trials, wallet_profile = _get_optimizer_settings_interactively()
+
+        print("\n--- Iniciando Otimização ---")
+        print(f"   - Bot: {final_bot_name}, Dias: {days}, Trials: {n_trials}, Perfil: {wallet_profile}")
+        if not typer.confirm("Deseja continuar?"):
+            raise typer.Exit()
+
+        print("\n--- Etapa 1 de 3: Preparando dados históricos ---")
+        if not run_command_in_container(["scripts/prepare_backtest_data.py", str(days)], final_bot_name):
+            print("❌ Falha na preparação dos dados. Abortando.")
+            return
+
+        print(f"\n--- Etapa 2 de 3: Rodando a otimização para {n_trials} tentativas ---")
+        optimizer_args = ["scripts/run_optimizer.py", final_bot_name, str(n_trials), str(days), wallet_profile]
+        if not run_command_in_container(optimizer_args, final_bot_name):
+            print("❌ Falha na execução da otimização.")
+            return
+
+        print("✅ Otimização finalizada. Os melhores parâmetros foram salvos em '.best_params.env'.")
+        env_files_for_final_run = [".best_params.env"]
+
+        print("\n--- Etapa 3 de 3: Rodando Backtest Final com os Melhores Parâmetros ---")
+
+    else:
+        print(f"🚀 Iniciando execução de backtest padrão para {days} dias para o bot '{final_bot_name}'...")
+        print("\n--- Etapa 1 de 2: Preparando dados ---")
+        if not run_command_in_container(["scripts/prepare_backtest_data.py", str(days)], final_bot_name):
+            print("❌ Falha na preparação dos dados. Abortando backtest.")
+            return
+        print("\n--- Etapa 2 de 2: Rodando o backtest ---")
+
+    if not run_command_in_container(["scripts/run_backtest.py", str(days)], final_bot_name, extra_env_files=env_files_for_final_run):
         print("❌ Falha na execução do backtest.")
         return
+
     print("\n✅ Backtest finalizado com sucesso.")
 
 @app.command("clean")
@@ -629,7 +663,6 @@ def clean():
     print("🧹 Limpando arquivos de cache do Python...")
     count_files = 0
     count_dirs = 0
-    # Adicionado um .gitignore global para __pycache__ para evitar que o problema se repita
     gitignore_path = ".gitignore"
     pycache_ignored = False
     if os.path.exists(gitignore_path):
@@ -643,7 +676,6 @@ def clean():
             f.write("\n\n# Python cache files\n__pycache__/\n")
 
     for root, dirs, files in os.walk("."):
-        # Remove .pyc files
         for file in files:
             if file.endswith(".pyc"):
                 full_path = os.path.join(root, file)
@@ -653,20 +685,16 @@ def clean():
                 except OSError as e:
                     print(f"❌ Erro ao remover o arquivo {full_path}: {e}")
 
-        # Remove __pycache__ directories
         if "__pycache__" in dirs:
             full_path = os.path.join(root, "__pycache__")
             try:
-                # Usar shutil.rmtree para remover o diretório e seu conteúdo
                 shutil.rmtree(full_path)
                 count_dirs += 1
-                # É preciso remover o __pycache__ da lista de `dirs` para que o os.walk não tente entrar nele
                 dirs.remove('__pycache__')
             except OSError as e:
                 print(f"❌ Erro ao remover o diretório {full_path}: {e}")
     
     print(f"✅ Limpeza concluída. Removidos {count_files} arquivos .pyc e {count_dirs} diretórios __pycache__.")
-
 
 if __name__ == "__main__":
     app()

@@ -6,6 +6,7 @@ pandas
 setuptools
 
 # --- Machine Learning & AI ---
+optuna
 # scikit-learn
 # optuna-integration # Comentado - Descomente apenas se o seu código o usar explicitamente
 # stable-baselines3 # Comentado - Para uso futuro em Reinforcement Learning
