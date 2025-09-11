@@ -131,12 +131,56 @@ def run_optimization(bot_name: str, n_trials: int, days: int, wallet_profile: st
         load_if_exists=True
     )
 
-    # --- Log de Aprendizagem Evolutiva ---
+    # --- Seed with .env parameters if study is new ---
     n_existing_trials = len(study.trials)
-    if n_existing_trials > 0:
-        logger.info(f"🧠 Found existing study with {n_existing_trials} trials. Resuming optimization.")
+    if n_existing_trials == 0:
+        logger.info("🧠 Starting new optimization study. Seeding first trial with parameters from config.")
+
+        # Initialize the global config manager to resolve bot-specific vars
+        config_manager.initialize(bot_name)
+
+        # Define the parameters to seed, matching the names in define_search_space
+        params_to_seed = [
+            "STRATEGY_RULES_TARGET_PROFIT", "STRATEGY_RULES_REVERSAL_BUY_THRESHOLD_PERCENT",
+            "STRATEGY_RULES_DYNAMIC_TRAIL_MIN_PCT", "STRATEGY_RULES_DYNAMIC_TRAIL_MAX_PCT",
+            "STRATEGY_RULES_DYNAMIC_TRAIL_PROFIT_SCALING", "STRATEGY_RULES_MIN_ORDER_PERCENTAGE",
+            "STRATEGY_RULES_MAX_ORDER_PERCENTAGE", "STRATEGY_RULES_LOG_SCALING_FACTOR",
+            "STRATEGY_RULES_CONSECUTIVE_BUYS_THRESHOLD", "STRATEGY_RULES_DIFFICULTY_ADJUSTMENT_FACTOR"
+        ]
+        for i in range(4):
+            params_to_seed.append(f"REGIME_{i}_BUY_DIP_PERCENTAGE")
+            params_to_seed.append(f"REGIME_{i}_SELL_RISE_PERCENTAGE")
+
+        initial_params = {}
+        for param_name in params_to_seed:
+            try:
+                section, key = None, None
+                # A more robust way to find the section and key
+                if param_name.startswith("STRATEGY_RULES"):
+                    section = "STRATEGY_RULES"
+                    key = param_name.replace("STRATEGY_RULES_", "")
+                elif param_name.startswith("REGIME"):
+                    regime_parts = param_name.split('_', 2) # REGIME_0_BUY_DIP_PERCENTAGE
+                    section = f"{regime_parts[0]}_{regime_parts[1]}"
+                    key = regime_parts[2]
+
+                if section and key:
+                    value_str = config_manager.get(section, key)
+                    if param_name == "STRATEGY_RULES_CONSECUTIVE_BUYS_THRESHOLD":
+                        initial_params[param_name] = int(value_str)
+                    else:
+                        initial_params[param_name] = float(value_str)
+                else:
+                    logger.warning(f"Could not determine section/key for seeding parameter: {param_name}")
+
+            except Exception as e:
+                logger.warning(f"Could not seed parameter '{param_name}' from config. Using Optuna's default. Reason: {e}")
+
+        if initial_params:
+            study.enqueue_trial(initial_params)
+            logger.info(f"Successfully enqueued trial with {len(initial_params)} parameters from config.")
     else:
-        logger.info("🧠 Starting new optimization study.")
+        logger.info(f"🧠 Found existing study with {n_existing_trials} trials. Resuming optimization.")
 
 
     # --- Callback for TUI ---
@@ -160,19 +204,8 @@ def run_optimization(bot_name: str, n_trials: int, days: int, wallet_profile: st
         with open(tui_callback_dir / f"trial_{trial.number}.json", "w") as f:
             json.dump(trial_data, f, indent=4)
 
-        # Also, update the summary of the best trial so far
-        try:
-            best_trial = study.best_trial
-            best_trial_data = {
-                "number": best_trial.number,
-                "value": best_trial.value,
-                "params": best_trial.params,
-            }
-            with open(tui_callback_dir / "best_trial_summary.json", "w") as f:
-                json.dump(best_trial_data, f, indent=4)
-        except ValueError:
-            # No best trial yet
-            pass
+        # The best trial summary is now handled by the main run.py script
+        # to avoid race conditions in parallel mode.
 
 
     objective_func = lambda trial: objective(trial, bot_name, days, wallet_profile)

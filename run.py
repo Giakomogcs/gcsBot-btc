@@ -7,6 +7,8 @@ import time
 import traceback
 from typing import Optional, List
 import glob
+import json
+from pathlib import Path
 from jules_bot.utils import process_manager
 try:
     import questionary
@@ -521,6 +523,18 @@ def _save_best_params(bot_name: str):
         best_trial = study.best_trial
 
         print(f"🏆 Melhor trial: #{best_trial.number} -> Saldo Final: ${best_trial.value:,.2f}")
+
+        # --- Save best trial summary for TUI ---
+        tui_callback_dir = Path(".tui_files")
+        tui_callback_dir.mkdir(exist_ok=True)
+        best_trial_data = {
+            "number": best_trial.number,
+            "value": best_trial.value,
+            "params": best_trial.params,
+        }
+        with open(tui_callback_dir / "best_trial_summary.json", "w") as f:
+            json.dump(best_trial_data, f, indent=4)
+        # --- End of new code ---
 
         with open(BEST_PARAMS_FILE, 'w') as f:
             f.write(f"# Best parameters for bot '{bot_name}' from study '{study_name}'\n")

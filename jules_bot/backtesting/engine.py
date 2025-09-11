@@ -349,7 +349,10 @@ class Backtester:
                         lambda row: (row['realized_pnl_usd_sell'] / row['usd_value_buy']) * 100 if row['usd_value_buy'] > 0 else Decimal(0), axis=1
                     )
                     avg_gain_pct = Decimal(merged_trades[merged_trades['pnl_pct'] > 0]['pnl_pct'].mean() or 0)
-                    avg_loss_pct = abs(Decimal(merged_trades[merged_trades['pnl_pct'] < 0]['pnl_pct'].mean() or 0))
+
+                    losing_trades_pct = merged_trades[merged_trades['pnl_pct'] < 0]['pnl_pct']
+                    avg_loss_pct = abs(Decimal(losing_trades_pct.mean())) if not losing_trades_pct.empty else Decimal(0)
+
 
                 gross_profit = winning_trades['realized_pnl_usd'].sum()
                 gross_loss = abs(losing_trades['realized_pnl_usd'].sum())
@@ -409,10 +412,14 @@ class Backtester:
         logger.info(f" Total de Trades (Compra): {buy_trades_count}")
         logger.info(f" Total de Trades (Venda):  {sell_trades_count}")
         logger.info(f" Taxa de Sucesso:          {win_rate:.2f}%")
-        logger.info(f" Fator de Lucro:           {profit_factor:.2f}")
+        if profit_factor.is_infinite():
+            logger.info(" Fator de Lucro:           Inf. (Sem Perdas)")
+        else:
+            logger.info(f" Fator de Lucro:           {profit_factor:.2f}")
         logger.info(f" Ganho Médio por Trade:    {avg_gain_pct:.2f}%")
         logger.info(f" Perda Média por Trade:    {avg_loss_pct:.2f}%")
-        logger.info(f" Duração Média do Trade:   {str(avg_trade_duration).split('.')[0] if avg_trade_duration else 'N/A'}")
+        avg_trade_duration_str = str(avg_trade_duration).split('.')[0] if pd.notna(avg_trade_duration) and avg_trade_duration.total_seconds() > 0 else 'N/A'
+        logger.info(f" Duração Média do Trade:   {avg_trade_duration_str}")
         logger.info(f" Total de Taxas Pagas:     ${total_fees_usd:,.2f}")
 
         logger.info("\n--- Análise de Risco ---")

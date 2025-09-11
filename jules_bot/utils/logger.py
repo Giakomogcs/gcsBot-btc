@@ -41,7 +41,7 @@ class JsonFormatter(logging.Formatter):
         }
         if hasattr(record, 'extra_data'):
             log_object.update(record.extra_data)
-        return json.dumps(log_object)
+        return json.dumps(log_object, ensure_ascii=False)
 
 # --- CONFIGURAÇÃO DO LOGGER ---
 # Get bot name from environment variable for log isolation

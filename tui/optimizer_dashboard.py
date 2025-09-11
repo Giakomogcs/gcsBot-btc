@@ -1,8 +1,10 @@
 import json
 from pathlib import Path
 from rich.pretty import Pretty
+from datetime import datetime
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, DataTable, Static
+from textual.widgets._data_table import CellDoesNotExist
 from textual.containers import Container, VerticalScroll
 from textual.timer import Timer
 
@@ -95,17 +97,16 @@ class OptimizerDashboard(App):
                 end_time = data.get("datetime_complete")
                 duration_str = "N/A"
                 if start_time and end_time:
-                    from datetime import datetime
                     duration = datetime.fromisoformat(end_time) - datetime.fromisoformat(start_time)
                     duration_str = f"{duration.total_seconds():.2f}"
 
                 # Use a unique key for each row to update it in place
                 try:
-                    # update_cell will raise a KeyError if the row doesn't exist.
+                    # update_cell will raise a CellDoesNotExist if the row doesn't exist.
                     table.update_cell(row_key, "status", status, update_width=True)
                     table.update_cell(row_key, "value", value_str, update_width=True)
                     table.update_cell(row_key, "duration", duration_str, update_width=True)
-                except KeyError:
+                except CellDoesNotExist:
                     # If the row does not exist, add it.
                     # The values must be in the same order as the columns were added.
                     table.add_row(
