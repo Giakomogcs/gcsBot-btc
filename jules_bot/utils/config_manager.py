@@ -8,6 +8,7 @@ class ConfigManager:
     """
     A class to manage loading and accessing configuration from a .ini file.
     It can resolve values from environment variables using the @env/ syntax.
+    It also supports temporary overrides for optimization purposes.
     """
     def __init__(self, config_file: Path = Path('config.ini')):
         """
@@ -16,6 +17,7 @@ class ConfigManager:
             config_file: The path to the configuration file.
         """
         self.bot_name: Optional[str] = None
+        self.overrides: Optional[Dict[str, str]] = None
         # Load environment variables from the specified .env file
         load_dotenv(dotenv_path=os.getenv("ENV_FILE", ".env"))
         self.config = configparser.ConfigParser(interpolation=None)
@@ -28,6 +30,18 @@ class ConfigManager:
         Initializes the manager with a specific bot name to resolve bot-specific env vars.
         """
         self.bot_name = bot_name
+
+    def apply_overrides(self, override_dict: Dict[str, str]):
+        """
+        Applies a dictionary of temporary overrides. These take highest precedence.
+        """
+        self.overrides = override_dict
+
+    def clear_overrides(self):
+        """
+        Clears any temporary overrides.
+        """
+        self.overrides = None
 
     def _resolve_value(self, value: str) -> Optional[str]:
         """
@@ -81,28 +95,34 @@ class ConfigManager:
 
     def get(self, section: str, key: str, fallback: str = None) -> str:
         """
-        Retrieves a specific key, prioritizing environment variables over the config file.
+        Retrieves a specific key, prioritizing overrides, then environment variables,
+        then the config file.
         The lookup order is:
-        1. Bot-specific environment variable (e.g., MYBOT_MAX_TRADE_SIZE_USDT)
-        2. Generic environment variable (e.g., MAX_TRADE_SIZE_USDT)
-        3. Value from the .ini file (which can itself be an @env/ pointer)
-        4. The provided fallback value.
+        1. Temporary override dictionary (for optimization)
+        2. Bot-specific environment variable (e.g., MYBOT_MAX_TRADE_SIZE_USDT)
+        3. Generic environment variable (e.g., MAX_TRADE_SIZE_USDT)
+        4. Value from the .ini file (which can itself be an @env/ pointer)
+        5. The provided fallback value.
         """
         env_key_name = key.upper()
 
-        # 1. Check for bot-specific environment variable (e.g., MY-BOT_MAX_TRADE_SIZE_USDT)
+        # 1. Check for temporary override
+        if self.overrides and env_key_name in self.overrides:
+            return self.overrides[env_key_name]
+
+        # 2. Check for bot-specific environment variable (e.g., MY-BOT_MAX_TRADE_SIZE_USDT)
         if self.bot_name:
             bot_specific_env_key = f"{self.bot_name.upper().replace('-', '_')}_{env_key_name}"
             value = os.getenv(bot_specific_env_key)
             if value is not None:
                 return value
 
-        # 2. Check for generic environment variable
+        # 3. Check for generic environment variable
         value = os.getenv(env_key_name)
         if value is not None:
             return value
 
-        # 3. If no direct env var, fall back to the existing .ini logic
+        # 4. If no direct env var, fall back to the existing .ini logic
         raw_value = self.config.get(section, key, fallback=None)
 
         if raw_value is None:

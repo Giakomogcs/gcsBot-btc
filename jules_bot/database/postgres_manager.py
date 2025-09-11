@@ -18,7 +18,11 @@ from jules_bot.utils.logger import logger
 from jules_bot.utils.config_manager import config_manager
 
 class PostgresManager:
-    def __init__(self):
+    def __init__(self, config_manager=None):
+        if config_manager is None:
+            from jules_bot.utils.config_manager import config_manager as global_config_manager
+            config_manager = global_config_manager
+
         # The config_manager MUST be initialized before this class is instantiated.
         if not config_manager.bot_name:
             raise RuntimeError(
@@ -26,7 +30,8 @@ class PostgresManager:
                 "Please call config_manager.initialize(bot_name) before instantiating PostgresManager."
             )
 
-        db_config = config_manager.get_section("POSTGRES")
+        self.config_manager = config_manager
+        db_config = self.config_manager.get_section("POSTGRES")
 
         db_user = db_config.get("user")
         db_password = db_config.get("password")

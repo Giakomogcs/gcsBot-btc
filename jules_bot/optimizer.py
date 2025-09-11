@@ -3,6 +3,8 @@ import sys
 import optuna
 import logging
 from decimal import Decimal
+from pathlib import Path
+import json
 
 # Adiciona a raiz do projeto ao path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -26,62 +28,67 @@ OPTIMIZE_OUTPUT_DIR = "optimize/"
 # Arquivo para salvar os melhores parâmetros encontrados
 BEST_PARAMS_FILE = f"{OPTIMIZE_OUTPUT_DIR}.best_params.env"
 
-def define_search_space(trial: optuna.Trial, wallet_profile: str) -> None:
+def define_search_space(trial: optuna.Trial, wallet_profile: str) -> dict:
     """
-    Define o espaço de busca para a otimização, sugerindo valores para os parâmetros.
-    Os valores são diretamente definidos como variáveis de ambiente para esta "tentativa".
+    Define o espaço de busca para a otimização e retorna um dicionário de overrides.
     """
+    overrides = {}
+
     # --- Configurações Gerais da Estratégia ---
-    os.environ["STRATEGY_RULES_TARGET_PROFIT"] = str(trial.suggest_float("STRATEGY_RULES_TARGET_PROFIT", 0.002, 0.015, log=True))
-    os.environ["STRATEGY_RULES_REVERSAL_BUY_THRESHOLD_PERCENT"] = str(trial.suggest_float("STRATEGY_RULES_REVERSAL_BUY_THRESHOLD_PERCENT", 0.001, 0.01, log=True))
+    overrides["STRATEGY_RULES_TARGET_PROFIT"] = str(trial.suggest_float("STRATEGY_RULES_TARGET_PROFIT", 0.002, 0.015, log=True))
+    overrides["STRATEGY_RULES_REVERSAL_BUY_THRESHOLD_PERCENT"] = str(trial.suggest_float("STRATEGY_RULES_REVERSAL_BUY_THRESHOLD_PERCENT", 0.001, 0.01, log=True))
 
     # --- Parâmetros do Trailing Stop Dinâmico ---
-    os.environ["STRATEGY_RULES_DYNAMIC_TRAIL_MIN_PCT"] = str(trial.suggest_float("STRATEGY_RULES_DYNAMIC_TRAIL_MIN_PCT", 0.005, 0.02, log=True))
-    os.environ["STRATEGY_RULES_DYNAMIC_TRAIL_MAX_PCT"] = str(trial.suggest_float("STRATEGY_RULES_DYNAMIC_TRAIL_MAX_PCT", 0.02, 0.08, log=True))
-    os.environ["STRATEGY_RULES_DYNAMIC_TRAIL_PROFIT_SCALING"] = str(trial.suggest_float("STRATEGY_RULES_DYNAMIC_TRAIL_PROFIT_SCALING", 0.05, 0.25))
+    overrides["STRATEGY_RULES_DYNAMIC_TRAIL_MIN_PCT"] = str(trial.suggest_float("STRATEGY_RULES_DYNAMIC_TRAIL_MIN_PCT", 0.005, 0.02, log=True))
+    overrides["STRATEGY_RULES_DYNAMIC_TRAIL_MAX_PCT"] = str(trial.suggest_float("STRATEGY_RULES_DYNAMIC_TRAIL_MAX_PCT", 0.02, 0.08, log=True))
+    overrides["STRATEGY_RULES_DYNAMIC_TRAIL_PROFIT_SCALING"] = str(trial.suggest_float("STRATEGY_RULES_DYNAMIC_TRAIL_PROFIT_SCALING", 0.05, 0.25))
 
     # --- Gestão de Capital (Dimensionamento de Ordem) ---
-    os.environ["STRATEGY_RULES_MIN_ORDER_PERCENTAGE"] = str(trial.suggest_float("STRATEGY_RULES_MIN_ORDER_PERCENTAGE", 0.003, 0.01, log=True))
-    os.environ["STRATEGY_RULES_MAX_ORDER_PERCENTAGE"] = str(trial.suggest_float("STRATEGY_RULES_MAX_ORDER_PERCENTAGE", 0.01, 0.05, log=True))
-    os.environ["STRATEGY_RULES_LOG_SCALING_FACTOR"] = str(trial.suggest_float("STRATEGY_RULES_LOG_SCALING_FACTOR", 0.001, 0.005, log=True))
+    overrides["STRATEGY_RULES_MIN_ORDER_PERCENTAGE"] = str(trial.suggest_float("STRATEGY_RULES_MIN_ORDER_PERCENTAGE", 0.003, 0.01, log=True))
+    overrides["STRATEGY_RULES_MAX_ORDER_PERCENTAGE"] = str(trial.suggest_float("STRATEGY_RULES_MAX_ORDER_PERCENTAGE", 0.01, 0.05, log=True))
+    overrides["STRATEGY_RULES_LOG_SCALING_FACTOR"] = str(trial.suggest_float("STRATEGY_RULES_LOG_SCALING_FACTOR", 0.001, 0.005, log=True))
 
     # --- Dificuldade de Compra ---
-    os.environ["STRATEGY_RULES_CONSECUTIVE_BUYS_THRESHOLD"] = str(trial.suggest_int("STRATEGY_RULES_CONSECUTIVE_BUYS_THRESHOLD", 3, 10))
-    os.environ["STRATEGY_RULES_DIFFICULTY_ADJUSTMENT_FACTOR"] = str(trial.suggest_float("STRATEGY_RULES_DIFFICULTY_ADJUSTMENT_FACTOR", 0.001, 0.01, log=True))
+    overrides["STRATEGY_RULES_CONSECUTIVE_BUYS_THRESHOLD"] = str(trial.suggest_int("STRATEGY_RULES_CONSECUTIVE_BUYS_THRESHOLD", 3, 10))
+    overrides["STRATEGY_RULES_DIFFICULTY_ADJUSTMENT_FACTOR"] = str(trial.suggest_float("STRATEGY_RULES_DIFFICULTY_ADJUSTMENT_FACTOR", 0.001, 0.01, log=True))
 
     # --- Parâmetros Específicos por Regime ---
-    base_profit_target = float(os.environ["STRATEGY_RULES_TARGET_PROFIT"])
-    regime_0_multiplier = trial.suggest_float("REGIME_0_PROFIT_MULTIPLIER", 0.5, 1.0)
-    os.environ["REGIME_0_TARGET_PROFIT"] = str(base_profit_target * regime_0_multiplier)
-    regime_1_multiplier = trial.suggest_float("REGIME_1_PROFIT_MULTIPLIER", 0.9, 2.0)
-    os.environ["REGIME_1_TARGET_PROFIT"] = str(base_profit_target * regime_1_multiplier)
-    regime_2_multiplier = trial.suggest_float("REGIME_2_PROFIT_MULTIPLIER", 1.2, 3.0)
-    os.environ["REGIME_2_TARGET_PROFIT"] = str(base_profit_target * regime_2_multiplier)
-    regime_3_multiplier = trial.suggest_float("REGIME_3_PROFIT_MULTIPLIER", 0.6, 1.2)
-    os.environ["REGIME_3_TARGET_PROFIT"] = str(base_profit_target * regime_3_multiplier)
+    for i in range(4): # Para regimes 0, 1, 2, 3
+        overrides[f"REGIME_{i}_BUY_DIP_PERCENTAGE"] = str(trial.suggest_float(f"REGIME_{i}_BUY_DIP_PERCENTAGE", 0.001, 0.05, log=True))
+        overrides[f"REGIME_{i}_SELL_RISE_PERCENTAGE"] = str(trial.suggest_float(f"REGIME_{i}_SELL_RISE_PERCENTAGE", 0.002, 0.03, log=True))
+
 
     # --- Configuração da Carteira ---
     initial_balance = WALLET_PROFILES.get(wallet_profile, "1000.0")
-    os.environ["BACKTEST_INITIAL_BALANCE"] = initial_balance
+    overrides["BACKTEST_INITIAL_BALANCE"] = initial_balance
+
+    return overrides
+
 
 def objective(trial: optuna.Trial, bot_name: str, days: int, wallet_profile: str) -> float:
     """
     A função objetivo que o Optuna tentará maximizar.
     """
-    original_log_level = logging.getLogger('jules_bot').getEffectiveLevel()
+    # original_log_level = logging.getLogger('jules_bot').getEffectiveLevel()
     try:
-        # Silenciar logs durante a otimização para uma saída mais limpa
-        logging.getLogger('jules_bot').setLevel(logging.WARNING)
+        # O log não é mais silenciado aqui. Será controlado pelo handler do TUI.
+        # logging.getLogger('jules_bot').setLevel(logging.WARNING)
 
-        define_search_space(trial, wallet_profile)
-        config_manager.initialize(bot_name)
+        config_overrides = define_search_space(trial, wallet_profile)
 
-        # A limpeza de trades agora é feita opcionalmente no início do processo em run.py.
-        # Removido daqui para evitar race conditions em execuções paralelas.
-        db_manager = PostgresManager()
+        # O ConfigManager agora é instanciado por trial para garantir isolamento
+        from jules_bot.utils.config_manager import ConfigManager
+        trial_config_manager = ConfigManager()
+        trial_config_manager.initialize(bot_name)
+        trial_config_manager.apply_overrides(config_overrides)
 
-        backtester = Backtester(db_manager=db_manager, days=days)
-        # Passa o 'trial' para o backtester para permitir o pruning
+        db_manager = PostgresManager(config_manager=trial_config_manager)
+
+        backtester = Backtester(
+            db_manager=db_manager,
+            days=days,
+            config_manager=trial_config_manager # Passa o config manager específico do trial
+        )
         final_balance = backtester.run(trial=trial)
 
         if final_balance is None:
@@ -94,12 +101,12 @@ def objective(trial: optuna.Trial, bot_name: str, days: int, wallet_profile: str
         raise
 
     except Exception as e:
-        logger.error(f"--- Optuna Trial #{trial.number}: FAILED. Error: {e} ---", exc_info=False)
+        logger.error(f"--- Optuna Trial #{trial.number}: FAILED. Error: {e} ---", exc_info=True)
         return 0.0
 
-    finally:
-        # Restaura o nível de log original
-        logging.getLogger('jules_bot').setLevel(original_log_level)
+    # finally:
+        # A restauração do nível de log não é mais necessária
+        # logging.getLogger('jules_bot').setLevel(original_log_level)
 
 def run_optimization(bot_name: str, n_trials: int, days: int, wallet_profile: str):
     """
@@ -124,10 +131,59 @@ def run_optimization(bot_name: str, n_trials: int, days: int, wallet_profile: st
         load_if_exists=True
     )
 
+    # --- Log de Aprendizagem Evolutiva ---
+    n_existing_trials = len(study.trials)
+    if n_existing_trials > 0:
+        logger.info(f"🧠 Found existing study with {n_existing_trials} trials. Resuming optimization.")
+    else:
+        logger.info("🧠 Starting new optimization study.")
+
+
+    # --- Callback for TUI ---
+    tui_callback_dir = Path(".tui_files")
+    tui_callback_dir.mkdir(exist_ok=True)
+
+    def tui_callback(study: optuna.study.Study, trial: optuna.trial.FrozenTrial):
+        """
+        Callback to write trial results to a JSON file for the TUI to read.
+        """
+        trial_data = {
+            "number": trial.number,
+            "state": trial.state.name,
+            "value": trial.value,
+            "params": trial.params,
+            "datetime_start": trial.datetime_start.isoformat() if trial.datetime_start else None,
+            "datetime_complete": trial.datetime_complete.isoformat() if trial.datetime_complete else None,
+        }
+
+        # Write to a file specific to this trial
+        with open(tui_callback_dir / f"trial_{trial.number}.json", "w") as f:
+            json.dump(trial_data, f, indent=4)
+
+        # Also, update the summary of the best trial so far
+        try:
+            best_trial = study.best_trial
+            best_trial_data = {
+                "number": best_trial.number,
+                "value": best_trial.value,
+                "params": best_trial.params,
+            }
+            with open(tui_callback_dir / "best_trial_summary.json", "w") as f:
+                json.dump(best_trial_data, f, indent=4)
+        except ValueError:
+            # No best trial yet
+            pass
+
+
     objective_func = lambda trial: objective(trial, bot_name, days, wallet_profile)
 
     try:
-        study.optimize(objective_func, n_trials=n_trials, show_progress_bar=True)
+        study.optimize(
+            objective_func,
+            n_trials=n_trials,
+            callbacks=[tui_callback],
+            show_progress_bar=False # TUI will be the progress bar
+        )
     except KeyboardInterrupt:
         logger.warning("\nOptimization stopped by user.")
 

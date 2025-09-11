@@ -640,6 +640,17 @@ def backtest(
 
         print(f"\n--- Etapa 2 de 3: Rodando a otimização com {jobs} processo(s) em paralelo ---")
 
+        # Iniciar o dashboard TUI em um processo separado
+        tui_process = None
+        try:
+            print("   -> Iniciando Dashboard de Otimização...")
+            tui_env = os.environ.copy()
+            tui_command = [sys.executable, "tui/optimizer_dashboard.py"]
+            tui_process = subprocess.Popen(tui_command, env=tui_env)
+            time.sleep(2) # Dá um tempo para a TUI iniciar
+        except Exception as e:
+            print(f"⚠️  Aviso: Não foi possível iniciar o dashboard de otimização: {e}")
+
         base_trials = n_trials // jobs
         remainder = n_trials % jobs
 
@@ -656,6 +667,14 @@ def backtest(
 
         for p in processes:
             p.wait()
+
+        if tui_process:
+            print("\n🛑 Encerrando o Dashboard de Otimização...")
+            tui_process.terminate()
+            try:
+                tui_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                tui_process.kill()
 
         print("\n✅ Otimização finalizada. Os melhores parâmetros foram salvos em 'optimize/.best_params.env'.")
         env_files_for_final_run = ["optimize/.best_params.env"]

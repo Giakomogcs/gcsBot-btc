@@ -34,7 +34,11 @@ class BacktestTrade:
         return self.__dict__
 
 class Backtester:
-    def __init__(self, db_manager: PostgresManager, days: int = None, start_date: str = None, end_date: str = None):
+    def __init__(self, db_manager: PostgresManager, days: int = None, start_date: str = None, end_date: str = None, config_manager=None):
+        if config_manager is None:
+            from jules_bot.utils.config_manager import config_manager as global_config_manager
+            config_manager = global_config_manager
+
         self.run_id = f"backtest_{uuid.uuid4()}"
         self.db_manager = db_manager
         
@@ -321,7 +325,7 @@ class Backtester:
                 winning_trades = sell_trades[sell_trades['realized_pnl_usd'] > 0]
                 losing_trades = sell_trades[sell_trades['realized_pnl_usd'] < 0]
 
-                win_rate = (len(winning_trades) / sell_trades_count) * 100 if sell_trades_count > 0 else Decimal(0)
+                win_rate = (Decimal(len(winning_trades)) / Decimal(sell_trades_count)) * 100 if sell_trades_count > 0 else Decimal(0)
 
                 # Link sells to buys to calculate durations and percentage gains/losses
                 merged_trades = pd.merge(
@@ -342,10 +346,10 @@ class Backtester:
 
                     # Calculate gain/loss percentage relative to the initial investment of that trade
                     merged_trades['pnl_pct'] = merged_trades.apply(
-                        lambda row: (row['realized_pnl_usd_sell'] / row['usd_value_buy']) * 100, axis=1
+                        lambda row: (row['realized_pnl_usd_sell'] / row['usd_value_buy']) * 100 if row['usd_value_buy'] > 0 else Decimal(0), axis=1
                     )
-                    avg_gain_pct = merged_trades[merged_trades['pnl_pct'] > 0]['pnl_pct'].mean() or Decimal(0)
-                    avg_loss_pct = abs(merged_trades[merged_trades['pnl_pct'] < 0]['pnl_pct'].mean() or Decimal(0))
+                    avg_gain_pct = Decimal(merged_trades[merged_trades['pnl_pct'] > 0]['pnl_pct'].mean() or 0)
+                    avg_loss_pct = abs(Decimal(merged_trades[merged_trades['pnl_pct'] < 0]['pnl_pct'].mean() or 0))
 
                 gross_profit = winning_trades['realized_pnl_usd'].sum()
                 gross_loss = abs(losing_trades['realized_pnl_usd'].sum())
@@ -359,27 +363,28 @@ class Backtester:
 
         if portfolio_history:
             portfolio_df = pd.DataFrame(portfolio_history, columns=['value'])
-            # BUG FIX: Convert Decimal to float for compatibility with numpy/pandas stats
-            portfolio_df['value'] = portfolio_df['value'].astype(float)
-            portfolio_df['returns'] = portfolio_df['value'].pct_change().fillna(0)
+            # Convert Decimal to float for numpy/pandas stats, but be careful with division
+            portfolio_float = portfolio_df['value'].astype(float)
+            portfolio_df['returns'] = portfolio_float.pct_change().fillna(0)
 
             # Max Drawdown
-            peak = portfolio_df['value'].expanding(min_periods=1).max()
-            drawdown = (portfolio_df['value'] - peak) / peak
-            max_drawdown = abs(drawdown.min())
+            peak = portfolio_float.expanding(min_periods=1).max()
+            drawdown = (portfolio_float - peak) / peak
+            max_drawdown_float = abs(drawdown.min())
+            max_drawdown = Decimal(str(max_drawdown_float))
 
             # Sharpe Ratio (assuming daily returns if data is granular, and 0 risk-free rate)
             # To be more accurate, we should resample to daily returns
-            daily_returns = portfolio_df['value'].resample('D').last().pct_change().dropna() if isinstance(portfolio_df.index, pd.DatetimeIndex) else portfolio_df['returns']
+            daily_returns = portfolio_float.resample('D').last().pct_change().dropna() if isinstance(portfolio_df.index, pd.DatetimeIndex) else portfolio_df['returns']
             if len(daily_returns) > 1 and daily_returns.std() != 0:
-                sharpe_ratio = np.sqrt(365) * daily_returns.mean() / daily_returns.std()
+                sharpe_ratio = Decimal(str(np.sqrt(365) * daily_returns.mean() / daily_returns.std()))
 
             # Sortino Ratio
             downside_returns = daily_returns[daily_returns < 0]
             if len(downside_returns) > 1:
                 downside_std = downside_returns.std()
                 if downside_std != 0:
-                    sortino_ratio = np.sqrt(365) * daily_returns.mean() / downside_std
+                    sortino_ratio = Decimal(str(np.sqrt(365) * daily_returns.mean() / downside_std))
 
             # Calmar Ratio
             if max_drawdown > 0:
