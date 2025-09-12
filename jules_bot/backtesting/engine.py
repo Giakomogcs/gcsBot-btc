@@ -469,7 +469,12 @@ class Backtester:
         calmar_ratio = Decimal(0)
 
         if portfolio_history and len(portfolio_history) > 1:
-            portfolio_df = pd.DataFrame(portfolio_history, columns=['value'])
+            # Create the DataFrame with the correct DatetimeIndex from the start
+            portfolio_df = pd.DataFrame(
+                portfolio_history,
+                columns=['value'],
+                index=self.feature_data.index[:len(portfolio_history)]
+            )
             portfolio_float = portfolio_df['value'].astype(float)
 
             # Max Drawdown
@@ -478,10 +483,8 @@ class Backtester:
             max_drawdown = Decimal(str(abs(drawdown.min()))) if not drawdown.empty else Decimal(0)
 
             # Ratios
-            if not isinstance(self.feature_data.index, pd.DatetimeIndex):
-                daily_returns = portfolio_float.pct_change().dropna()
-            else:
-                daily_returns = portfolio_float.resample('D', on=self.feature_data.index[:len(portfolio_float)]).last().pct_change().dropna()
+            # Now that the DataFrame has a DatetimeIndex, we can resample directly
+            daily_returns = portfolio_float.resample('D').last().pct_change().dropna()
 
             if not daily_returns.empty:
                 try:

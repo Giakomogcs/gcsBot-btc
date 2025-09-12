@@ -162,6 +162,14 @@ class CapitalManager:
             buy_amount = self.max_trade_size
             reason += f", Capped at max trade size"
 
+        # --- APPLY DIFFICULTY FACTOR ---
+        if difficulty_factor > 0:
+            original_amount = buy_amount
+            buy_amount *= (Decimal('1') - difficulty_factor)
+            reason += f", Reduced by {difficulty_factor:.2%} difficulty"
+            logger.info(f"Buy amount {original_amount:.2f} reduced to {buy_amount:.2f} due to difficulty factor {difficulty_factor:.2%}")
+
+
         # Check against the available working capital, not the total free cash
         if buy_amount > working_capital_free_cash:
             return Decimal('0'), OperatingMode.PRESERVATION.name, f"Insufficient working capital for order of ${buy_amount:,.2f}. Available: ${working_capital_free_cash:,.2f}", regime, difficulty_factor
