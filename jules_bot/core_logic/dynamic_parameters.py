@@ -51,16 +51,35 @@ class DynamicParameters:
             logger.warning(f"Config section '{section_name}' not found. Falling back to 'STRATEGY_RULES'.")
             section_name = 'STRATEGY_RULES'
 
-        # Correctly load sell_rise_percentage, falling back to target_profit within the same section.
-        # This ensures regime-specific profit targets from config.ini are respected.
-        # The fallback value for `sell_rise_percentage` is the value of `target_profit` from the same section.
-        sell_rise_fallback = self.config_manager.get(section_name, 'target_profit', fallback='0.01')
+        # --- Load Parameters with Clear Fallbacks ---
+        # For each parameter, we first try to get the specific value from the regime section.
+        # If that fails, we have a clear order of fallbacks.
 
-        # Load parameters using the safe getter method for robustness
+        # 1. Buy Dip Percentage
+        # Fallback to a very high, "non-trading" value if not defined for the regime.
+        # This prevents the bot from buying with an unexpected default value.
+        buy_dip_fallback = '1.0' # A 100% dip, effectively disabling buys.
+        buy_dip_percentage = self._safe_get_decimal(section_name, 'buy_dip_percentage', buy_dip_fallback)
+        if buy_dip_percentage == Decimal(buy_dip_fallback):
+            logger.warning(f"'{section_name}' is missing 'buy_dip_percentage'. Using a safe, non-trading fallback of {buy_dip_fallback}.")
+
+        # 2. Sell Rise Percentage
+        # First, try 'sell_rise_percentage'.
+        # Second, fall back to 'target_profit' from the same regime section.
+        # Finally, use a hardcoded default if neither is found.
+        target_profit_fallback = self.config_manager.get(section_name, 'target_profit', fallback='0.01')
+        sell_rise_percentage = self._safe_get_decimal(section_name, 'sell_rise_percentage', target_profit_fallback)
+
+        # 3. Order Size
+        # Fallback to a default value from the main strategy section if not defined for the regime.
+        order_size_fallback = self.config_manager.get('STRATEGY_RULES', 'base_usd_per_trade', '20.0')
+        order_size_usd = self._safe_get_decimal(section_name, 'order_size_usd', order_size_fallback)
+
+
         self.parameters = {
-            'buy_dip_percentage': self._safe_get_decimal(section_name, 'buy_dip_percentage', '0.02'),
-            'sell_rise_percentage': self._safe_get_decimal(section_name, 'sell_rise_percentage', sell_rise_fallback),
-            'order_size_usd': self._safe_get_decimal(section_name, 'order_size_usd', '20.0'),
+            'buy_dip_percentage': buy_dip_percentage,
+            'sell_rise_percentage': sell_rise_percentage,
+            'order_size_usd': order_size_usd,
         }
 
     def get_param(self, param_name: str, default: Decimal = None) -> Decimal:
