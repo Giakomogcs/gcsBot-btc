@@ -14,6 +14,7 @@
   - [Comandos de Gerenciamento de Bots](#comandos-de-gerenciamento-de-bots)
   - [Comandos de Execução e Monitoramento](#comandos-de-execução-e-monitoramento)
   - [Scripts de Utilidade](#scripts-de-utilidade)
+- [Entendendo as Métricas de Performance](#entendendo-as-métricas-de-performance)
 - [Estrutura do Projeto](#estrutura-do-projeto)
 - [Como Contribuir](#como-contribuir)
 
@@ -373,6 +374,7 @@ python run.py display --bot-name meu-primeiro-bot
 **Descrição:** Executa um processo de backtesting. Pode ser um backtest simples com os parâmetros atuais ou um fluxo completo de otimização para encontrar os melhores parâmetros antes da simulação final.
 
 **Uso:**
+
 ```bash
 python run.py backtest [OPÇÕES]
 ```
@@ -389,6 +391,7 @@ python run.py backtest [OPÇÕES]
 
 1.  **Backtest Padrão:**
     Executa um backtest simples usando as configurações atuais do seu arquivo `.env`.
+
     ```bash
     python run.py backtest --bot-name meu-primeiro-bot --days 90
     ```
@@ -399,11 +402,11 @@ python run.py backtest [OPÇÕES]
     python run.py backtest --optimize
     ```
     - **O que acontece:**
-        1.  **Configuração Interativa:** O script fará perguntas para configurar a otimização (número de testes, perfil de carteira, etc.).
-        2.  **Dashboard de Otimização:** Um painel de controle (TUI) será iniciado no seu terminal, mostrando o progresso de todos os jobs de otimização em tempo real.
-        3.  **Otimização Paralela:** O Optuna rodará vários backtests em segundo plano, de forma eficiente (usando "pruning" para descartar testes ruins), para encontrar a melhor combinação de parâmetros. O progresso é salvo em `optimize/jules_bot_optimization.db` e pode ser retomado de onde parou.
-        4.  **Salvar Resultados:** Os melhores parâmetros são salvos automaticamente no arquivo `optimize/.best_params.env`.
-        5.  **Backtest Final:** Um último backtest, com relatório detalhado e limpo, é executado usando os parâmetros do `optimize/.best_params.env`.
+      1.  **Configuração Interativa:** O script fará perguntas para configurar a otimização (número de testes, perfil de carteira, etc.).
+      2.  **Dashboard de Otimização:** Um painel de controle (TUI) será iniciado no seu terminal, mostrando o progresso de todos os jobs de otimização em tempo real.
+      3.  **Otimização Paralela:** O Optuna rodará vários backtests em segundo plano, de forma eficiente (usando "pruning" para descartar testes ruins), para encontrar a melhor combinação de parâmetros. O progresso é salvo em `optimize/jules_bot_optimization.db` e pode ser retomado de onde parou.
+      4.  **Salvar Resultados:** Os melhores parâmetros são salvos automaticamente no arquivo `optimize/.best_params.env`.
+      5.  **Backtest Final:** Um último backtest, com relatório detalhado e limpo, é executado usando os parâmetros do `optimize/.best_params.env`.
 
 Este fluxo integrado garante que você possa encontrar e testar a melhor estratégia de forma robusta e profissional com um único comando, agora com visibilidade total do processo.
 
@@ -416,11 +419,13 @@ A pasta `scripts/` contém uma série de ferramentas de linha de comando para in
 ---
 
 #### `get_trade_history.py`
+
 **Descrição:** Busca o histórico de trades de um bot específico diretamente do banco de dados e o exibe em formato JSON.
 **Uso:**
+
 ```bash
 python scripts/get_trade_history.py [NOME_DO_BOT] [OPÇÕES]
-````
+```
 
 **Argumentos:**
 | Nome | Descrição | Padrão |
@@ -501,6 +506,25 @@ python scripts/wipe_database.py --force
 | Nome | Descrição |
 | --- | --- |
 | `--force` | **(Obrigatório)** Confirmação explícita para evitar a exclusão acidental de dados. |
+
+## Entendendo as Métricas de Performance
+
+Tanto o relatório de **backtest** quanto o painel de monitoramento **(TUI)** foram projetados para oferecer uma visão clara e transparente sobre o desempenho do robô. Abaixo está uma explicação detalhada das principais métricas para que você possa interpretar os resultados corretamente.
+
+### Métricas Chave no Painel (TUI) e Relatório de Backtest
+
+| Métrica                        | O que significa?                                                                                                                                                                                                                                                        | Onde Encontrar?        |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| **Initial Capital**            | **(TUI)** O valor estimado da sua carteira no momento em que o PnL começou a ser contado. É calculado como: `Valor do Portfólio Atual - Lucro/Prejuízo Líquido`.                                                                                                        | TUI (Painel Principal) |
+| **Initial Balance**            | **(Backtest)** O saldo inicial com o qual o backtest começou (ex: $100.00).                                                                                                                                                                                             | Relatório de Backtest  |
+| **Portfolio Value**            | **(TUI)** O valor total e atual da sua carteira. É a soma de todo o seu **dinheiro em caixa (não investido)** com o **valor de mercado de todas as suas posições abertas**.                                                                                             | TUI (Painel Principal) |
+| **Final Total Balance**        | **(Backtest)** O valor total da carteira ao final da simulação. Equivalente ao "Portfolio Value" da TUI.                                                                                                                                                                | Relatório de Backtest  |
+| **Net Profit/Loss**            | **(TUI)** O indicador mais importante do seu resultado financeiro geral. Mostra se você ganhou ou perdeu dinheiro desde o início. É calculado como: `Portfolio Value - Initial Capital`.                                                                                | TUI (Painel Principal) |
+| **Net PnL**                    | **(Backtest)** O resultado financeiro total da simulação. Equivalente ao "Net Profit/Loss" da TUI.                                                                                                                                                                      | Relatório de Backtest  |
+| **Realized PnL**               | O lucro ou prejuízo **já realizado** com as vendas de posições. Este valor só muda quando uma operação é fechada.                                                                                                                                                       | TUI e Backtest         |
+| **Unrealized PnL**             | O lucro ou prejuízo "no papel" de todas as suas posições que **ainda estão abertas**. Este valor flutua constantemente com o preço do mercado.                                                                                                                          | TUI e Backtest         |
+| **Open Positions**             | O número de posições de compra que ainda não foram vendidas.                                                                                                                                                                                                            | TUI e Backtest         |
+| **Win Rate (Taxa de Vitória)** | A porcentagem de operações de **venda** que foram fechadas com lucro. **Importante:** Esta métrica **não considera as posições abertas**, que podem estar com prejuízo não realizado. É por isso que é possível ter uma alta taxa de vitória e um PnL líquido negativo. | Relatório de Backtest  |
 
 ## Estrutura do Projeto
 

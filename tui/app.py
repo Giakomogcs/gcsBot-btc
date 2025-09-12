@@ -147,10 +147,11 @@ class TUIApp(App):
                                     yield Static(f"Mode: {self.mode.upper()}", id="status_mode")
                                     yield Static("Symbol: N/A", id="status_symbol")
                                     yield Static("Price: N/A", id="status_price")
-                                    yield Static("Wallet Value: N/A", id="status_wallet_usd")
+                                    yield Static("Initial Capital: N/A", id="status_initial_capital")
+                                    yield Static("Portfolio Value: N/A", id="status_wallet_usd")
                                     yield Static("Realized PnL: N/A", id="status_realized_pnl")
                                     yield Static("Unrealized PnL: N/A", id="status_unrealized_pnl")
-                                    yield Static("Total PnL: N/A", id="status_total_pnl")
+                                    yield Static("Net Profit/Loss: N/A", id="status_total_pnl")
                                     yield Static("Positions: N/A", id="status_positions_count")
                                 yield Static("Strategy Status", classes="title")
                                 with Static(id="strategy_container"):
@@ -435,7 +436,10 @@ class TUIApp(App):
         total_count = data.get('total_trades_count', 0)
         self.query_one("#status_positions_count").update(f"Positions: {open_count} Open / {total_count} Total")
         wallet_value = Decimal(data.get('total_wallet_usd_value', 0))
-        self.query_one("#status_wallet_usd").update(f"Wallet Value: ${wallet_value:,.2f}")
+        initial_capital = Decimal(data.get("initial_capital", 0))
+        self.query_one("#status_initial_capital").update(f"Initial Capital: ${initial_capital:,.2f}")
+
+        self.query_one("#status_wallet_usd").update(f"Portfolio Value: ${wallet_value:,.2f}")
         realized_pnl = Decimal(data.get("total_realized_pnl", 0))
         unrealized_pnl = Decimal(data.get("total_unrealized_pnl", 0))
         net_total_pnl = Decimal(data.get("net_total_pnl", 0))
@@ -444,7 +448,7 @@ class TUIApp(App):
         total_color = "green" if net_total_pnl >= 0 else "red"
         self.query_one("#status_realized_pnl").update(f"Realized PnL: [{realized_color}]${realized_pnl:,.2f}[/]")
         self.query_one("#status_unrealized_pnl").update(f"Unrealized PnL: [{unrealized_color}]${unrealized_pnl:,.2f}[/]")
-        self.query_one("#status_total_pnl").update(f"Total PnL: [{total_color}]${net_total_pnl:,.2f}[/]")
+        self.query_one("#status_total_pnl").update(f"Net Profit/Loss: [{total_color}]${net_total_pnl:,.2f}[/]")
 
         # --- Update All UI Components from the Single Data Source ---
         self.update_strategy_panel(data.get("buy_signal_status", {}), price)

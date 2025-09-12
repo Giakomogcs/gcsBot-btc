@@ -226,6 +226,7 @@ class StatusService:
                 "total_realized_pnl": total_realized_pnl,
                 "total_unrealized_pnl": total_unrealized_pnl,
                 "net_total_pnl": net_total_pnl,
+                "initial_capital": total_wallet_usd_value - net_total_pnl,
                 "capital_allocation": capital_allocation
             }
         except OperationalError as e:

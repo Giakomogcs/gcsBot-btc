@@ -354,6 +354,11 @@ class Backtester:
         perf_table.add_row("Initial Balance", format_value(results['initial_balance'], 'money'))
         perf_table.add_row("Final Cash Balance", format_value(results.get('final_cash_balance'), 'money'))
         perf_table.add_row("Open Positions Value", format_value(results.get('final_open_positions_value'), 'money'))
+        
+        unrealized_pnl_val = results.get('unrealized_pnl', Decimal('0'))
+        unrealized_style = "bold green" if unrealized_pnl_val > 0 else "bold red" if unrealized_pnl_val < 0 else "default"
+        perf_table.add_row("Unrealized PnL", f"[{unrealized_style}]{format_value(unrealized_pnl_val, 'money')}[/{unrealized_style}]")
+        
         perf_table.add_row("Final Total Balance", format_value(results['final_balance'], 'money'))
         perf_table.add_row("Net PnL", f"[{pnl_style}]{format_value(results['net_pnl_usd'], 'money')} ({format_value(results['net_pnl_pct'], 'percent')})[/{pnl_style}]")
         perf_table.add_row("Total Realized PnL", format_value(results['total_realized_pnl'], 'money'))
@@ -376,6 +381,7 @@ class Backtester:
 
         trade_table.add_row("Total Buy Trades", format_value(results['buy_trades_count'], 'integer'))
         trade_table.add_row("Total Sell Trades", format_value(results['sell_trades_count'], 'integer'))
+        trade_table.add_row("Open Positions", format_value(results.get('open_positions_count'), 'integer'))
         trade_table.add_row("Win Rate", format_value(results['win_rate'], 'percent'))
         trade_table.add_row("Profit Factor", profit_factor_str)
         trade_table.add_row("Avg. Gain %", format_value(results['avg_gain_pct'], 'percent'))
@@ -393,6 +399,10 @@ class Backtester:
         console.print(perf_table)
         console.print(trade_table)
         console.print(risk_table)
+
+        # --- Footer Note ---
+        footer = Text("\n* Win Rate & Profit Factor are calculated based on closed (sell) trades only.", style="dim italic")
+        console.print(footer)
 
     def _generate_and_save_summary(self, open_positions: dict, portfolio_history: list[Decimal]):
         logger.info("--- Generating backtest summary ---")
@@ -523,16 +533,24 @@ class Backtester:
         final_cash_balance = self.mock_trader.get_account_balance()
         final_open_positions_value = final_balance - final_cash_balance
 
+        # --- Enhanced Metrics for Open Positions ---
+        open_positions_count = len(open_positions)
+        # Calculate the total cost basis of all currently open positions
+        cost_of_open_positions = sum(pos.get('usd_value', Decimal('0')) for pos in open_positions.values())
+        unrealized_pnl = final_open_positions_value - cost_of_open_positions
+
         results = {
             "initial_balance": initial_balance,
             "final_balance": final_balance,
             "final_cash_balance": final_cash_balance,
             "final_open_positions_value": final_open_positions_value,
+            "unrealized_pnl": unrealized_pnl,
             "net_pnl_usd": net_pnl,
             "net_pnl_pct": net_pnl_percent,
             "total_realized_pnl": total_realized_pnl,
             "buy_trades_count": buy_trades_count,
             "sell_trades_count": sell_trades_count,
+            "open_positions_count": open_positions_count,
             "win_rate": win_rate,
             "profit_factor": profit_factor,
             "avg_gain_pct": avg_gain_pct,
