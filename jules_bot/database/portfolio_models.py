@@ -13,6 +13,12 @@ class PortfolioSnapshot(Base):
     realized_pnl_usd = Column(Numeric(20, 8), nullable=False)
     btc_treasury_amount = Column(Numeric(20, 8), nullable=False)
     btc_treasury_value_usd = Column(Numeric(20, 8), nullable=False)
+
+    def to_dict(self):
+        return {
+            'timestamp': self.timestamp.isoformat(),
+            'value': self.total_portfolio_value_usd
+        }
     evolution_percent_vs_previous = Column(Numeric(20, 8))
 
 class FinancialMovement(Base):

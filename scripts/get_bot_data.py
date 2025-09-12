@@ -3,15 +3,10 @@ import json
 import os
 import sys
 import typer
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
-
 # Add project root to sys.path to allow imports from other directories
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from jules_bot.utils.config_manager import ConfigManager
+from jules_bot.utils.config_manager import config_manager
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.services.status_service import StatusService
 from jules_bot.research.live_feature_calculator import LiveFeatureCalculator
@@ -71,40 +66,31 @@ def main(
         logger.error("Invalid mode specified. Please choose 'trade' or 'test'.")
         raise typer.Exit(code=1)
 
-    logger.info(f"Gathering bot data for '{mode}' environment...")
+    bot_name = os.getenv("BOT_NAME")
+    if not bot_name:
+        logger.error("ERRO CRÍTICO: A variável de ambiente BOT_NAME não está definida.")
+        # Print JSON error to stderr for TUI to catch
+        print(json.dumps({"error": "BOT_NAME environment variable not set."}), file=sys.stderr)
+        raise typer.Exit(code=1)
 
-    # --- Inicialização e Verificação do Ambiente ---
+    logger.info(f"Gathering bot data for '{bot_name}' in '{mode}' environment...")
+
     try:
-        config_manager = ConfigManager()
-        db_config = config_manager.get_db_config('POSTGRES')
-        db_manager = PostgresManager(config=db_config)
+        # 1. Initialize ConfigManager
+        config_manager.initialize(bot_name)
 
-        # A verificação do ambiente é a primeira coisa a ser feita.
-        # Se isso falhar, o restante do script não deve ser executado.
+        # 2. Instantiate services
+        db_manager = PostgresManager()
+
+        # 3. Check environment dependencies (API keys, DB connection)
         _check_environment(mode, db_manager)
 
-    except FileNotFoundError as e:
-        logger.error(f"ERRO DE CONFIGURAÇÃO: O arquivo de configuração 'config.ini' não foi encontrado.")
-        logger.error(f"Detalhes: {e}")
-        raise typer.Exit(code=1)
-    except Exception as e:
-        # Captura outras exceções de inicialização que não são tratadas por _check_environment
-        logger.error(f"Ocorreu um erro crítico durante a inicialização: {e}", exc_info=True)
-        raise typer.Exit(code=1)
-
-
-    # --- Lógica Principal da Aplicação ---
-    try:
-        # A inicialização do DB (criação de tabelas) acontece aqui, somente após
-        # a verificação bem-sucedida da conexão.
-        db_manager.initialize_db()
-
+        # 4. Proceed with main logic
         logger.info("Ambiente verificado. Coletando dados do bot...")
         feature_calculator = LiveFeatureCalculator(db_manager, mode=mode)
         status_service = StatusService(db_manager, config_manager, feature_calculator)
-        bot_id = f"jules_{mode}_bot"
-
-        status_data = status_service.get_extended_status(mode, bot_id)
+        
+        status_data = status_service.get_extended_status(mode, bot_name)
 
         if "error" in status_data:
             logger.error(f"O serviço de status retornou um erro: {status_data['error']}")

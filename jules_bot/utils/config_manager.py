@@ -8,34 +8,75 @@ class ConfigManager:
     """
     A class to manage loading and accessing configuration from a .ini file.
     It can resolve values from environment variables using the @env/ syntax.
+    It also supports temporary overrides for optimization purposes.
     """
     def __init__(self, config_file: Path = Path('config.ini')):
         """
         Initializes the ConfigManager and loads the configuration file.
+        The bot_name is determined immediately from environment variables for robust,
+        atomic initialization.
+
         Args:
             config_file: The path to the configuration file.
         """
-        load_dotenv()
+        # Load environment variables from the specified .env file first.
+        load_dotenv(dotenv_path=os.getenv("ENV_FILE", ".env"))
+
+        # Determine the bot name immediately from the environment.
+        self.bot_name: str = os.getenv("BOT_NAME", "jules_bot")
+        
+        self.overrides: Optional[Dict[str, str]] = None
         self.config = configparser.ConfigParser(interpolation=None)
         if not config_file.exists():
             raise FileNotFoundError(f"Configuration file not found: {config_file}")
         self.config.read(config_file)
 
+    def apply_overrides(self, override_dict: Dict[str, str]):
+        """
+        Applies a dictionary of temporary overrides. These take highest precedence.
+        """
+        self.overrides = override_dict
+
+    def clear_overrides(self):
+        """
+        Clears any temporary overrides.
+        """
+        self.overrides = None
+
     def _resolve_value(self, value: str) -> Optional[str]:
         """
         Resolves a value from an environment variable if it starts with @env/.
+        If a bot_name is set, it first tries to resolve a bot-specific env var.
         """
-        if isinstance(value, str) and value.startswith('@env/'):
-            env_var_name = value[5:]
+        if not isinstance(value, str) or not value.startswith('@env/'):
+            return value
+
+        env_var_name = value[5:]
+        env_var_value = None
+
+        # 1. Try to get bot-specific environment variable first
+        if self.bot_name:
+            # e.g., GCS-BOT_BINANCE_API_KEY -> GCS_BOT_BINANCE_API_KEY
+            # Normalize bot name to uppercase, replacing hyphens with underscores.
+            normalized_bot_name = self.bot_name.upper().replace("-", "_")
+            bot_specific_env_var = f"{normalized_bot_name}_{env_var_name}"
+            env_var_value = os.getenv(bot_specific_env_var)
+
+        # 2. If not found, fall back to the generic environment variable
+        if env_var_value is None:
             env_var_value = os.getenv(env_var_name)
 
-            # Special case for POSTGRES_HOST: default to 'localhost' if not set.
-            # This allows scripts to run from the host machine when the DB is in Docker.
-            if env_var_name == 'POSTGRES_HOST' and env_var_value is None:
+        # Special case for POSTGRES_HOST: if running locally (not in Docker),
+        # and the host is set to 'postgres', override to 'localhost'.
+        if env_var_name == 'POSTGRES_HOST':
+            # A simple way to check if we're not in a Docker container.
+            # This works for Linux-based Docker containers.
+            is_running_locally = not os.path.exists('/.dockerenv')
+
+            if is_running_locally and (env_var_value == 'postgres' or env_var_value is None):
                 return 'localhost'
 
-            return env_var_value
-        return value
+        return env_var_value
 
     def get_section(self, section: str) -> Dict[str, str]:
         """
@@ -54,17 +95,36 @@ class ConfigManager:
 
     def get(self, section: str, key: str, fallback: str = None) -> str:
         """
-        Retrieves a specific key from a section, resolving env vars.
+        Retrieves a specific key from the configuration.
+        The lookup order is as follows:
+        1. Temporary override dictionary (used for optimization).
+        2. The value from the .ini file, which can be a literal value or an
+           @env/ pointer to an environment variable.
+        3. The provided fallback value.
+        This ensures that the .ini file is the single source of truth for which
+        environment variables are used.
         """
-        # Get the raw value from configparser
-        value = self.config.get(section, key, fallback=fallback)
+        env_key_name = key.upper()
 
-        # If the retrieved value is the fallback, don't try to resolve it, just return it.
-        # This can happen if the key does not exist in the .ini file.
-        if value == fallback:
+        # 1. Check for temporary override
+        if self.overrides and env_key_name in self.overrides:
+            return self.overrides[env_key_name]
+
+        # 2. Get the raw value from the .ini file
+        raw_value = self.config.get(section, key, fallback=None)
+
+        if raw_value is None:
+            # The key was not found in the .ini file at all.
             return fallback
 
-        return self._resolve_value(value)
+        # 3. Resolve the value (e.g., from an @env/ pointer).
+        resolved_value = self._resolve_value(raw_value)
+
+        if resolved_value is None:
+            # The key was in the .ini but pointed to an env var that was not set.
+            return fallback
+
+        return resolved_value
 
     def getboolean(self, section: str, key: str, fallback: bool = None) -> bool:
         """
@@ -97,9 +157,9 @@ class ConfigManager:
         This is the single source of truth for DB connection details.
         """
         if db_type.upper() == 'INFLUXDB':
-            db_url = os.getenv("INFLUXDB_URL")
-            db_token = os.getenv("INFLUXDB_TOKEN")
-            db_org = os.getenv("INFLUXDB_ORG")
+            db_url = self._resolve_value("@env/INFLUXDB_URL")
+            db_token = self._resolve_value("@env/INFLUXDB_TOKEN")
+            db_org = self._resolve_value("@env/INFLUXDB_ORG")
 
             if not all([db_url, db_token, db_org]):
                 raise ValueError(

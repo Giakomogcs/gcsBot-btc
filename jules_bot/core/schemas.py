@@ -51,6 +51,8 @@ class TradePoint:
     sell_target_price: Optional[float] = None
 
     # --- Fields for SELL trades ---
+    sell_price: Optional[float] = None
+    sell_usd_value: Optional[float] = None
     commission_usd: Optional[float] = None
     realized_pnl_usd: Optional[float] = None
     hodl_asset_amount: Optional[float] = None
@@ -58,6 +60,4 @@ class TradePoint:
 
     # --- Legacy Fields (to be deprecated) ---
     backtest_id: Optional[str] = None
-    realized_pnl: Optional[float] = None
-    held_quantity: Optional[float] = None
 

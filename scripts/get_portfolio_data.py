@@ -8,9 +8,6 @@ from decimal import Decimal
 # Add project root to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# No longer needed, as the global logger configuration now handles the script mode.
-
-
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.database.portfolio_manager import PortfolioManager
 from jules_bot.database.postgres_manager import PostgresManager
@@ -19,9 +16,17 @@ def get_portfolio_data():
     """
     Fetches the latest portfolio snapshot, historical data, and DCOM status for the TUI.
     """
+    bot_name = os.getenv("BOT_NAME")
+    if not bot_name:
+        print(json.dumps({"error": "BOT_NAME environment variable not set."}), file=sys.stderr)
+        sys.exit(1)
+
     try:
-        db_config = config_manager.get_section('POSTGRES')
-        db_manager = PostgresManager(config=db_config)
+        # 1. Initialize ConfigManager
+        config_manager.initialize(bot_name)
+
+        # 2. Instantiate services
+        db_manager = PostgresManager()
         portfolio_manager = PortfolioManager(db_manager.SessionLocal)
 
         # --- Fetch Data ---
@@ -127,9 +132,9 @@ def get_portfolio_data():
 
     except Exception as e:
         # Print errors to stderr to avoid polluting the stdout stream
+        import traceback
         print(json.dumps({"error": str(e), "traceback": traceback.format_exc()}), file=sys.stderr)
         sys.exit(1)
 
 if __name__ == "__main__":
-    import traceback
     get_portfolio_data()

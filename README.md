@@ -1,382 +1,557 @@
-# GCS Trading Bot: Comprehensive Documentation
+# Robô GCS-BTC
 
-This document provides a complete guide to the GCS Trading Bot, a sophisticated, data-driven automated trading system for the BTC/USDT market.
+![Python Version](https://img.shields.io/badge/python-3.10%2B-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Status](https://img.shields.io/badge/status-active-brightgreen)
 
-## Table of Contents
+## Índice
 
-1.  [**Overview**](#1-overview)
-    - What is the GCS Trading Bot?
-    - Key Principles
-2.  [**Core Features**](#2-core-features)
-3.  [**System Architecture**](#3-system-architecture)
-    - Architectural Diagram
-    - Component Breakdown
-    - The Docker-Centric Workflow
-4.  [**Setup and Installation**](#4-setup-and-installation)
-    - Prerequisites
-    - Step 1: Clone and Configure
-    - Step 2: Start the Environment
-5.  [**User Guide: A Typical Workflow**](#5-user-guide-a-typical-workflow)
-    - Step 1: Start the Services
-    - Step 2: Run the Bot
-    - Step 3: Monitor with the Dashboard
-    - Step 4: Stop Everything
-6.  [**Complete Command Reference**](#6-complete-command-reference)
-    - `run.py`: The Main Control Script
-    - `scripts/`: Directory for Direct Interaction
-7.  [**Execution Environment Clarification**](#7-execution-environment-clarification)
-    - Why Docker?
-    - Can I Run it Without Docker?
-8.  [**Data and Database**](#8-data-and-database)
-    - Database Schema
-    - Log File Management
-9.  [**Troubleshooting**](#9-troubleshooting)
+- [Descrição do Projeto](#descrição-do-projeto)
+- [Pré-requisitos](#pré-requisitos)
+- [Instalação e Configuração Inicial](#instalação-e-configuração-inicial)
+- [Guia de Uso e Comandos](#guia-de-uso-e-comandos)
+  - [Comandos de Gerenciamento do Ambiente](#comandos-de-gerenciamento-do-ambiente)
+  - [Comandos de Gerenciamento de Bots](#comandos-de-gerenciamento-de-bots)
+  - [Comandos de Execução e Monitoramento](#comandos-de-execução-e-monitoramento)
+  - [Scripts de Utilidade](#scripts-de-utilidade)
+- [Entendendo as Métricas de Performance](#entendendo-as-métricas-de-performance)
+- [Estrutura do Projeto](#estrutura-do-projeto)
+- [Como Contribuir](#como-contribuir)
 
----
+## Descrição do Projeto
 
-## 1. Overview
+O **Robô de Automação Jules** é um sistema de trading automatizado, robusto e flexível, projetado para operar no mercado de criptomoedas da Binance. Sua arquitetura é centrada em Docker, permitindo que cada bot opere em um contêiner isolado, garantindo estabilidade e escalabilidade. O sistema é controlado por uma poderosa interface de linha de comando (`run.py`) que gerencia todo o ciclo de vida dos bots, desde a criação e configuração até a execução e monitoramento em tempo real.
 
-### What is the GCS Trading Bot?
+## Estratégias de Trading Implementadas
 
-The GCS Trading Bot is a powerful, fully automated trading bot designed for the BTC/USDT spot market on the Binance exchange. It is not a simple, rule-based bot; instead, it leverages a robust data pipeline, machine learning for market regime detection, and a flexible, containerized architecture. This design supports live trading, paper trading (on the Binance testnet), and comprehensive backtesting capabilities.
+As seguintes estratégias foram implementadas para tornar o robô mais inteligente e adaptável às condições de mercado.
 
-### Key Principles
+### Fator de Dificuldade de Compra Incremental
 
-- **Data-Driven:** Decisions are based on a rich dataset, including price action, technical indicators, order flow, market sentiment, and macroeconomic data.
-- **Reproducibility:** The entire application stack is containerized using Docker. This guarantees that the environment is consistent and eliminates "it works on my machine" problems.
-- **Script-Based Control:** All interactions are handled through a command-line interface (`run.py`) and a collection of powerful scripts. This is a deliberate design choice for reliability, speed, and ease of automation.
-- **Modularity:** The codebase is organized into decoupled components, making it easier to maintain, test, and extend.
+Para evitar a exaustão de capital durante tendências de baixa prolongadas, o robô emprega um fator de dificuldade de compra que se torna progressivamente mais rigoroso.
 
-## 2. Core Features
+- **Como Funciona:** Após um número configurável de compras consecutivas (definido por `STRATEGY_RULES_CONSECUTIVE_BUYS_THRESHOLD`), o robô aumenta a exigência para novas compras. Em vez de comprar após uma queda de X%, ele passará a exigir uma queda de X+1, X+2, e assim por diante.
+- **Reset da Dificuldade:** A dificuldade é zerada se ocorrer uma venda ou se não houver novas compras dentro de um período de tempo configurável (`STRATEGY_RULES_DIFFICULTY_RESET_TIMEOUT_HOURS`).
 
-- **Multiple Execution Modes**:
-  - **Live Trading**: Execute trades with real capital.
-  - **Paper Trading**: Trade on the Binance testnet without risking real funds.
-  - **Backtesting**: Simulate strategies on historical data to evaluate performance.
-- **Situational Awareness Model**: Utilizes a K-Means clustering model to classify the market into "regimes" (e.g., _Bull Volatile_, _Bear Quiet_), allowing the strategy to adapt to changing conditions.
-- **Interactive Terminal UI (TUI)**: A high-performance dashboard (`run.py dashboard`) provides a real-time view of the bot's status, open positions, wallet balances, and live logs.
-- **Automated Data Pipeline**: A built-in collector (`collectors/core_price_collector.py`) automatically ingests and stores all required price data in a PostgreSQL time-series database.
+### Trailing Stop Dinâmico com Trava de Lucro
 
-## 3. System Architecture
+Para maximizar os ganhos e, ao mesmo tempo, proteger o capital, o robô utiliza uma estratégia de trailing stop de nível profissional, que se torna mais flexível à medida que o lucro aumenta.
 
-### Architectural Diagram
+- **Como Funciona:**
 
-The system is centered around a main bot process running inside a Docker container. It is controlled and monitored via local scripts that interact with the container.
+  1.  **Ativação (Trava de Lucro):** Quando uma posição atinge um lucro mínimo em dólar (configurado por `STRATEGY_RULES_TRAILING_STOP_PROFIT`), a "trava de segurança" é ativada. A partir desse ponto, o robô tentará sempre fechar a operação com lucro.
+  2.  **Cálculo do Trail Dinâmico:** Em vez de uma porcentagem fixa, o "trail" (a distância do stop ao preço máximo) começa com um valor mínimo e aumenta conforme o lucro da operação cresce. Isso permite um stop mais justo para lucros pequenos e um stop mais flexível para lucros maiores.
+  3.  **Lógica de "Não Retorno":** A porcentagem do trail, uma vez que aumenta, **nunca mais diminui** para aquela operação, mesmo que o lucro recue do seu pico. Isso garante que a proteção de lucro seja sempre mantida ou melhorada.
+  4.  **Execução:** Se o preço do ativo cair e atingir o preço de stop calculado, a venda é executada. Se, no momento da venda, a operação estiver com prejuízo (devido a uma queda extremamente rápida), a venda é cancelada e o trailing stop é resetado para aguardar uma nova oportunidade de lucro.
 
-```
-   HOST MACHINE                                  DOCKER CONTAINER
-+-------------------+      +------------------+      +---------------------+
-|      run.py       |----->| docker-compose   |----->|  jules_bot/main.py  |
-| (Control Script)  |      | (Service Mgmt)   |      |  (Bot Entry Point)  |
-+-------------------+      +------------------+      +---------------------+
-        ^                                                    |
-        |                                                    V
-+-------------------+      +----------------+      +-----------------------+
-|  scripts/*.py     |<---->|   commands/    |<---->|  TradingBot           |
-| (Manual Commands) |      | (File-based    |      |  (Orchestrator)       |
-+-------------------+      |    Queue)      |      +-----------------------+
-        ^                  +----------------+
-        |
-+-------------------+
-|  tui/app.py       |
-| (Dashboard)       |
-+-------------------+
+- **Benefício:** Esta abordagem permite que o robô "surfe" as tendências de alta de forma mais inteligente. Ele protege lucros pequenos de forma agressiva (com um trail curto) e dá mais espaço para a operação respirar quando os lucros já são significativos (com um trail mais longo), evitando vendas prematuras.
+
+- **Variáveis de Configuração:**
+
+| Variável                                      | Descrição                                                                                                                                   | Valor Padrão |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `STRATEGY_RULES_USE_DYNAMIC_TRAILING_STOP`    | Ativa (`true`) ou desativa (`false`) a lógica de trailing stop dinâmico. Se `false`, usará a porcentagem fixa definida abaixo.              | `true`       |
+| `STRATEGY_RULES_TRAILING_STOP_PROFIT`         | O valor de lucro em USD que ativa a "trava de segurança" do trailing stop.                                                                  | `0.02`       |
+| `STRATEGY_RULES_DYNAMIC_TRAIL_PERCENTAGE`     | **(Legado/Fixo)** A distância percentual do stop se o modo dinâmico estiver desativado.                                                     | `0.02`       |
+| `STRATEGY_RULES_DYNAMIC_TRAIL_MIN_PCT`        | A **porcentagem mínima** inicial do trail quando ele é ativado.                                                                             | `0.01`       |
+| `STRATEGY_RULES_DYNAMIC_TRAIL_MAX_PCT`        | A **porcentagem máxima** que o trail pode atingir, não importa quão alto seja o lucro.                                                      | `0.05`       |
+| `STRATEGY_RULES_DYNAMIC_TRAIL_PROFIT_SCALING` | O fator que controla a rapidez com que o trail aumenta em relação ao lucro. Um valor maior torna o trail mais sensível ao aumento de lucro. | `0.1`        |
+
+## Pré-requisitos
+
+Para executar este projeto, você precisará ter os seguintes softwares instalados em sua máquina:
+
+- **Python 3.10 ou superior**
+- **Docker**
+- **Docker Compose** (geralmente incluído com o Docker Desktop)
+
+## Instalação e Configuração Inicial
+
+Siga este guia para configurar o ambiente de desenvolvimento do zero.
+
+### Passo 1: Clonar o Repositório
+
+```bash
+git clone [URL_DO_REPOSITORIO]
+cd [NOME_DA_PASTA_DO_PROJETO]
 ```
 
-### Component Breakdown
+### Passo 2: Criar e Ativar o Ambiente Virtual (`venv`)
 
-- **`run.py` (CLI)**: The main entry point for managing the bot's lifecycle (starting, stopping, running commands). This script runs on your **host machine**.
-- **`docker-compose.yml`**: Defines the services that make up the application stack: the Python application (`app`), the PostgreSQL database (`postgres`), and a database admin tool (`pgadmin`).
-- **`jules_bot/main.py`**: The entry point for the application _inside_ the Docker container. It instantiates and starts the main `TradingBot` orchestrator.
-- **`TradingBot`**: The central orchestrator. It runs the main trading loop and continuously checks the `commands/` directory for manual instructions (e.g., a `force_buy.json` file).
-- **`scripts/`**: A folder of standalone Python scripts that run on your **host machine**. They provide direct control by creating command files or fetching data from the bot.
-- **`tui/app.py`**: The Textual-based dashboard. It runs on your **host machine** and uses the `scripts/` to get data and issue commands.
+É altamente recomendado usar um ambiente virtual para isolar as dependências do projeto.
 
-### The Docker-Centric Workflow
+**Para Windows (PowerShell):**
 
-The bot application itself **always runs inside the `app` Docker container**. The `run.py` script on your host machine is a convenience wrapper that executes commands _inside_ that container using `docker-compose exec`. This is a crucial concept to understand.
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+```
 
-## 4. Setup and Installation
+**Para Linux/macOS (Bash):**
 
-### Prerequisites
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
 
-- **Docker and Docker Compose**: Ensure Docker is installed and running. This is non-negotiable.
-- **Python 3.10+**: Required for running the `run.py` control script on your host machine.
-- **Git**: For cloning the repository.
-- **(Windows Users)**: It is highly recommended to use **Windows Terminal** for the best experience, especially for the TUI dashboard. The legacy `cmd.exe` may have rendering issues.
+### Passo 3: Instalar as Dependências
 
-### Step 1: Clone and Configure
+Com o ambiente virtual ativado, instale todas as bibliotecas Python necessárias:
 
-1.  Clone the repository and navigate into the directory.
-    ```bash
-    git clone <YOUR_REPOSITORY_URL>
-    cd gcsbot-btc
-    ```
-2.  Create your environment configuration file from the example.
+```bash
+pip install -r requirements.txt
+```
+
+### Passo 4: Configurar as Variáveis de Ambiente
+
+O projeto utiliza um arquivo `.env` para gerenciar segredos e configurações.
+
+1.  **Copie o arquivo de exemplo:**
+
     ```bash
     cp .env.example .env
     ```
-3.  Edit the `.env` file with your Binance API keys (and any other custom settings).
 
-> **Important**: If you change the `.env` file after starting the services, you must restart them for the changes to take effect: `python run.py stop` followed by `python run.py start`.
+2.  **Edite o arquivo `.env`** e preencha as variáveis essenciais. No mínimo, você precisará configurar suas chaves de API da Binance.
 
-### Step 2: Start the Environment
+    Abaixo estão as variáveis mais críticas para o funcionamento do robô:
 
-The `start` command will build the Docker images (if they don't exist) and launch the `app`, `postgres`, and `pgadmin` services in the background.
+| Variável                     | Descrição                                                      | Exemplo de Valor                  |
+| ---------------------------- | -------------------------------------------------------------- | --------------------------------- |
+| `POSTGRES_USER`              | Nome de usuário para o banco de dados PostgreSQL.              | `gcs_user`                        |
+| `POSTGRES_PASSWORD`          | Senha para o banco de dados PostgreSQL.                        | `gcs_password`                    |
+| `POSTGRES_DB`                | Nome do banco de dados a ser utilizado.                        | `gcs_db`                          |
+| `BINANCE_API_KEY`            | Sua chave de API para a conta de produção da Binance.          | `AbCdEfGhIjKlMnOpQrStUvWxYz...`   |
+| `BINANCE_API_SECRET`         | Seu segredo de API para a conta de produção da Binance.        | `1a2b3c4d5e6f7g8h9i0j1k2l3m4n...` |
+| `BINANCE_TESTNET_API_KEY`    | Sua chave de API para a conta de teste (Testnet) da Binance.   | `...`                             |
+| `BINANCE_TESTNET_API_SECRET` | Seu segredo de API para a conta de teste (Testnet) da Binance. | `...`                             |
+
+## Configuração Detalhada de Estratégias
+
+Para um controle fino sobre o comportamento do robô, as seguintes variáveis podem ser ajustadas no seu arquivo `.env`.
+
+### Regras Gerais da Estratégia (`STRATEGY_RULES_*`)
+
+Estas variáveis controlam a lógica de alto nível e as salvaguardas da estratégia de trading.
+
+| Variável                                             | Descrição                                                                                                                   | Valor Padrão |
+| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `STRATEGY_RULES_COMMISSION_RATE`                     | A taxa de comissão da exchange (ex: 0.001 para 0.1%). Usada para calcular o preço de break-even.                            | `0.001`      |
+| `STRATEGY_RULES_SELL_FACTOR`                         | A porcentagem de uma posição a ser vendida quando o alvo de lucro é atingido (ex: 1 para vender 100%, 0.5 para vender 50%). | `1`          |
+| `STRATEGY_RULES_MAX_OPEN_POSITIONS`                  | O número máximo de posições que o robô pode manter abertas simultaneamente.                                                 | `150`        |
+| `STRATEGY_RULES_USE_DYNAMIC_CAPITAL`                 | Se `true`, ativa lógicas dinâmicas como o fator de dificuldade.                                                             | `true`       |
+| `STRATEGY_RULES_WORKING_CAPITAL_PERCENTAGE`          | A porcentagem do capital total da carteira que deve ser usada para trading ativo.                                           | `0.85`       |
+| `STRATEGY_RULES_USE_REVERSAL_BUY_STRATEGY`           | Se `true`, ativa a estratégia que monitora por uma reversão de preço antes de confirmar uma compra em um dip.               | `true`       |
+| `STRATEGY_RULES_REVERSAL_BUY_THRESHOLD_PERCENT`      | A porcentagem que o preço precisa subir do ponto mais baixo para confirmar uma compra por reversão.                         | `0.005`      |
+| `STRATEGY_RULES_REVERSAL_MONITORING_TIMEOUT_SECONDS` | O tempo em segundos que o robô monitora por uma reversão antes de cancelar a tentativa de compra.                           | `100`        |
+| `STRATEGY_RULES_CONSECUTIVE_BUYS_THRESHOLD`          | O número de compras consecutivas antes que o fator de dificuldade comece a ser aplicado.                                    | `5`          |
+| `STRATEGY_RULES_DIFFICULTY_ADJUSTMENT_FACTOR`        | O multiplicador usado para aumentar a exigência de compra a cada nível de dificuldade.                                      | `0.005`      |
+| `STRATEGY_RULES_DIFFICULTY_RESET_TIMEOUT_HOURS`      | O número de horas sem compras após o qual o fator de dificuldade é resetado.                                                | `2`          |
+
+### Parâmetros por Regime de Mercado (`REGIME_*`)
+
+O robô identifica 4 regimes de mercado e aplica um conjunto diferente de parâmetros para cada um, permitindo uma estratégia adaptativa.
+
+- **Regime 0:** Baixa Volatilidade / Mercado em Range (Estratégia Conservadora)
+- **Regime 1:** Tendência de Alta Moderada (Estratégia Equilibrada)
+- **Regime 2:** Alta Volatilidade / Tendência Forte (Estratégia Agressiva)
+- **Regime 3:** Tendência de Baixa / Cautela (Estratégia Muito Conservadora)
+
+| Variável                        | Descrição                                                                                | Valor Padrão (Regime 1) |
+| ------------------------------- | ---------------------------------------------------------------------------------------- | ----------------------- |
+| `REGIME_X_BUY_DIP_PERCENTAGE`   | A porcentagem de queda a partir de um topo recente necessária para iniciar uma compra.   | `0.003`                 |
+| `REGIME_X_SELL_RISE_PERCENTAGE` | A porcentagem de lucro inicial que, ao ser atingida, ativa o Trailing Take-Profit.       | `0.008`                 |
+| `REGIME_X_ORDER_SIZE_USD`       | O tamanho base da ordem em USD para este regime (se não estiver usando sizing dinâmico). | `10`                    |
+
+_Substitua `X` pelo número do regime (0, 1, 2 ou 3) para configurar cada um individualmente._
+
+## Guia de Uso e Comandos
+
+A interação com o robô é feita principalmente através do script `run.py`. Ele oferece uma interface de linha de comando para gerenciar todo o ciclo de vida do ambiente e dos bots.
+
+### Comandos de Gerenciamento do Ambiente
+
+Estes comandos controlam o ambiente Docker subjacente, que inclui o banco de dados PostgreSQL.
+
+---
+
+#### `start-env`
+
+**Descrição:** Garante que os serviços essenciais do ambiente (como o banco de dados PostgreSQL) estejam em execução. Se o ambiente não estiver ativo, este comando irá iniciá-lo.
+**Uso:**
 
 ```bash
-python run.py start
+python run.py start-env
 ```
 
-The `app` container will start and remain in an idle state, waiting for you to issue a command.
+---
 
-## 5. User Guide: A Typical Workflow
+#### `stop-env`
 
-Here is how you would typically run and interact with the bot.
-
-### Step 1: Start the Services
-
-In your terminal, start all Docker services:
+**Descrição:** Para todos os serviços Docker em execução, incluindo os contêineres de bots e o banco de dados. Este comando também remove os contêineres para garantir um estado limpo.
+**Uso:**
 
 ```bash
-python run.py start
+python run.py stop-env
 ```
 
-### Step 2: Run the Bot
+---
 
-Open a **new terminal window** (or a new tab). Choose whether you want to run in live or paper trading mode. This command will occupy the terminal window with live logs from the bot.
+#### `status`
 
-- **For Live Trading:**
-  ```bash
-  python run.py trade
-  ```
-- **For Paper Trading (Testnet):**
-  ```bash
-  python run.py test
-  ```
-
-### Step 3: Monitor with the Dashboard
-
-Open a **third terminal window**. Launch the TUI dashboard, making sure to specify the correct mode to monitor.
-
-- **To monitor the Testnet bot:**
-  ```bash
-  python run.py dashboard --mode test
-  ```
-- **To monitor the Live bot:**
-  ```bash
-  python run.py dashboard --mode trade
-  ```
-
-### Step 4: Stop Everything
-
-When you are finished, you can stop all services and remove the containers and volumes with a single command from any terminal window:
+**Descrição:** Mostra o status atual de todos os contêineres Docker associados ao projeto.
+**Uso:**
 
 ```bash
-python run.py stop
+python run.py status
 ```
 
-## 6. Complete Command Reference
+### Comandos de Gerenciamento de Bots
 
-### `run.py`: The Main Control Script
+Estes comandos permitem criar, configurar e gerenciar as instâncias de seus bots.
 
-These commands are your primary way of managing the bot's environment and application.
+---
 
-| Command                 | Description                                                                                       |
-| ----------------------- | ------------------------------------------------------------------------------------------------- |
-| `start`                 | Builds and starts all services (`app`, `postgres`, `pgadmin`) in detached mode.                   |
-| `stop`                  | Stops and removes all running services and associated volumes.                                    |
-| `status`                | Shows the current status of all running Docker services.                                          |
-| `build`                 | Forces a rebuild of the Docker images without starting them. Use after changing the `Dockerfile`. |
-| `logs [service]`        | Tails the logs of a specific service (e.g., `app`, `db`) or all services if none is specified.    |
-| `trade`                 | Starts the bot in **live trading mode**. Runs the main loop in the container.                     |
-| `test`                  | Starts the bot in **paper trading (testnet) mode**.                                               |
-| `dashboard --mode <m>`  | Starts the interactive TUI. Use `--mode trade` or `--mode test`.                                  |
-| `backtest --days <d>`   | Prepares historical data and runs a full backtest for the specified number of days.               |
-| `clear-testnet-trades`  | **DESTRUCTIVE:** Deletes all `test` environment trades from the PostgreSQL database.              |
-| `clear-backtest-trades` | **DESTRUCTIVE:** Deletes all `backtest` environment trades from the PostgreSQL database.          |
-| `wipe-db`               | **EXTREMELY DESTRUCTIVE:** Wipes all data from the primary tables after a confirmation prompt.    |
+#### `new-bot`
 
-### `scripts/`: Directory for Direct Interaction
+**Descrição:** Inicia um guia interativo para criar a configuração de um novo bot. Ele adiciona as variáveis de ambiente necessárias, com o prefixo do nome do bot, ao seu arquivo `.env`.
+**Uso:**
 
-These scripts can be run from your host machine's terminal for automation or direct manual intervention. They work by executing code inside the running `app` container.
-
-| Script                        | Description                                                                                    | Arguments                                |
-| ----------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| `analyze_results.py`          | Analyzes trade performance against model confidence.                                           | `--env <name>` (Default: `trade`)        |
-| `get_bot_data.py`             | Dumps a JSON report of the bot's current status (used by the TUI).                             | `mode` (Default: `test`)                 |
-| `force_buy.py`                | Issues a manual buy command to a running bot.                                                  | `amount_usd` (Required)                  |
-| `force_sell.py`               | Issues a manual sell command to a running bot.                                                 | `trade_id`, `percentage` (Required)      |
-| `prepare_backtest_data.py`    | Fetches and prepares historical data for backtesting.                                          | `days` (Required)                        |
-| `run_backtest.py`             | Runs a backtesting simulation on already-prepared data.                                        | `days` or (`--start-date`, `--end-date`) |
-| `verify_data.py`              | Checks data integrity in the database.                                                         | None                                     |
-| `clear_testnet_trades.py`     | **DESTRUCTIVE:** Clears all `test` environment trades from PostgreSQL.                         | None                                     |
-| `clear_trades_measurement.py` | **DESTRUCTIVE:** Clears all data from the `trades` measurement for a given environment.        | `--env <name>` (Required)                |
-| `wipe_database.py`            | **EXTREMELY DESTRUCTIVE:** Wipes all tables in the PostgreSQL database. Requires confirmation. | None                                     |
-
-## 7. Execution Environment Clarification
-
-### Why Docker?
-
-The bot is designed to run within a Docker container for several critical reasons:
-
-1.  **Consistency:** It ensures that the bot runs in the exact same environment every time, with the same dependencies and configuration, regardless of your host operating system.
-2.  **Dependency Management:** All Python and system-level dependencies are managed within the `Dockerfile`, preventing conflicts with other projects on your machine.
-3.  **Portability:** The entire application can be easily moved and run on any machine that has Docker installed.
-
-### Can I Run it Without Docker?
-
-**No.** The intended and only supported method of running the bot application is through the provided Docker setup managed by `run.py`.
-
-While you may see a `.venv` directory if you are developing on the code, this virtual environment is for your IDE to provide features like code completion and linting. It is **not** for running the bot itself. The `run.py` script and the `scripts/` are the only components designed to be executed directly on your host machine, and their purpose is to control the bot running inside Docker.
-
-## 8. Data and Database
-
-### Database Schema
-
-The application uses a PostgreSQL database with three main tables: `price_history`, `trades`, and `bot_status`. For a detailed breakdown of each table's columns, refer to the `jules_bot/database/models.py` file.
-
-### Log File Management
-
-The bot generates structured JSON logs in the `logs/` directory. This directory is created automatically.
-
-- `jules_bot.jsonl`: The main application log.
-- `performance.jsonl`: A log specifically for performance metrics.
-
-To prevent excessive disk usage, the log files are automatically rotated. **Only the most recent 2 days of logs are kept.** Older log files are automatically deleted.
-
-## 9. Troubleshooting
-
-**"Docker Compose not found" error:**
-
-- Ensure Docker Desktop (or Docker Engine) is installed correctly and that the Docker daemon is running.
-- On Linux, you may need to install `docker-compose` separately or use `docker compose` (with a space). The `run.py` script tries to detect this automatically. You might also need to run commands with `sudo`.
-
-**TUI Dashboard is not rendering correctly:**
-
-- If you are on Windows, ensure you are using Windows Terminal.
-- If you are on macOS or Linux, ensure your terminal supports standard color and character rendering (most modern terminals do).
-- Make sure your terminal window is large enough to draw the UI components.
-
-**Changes to `.env` file not working:**
-
-- You must restart the Docker services for changes in the `.env` file to be loaded. Run `python run.py stop` and then `python run.py start`.
-
-## 10. Terminal User Interface (TUI)
-
-The bot includes a new, high-performance Terminal User Interface (TUI) for monitoring and manual control, launched with the `run.py dashboard` command. This TUI is built on the new script-based architecture, ensuring it is fast and reliable.
-
-### TUI Preview
-
-A preview of the new dashboard layout:
-
-```
- +---------------------------------------------------------------------------------------------+
- | Jules Bot                                                                     मोड: TEST      |
- +---------------------------------------------------------------------------------------------+
- | Bot Control                        | Bot Status                                             |
- | Manual Buy (USD): [ 50.00 ]        | Symbol: BTC/USDT   Price: $34,567.89                     |
- | [ FORCE BUY ]                      |                                                        |
- |                                    | Open Positions                                         |
- | Selected Trade Actions (ID: ab12)  | ID   | Entry   | Value   | PnL     | Sell Target | Pr.. |
- | [ Sell 100% ] [ Sell 90% ]         |------|---------|---------|---------|-------------|------|
- |                                    | ab12 | 34000.0 | $345.67 | +$5.67  | $35000.0    | 56.7%|
- | Live Log                           | cd34 | 33950.0 | $691.35 | +$11.35 | $34800.0    | 70.1%|
- | [INFO] Bot cycle complete.         |                                                        |
- | [ERROR] Failed to fetch...         | Wallet Balances                                        |
- |                                    | Asset | Free      | Locked    | USD Value              |
- |                                    |-------|-----------|-----------|------------------------|
- |                                    | BTC   | 0.01234567| 0.00000000| $427.81                  |
- |                                    | USDT  | 1000.00   | 0.00      | $1000.00               |
- +---------------------------------------------------------------------------------------------+
+```bash
+python run.py new-bot
 ```
 
-### Key UI Features
+**Exemplo de Interação:**
 
-- **Live Status**: Real-time updates on the bot's mode and the current asset price.
-- **Bot Control**: A panel to manually trigger a buy order for a specific USD amount.
-- **Live Log Panel**: A dedicated panel that streams the bot's most important messages directly from its structured log file, with color-coding for different log levels.
-- **Open Positions Table**: A detailed list of all open trades, including unrealized PnL and a progress bar showing how close each position is to its sell target.
-- **Manual Intervention**: Select a trade in the table to bring up options to **Force Sell** either 100% or 90% of the position.
-
-## 10. Status Data Structure
-
-The `scripts/get_bot_data.py` script provides a comprehensive JSON snapshot of the bot's current state. This data is used to populate the TUI and can be used for any external monitoring. Below is an example of the structure with explanations for each key.
-
-```json
-{
-  "mode": "test",
-  "symbol": "BTC/USDT",
-  "current_btc_price": 51000.5,
-  "total_wallet_usd_value": 11500.25,
-  "open_positions_status": [
-    {
-      "trade_id": "a1b2c3d4-e5f6-7890-g1h2-i3j4k5l6m7n8",
-      "entry_price": 50000.0,
-      "current_price": 51000.5,
-      "quantity": 0.1,
-      "unrealized_pnl": 100.05,
-      "sell_target_price": 55000.0,
-      "progress_to_sell_target_pct": 20.01,
-      "price_to_target": 3999.5,
-      "usd_to_target": 399.95
-    }
-  ],
-  "buy_signal_status": {
-    "should_buy": false,
-    "reason": "Price is above the buy threshold.",
-    "btc_purchase_target": 48000.0,
-    "btc_purchase_progress_pct": 0.0
-  },
-  "trade_history": [
-    {
-      "trade_id": "z9y8x7w6-v5u4-t3s2-r1q0-p9o8n7m6l5k4",
-      "status": "CLOSED",
-      "realized_pnl_usd": 50.75,
-      "...": "other trade fields"
-    }
-  ],
-  "wallet_balances": [
-    {
-      "asset": "BTC",
-      "free": "0.1",
-      "locked": "0.0",
-      "usd_value": 5100.05
-    },
-    {
-      "asset": "USDT",
-      "free": "6400.20",
-      "locked": "0.0",
-      "usd_value": 6400.2
-    }
-  ]
-}
+```
+Qual o nome do novo bot? (use apenas letras minúsculas, números, '_' e '-', sem espaços) meu-primeiro-bot
+✅ Bot 'meu-primeiro-bot' adicionado com sucesso ao seu arquivo .env!
+   -> Agora, edite o arquivo e preencha com as chaves de API do bot.
 ```
 
-### Key Descriptions
+---
 
-- **`mode`**: The environment the bot is running in (`trade`, `test`).
-- **`symbol`**: The trading pair being monitored.
-- **`current_btc_price`**: The latest price of BTC.
-- **`total_wallet_usd_value`**: The total estimated value of the wallet in USD, summing the value of all assets (BTC and USDT).
-- **`open_positions_status`**: A list of currently open positions.
-  - `trade_id`: The unique ID for the trade.
-  - `entry_price`: The price at which the asset was bought.
-  - `current_price`: The current market price.
-  - `quantity`: The amount of the asset held.
-  - `unrealized_pnl`: The current paper profit or loss for the position.
-  - `sell_target_price`: The price at which the strategy aims to sell.
-  - `progress_to_sell_target_pct`: The percentage progress towards the sell target.
-  - `price_to_target`: The absolute price difference to the sell target.
-  - `usd_to_target`: The USD value of the `price_to_target`.
-- **`buy_signal_status`**: Information about the bot's readiness to make a new buy.
-  - `should_buy`: A boolean indicating if the strategy conditions for a buy are met.
-  - `reason`: A human-readable explanation of the current signal status.
-  - `btc_purchase_target`: The price at which the bot would consider buying.
-  - `btc_purchase_progress_pct`: The percentage progress towards the buy target.
-- **`trade_history`**: A list of all trades (open and closed) for the environment.
-- **`wallet_balances`**: A list of balances for relevant assets from the exchange.
-  - `asset`: The ticker for the asset (e.g., `BTC`).
-  - `free`: The amount of the asset that is available to trade.
-  - `locked`: The amount of the asset that is currently in open orders.
-  - `usd_value`: The estimated value of the asset balance in USD.
+#### `delete-bot`
+
+**Descrição:** Inicia um guia interativo para remover a configuração de um bot existente do seu arquivo `.env`.
+**Uso:**
+
+```bash
+python run.py delete-bot
+```
+
+---
+
+#### `list-bots`
+
+**Descrição:** Exibe uma tabela com todos os bots que estão atualmente em execução como contêineres Docker.
+**Uso:**
+
+```bash
+python run.py list-bots
+```
+
+---
+
+#### `stop-bot`
+
+**Descrição:** Para um contêiner de bot específico que está em execução. Pode ser usado de forma interativa ou especificando o nome do bot.
+**Uso:**
+
+```bash
+python run.py stop-bot [OPÇÕES]
+```
+
+**Argumentos:**
+| Nome | Descrição | Padrão |
+| --- | --- | --- |
+| `--bot-name, -n` | O nome do bot que você deseja parar. Se não for fornecido, um menu interativo será exibido. | Nenhum |
+**Exemplo:**
+
+```bash
+# Parar um bot específico
+python run.py stop-bot --bot-name meu-primeiro-bot
+```
+
+### Comandos de Execução e Monitoramento
+
+Estes comandos são usados para iniciar, monitorar e interagir com seus bots.
+
+---
+
+#### `trade`
+
+**Descrição:** Inicia um bot em modo de produção (**live trading**), utilizando as chaves de API reais da Binance. O bot é executado em segundo plano (modo "detached").
+**Uso:**
+
+```bash
+python run.py trade [OPÇÕES]
+```
+
+**Argumentos:**
+| Nome | Descrição | Padrão |
+| --- | --- | --- |
+| `--bot-name, -n` | **(Obrigatório)** O nome do bot a ser executado. | Nenhum |
+| `--detached, -d` | **(Obrigatório)** Deve ser usado para executar o bot em segundo plano. | `True` |
+**Exemplo:**
+
+```bash
+# Iniciar o bot 'meu-primeiro-bot' em modo de produção
+python run.py trade --bot-name meu-primeiro-bot --detached
+```
+
+---
+
+#### `test`
+
+**Descrição:** Inicia um bot em modo de teste (**paper trading**), utilizando as chaves de API da Testnet da Binance. O bot é executado em segundo plano.
+**Uso:**
+
+```bash
+python run.py test [OPÇÕES]
+```
+
+**Argumentos:**
+| Nome | Descrição | Padrão |
+| --- | --- | --- |
+| `--bot-name, -n` | **(Obrigatório)** O nome do bot a ser executado. | Nenhum |
+| `--detached, -d` | **(Obrigatório)** Deve ser usado para executar o bot em segundo plano. | `True` |
+**Exemplo:**
+
+```bash
+# Iniciar o bot 'meu-primeiro-bot' em modo de teste
+python run.py test --bot-name meu-primeiro-bot --detached
+```
+
+---
+
+#### `logs`
+
+**Descrição:** Exibe e acompanha em tempo real os logs de um contêiner de bot em execução. Essencial para depuração.
+**Uso:**
+
+```bash
+python run.py logs [OPÇÕES]
+```
+
+**Argumentos:**
+| Nome | Descrição | Padrão |
+| --- | --- | --- |
+| `--bot-name, -n` | O nome do bot cujos logs você deseja ver. Se não for fornecido, um menu interativo será exibido. | Nenhum |
+**Exemplo:**
+
+```bash
+# Ver os logs do bot 'meu-primeiro-bot'
+python run.py logs --bot-name meu-primeiro-bot
+```
+
+---
+
+#### `display`
+
+**Descrição:** Inicia a Interface de Usuário do Terminal (TUI) para monitorar um bot em execução em tempo real.
+**Uso:**
+
+```bash
+python run.py display [OPÇÕES]
+```
+
+**Argumentos:**
+| Nome | Descrição | Padrão |
+| --- | --- | --- |
+| `--bot-name, -n` | O nome do bot que você deseja monitorar. Se não for fornecido, um menu interativo será exibido. | Nenhum |
+**Exemplo:**
+
+```bash
+# Abrir o painel de monitoramento para o bot 'meu-primeiro-bot'
+python run.py display --bot-name meu-primeiro-bot
+```
+
+---
+
+#### `backtest`
+
+**Descrição:** Executa um processo de backtesting. Pode ser um backtest simples com os parâmetros atuais ou um fluxo completo de otimização para encontrar os melhores parâmetros antes da simulação final.
+
+**Uso:**
+
+```bash
+python run.py backtest [OPÇÕES]
+```
+
+**Argumentos:**
+| Nome | Descrição | Padrão |
+| --- | --- | --- |
+| `--bot-name, -n` | O nome do bot para o qual o backtest será executado. Se omitido, será interativo. | `jules_bot` |
+| `--days, -d` | O número de dias de dados históricos a serem usados no backtest. | `30` |
+| `--optimize` | Se esta flag for usada, ativa o modo de otimização antes do backtest final. | `False` |
+| `--jobs, -j` | Número de processos de otimização para rodar em paralelo. | Nº de CPUs da máquina |
+
+**Exemplos de Uso:**
+
+1.  **Backtest Padrão:**
+    Executa um backtest simples usando as configurações atuais do seu arquivo `.env`.
+
+    ```bash
+    python run.py backtest --bot-name meu-primeiro-bot --days 90
+    ```
+
+2.  **Backtest com Otimização:**
+    Ativa o fluxo de otimização profissional com um dashboard de monitoramento em tempo real.
+    ```bash
+    python run.py backtest --optimize
+    ```
+    - **O que acontece:**
+      1.  **Configuração Interativa:** O script fará perguntas para configurar a otimização (número de testes, perfil de carteira, etc.).
+      2.  **Dashboard de Otimização:** Um painel de controle (TUI) será iniciado no seu terminal, mostrando o progresso de todos os jobs de otimização em tempo real.
+      3.  **Otimização Paralela:** O Optuna rodará vários backtests em segundo plano, de forma eficiente (usando "pruning" para descartar testes ruins), para encontrar a melhor combinação de parâmetros. O progresso é salvo em `optimize/jules_bot_optimization.db` e pode ser retomado de onde parou.
+      4.  **Salvar Resultados:** Os melhores parâmetros são salvos automaticamente no arquivo `optimize/.best_params.env`.
+      5.  **Backtest Final:** Um último backtest, com relatório detalhado e limpo, é executado usando os parâmetros do `optimize/.best_params.env`.
+
+Este fluxo integrado garante que você possa encontrar e testar a melhor estratégia de forma robusta e profissional com um único comando, agora com visibilidade total do processo.
+
+### Scripts de Utilidade
+
+A pasta `scripts/` contém uma série de ferramentas de linha de comando para interações avançadas, como extração de dados e intervenção manual.
+
+**Requisito Importante:** Para usar esses scripts, você deve ter seu ambiente virtual (`.venv`) ativado, pois eles dependem das bibliotecas instaladas e do código-fonte do projeto.
+
+---
+
+#### `get_trade_history.py`
+
+**Descrição:** Busca o histórico de trades de um bot específico diretamente do banco de dados e o exibe em formato JSON.
+**Uso:**
+
+```bash
+python scripts/get_trade_history.py [NOME_DO_BOT] [OPÇÕES]
+```
+
+**Argumentos:**
+| Nome | Descrição | Padrão |
+| --- | --- | --- |
+| `bot_name` | **(Obrigatório)** O nome do bot para o qual a consulta será feita. | Nenhum |
+| `--start-date` | Filtra os trades a partir desta data (YYYY-MM-DD). | Nenhum |
+| `--end-date` | Filtra os trades até esta data (YYYY-MM-DD). | Nenhum |
+**Exemplo:**
+
+```bash
+# Obter todo o histórico do 'meu-primeiro-bot'
+python scripts/get_trade_history.py meu-primeiro-bot
+
+# Obter o histórico de Junho de 2024
+python scripts/get_trade_history.py meu-primeiro-bot --start-date 2024-06-01 --end-date 2024-06-30
+```
+
+---
+
+#### `force_buy.py` e `force_sell.py`
+
+**Descrição:** Estes scripts criam um "arquivo de comando" que instrui um bot em execução a realizar uma compra ou venda manual. O bot monitora a pasta de comandos e executa a ação assim que a detecta. **É necessário definir a variável de ambiente `BOT_NAME` para direcionar o comando ao bot correto.**
+
+**Uso (`force_buy`):**
+
+```bash
+export BOT_NAME=meu-primeiro-bot
+python scripts/force_buy.py [VALOR_EM_USD]
+```
+
+**Argumentos (`force_buy`):**
+| Nome | Descrição |
+| --- | --- |
+| `amount_usd` | **(Obrigatório)** O valor em USD que você deseja comprar. |
+
+**Exemplo (`force_buy`):**
+
+```bash
+# Comprar $50 de BTC com o bot 'meu-primeiro-bot'
+export BOT_NAME=meu-primeiro-bot
+python scripts/force_buy.py 50
+```
+
+**Uso (`force_sell`):**
+
+```bash
+export BOT_NAME=meu-primeiro-bot
+python scripts/force_sell.py [ID_DO_TRADE] [PERCENTUAL]
+```
+
+**Argumentos (`force_sell`):**
+| Nome | Descrição |
+| --- | --- |
+| `trade_id` | **(Obrigatório)** O ID único do trade que você deseja vender. |
+| `percentage` | **(Obrigatório)** A porcentagem da posição a ser vendida (1 a 100). |
+
+**Exemplo (`force_sell`):**
+
+```bash
+# Vender 100% do trade com ID 'abc-123' usando o bot 'meu-primeiro-bot'
+export BOT_NAME=meu-primeiro-bot
+python scripts/force_sell.py abc-123 100
+```
+
+---
+
+#### `wipe_database.py`
+
+**Descrição:** **(AÇÃO DESTRUTIVA)** Limpa completamente as tabelas do banco de dados para um bot específico. Útil para reiniciar os testes do zero. Requer a variável de ambiente `BOT_NAME`.
+**Uso:**
+
+```bash
+export BOT_NAME=meu-primeiro-bot
+python scripts/wipe_database.py --force
+```
+
+**Argumentos:**
+| Nome | Descrição |
+| --- | --- |
+| `--force` | **(Obrigatório)** Confirmação explícita para evitar a exclusão acidental de dados. |
+
+## Entendendo as Métricas de Performance
+
+Tanto o relatório de **backtest** quanto o painel de monitoramento **(TUI)** foram projetados para oferecer uma visão clara e transparente sobre o desempenho do robô. Abaixo está uma explicação detalhada das principais métricas para que você possa interpretar os resultados corretamente.
+
+### Métricas Chave no Painel (TUI) e Relatório de Backtest
+
+| Métrica                        | O que significa?                                                                                                                                                                                                                                                        | Onde Encontrar?        |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| **Initial Capital**            | **(TUI)** O valor estimado da sua carteira no momento em que o PnL começou a ser contado. É calculado como: `Valor do Portfólio Atual - Lucro/Prejuízo Líquido`.                                                                                                        | TUI (Painel Principal) |
+| **Initial Balance**            | **(Backtest)** O saldo inicial com o qual o backtest começou (ex: $100.00).                                                                                                                                                                                             | Relatório de Backtest  |
+| **Portfolio Value**            | **(TUI)** O valor total e atual da sua carteira. É a soma de todo o seu **dinheiro em caixa (não investido)** com o **valor de mercado de todas as suas posições abertas**.                                                                                             | TUI (Painel Principal) |
+| **Final Total Balance**        | **(Backtest)** O valor total da carteira ao final da simulação. Equivalente ao "Portfolio Value" da TUI.                                                                                                                                                                | Relatório de Backtest  |
+| **Net Profit/Loss**            | **(TUI)** O indicador mais importante do seu resultado financeiro geral. Mostra se você ganhou ou perdeu dinheiro desde o início. É calculado como: `Portfolio Value - Initial Capital`.                                                                                | TUI (Painel Principal) |
+| **Net PnL**                    | **(Backtest)** O resultado financeiro total da simulação. Equivalente ao "Net Profit/Loss" da TUI.                                                                                                                                                                      | Relatório de Backtest  |
+| **Realized PnL**               | O lucro ou prejuízo **já realizado** com as vendas de posições. Este valor só muda quando uma operação é fechada.                                                                                                                                                       | TUI e Backtest         |
+| **Unrealized PnL**             | O lucro ou prejuízo "no papel" de todas as suas posições que **ainda estão abertas**. Este valor flutua constantemente com o preço do mercado.                                                                                                                          | TUI e Backtest         |
+| **Open Positions**             | O número de posições de compra que ainda não foram vendidas.                                                                                                                                                                                                            | TUI e Backtest         |
+| **Win Rate (Taxa de Vitória)** | A porcentagem de operações de **venda** que foram fechadas com lucro. **Importante:** Esta métrica **não considera as posições abertas**, que podem estar com prejuízo não realizado. É por isso que é possível ter uma alta taxa de vitória e um PnL líquido negativo. | Relatório de Backtest  |
+
+## Estrutura do Projeto
+
+A estrutura de pastas do projeto foi organizada para separar as responsabilidades e facilitar a manutenção e o desenvolvimento.
+
+- **`/` (Raiz):** Contém os arquivos de configuração principal como `run.py`, `docker-compose.yml`, `requirements.txt` e o `.env`.
+- **`jules_bot/`:** O coração da aplicação. Contém toda a lógica do robô.
+  - **`bot/`:** Orquestração do bot, gerenciamento de contas e lógica de alto nível.
+  - **`core/`:** Lógica de trading principal, regras de estratégia e gerenciamento de estado.
+  - **`database/`:** Gerenciamento da conexão e dos modelos do banco de dados (PostgreSQL).
+  - **`services/`:** Serviços de suporte, como log de trades e monitoramento de performance.
+  - **`utils/`:** Utilitários compartilhados, como o gerenciador de configuração e o logger.
+- **`scripts/`:** Contém os scripts de utilidade para interação direta com o bot e o banco de dados.
+- **`tui/`:** Código-fonte da Interface de Usuário do Terminal (TUI), construída com a biblioteca Textual.
+- **`config/`:** Arquivos de configuração adicionais para serviços como o InfluxDB.
+- **`tests/`:** Testes unitários e de integração para garantir a qualidade do código.
+
+## Como Contribuir
+
+Contribuições são bem-vindas! Se você deseja melhorar este projeto, siga estes passos:
+
+1.  **Faça um Fork** do repositório.
+2.  **Crie uma Nova Branch** (`git checkout -b feature/sua-feature`).
+3.  **Faça suas Alterações** e commite (`git commit -m 'Adiciona nova feature'`).
+4.  **Envie para a Branch Original** (`git push origin feature/sua-feature`).
+5.  **Abra um Pull Request**.
+
+```
+
+```

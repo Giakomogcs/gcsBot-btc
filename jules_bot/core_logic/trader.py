@@ -21,6 +21,8 @@ class Trader:
         self.symbol = config_manager.get('APP', 'symbol')
         self.strategy_name = config_manager.get('APP', 'strategy_name', fallback='default_strategy')
         self.step_size = None
+        self.min_qty = None
+        self.min_notional = Decimal('5.0') # Default value, will be updated from exchange info
         self._fetch_exchange_info()
 
     def _map_mode_to_environment(self, mode: str) -> str:
@@ -35,7 +37,7 @@ class Trader:
 
     def _init_binance_client(self) -> Optional[Client]:
         """Initializes and authenticates the Binance API client based on the mode."""
-        if self.mode == 'offline' or config_manager.getboolean('APP', 'force_offline_mode'):
+        if self.mode == 'offline' or config_manager.getboolean('APP', 'force_offline_mode', fallback=False):
             logger.warning("OFFLINE mode. Trader will not connect.")
             return None
 
@@ -147,7 +149,7 @@ class Trader:
                 "trade_id": trade_id, "symbol": self.symbol, "price": 0.0, "quantity": 0.0,
                 "usd_value": 0.0, "commission": 0.0, "commission_asset": "N/A",
                 "exchange_order_id": str(order.get('orderId')), "timestamp": order.get('transactTime'),
-                "decision_context": decision_context, "environment": self.environment
+                "decision_context": decision_context, "environment": self.environment, "fills": []
             }
 
         executed_qty = float(order['executedQty'])
@@ -161,6 +163,25 @@ class Trader:
         commission = sum(float(f.get('commission', 0.0)) for f in order['fills'])
         commission_asset = order['fills'][0].get('commissionAsset', 'N/A') if order['fills'] else 'N/A'
 
+        # --- Calculate Commission in USD ---
+        commission_usd = 0.0
+        if commission > 0:
+            if commission_asset == 'USDT':
+                commission_usd = commission
+            # If commission is in the base asset (e.g., BTC), its value is commission * price
+            elif commission_asset == self.symbol.replace('USDT', ''):
+                 commission_usd = commission * price
+            else:
+                # Fetch price for other commission assets like BNB
+                try:
+                    asset_price = self.get_current_price(f"{commission_asset}USDT")
+                    if asset_price:
+                        commission_usd = commission * asset_price
+                    else:
+                        logger.warning(f"Could not determine price for commission asset '{commission_asset}'. commission_usd will be 0.")
+                except Exception as e:
+                    logger.error(f"Error fetching price for commission asset '{commission_asset}': {e}")
+
         # Return a standardized dictionary
         binance_trade_id = order['fills'][0]['tradeId'] if order.get('fills') else None
 
@@ -172,11 +193,13 @@ class Trader:
             "usd_value": cummulative_quote_qty,
             "commission": commission,
             "commission_asset": commission_asset,
+            "commission_usd": commission_usd,
             "exchange_order_id": str(order.get('orderId')),
             "binance_trade_id": binance_trade_id,
             "timestamp": order.get('transactTime'),
             "decision_context": decision_context,
-            "environment": self.environment
+            "environment": self.environment,
+            "fills": order.get('fills', [])
         }
 
 
@@ -231,8 +254,11 @@ class Trader:
             for f in info['filters']:
                 if f['filterType'] == 'LOT_SIZE':
                     self.step_size = f['stepSize']
-                    logger.info(f"LOT_SIZE filter for {self.symbol}: stepSize is {self.step_size}")
-                    break
+                    self.min_qty = Decimal(f['minQty'])
+                    logger.info(f"LOT_SIZE filter for {self.symbol}: stepSize is {self.step_size}, minQty is {self.min_qty}")
+                elif f['filterType'] == 'MIN_NOTIONAL':
+                    self.min_notional = Decimal(f['minNotional'])
+                    logger.info(f"MIN_NOTIONAL filter for {self.symbol}: minNotional is {self.min_notional}")
         except Exception as e:
             logger.error(f"Could not fetch exchange info for {self.symbol}: {e}")
 
@@ -289,8 +315,15 @@ class Trader:
             return False, None
 
         try:
-            quantity_to_sell = position_data.get('quantity')
+            quantity_to_sell = Decimal(str(position_data.get('quantity')))
             
+            # Check if the quantity is sufficient to sell
+            if self.min_qty is not None and quantity_to_sell < self.min_qty:
+                logger.warning(
+                    f"SELL ABORTED (Trade ID: {trade_id}): Quantity {quantity_to_sell} is less than the minimum required quantity {self.min_qty} for {self.symbol}."
+                )
+                return False, {"error": "Quantity is less than the minimum required."}
+
             # Format the quantity to comply with exchange filters
             formatted_quantity = self._format_quantity(quantity_to_sell)
             
@@ -301,10 +334,9 @@ class Trader:
             # Parse the response to get accurate, standardized data
             trade_result = self._parse_order_response(order, trade_id, decision_context)
 
-            # Add PnL info from the input data, as the trader doesn't know this
+            # The trader layer is not responsible for PnL. The caller (bot) will calculate it.
+            # We pass through hodl info if it was provided by the backtester.
             trade_result.update({
-                "commission_usd": position_data.get("commission_usd"),
-                "realized_pnl_usd": position_data.get("realized_pnl_usd"),
                 "hodl_asset_amount": position_data.get("hodl_asset_amount"),
                 "hodl_asset_value_at_sell": position_data.get("hodl_asset_value_at_sell")
             })
@@ -329,6 +361,10 @@ class Trader:
         limit = 1000  # Max limit per request for myTrades endpoint
 
         logger.info(f"Fetching all historical trades for {symbol} from Binance...")
+        logger.warning(
+            "Please be aware that the Binance API may only return trades from the last 7 days. "
+            "If you have open positions from trades older than that, they may not be synchronized."
+        )
         
         while True:
             try:

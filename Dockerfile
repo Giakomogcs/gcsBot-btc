@@ -14,10 +14,17 @@ ENV PYTHONPATH=/app
 COPY requirements.txt .
 
 # Second, install the dependencies. This step uses the cache from above.
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt
 
-# Third, now that dependencies are cached, copy the rest of your application code.
-COPY . .
+# Third, now that dependencies are cached, copy only the necessary application code.
+# This improves caching, as changes in other files (like README, .gitignore) won't invalidate the cache for this layer.
+COPY jules_bot/ /app/jules_bot/
+COPY scripts/ /app/scripts/
+COPY collectors/ /app/collectors/
+COPY tui/ /app/tui/
+COPY config/ /app/config/
+COPY run.py /app/
+COPY pyproject.toml /app/
 
 # The command to run your application when the container starts
 CMD ["python", "jules_bot/main.py"]

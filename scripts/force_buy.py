@@ -1,58 +1,63 @@
-import json
-import os
-import sys
-import time
 import typer
+import requests
+from typing_extensions import Annotated
+from jules_bot.utils import process_manager
 
-# Add project root to sys.path to allow imports if needed, and for consistency
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from jules_bot.utils.logger import logger
-
-COMMAND_DIR = "commands"
 
 def main(
-    amount_usd: float = typer.Argument(
-        ...,
+    usd_amount: Annotated[str, typer.Argument(
         help="The amount in USD to buy.",
-        min=0.0,
-        show_default=False
-    )
+        show_default=False,
+    )],
+    bot_name: Annotated[str, typer.Option(
+        "--bot-name", "-n",
+        help="The name of the bot to send the command to. Defaults to the BOT_NAME environment variable.",
+        envvar="BOT_NAME",
+        show_default=False,
+    )],
 ):
     """
-    Creates a command file to instruct a running bot to execute a manual buy.
+    Sends a 'force_buy' command to the running bot via its API.
     """
-    logger.info(f"Received request to force buy ${amount_usd:.2f}.")
+    bot = process_manager.get_bot_by_name(bot_name)
+    if not bot:
+        print(f"❌ Error: Bot '{bot_name}' not found or is not running.")
+        print("   Make sure the bot is started and check the name for typos.")
+        raise typer.Exit(code=1)
 
     try:
-        # Ensure the command directory exists
-        os.makedirs(COMMAND_DIR, exist_ok=True)
-
-        # Define the command payload
-        command = {
-            "type": "force_buy",
-            "amount_usd": amount_usd
-        }
-
-        # Create a unique filename for the command
-        filename = f"cmd_buy_{int(time.time() * 1000)}.json"
-        filepath = os.path.join(COMMAND_DIR, filename)
-
-        # Write the command to the file
-        with open(filepath, "w") as f:
-            json.dump(command, f)
-
-        logger.info(f"Successfully created command file: {filepath}")
-        print(f"✅ Buy command for ${amount_usd:.2f} has been issued.")
-        print(f"   A running bot should execute it shortly.")
-
-    except IOError as e:
-        logger.error(f"Failed to write command file: {e}", exc_info=True)
-        print(f"❌ Error: Could not write command file to '{COMMAND_DIR}'.")
+        if float(usd_amount) < 1.0:
+            print("❌ Error: The amount to buy must be at least 1.0 USD.")
+            raise typer.Exit(code=1)
+    except ValueError:
+        print(f"❌ Error: Invalid number format '{usd_amount}'.")
         raise typer.Exit(code=1)
-    except Exception as e:
-        logger.error(f"An unexpected error occurred: {e}", exc_info=True)
-        print(f"❌ An unexpected error occurred.")
+
+    base_url = f"http://host.docker.internal:{bot.host_port}/api"
+    endpoint = f"{base_url}/force_buy"
+    payload = {"amount_usd": usd_amount}
+
+    print(f"▶️ Sending force buy command for ${usd_amount} to {endpoint}...")
+
+    try:
+        response = requests.post(endpoint, json=payload, timeout=10)
+
+        if response.status_code == 200:
+            print("✅ Success! Bot executed the buy command.")
+            print("   Response:", response.json())
+        elif response.status_code == 400:
+            print("❌ Bad Request: The bot rejected the command.")
+            print("   Reason:", response.json().get("detail"))
+        else:
+            print(f"❌ Error: Received status code {response.status_code}")
+            try:
+                print("   Response:", response.json())
+            except requests.exceptions.JSONDecodeError:
+                print("   Response body:", response.text)
+
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Failed to connect to the bot's API at {endpoint}.")
+        print(f"   Is the bot running? Details: {e}")
         raise typer.Exit(code=1)
 
 if __name__ == "__main__":

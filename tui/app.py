@@ -2,274 +2,801 @@ import json
 import subprocess
 import sys
 import os
-from decimal import Decimal
+import tempfile
+from decimal import Decimal, InvalidOperation
 import time
+from datetime import datetime
+import requests
 
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll, Horizontal, Vertical
-from textual.widgets import Header, Footer, DataTable, Input, Button, Label, Static, RichLog, ProgressBar
+from textual.widgets.data_table import CellDoesNotExist, RowDoesNotExist
+from textual.widgets import Footer, DataTable, Input, Button, Label, Static, RichLog, TabbedContent, TabPane
 from textual.validation import Validator, ValidationResult
 from textual.worker import Worker, get_current_worker
 from textual import work
-from textual.message import Message # NOVO
+from textual.coordinate import Coordinate
+from textual.message import Message
+from textual.reactive import reactive
+from textual.screen import Screen
+from rich.text import Text
+from textual_plotext import PlotextPlot
+from textual_timepiece.pickers import DatePicker
+from whenever import Date
+import pytz
 
-# Add project root to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+SUDO_PREFIX = ["sudo"] if os.name != "nt" else []
+
+from jules_bot.utils.config_manager import config_manager
+from jules_bot.utils.logger import logger
 
 class NumberValidator(Validator):
     def validate(self, value: str) -> ValidationResult:
         try:
-            if float(value) > 0:
-                return self.success()
-            else:
-                return self.failure("Must be a positive number.")
+            if float(value) > 0: return self.success()
+            else: return self.failure("Must be a positive number.")
         except ValueError:
             return self.failure("Invalid number format.")
 
-# NOVO: Mensagens personalizadas para comunicação entre workers e a UI
 class DashboardData(Message):
-    """Uma mensagem para transportar dados do dashboard."""
     def __init__(self, data: dict | str, success: bool) -> None:
         self.data = data
         self.success = success
         super().__init__()
 
 class CommandOutput(Message):
-    """Uma mensagem para transportar a saída de um comando."""
     def __init__(self, output: str, success: bool) -> None:
         self.output = output
         self.success = success
         super().__init__()
 
-class PortfolioData(Message):
-    """A message to transport portfolio evolution data."""
-    def __init__(self, data: dict | str, success: bool) -> None:
-        self.data = data
-        self.success = success
+class ProcessedPositionsData(Message):
+    """Carries processed positions data from the worker."""
+    def __init__(self, sorted_positions: list, summary_text: str) -> None:
+        self.sorted_positions = sorted_positions
+        self.summary_text = summary_text
         super().__init__()
 
-class PerformanceSummaryData(Message):
-    """A message to transport performance summary data."""
-    def __init__(self, data: dict | str, success: bool) -> None:
-        self.data = data
-        self.success = success
+class ProcessedHistoryData(Message):
+    """Carries processed trade history data from the worker."""
+    def __init__(self, sorted_history: list, summary_text: str) -> None:
+        self.sorted_history = sorted_history
+        self.summary_text = summary_text
         super().__init__()
+
+class StatusIndicator(Static):
+    status = reactive("OFF")
+    def render(self) -> str:
+        colors = {"RUNNING": "green", "ERROR": "red", "STOPPED": "gray", "OFF": "gray", "SYNCHRONIZING...": "yellow"}
+        return f"[{colors.get(self.status, 'gray')}]●[/] {self.status}"
+    def watch_status(self, new_status: str) -> None:
+        self.refresh()
+
+class CustomHeader(Static):
+    def compose(self) -> ComposeResult:
+        with Horizontal():
+            yield Label("GCS Trading Bot Dashboard", id="header_title")
+            yield StatusIndicator(id="status_indicator")
+
+class DatePickerModal(Screen[Date]):
+    """A modal screen for the date picker."""
+    def compose(self) -> ComposeResult:
+        yield Vertical(
+            DatePicker(id="date_picker"),
+            id="date_picker_dialog",
+        )
+
+    def on_mount(self) -> None:
+        self.query_one(DatePicker).focus()
+
+    def on_date_picker_date_changed(self, event) -> None:
+        """Called when the date is changed in the date picker."""
+        self.dismiss(event.date)
 
 class TUIApp(App):
-    """A Textual app to display and control the trading bot's status via command-line scripts."""
-
     BINDINGS = [("d", "toggle_dark", "Toggle Dark Mode"), ("q", "quit", "Quit")]
-    CSS = """
-    #main_container {
-        layout: horizontal;
-    }
-    #left_pane {
-        width: 30%;
-        padding: 1;
-        border-right: solid $accent;
-    }
-    #middle_pane {
-        width: 45%;
-        padding: 1;
-        border-right: solid $accent;
-    }
-    #right_pane {
-        width: 25%;
-        padding: 1;
-    }
-    .title {
-        background: $accent;
-        color: $text;
-        width: 100%;
-        padding: 0 1;
-        margin-top: 1;
-    }
-    #status_container, #strategy_container {
-        layout: grid;
-        grid-gutter: 1;
-        height: auto;
-    }
-    #status_container {
-        grid-size: 3;
-    }
-    #strategy_container {
-        grid-size: 2;
-    }
-    #positions_table {
-        margin-top: 1;
-        height: 100%;
-    }
-    #log_display {
-        height: 1fr;
-    }
-    #chart_container {
-        height: 12;
-        border: round $primary;
-        padding: 0 1;
-    }
-    #performance_summary_container {
-        padding: 0 1;
-        margin-bottom: 1;
-        border: round $primary;
-        height: auto;
-    }
-    #action_bar, #log_filter_bar {
-        margin-top: 1;
-        height: auto;
-        align: right middle;
-    }
-    .hidden {
-        display: none;
-    }
-    """
+    CSS_PATH = "app.css"
 
-    def __init__(self, mode: str = "test", *args, **kwargs):
+    def __init__(self, mode: str = "test", container_id: str | None = None, bot_name: str = "jules_bot", host_port: int = 8000, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.mode = mode
+        self.container_id = container_id
+        self.host_port = host_port
         self.selected_trade_id: str | None = None
         self.log_display: RichLog | None = None
-        self.log_file_path = os.path.join("logs", "jules_bot.jsonl")
-        self.log_file_handle = None
+        self.bot_name = bot_name
+        logger.info(f"TUI is initializing for bot: {self.bot_name} (Container: {self.container_id}, Port: {self.host_port})")
+        # The TUI runs in its own process and the bot_name is passed as an argument.
+        # We must manually update the config_manager singleton's state to ensure
+        # any components it uses (none currently, but good practice) have the right context.
+        config_manager.bot_name = self.bot_name
         self.log_filter = ""
+        self.open_positions_data = []
+        self._last_positions_data: str | None = None
+        self.trade_history_data = []
+        self._last_history_data: str | None = None
+        self.positions_sort_column = "Unrealized PnL"
+        self.positions_sort_reverse = True
+        self.history_sort_column = "Timestamp"
+        self.history_sort_reverse = True
+        self.history_filter = "all"
 
     def compose(self) -> ComposeResult:
-        yield Header()
-        with Horizontal(id="main_container"):
-            with VerticalScroll(id="left_pane"):
-                yield Static("Bot Control", classes="title")
-                yield Label("Manual Buy (USD):")
-                yield Input(placeholder="e.g., 50.00", id="manual_buy_input", validators=[NumberValidator()])
-                with Horizontal():
-                    yield Button("FORCE BUY", id="force_buy_button", variant="primary")
-                    yield Button("Sell 100%", id="force_sell_100_button", variant="error", disabled=True)
-                    yield Button("Sell 90%", id="force_sell_90_button", variant="warning", disabled=True)
-
-                yield Static("Live Log", classes="title")
-                with Horizontal(id="log_filter_bar"):
-                    yield Label("Filter:", id="log_filter_label")
-                    yield Input(placeholder="e.g., ERROR", id="log_filter_input")
-                yield RichLog(id="log_display", wrap=True, markup=True, min_width=0)
-
-            with VerticalScroll(id="middle_pane"):
-                yield Static("Bot Status", classes="title")
-                with Static(id="status_container"):
-                    yield Static(f"Mode: {self.mode.upper()}", id="status_mode")
-                    yield Static("Symbol: N/A", id="status_symbol")
-                    yield Static("BTC Price: N/A", id="status_price")
-                    yield Static("Open Positions: N/A", id="status_open_positions")
-                    yield Static("Wallet Value: N/A", id="status_wallet_usd")
-
-                yield Static("Strategy Status", classes="title")
-                with Static(id="strategy_container"):
-                    yield Static("Operating Mode: N/A", id="strategy_operating_mode")
-                    yield Static("Market Regime: N/A", id="strategy_market_regime")
-                    yield Static("Buy Condition: N/A", id="strategy_buy_condition")
-                    yield Static("Buy Target: N/A", id="strategy_buy_target")
-                    yield Static("Buy Progress: N/A", id="strategy_buy_progress")
-
-                yield Static("Wallet Balances", classes="title")
-                yield DataTable(id="wallet_table")
-
-                yield Static("Open Positions", classes="title")
-                yield DataTable(id="positions_table")
-
-            with VerticalScroll(id="right_pane"):
-                yield Static("Performance Summary", classes="title")
-                with Static(id="performance_summary_container"):
-                    yield Label("Total Realized PnL (USD): N/A", id="perf_pnl_usd")
-                    yield Label("Total Realized PnL (BTC): N/A", id="perf_pnl_btc")
-                    yield Label("Total Treasury (BTC): N/A", id="perf_treasury_btc")
-
-                yield Static("Portfolio Evolution", classes="title")
-                yield Static("Total Portfolio Value: N/A", id="portfolio_total_value")
-                yield Static("Evolution (Total): N/A", id="portfolio_evolution_total")
-                yield Static("Realized Profit/Loss: N/A", id="portfolio_realized_pnl")
-                yield Static("Evolution (24h): N/A", id="portfolio_evolution_24h")
-                yield Static("BTC Treasury: N/A", id="portfolio_btc_treasury")
-                yield Static("Accumulated BTC: N/A", id="portfolio_accumulated_btc")
-
-                yield Static("DCOM Status", classes="title")
-                yield Static("Total Equity: N/A", id="dcom_total_equity")
-                yield Static("Working Capital: N/A", id="dcom_working_capital")
-                yield Static("Strategic Reserve: N/A", id="dcom_strategic_reserve")
-                yield Static("Operating Mode: N/A", id="dcom_operating_mode")
-
-                yield Static("Portfolio Value History", classes="title")
-                with Vertical(id="chart_container"):
-                    yield Static(id="portfolio_chart")
-
+        yield CustomHeader()
+        with TabbedContent(initial="dashboard"):
+            with TabPane("Dashboard", id="dashboard"):
+                with Horizontal(id="main_container"):
+                    with VerticalScroll(id="left_pane"):
+                        yield Static("Bot Control", classes="title")
+                        yield Label("Manual Buy (USD):")
+                        yield Input(placeholder="e.g., 50.00", id="manual_buy_input", validators=[NumberValidator()])
+                        with Horizontal():
+                            yield Button("FORCE BUY", id="force_buy_button", variant="primary")
+                            yield Button("FORCE SELL", id="force_sell_button", variant="error", disabled=True)
+                        yield Static(f"Live Log for {self.bot_name}", classes="title")
+                        with Horizontal(id="log_filter_bar"):
+                            yield Label("Filter:", id="log_filter_label")
+                            yield Input(placeholder="e.g., ERROR", id="log_filter_input")
+                        yield RichLog(id="log_display", wrap=True, markup=True, min_width=0)
+                    with Vertical(id="middle_pane"):
+                        with Horizontal(id="top_middle_pane"):
+                            with VerticalScroll(id="status_and_strategy"):
+                                yield Static(f"Bot Status for {self.bot_name}", classes="title")
+                                with Static(id="status_container"):
+                                    yield Static(f"Mode: {self.mode.upper()}", id="status_mode")
+                                    yield Static("Symbol: N/A", id="status_symbol")
+                                    yield Static("Price: N/A", id="status_price")
+                                    yield Static("Initial Capital: N/A", id="status_initial_capital")
+                                    yield Static("Portfolio Value: N/A", id="status_wallet_usd")
+                                    yield Static("Realized PnL: N/A", id="status_realized_pnl")
+                                    yield Static("Unrealized PnL: N/A", id="status_unrealized_pnl")
+                                    yield Static("Net Profit/Loss: N/A", id="status_total_pnl")
+                                    yield Static("Positions: N/A", id="status_positions_count")
+                                yield Static("Strategy Status", classes="title")
+                                with Static(id="strategy_container"):
+                                    yield Static("Operating Mode: N/A", id="strategy_operating_mode")
+                                    yield Static("Market Regime: N/A", id="strategy_market_regime")
+                                    yield Static("Status: N/A", id="strategy_buy_reason")
+                                    yield Static("Next Buy Target: N/A", id="strategy_buy_target")
+                                    yield Static("Drop Needed: N/A", id="strategy_buy_target_percentage")
+                                    yield Static("Buy Progress: N/A", id="strategy_buy_progress")
+                               
+                            with VerticalScroll(id="portfolio_and_positions"):
+                                yield Static("Wallet Balances", classes="title")
+                                yield DataTable(id="wallet_table")
+                                yield Static("Positions Summary", classes="title")
+                                yield Label("Summary: N/A", id="positions_summary_label")
+                                yield Static("Capital Allocation", classes="title")
+                                with Static(id="capital_container"):
+                                    yield Static("Working Capital: $0 | Used: $0 | Free: $0", id="info_working_capital")
+                                    yield Static("USDT Strategic Reserve: $0", id="info_strategic_reserve")
+                                    yield Static("Unmanaged BTC Reserve: $0", id="info_unmanaged_btc_reserve") # New line
+                                    yield Static("Operating Mode: N/A", id="info_operating_mode")
+                        with VerticalScroll(id="open_positions"):
+                            yield Static("Open Positions", classes="title")
+                            yield DataTable(id="positions_table")
+            with TabPane("Trade History", id="history"):
+                with Vertical():
+                    with Horizontal(id="history_filter_bar"):
+                        yield Button("All", id="filter_all_button", variant="primary")
+                        yield Button("Open", id="filter_open_button")
+                        yield Button("Closed", id="filter_closed_button")
+                        yield Input(placeholder="Start (YYYY-MM-DD)", id="start_date_input", classes="date_input")
+                        yield Input(placeholder="End (YYYY-MM-DD)", id="end_date_input", classes="date_input")
+                        yield Button("Filter", id="filter_date_button")
+                    yield Label("Summary: N/A", id="history_summary_label")
+                    with Horizontal():
+                        yield DataTable(id="history_table", classes="history_table")
+                        with Vertical(id="portfolio_chart_container"):
+                            yield Static("Portfolio Value History", classes="title", id="portfolio_title")
+                            yield PlotextPlot(id="portfolio_chart")
         yield Footer()
 
     def on_mount(self) -> None:
         self.log_display = self.query_one(RichLog)
-        self.log_display.write("[bold green]TUI Initialized.[/bold green]")
-
+        self.log_display.write(f"[bold green]TUI Initialized for {self.bot_name}.[/bold green]")
         positions_table = self.query_one("#positions_table", DataTable)
         positions_table.cursor_type = "row"
-        positions_table.add_columns("ID", "Entry", "Value", "PnL", "Sell Target", "Target Status")
-
+        positions_table.add_columns("TS", "ID", "Date", "Entry", "Value", "Unrealized PnL", "PnL %", "Peak PnL", "Trail %", "Target", "Target PnL", "Progress")
         wallet_table = self.query_one("#wallet_table", DataTable)
-        wallet_table.add_columns("Asset", "Free", "Locked", "Total", "USD Value")
-
-        # MODIFICADO: Chama o update_dashboard uma vez e depois define o intervalo de 30s
-        self.update_dashboard()
-        self.set_interval(20.0, self.update_dashboard) # Atualiza a cada 30 segundos
-
-        self.update_portfolio_dashboard()
-        self.set_interval(30.0, self.update_portfolio_dashboard) # Update portfolio every 60 seconds
-
-        self.update_performance_summary()
-        self.set_interval(60.0, self.update_performance_summary) # Update every 2 minutes
+        wallet_table.add_columns("Asset", "Available", "Total", "USD Value")
+        history_table = self.query_one("#history_table", DataTable)
+        history_table.cursor_type = "row"
+        history_table.add_columns("Timestamp", "Symbol", "Type", "Status", "Buy Price", "Sell Price", "Quantity", "USD Value", "PnL (USD)", "PnL (%)", "Trade ID")
+        
+        # Start the new, unified update worker
+        self.update_from_status_file()
+        self.set_interval(2.0, self.update_from_status_file)
 
         self.query_one("#manual_buy_input").focus()
+        self.stream_docker_logs()
 
-        self.tail_log_file()
-
-    def on_unmount(self) -> None:
-        if self.log_file_handle:
-            self.log_file_handle.close()
-
-    @work(group="log_tailer", thread=True)
-    def tail_log_file(self) -> None:
-        self.log_display.write(f"Tailing log file: [yellow]{self.log_file_path}[/]")
+    @work(group="log_streamer", thread=True)
+    def stream_docker_logs(self) -> None:
+        if not self.container_id:
+            self.log_display.write("[bold red]Error: Container ID not provided.[/]")
+            return
+        self.log_display.write(f"Streaming logs from container [yellow]{self.container_id[:12]}[/]")
         try:
-            if not os.path.exists(self.log_file_path):
-                self.log_display.write(f"[dim]Log file not found. Creating...[/dim]")
-                os.makedirs(os.path.dirname(self.log_file_path), exist_ok=True)
-                with open(self.log_file_path, 'w') as f:
-                    pass
-
-            self.log_file_handle = open(self.log_file_path, 'r')
-            self.log_file_handle.seek(0, 2)
-
-            # MODIFICADO: Usa um método para checar se o worker deve parar
+            process = subprocess.Popen(SUDO_PREFIX + ["docker", "logs", "-f", self.container_id], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace')
             worker = get_current_worker()
             while not worker.is_cancelled:
-                line = self.log_file_handle.readline()
+                line = process.stdout.readline()
                 if not line:
-                    time.sleep(0.5)
+                    if process.poll() is not None: break
+                    time.sleep(0.1)
                     continue
                 self.call_from_thread(self.process_log_line, line)
-
+            if not worker.is_cancelled:
+                self.call_from_thread(self.log_display.write, "[bold yellow]Log stream ended.[/]")
+        except FileNotFoundError:
+             self.call_from_thread(self.log_display.write, "[bold red]Error: 'docker' command not found.[/]")
         except Exception as e:
-            self.call_from_thread(self.log_display.write, f"[bold red]Error tailing log file: {e}[/]")
+            self.call_from_thread(self.log_display.write, f"[bold red]Error streaming logs: {e}[/]")
+
+    @work(thread=True)
+    def api_call_worker(self, endpoint: str, payload: dict) -> None:
+        """
+        Makes a direct API call to the bot's API server.
+        """
+        url = f"http://localhost:{self.host_port}/api/{endpoint}"
+        try:
+            self.log_display.write(f"Sending POST request to {url} with payload: {json.dumps(payload)}")
+            response = requests.post(url, json=payload, timeout=15)
+            
+            if response.status_code == 200:
+                self.post_message(CommandOutput(json.dumps(response.json()), success=True))
+            else:
+                try:
+                    # Try to parse the JSON error from the server
+                    error_detail = response.json().get("detail", response.text)
+                except json.JSONDecodeError:
+                    error_detail = response.text
+                output = f"API Error (HTTP {response.status_code}): {error_detail}"
+                self.post_message(CommandOutput(output, success=False))
+
+        except requests.exceptions.RequestException as e:
+            self.post_message(CommandOutput(f"Failed to connect to bot API: {e}", success=False))
+        except Exception as e:
+            self.post_message(CommandOutput(f"An unexpected error occurred: {e}", success=False))
+
+    @work(thread=True)
+    def process_positions_worker(self, positions_data: list, sort_column: str, sort_reverse: bool) -> None:
+        """Processes and sorts open positions data in a background thread."""
+        try:
+            # --- Perform expensive calculations ---
+            for pos in positions_data:
+                pos['current_value'] = Decimal(pos.get('quantity', 0)) * Decimal(pos.get('current_price', 0))
+            
+            open_positions_count = len(positions_data)
+            if open_positions_count > 0:
+                total_invested = sum(Decimal(p.get('entry_price', 0)) * Decimal(p.get('quantity', 0)) for p in positions_data)
+                current_market_value = sum(p['current_value'] for p in positions_data)
+                total_unrealized_pnl = sum(Decimal(p.get('unrealized_pnl', 0)) for p in positions_data)
+                pnl_color = "green" if total_unrealized_pnl >= 0 else "red"
+                summary_text = (
+                    f"Open Positions: {open_positions_count}\n\n"
+                    f"  Total Invested: ${total_invested:,.2f}\n"
+                    f"  Market Value:   ${current_market_value:,.2f}\n"
+                    f"  Unrealized PnL: [{pnl_color}]${total_unrealized_pnl:,.2f}[/]"
+                )
+            else:
+                summary_text = "No open positions."
+
+            # --- Perform sorting ---
+            sort_key_map = {
+                "ID": "trade_id", "Date": "timestamp", "Entry": "entry_price", "Value": "current_value",
+                "Unrealized PnL": "unrealized_pnl", "PnL %": "unrealized_pnl_pct",
+                "Peak PnL": "smart_trailing_highest_profit", "Trail %": "current_trail_percentage",
+                "Target": "sell_target_price", "Target PnL": "target_pnl",
+                "Progress": "progress_to_sell_target_pct"
+            }
+            sort_key = sort_key_map.get(sort_column, "unrealized_pnl")
+            numeric_keys = [
+                "entry_price", "current_value", "unrealized_pnl", "unrealized_pnl_pct",
+                "smart_trailing_highest_profit", "current_trail_percentage",
+                "sell_target_price", "target_pnl", "progress_to_sell_target_pct"
+            ]
+
+            def sort_func(p):
+                val = p.get(sort_key)
+                if val is None: return -float('inf') if sort_reverse else float('inf')
+                if sort_key in numeric_keys:
+                    try: return Decimal(val)
+                    except (InvalidOperation, TypeError): return -float('inf') if sort_reverse else float('inf')
+                else: return str(val)
+
+            sorted_positions = sorted(positions_data, key=sort_func, reverse=sort_reverse)
+            
+            self.post_message(ProcessedPositionsData(sorted_positions, summary_text))
+        except Exception as e:
+            # Log the error or post an error message back to the main thread
+            self.call_from_thread(self.log_display.write, f"[bold red]Error in positions worker: {e}[/]")
+
+    @work(thread=True)
+    def process_history_worker(self, history_data: list, history_filter: str, start_date_str: str, end_date_str: str, sort_column: str, sort_reverse: bool) -> None:
+        """Processes, filters, and sorts trade history data in a background thread."""
+        try:
+            # --- Filtering ---
+            if history_filter == 'open':
+                status_filtered_trades = [t for t in history_data if t.get('status') == 'OPEN']
+            elif history_filter == 'closed':
+                status_filtered_trades = [t for t in history_data if t.get('status') == 'CLOSED']
+            else:
+                status_filtered_trades = history_data
+            
+            # --- Additional Filtering for Closed Buys ---
+            # Remove closed buy orders as they are represented by the sell record
+            status_filtered_trades = [
+                t for t in status_filtered_trades
+                if not (t.get('order_type') == 'buy' and t.get('status') == 'CLOSED')
+            ]
+
+            final_filtered_history = []
+            start_date = datetime.strptime(start_date_str, "%Y-%m-%d").date() if start_date_str else None
+            end_date = datetime.strptime(end_date_str, "%Y-%m-%d").date() if end_date_str else None
+            for trade in status_filtered_trades:
+                trade_date = datetime.fromisoformat(trade['timestamp']).date()
+                if (start_date and trade_date < start_date) or (end_date and trade_date > end_date):
+                    continue
+                final_filtered_history.append(trade)
+
+            # --- Summary Calculation ---
+            total_trades = len(final_filtered_history)
+            if total_trades > 0:
+                buy_trades = [t for t in final_filtered_history if t.get('order_type') == 'buy']
+                closed_sells = [t for t in final_filtered_history if t.get('order_type') == 'sell' and t.get('status') == 'CLOSED']
+                total_invested = sum(Decimal(t.get('usd_value', 0)) for t in buy_trades if t.get('usd_value') is not None)
+                total_returned = sum(Decimal(t.get('sell_usd_value', 0)) for t in closed_sells if t.get('sell_usd_value') is not None)
+                total_realized_pnl = sum(Decimal(t.get('realized_pnl_usd', 0)) for t in closed_sells if t.get('realized_pnl_usd') is not None)
+                roi_pct = (total_realized_pnl / total_invested * 100) if total_invested > 0 else 0
+                pnl_color = "green" if total_realized_pnl >= 0 else "red"
+                roi_color = "green" if roi_pct >= 0 else "red"
+                summary_text = (
+                    f"Filtered Trades: {total_trades} (Buys: {len(buy_trades)}, Sells: {len(closed_sells)})\n\n"
+                    f"  Total Invested (in view): ${total_invested:,.2f}\n"
+                    f"  Total Returned (in view): ${total_returned:,.2f}\n"
+                    f"  Realized PnL (in view):   [{pnl_color}]${total_realized_pnl:,.2f}[/]\n"
+                    f"  ROI (of closed in view):  [{roi_color}]{roi_pct:.2f}%[/]"
+                )
+            else:
+                summary_text = "No trades match the current filter."
+
+            # --- Sorting ---
+            sort_key_map = {
+                "Timestamp": "timestamp", "Symbol": "symbol", "Type": "order_type", "Status": "status",
+                "Buy Price": "price", "Sell Price": "sell_price", "Quantity": "quantity",
+                "USD Value": "usd_value", "PnL (USD)": "realized_pnl_usd", "PnL (%)": "pnl_percentage",
+                "Trade ID": "trade_id"
+            }
+            sort_key = sort_key_map.get(sort_column, "timestamp")
+            numeric_keys = ["price", "sell_price", "quantity", "usd_value", "realized_pnl_usd", "pnl_percentage"]
+
+            def sort_func(trade):
+                if sort_key == 'pnl_percentage': val = trade.get('decision_context', {}).get('pnl_percentage')
+                else: val = trade.get(sort_key)
+                if val is None: return -float('inf') if sort_reverse else float('inf')
+                if sort_key in numeric_keys:
+                    try: return Decimal(val)
+                    except (InvalidOperation, TypeError): return -float('inf') if sort_reverse else float('inf')
+                else: return str(val)
+            
+            sorted_history = sorted(final_filtered_history, key=sort_func, reverse=sort_reverse)
+
+            self.post_message(ProcessedHistoryData(sorted_history, summary_text))
+        except ValueError:
+            self.call_from_thread(self.log_display.write, "[bold red]Invalid date format. Please use YYYY-MM-DD.[/bold red]")
+        except Exception as e:
+            self.call_from_thread(self.log_display.write, f"[bold red]Error in history worker: {e}[/]")
+
+
+    @work(thread=True)
+    def read_status_file_worker(self) -> None:
+        """Worker to read the bot status from the JSON file."""
+        # Use a simple relative path, assuming TUI is run from the project root.
+        status_file_path = os.path.join(".tui_files", f".bot_status_{self.bot_name}.json")
+        try:
+            if os.path.exists(status_file_path):
+                with open(status_file_path, "r") as f:
+                    content = f.read()
+                    if not content:
+                        self.post_message(DashboardData("Bot is starting, waiting for status file...", success=False))
+                        return
+                    data = json.loads(content)
+                self.post_message(DashboardData(data, success=True))
+            else:
+                self.post_message(DashboardData(f"Status file not found for bot '{self.bot_name}'. Is the bot running?", success=False))
+        except json.JSONDecodeError:
+            self.post_message(DashboardData("Error decoding status file. It might be corrupted or being written.", success=False))
+        except Exception as e:
+            self.post_message(DashboardData(f"Error reading status file: {e}", success=False))
+
+    def update_from_status_file(self) -> None:
+        """Triggers the worker to read the status file."""
+        self.read_status_file_worker()
+
+    def on_dashboard_data(self, message: DashboardData) -> None:
+        """The single entry point for all data updates from the live status file."""
+        if not message.success or not isinstance(message.data, dict):
+            # Display a generic error or status message if data loading fails
+            self.query_one(StatusIndicator).status = "ERROR"
+            # You might want to display the error message from message.data somewhere in the UI
+            return
+
+        data = message.data
+        self.query_one(StatusIndicator).status = data.get("bot_status", "OFF")
+        self.query_one("#header_title").update(f"GCS Trading Bot Dashboard - {self.bot_name}")
+
+        # --- Main Status Panel ---
+        price = Decimal(data.get("current_btc_price", 0))
+        self.query_one("#status_symbol").update(f"Symbol: {data.get('symbol', 'N/A')}")
+        self.query_one("#status_price").update(f"Price: ${price:,.2f}")
+        open_count = data.get('open_positions_count', 0)
+        total_count = data.get('total_trades_count', 0)
+        self.query_one("#status_positions_count").update(f"Positions: {open_count} Open / {total_count} Total")
+        wallet_value = Decimal(data.get('total_wallet_usd_value', 0))
+        initial_capital = Decimal(data.get("initial_capital", 0))
+        self.query_one("#status_initial_capital").update(f"Initial Capital: ${initial_capital:,.2f}")
+
+        self.query_one("#status_wallet_usd").update(f"Portfolio Value: ${wallet_value:,.2f}")
+        realized_pnl = Decimal(data.get("total_realized_pnl", 0))
+        unrealized_pnl = Decimal(data.get("total_unrealized_pnl", 0))
+        net_total_pnl = Decimal(data.get("net_total_pnl", 0))
+        realized_color = "green" if realized_pnl >= 0 else "red"
+        unrealized_color = "green" if unrealized_pnl >= 0 else "red"
+        total_color = "green" if net_total_pnl >= 0 else "red"
+        self.query_one("#status_realized_pnl").update(f"Realized PnL: [{realized_color}]${realized_pnl:,.2f}[/]")
+        self.query_one("#status_unrealized_pnl").update(f"Unrealized PnL: [{unrealized_color}]${unrealized_pnl:,.2f}[/]")
+        self.query_one("#status_total_pnl").update(f"Net Profit/Loss: [{total_color}]${net_total_pnl:,.2f}[/]")
+
+        # --- Update All UI Components from the Single Data Source ---
+        self.update_strategy_panel(data.get("buy_signal_status", {}), price)
+        self.update_capital_panel(data.get("capital_allocation", {}), data.get("buy_signal_status", {}))
+        self.update_wallet_table(data.get("wallet_balances", []))
+
+        # --- Trigger background workers to process and render table data ---
+        new_positions_data = data.get("open_positions_status", [])
+        new_positions_str = json.dumps(new_positions_data)
+        if new_positions_str != self._last_positions_data:
+            self.log_display.write("Change in positions data detected, updating table...")
+            self._last_positions_data = new_positions_str
+            self.open_positions_data = new_positions_data
+            self.process_positions_worker(self.open_positions_data, self.positions_sort_column, self.positions_sort_reverse)
+
+        new_history_data = data.get("trade_history", [])
+        new_history_str = json.dumps(new_history_data)
+        if new_history_str != self._last_history_data:
+            self.log_display.write("Change in history data detected, updating table...")
+            self._last_history_data = new_history_str
+            self.trade_history_data = new_history_data
+            self.update_history_table() # This will call the worker
+
+        # Update portfolio chart
+        self.update_portfolio_chart(data.get("portfolio_history", []))
+
+    def update_history_table(self) -> None:
+        """Triggers the history processing worker with the current filters."""
+        start_date_str = self.query_one("#start_date_input", Input).value
+        end_date_str = self.query_one("#end_date_input", Input).value
+        self.process_history_worker(
+            self.trade_history_data,
+            self.history_filter,
+            start_date_str,
+            end_date_str,
+            self.history_sort_column,
+            self.history_sort_reverse
+        )
+
+    def on_processed_history_data(self, message: ProcessedHistoryData) -> None:
+        """Renders the processed trade history data received from the worker,
+        preserving scroll position."""
+        table = self.query_one("#history_table", DataTable)
+        self.query_one("#history_summary_label").update(message.summary_text)
+        self._update_table_headers(table, self.history_sort_column, self.history_sort_reverse)
+
+        # --- Preserve scroll position ---
+        cursor_row_key = None
+        if table.row_count > 0 and table.is_valid_coordinate(table.cursor_coordinate):
+            try:
+                cursor_row_key, _ = table.coordinate_to_cell_key(table.cursor_coordinate)
+            except CellDoesNotExist:
+                cursor_row_key = None
+
+        table.clear()
+
+        if not message.sorted_history:
+            table.add_row("No trades match the current filter.", key="placeholder_history")
+            return
+
+        # --- Repopulate the table with new data ---
+        for trade in message.sorted_history:
+            trade_id = trade.get("trade_id")
+            if not trade_id: continue
+
+            pnl = trade.get('realized_pnl_usd')
+            order_type = trade.get('order_type', 'N/A')
+            pnl_str = f"${Decimal(pnl):,.2f}" if pnl is not None else "N/A"
+            pnl_color = "green" if pnl is not None and Decimal(pnl) >= 0 else "red"
+            pnl_cell = f"[{pnl_color}]{pnl_str}[/]" if order_type == 'sell' else "N/A"
+            type_color = "green" if order_type == 'buy' else "red"
+            type_cell = f"[{type_color}]{order_type.upper()}[/]"
+            local_timestamp = datetime.fromisoformat(trade['timestamp'])
+            timestamp = local_timestamp.strftime('%Y-%m-%d %H:%M')
+            trade_id_short = trade_id.split('-')[0]
+            buy_price = f"${Decimal(trade.get('price', 0)):,.2f}"
+            sell_price = f"${Decimal(trade.get('sell_price', 0)):,.2f}" if trade.get('sell_price') else "N/A"
+            pnl_pct_str = trade.get('decision_context', {}).get('pnl_percentage', 'N/A')
+            pnl_pct_cell = "N/A"
+            if pnl_pct_str != 'N/A':
+                try:
+                    pnl_pct_val = Decimal(pnl_pct_str)
+                    pct_color = "green" if pnl_pct_val >= 0 else "red"
+                    pnl_pct_cell = f"[{pct_color}]{pnl_pct_val:.2f}%[/]"
+                except InvalidOperation: pnl_pct_cell = "err"
+            
+            row_data = (
+                timestamp, trade.get('symbol'), type_cell, trade.get('status'), buy_price, sell_price, 
+                f"{Decimal(trade.get('quantity', 0)):.8f}", f"${Decimal(trade.get('usd_value', 0)):.2f}", 
+                pnl_cell, pnl_pct_cell if order_type == 'sell' else "N/A", trade_id_short
+            )
+            # Add row with key to allow scroll restoration
+            table.add_row(*row_data, key=trade_id)
+        
+        # --- Restore scroll position ---
+        if cursor_row_key:
+            try:
+                new_row_index = table.get_row_index(cursor_row_key)
+                table.move_cursor(row=new_row_index, animate=False)
+            except RowDoesNotExist:
+                pass # The previously selected row might no longer be in view
+
+    def on_command_output(self, message: CommandOutput) -> None:
+        if message.success:
+            self.log_display.write(f"[green]Command success:[/green] {message.output}")
+            self.log_display.write("[yellow]Command sent. Forcing UI refresh in 1, 2, and 3 seconds...[/yellow]")
+            # Trigger multiple refreshes to catch the state update from the bot
+            self.set_timer(1.0, self.update_from_status_file)
+            self.set_timer(2.0, self.update_from_status_file)
+            self.set_timer(3.0, self.update_from_status_file)
+        else:
+            self.log_display.write(f"[bold red]Command failed:[/bold red] {message.output}")
+        # Also trigger one immediate refresh just in case
+        self.update_from_status_file()
+
+    def update_capital_panel(self, capital: dict, strategy: dict):
+        wc_total = Decimal(capital.get("working_capital_total", 0))
+        wc_used = Decimal(capital.get("working_capital_used", 0))
+        wc_free = Decimal(capital.get("working_capital_free", 0))
+        sr_usdt = Decimal(capital.get("strategic_reserve", 0))
+        sr_btc = Decimal(capital.get("unmanaged_btc_reserve", 0))
+        op_mode = strategy.get("operating_mode", "N/A")
+
+        self.query_one("#info_working_capital").update(f"Working Capital: ${wc_total:,.0f} | Used: ${wc_used:,.0f} | Free: ${wc_free:,.0f}")
+        self.query_one("#info_strategic_reserve").update(f"USDT Strategic Reserve: ${sr_usdt:,.0f}")
+        self.query_one("#info_unmanaged_btc_reserve").update(f"Unmanaged BTC Reserve: ${sr_btc:,.0f}")
+        self.query_one("#info_operating_mode").update(f"Operating Mode: {op_mode}")
+
+    def update_strategy_panel(self, status: dict, current_price: Decimal):
+        operating_mode, market_regime, reason, condition_target_str = status.get("operating_mode", "N/A"), status.get("market_regime", -1), status.get("reason", "N/A"), status.get("condition_target", "N/A")
+        self.query_one("#strategy_operating_mode").update(f"Operating Mode: {operating_mode}")
+        self.query_one("#strategy_market_regime").update(f"Market Regime: {market_regime}")
+        self.query_one("#strategy_buy_reason").update(f"Status: {reason}")
+        try:
+            target_price = Decimal(condition_target_str.replace('$', '').replace(',', ''))
+            price_drop_needed = current_price - target_price
+            percentage_drop_needed = (price_drop_needed / current_price * 100) if current_price > 0 else 0
+            self.query_one("#strategy_buy_target").update(f"Buy Target: ${target_price:,.2f}")
+            self.query_one("#strategy_buy_target_percentage").update(f"Price Drop Needed: ${price_drop_needed:,.2f} ({percentage_drop_needed:.2f}%)")
+            progress = float(status.get("condition_progress", 0))
+            progress_bar = "█" * int(progress / 10) + "░" * (10 - int(progress / 10))
+            self.query_one("#strategy_buy_progress").update(f"Progress: [{progress_bar}] {progress:.1f}%")
+        except (ValueError, InvalidOperation):
+            self.query_one("#strategy_buy_target").update(f"Buy Target: {condition_target_str}")
+            self.query_one("#strategy_buy_target_percentage").update("Price Drop Needed: N/A")
+            self.query_one("#strategy_buy_progress").update("Progress: N/A")
+
+    def update_wallet_table(self, balances: list):
+        wallet_table = self.query_one("#wallet_table", DataTable)
+        
+        existing_assets = set(wallet_table.rows.keys())
+        new_assets = {bal.get('asset') for bal in balances}
+
+        # Remove assets no longer in the balance list
+        for asset in existing_assets - new_assets:
+            wallet_table.remove_row(asset)
+
+        # Add or update assets
+        for bal in balances:
+            asset = bal.get('asset')
+            if not asset: continue
+
+            free, total, usd_value = Decimal(bal.get('free','0')), Decimal(bal.get('total','0')), Decimal(bal.get('usd_value','0'))
+            row_format = "{:,.8f}" if asset == 'BTC' else "{:,.2f}"
+            
+            row_data = (
+                asset, 
+                row_format.format(free), 
+                row_format.format(total), 
+                f"${usd_value:,.2f}"
+            )
+
+            if asset in existing_assets:
+                # Update existing row - note we update all cells for simplicity
+                row_index = wallet_table.get_row_index(asset)
+                for i, cell_value in enumerate(row_data):
+                    wallet_table.update_cell_at(Coordinate(row_index, i), cell_value)
+            else:
+                # Add new row
+                wallet_table.add_row(*row_data, key=asset)
+
+        # Handle placeholder for empty table
+        has_placeholder = "placeholder_wallet" in wallet_table.rows
+        if not balances:
+            if not has_placeholder and len(wallet_table.rows) == 0:
+                wallet_table.add_row("No balance data.", key="placeholder_wallet")
+        elif has_placeholder:
+            wallet_table.remove_row("placeholder_wallet")
+
+    def update_positions_table(self) -> None:
+        """Triggers the positions processing worker."""
+        self.process_positions_worker(self.open_positions_data, self.positions_sort_column, self.positions_sort_reverse)
+
+    def on_processed_positions_data(self, message: ProcessedPositionsData) -> None:
+        """Renders the processed open positions data received from the worker,
+        preserving scroll position."""
+        pos_table = self.query_one("#positions_table", DataTable)
+        self.query_one("#positions_summary_label").update(message.summary_text)
+        self._update_table_headers(pos_table, self.positions_sort_column, self.positions_sort_reverse)
+
+        # --- Preserve scroll position by saving the key of the row at the cursor ---
+        cursor_row_key = None
+        if pos_table.row_count > 0 and pos_table.is_valid_coordinate(pos_table.cursor_coordinate):
+            try:
+                # coordinate_to_cell_key can fail if the cursor is on a header
+                cursor_row_key, _ = pos_table.coordinate_to_cell_key(pos_table.cursor_coordinate)
+            except CellDoesNotExist:
+                cursor_row_key = None # Cursor isn't on a cell, so we can't save the key
+
+        pos_table.clear()
+
+        if not message.sorted_positions:
+            pos_table.add_row("No open positions.", key="placeholder_positions")
+            return
+
+        # --- Repopulate the table with new data ---
+        for pos in message.sorted_positions:
+            trade_id = pos.get("trade_id")
+            if trade_id is None: continue
+
+            pnl = Decimal(pos.get("unrealized_pnl", 0))
+            pnl_color = "green" if pnl >= 0 else "red"
+            pnl_pct = Decimal(pos.get("unrealized_pnl_pct", 0))
+            pnl_pct_color = "green" if pnl_pct >= 0 else "red"
+            pnl_pct_str = f"[{pnl_pct_color}]{pnl_pct:,.2f}%[/]"
+            target_pnl = Decimal(pos.get("target_pnl", 0))
+            target_pnl_color = "green" if target_pnl >= 0 else "red"
+            target_pnl_str = f"[{target_pnl_color}]${target_pnl:,.2f}[/]"
+            is_trailing_active = pos.get("is_smart_trailing_active")
+
+            if is_trailing_active:
+                final_trigger_profit = Decimal(pos.get('final_trigger_profit', 0))
+                progress_str = f"Sell at ${final_trigger_profit:,.2f}"
+            else:
+                progress = float(pos.get('progress_to_sell_target_pct', 0))
+                progress_bar = "█" * int(progress / 10) + "░" * (10 - int(progress / 10))
+                progress_str = f"[{progress_bar}] {progress:.1f}%"
+
+            current_value = pos['current_value']
+            local_timestamp = datetime.fromisoformat(pos['timestamp'])
+            timestamp = local_timestamp.strftime('%Y-%m-%d %H:%M')
+            trailing_icon = "🛡️" if pos.get("is_smart_trailing_active") else " "
+            peak_pnl = Decimal(pos.get('smart_trailing_highest_profit', 0))
+            peak_pnl_str = f"${peak_pnl:,.2f}" if peak_pnl > 0 else "N/A"
+            trail_pct = Decimal(pos.get('current_trail_percentage', 0))
+            trail_pct_str = f"{trail_pct:.2%}" if trail_pct > 0 else "N/A"
+
+            row_data = (
+                trailing_icon, trade_id.split('-')[0], timestamp,
+                f"${Decimal(pos.get('entry_price', 0)):,.2f}", f"${current_value:,.2f}",
+                f"[{pnl_color}]${pnl:,.2f}[/]", pnl_pct_str, peak_pnl_str,
+                trail_pct_str, f"${Decimal(pos.get('sell_target_price', 0)):,.2f}",
+                target_pnl_str, progress_str,
+            )
+            pos_table.add_row(*row_data, key=trade_id)
+        
+        # --- Restore scroll position ---
+        if cursor_row_key:
+            try:
+                new_row_index = pos_table.get_row_index(cursor_row_key)
+                pos_table.move_cursor(row=new_row_index, animate=False)
+            except RowDoesNotExist:
+                # The row we were on might have been closed/removed.
+                # In this case, we can't restore the position, which is acceptable.
+                pass
+
+    def update_portfolio_chart(self, history: list):
+        chart = self.query_one("#portfolio_chart", PlotextPlot)
+        plt = chart.plt
+        plt.clear_data()
+        if not history:
+            chart.refresh()
+            return
+        dates = [datetime.fromisoformat(item['timestamp']).strftime("%m-%d %H:%M") for item in reversed(history)]
+        values = [float(item['value']) for item in reversed(history)]
+        plt.plot(values)
+        plt.xticks(range(len(dates)), dates)
+        plt.title("Portfolio Value (USD)")
+        plt.xlabel("Timestamp")
+        plt.ylabel("USD Value")
+        chart.refresh()
 
     def process_log_line(self, line: str) -> None:
+        """Processes a log line, applying default or user-specified filters."""
         try:
             log_entry = json.loads(line)
             level = log_entry.get("level", "INFO")
             message = log_entry.get("message", "")
 
-            if self.log_filter.lower() in message.lower() or self.log_filter.upper() in level:
-                color = "white"
-                if level == "INFO": color = "green"
-                elif level == "WARNING": color = "yellow"
-                elif level == "ERROR": color = "red"
-                elif level == "CRITICAL": color = "bold red"
+            show_log = False
+            # If the user has an active filter, it takes precedence.
+            if self.log_filter:
+                if self.log_filter.lower() in message.lower() or self.log_filter.upper() in level:
+                    show_log = True
+            # Otherwise, apply the default filter to reduce noise.
+            else:
+                if level in ["WARNING", "ERROR", "CRITICAL"]:
+                    show_log = True
+                elif level == "INFO":
+                    # Keywords for important INFO messages
+                    keywords = ["sell", "buy", "comprou", "vendeu", "position", "trigger", "shutdown", "started"]
+                    if any(keyword in message.lower() for keyword in keywords):
+                        show_log = True
+            
+            if show_log:
+                color = {"INFO": "green", "WARNING": "yellow", "ERROR": "red", "CRITICAL": "bold red"}.get(level, "white")
                 self.log_display.write(f"[[{color}]{level}[/{color}]] {message}")
+
         except json.JSONDecodeError:
-            if self.log_filter == "":
+            # For non-JSON lines (e.g., from docker-compose), only show if there's no filter.
+            if not self.log_filter:
                 self.log_display.write(f"[dim]{line.strip()}[/dim]")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "force_buy_button":
+            input_widget = self.query_one("#manual_buy_input", Input)
+            if input_widget.is_valid:
+                payload = {"amount_usd": input_widget.value}
+                self.api_call_worker("force_buy", payload)
+                input_widget.value = ""
+            else:
+                self.log_display.write("[bold red]Invalid buy amount.[/bold red]")
+
+        elif event.button.id == "force_sell_button" and self.selected_trade_id:
+            event.button.disabled = True
+            self.log_display.write(f"[yellow]Initiating force sell for trade ID: {self.selected_trade_id}...[/]")
+            payload = {"trade_id": self.selected_trade_id, "percentage": "100"}
+            self.api_call_worker("force_sell", payload)
+            self.selected_trade_id = None
+
+        elif event.button.id in ["filter_all_button", "filter_open_button", "filter_closed_button"]:
+            # Update filter state
+            self.history_filter = event.button.id.split('_')[1] # e.g., "all", "open", "closed"
+
+            # Update button variants for visual feedback
+            self.query_one("#filter_all_button", Button).variant = "primary" if self.history_filter == "all" else "default"
+            self.query_one("#filter_open_button", Button).variant = "primary" if self.history_filter == "open" else "default"
+            self.query_one("#filter_closed_button", Button).variant = "primary" if self.history_filter == "closed" else "default"
+            
+            # Refresh the table
+            self.update_history_table()
+        elif event.button.id == "filter_date_button":
+            self.update_history_table()
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        if event.control.id == "positions_table":
+            self.selected_trade_id = event.row_key.value
+            self.query_one("#force_sell_button").disabled = False
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "log_filter_input":
@@ -277,325 +804,57 @@ class TUIApp(App):
             self.log_display.clear()
             self.log_display.write("[bold green]Log filter applied. Tailing new logs...[/bold green]")
 
-    # --- Workers & Background Tasks ---
-
-    @work(thread=True)
-    def run_script_worker(self, command: list[str], message_type: type[Message]) -> None:
-        """
-        Executa um script de longa duração em um 'worker' para não bloquear a UI.
-        Isso é crucial para a responsividade do dashboard. O worker executa a tarefa
-        em um thread separado e, quando concluído, posta uma 'Message' com o resultado.
-        A UI principal então lida com essa mensagem em seu próprio thread.
-        """
-        self.log_display.write(f"Executing: [yellow]{' '.join(command)}[/]")
-        try:
-            # Executa o subprocesso de forma robusta e compatível com Windows/Linux.
-            # - `encoding='utf-8'`: Garante que o output seja lido como UTF-8.
-            # - `errors='replace'`: Previne falhas se o script gerar caracteres inválidos.
-            process = subprocess.run(
-                command,
-                capture_output=True,
-                text=True,
-                check=False,
-                encoding='utf-8',
-                errors='replace'
-            )
-
-            if process.returncode != 0:
-                output = process.stderr.strip()
-                success = False
-                # `call_from_thread` é necessário para atualizar widgets de um worker.
-                self.call_from_thread(self.log_display.write, f"[bold red]Script Error:[/bold red] {output}")
-            else:
-                output = process.stdout.strip()
-                success = True
+    def _update_table_headers(self, table: DataTable, sort_column: str, is_reverse: bool):
+        """Adds sort indicators (▲/▼) to the table headers, ensuring labels are Text objects."""
+        for column in table.columns.values():
+            # Safely convert the column label (which could be str or Text) to a string
+            label_str = str(column.label)
+            # Strip any existing indicator to get the base label
+            base_label = label_str.rstrip(" ▲▼")
             
-            # Tenta decodificar o JSON, se falhar, envia como texto bruto.
-            try:
-                data = json.loads(output)
-                self.post_message(message_type(data, success))
-            except (json.JSONDecodeError, TypeError):
-                self.post_message(message_type(output, success))
-
-        except FileNotFoundError:
-            self.post_message(message_type("Script not found", False))
-            self.call_from_thread(self.log_display.write, f"[bold red]Error: Script not found.[/bold red]")
-
-    # MODIFICADO: on_button_pressed agora chama um worker em vez de executar o script diretamente
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        """Lida com cliques de botão de forma não-bloqueante."""
-        if event.button.id == "force_buy_button":
-            input_widget = self.query_one("#manual_buy_input", Input)
-            if not input_widget.is_valid:
-                self.log_display.write("[bold red]Invalid buy amount.[/bold red]")
-                return
-            amount = input_widget.value
-            command = ["python", "scripts/force_buy.py", amount]
-            self.run_script_worker(command, CommandOutput) # Executa em segundo plano
-            input_widget.value = ""
-
-        elif event.button.id in ["force_sell_100_button", "force_sell_90_button"]:
-            if not self.selected_trade_id:
-                self.log_display.write("[bold red]No trade selected for selling.[/bold red]")
-                return
-
-            percentage = "100" if event.button.id == "force_sell_100_button" else "90"
-            command = ["python", "scripts/force_sell.py", self.selected_trade_id, percentage]
-            self.run_script_worker(command, CommandOutput) # Executa em segundo plano
-
-            self.query_one("#force_sell_100_button").disabled = True
-            self.query_one("#force_sell_90_button").disabled = True
-            self.query_one("#positions_table").move_cursor(row=-1)
-            self.selected_trade_id = None
-
-    def on_click(self, event) -> None:
-        # If the click is not on the datatable, deselect row and disable buttons
-        try:
-            if not self.query_one("#positions_table").hit(event.x, event.y):
-                self.query_one("#force_sell_100_button").disabled = True
-                self.query_one("#force_sell_90_button").disabled = True
-                self.query_one("#positions_table").cursor_type = 'row'
-                self.query_one("#positions_table").move_cursor(row=-1, animate=True)
-                self.selected_trade_id = None
-        except Exception:
-            pass
-
-    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        if event.control.id == "positions_table":
-            self.selected_trade_id = event.row_key.value
-            self.query_one("#force_sell_100_button").disabled = False
-            self.query_one("#force_sell_90_button").disabled = False
-    
-    # MODIFICADO: update_dashboard agora chama um worker
-    def update_dashboard(self) -> None:
-        """Inicia a atualização do dashboard em um worker."""
-        command = ["python", "scripts/get_bot_data.py", self.mode]
-        self.run_script_worker(command, DashboardData)
-
-    def update_portfolio_dashboard(self) -> None:
-        """Initiates the portfolio dashboard update in a worker."""
-        command = ["python", "scripts/get_portfolio_data.py"]
-        self.run_script_worker(command, PortfolioData)
-
-    # NOVO: Handler para a mensagem DashboardData, que atualiza a UI
-    def on_dashboard_data(self, message: DashboardData) -> None:
-        """Atualiza a UI com os dados recebidos do worker."""
-        if not message.success or not isinstance(message.data, dict):
-            self.log_display.write(f"[bold red]Failed to get dashboard data: {message.data}[/]")
-            return
-        
-        data = message.data
-        
-        # Update status bar
-        price = Decimal(data.get("current_btc_price", 0))
-        open_positions_count = data.get("open_positions_count", 0)
-        total_wallet_usd = Decimal(data.get("total_wallet_usd_value", 0))
-        self.query_one("#status_symbol").update(f"Symbol: {data.get('symbol', 'N/A')}")
-        self.query_one("#status_price").update(f"Price: ${price:,.2f}")
-        self.query_one("#status_open_positions").update(f"Open Positions: {open_positions_count}")
-        self.query_one("#status_wallet_usd").update(f"Wallet Value: ${total_wallet_usd:,.2f}")
-
-        # Update strategy status
-        buy_signal_status = data.get("buy_signal_status", {})
-        operating_mode = buy_signal_status.get("operating_mode", "N/A")
-        market_regime = buy_signal_status.get("market_regime", -1)
-        reason = buy_signal_status.get("reason", "N/A")
-        buy_target = Decimal(buy_signal_status.get("btc_purchase_target", 0))
-        buy_progress = float(buy_signal_status.get("btc_purchase_progress_pct", 0))
-
-        self.query_one("#strategy_operating_mode").update(f"Operating Mode: {operating_mode}")
-        self.query_one("#strategy_market_regime").update(f"Market Regime: {market_regime}")
-        self.query_one("#strategy_buy_condition").update(f"Buy Condition: {reason}")
-        self.query_one("#strategy_buy_target").update(f"Buy Target: ${buy_target:,.2f}")
-        self.query_one("#strategy_buy_progress").update(f"Buy Progress: {buy_progress:.1f}%")
-
-        # Update wallet balances table
-        wallet_table = self.query_one("#wallet_table", DataTable)
-        wallet_table.clear()
-        balances = data.get("wallet_balances", [])
-        if balances:
-            for bal in balances:
-                asset = bal.get('asset')
-                free = Decimal(bal.get('free', '0'))
-                locked = Decimal(bal.get('locked', '0'))
-                total = Decimal(bal.get('total', '0'))
-                usd_value = Decimal(bal.get('usd_value', '0'))
-
-                # Format based on asset type
-                if asset == 'BTC':
-                    wallet_table.add_row(asset, f"{free:.8f}", f"{locked:.8f}", f"{total:.8f}", f"${usd_value:,.2f}")
-                else: # USDT
-                    wallet_table.add_row(asset, f"${free:,.2f}", f"${locked:,.2f}", f"${total:,.2f}", f"${usd_value:,.2f}")
-        else:
-            wallet_table.add_row("No balance data.")
-
-        # Update positions table
-        pos_table = self.query_one("#positions_table", DataTable)
-        pos_table.clear()
-        positions = data.get("open_positions_status", [])
-        if positions:
-            for pos in positions:
-                pos_id = pos.get("trade_id", "N/A")
-                entry_price = Decimal(pos.get("entry_price", 0))
-                current_value = Decimal(pos.get("quantity", 0)) * price
-                pnl = Decimal(pos.get("unrealized_pnl", 0))
-                sell_target = Decimal(pos.get("sell_target_price", 0))
-                
-                progress_pct = float(pos.get("progress_to_sell_target_pct", 0))
-                usd_to_target = Decimal(pos.get("usd_to_target", 0))
-                
-                pnl_color = "green" if pnl >= 0 else "red"
-                progress_text = f"{progress_pct:.1f}% (${usd_to_target:,.2f})"
-
-                pos_table.add_row(
-                    pos_id.split('-')[0], f"${entry_price:,.2f}", f"${current_value:,.2f}",
-                    f"[{pnl_color}]${pnl:,.2f}[/]", f"${sell_target:,.2f}", progress_text, key=pos_id
-                )
-        else:
-            pos_table.add_row("No open positions.")
-
-    def _render_text_chart(self, history: list[dict], width: int = 50, height: int = 10) -> str:
-        """Renders a simple text-based bar chart from portfolio history."""
-        if not history:
-            return "[dim]Not enough data to render chart.[/dim]"
-
-        values = [Decimal(item['value']) for item in history]
-
-        # Sample data to fit the specified width
-        if len(values) > width:
-            indices = [int(i * (len(values) - 1) / (width - 1)) for i in range(width)]
-            sampled_values = [values[i] for i in indices]
-        else:
-            sampled_values = values
-            width = len(sampled_values)
-
-        if not sampled_values or width == 0:
-            return "[dim]Not enough data to render chart.[/dim]"
-
-        min_val = min(sampled_values)
-        max_val = max(sampled_values)
-        value_range = max_val - min_val
-
-        # Initialize grid
-        grid = [[' '] * width for _ in range(height)]
-
-        # Populate grid with bars
-        if value_range > 0:
-            for i, value in enumerate(sampled_values):
-                # Normalize value to the height of the chart
-                bar_height = int(((value - min_val) / value_range) * (height - 1))
-                for j in range(bar_height + 1):
-                    grid[height - 1 - j][i] = '█'
-        else:  # If all values are the same, draw a flat line
-            mid_line = height // 2
-            for i in range(width):
-                grid[mid_line][i] = '█'
-
-        # Convert grid to a list of strings and add a title
-        lines = ["".join(row) for row in grid]
-        top_label = f"Portfolio Value (Range: ${min_val:,.2f} - ${max_val:,.2f})"
-
-        return f"{top_label}\n" + "\n".join(lines)
-
-    def on_portfolio_data(self, message: PortfolioData) -> None:
-        """Updates the TUI with portfolio evolution data."""
-        if not message.success or not isinstance(message.data, dict):
-            self.log_display.write(f"[bold red]Failed to get portfolio data: {message.data}[/]")
-            return
-
-        data = message.data
-        snapshot = data.get("latest_snapshot")
-
-        if snapshot:
-            total_value = Decimal(snapshot.get("total_portfolio_value_usd", "0"))
-            realized_pnl = Decimal(snapshot.get("realized_pnl_usd", "0"))
-            btc_treasury_amount = Decimal(snapshot.get("btc_treasury_amount", "0"))
-            btc_treasury_value = Decimal(snapshot.get("btc_treasury_value_usd", "0"))
-
-            self.query_one("#portfolio_total_value").update(f"Total Portfolio Value: ${total_value:,.2f} USD")
-            self.query_one("#portfolio_realized_pnl").update(f"Realized Profit/Loss: ${realized_pnl:,.2f} USD")
-            self.query_one("#portfolio_btc_treasury").update(f"BTC Treasury: ₿{btc_treasury_amount:.8f} (${btc_treasury_value:,.2f} USD)")
-
-        evolution_total = Decimal(data.get("evolution_total", "0"))
-        evolution_24h = Decimal(data.get("evolution_24h", "0"))
-
-        self.query_one("#portfolio_evolution_total").update(f"Evolution (Total): {evolution_total:+.2f}%")
-        self.query_one("#portfolio_evolution_24h").update(f"Evolution (24h): {evolution_24h:+.2f}%")
-        self.query_one("#portfolio_accumulated_btc").update("Accumulated BTC: +0.0%") # Placeholder
-
-        # --- DCOM Status Panel Update ---
-        dcom_status = data.get("dcom_status", {})
-        if dcom_status:
-            total_equity = Decimal(dcom_status.get("total_equity", "0"))
-            wc_target = Decimal(dcom_status.get("working_capital_target", "0"))
-            wc_in_use = Decimal(dcom_status.get("working_capital_in_use", "0"))
-            wc_remaining = Decimal(dcom_status.get("working_capital_remaining", "0"))
-            reserve = Decimal(dcom_status.get("strategic_reserve", "0"))
-            mode = dcom_status.get("operating_mode", "N/A")
-
-            self.query_one("#dcom_total_equity").update(f"Total Equity: ${total_equity:,.2f}")
-            wc_text = f"Working Capital: ${wc_target:,.2f} | Used: ${wc_in_use:,.2f} | Free: ${wc_remaining:,.2f}"
-            self.query_one("#dcom_working_capital").update(wc_text)
-            self.query_one("#dcom_strategic_reserve").update(f"Strategic Reserve: ${reserve:,.2f}")
-            self.query_one("#dcom_operating_mode").update(f"Operating Mode: {mode}")
-
-        # Update the chart
-        history = data.get("history", [])
-        if history:
-            chart_str = self._render_text_chart(history)
-            self.query_one("#portfolio_chart").update(chart_str)
-        else:
-            self.query_one("#portfolio_chart").update("[dim]No portfolio history available.[/dim]")
+            if base_label == sort_column:
+                # Append the correct indicator
+                indicator = " ▼" if is_reverse else " ▲"
+                new_label_str = f"{base_label}{indicator}"
+            else:
+                new_label_str = base_label
+            
+            # Always assign a Text object back to the label to avoid type errors
+            column.label = Text(new_label_str)
 
 
-    # NOVO: Handler para a mensagem CommandOutput (opcional, mas bom para feedback)
-    def on_command_output(self, message: CommandOutput) -> None:
-        """Exibe o resultado de um comando no log."""
-        if message.success:
-            self.log_display.write(f"[green]Command success:[/green] {message.output}")
-        else:
-            self.log_display.write(f"[bold red]Command failed:[/bold red] {message.output}")
-        # Aciona uma atualização do dashboard para vermos o resultado da ação
-        self.update_dashboard()
+    def on_data_table_header_selected(self, event: DataTable.HeaderSelected) -> None:
+        """Handles sorting when a table header is clicked."""
+        table = event.control
+        # The event label can be a str or Text object, so convert to str to be safe.
+        column_label = str(event.label).rstrip(" ▲▼")
 
-    def update_performance_summary(self) -> None:
-        """Initiates the performance summary update in a worker."""
-        command = ["python", "scripts/get_tui_performance_data.py"]
-        self.run_script_worker(command, PerformanceSummaryData)
-
-    def on_performance_summary_data(self, message: PerformanceSummaryData) -> None:
-        """Updates the TUI with performance summary data."""
-        if not message.success or not isinstance(message.data, dict):
-            self.log_display.write(f"[bold red]Failed to get performance summary data: {message.data}[/]")
-            return
-
-        data = message.data
-        pnl_usd = data.get("total_usd_pnl", "0.0")
-        pnl_btc = data.get("total_btc_pnl", "0.0")
-        treasury_btc = data.get("total_treasury_btc", "0.0")
-
-        # Add color based on profit
-        usd_color = "green" if not pnl_usd.startswith('-') and pnl_usd != "0.0000" else "red"
-        btc_color = "green" if not pnl_btc.startswith('-') and pnl_btc != "0.00000000" else "red"
-
-        self.query_one("#perf_pnl_usd").update(f"Total Realized PnL (USD):  [{usd_color}]$ {pnl_usd}[/]")
-        self.query_one("#perf_pnl_btc").update(f"Total Realized PnL (BTC):    [{btc_color}]{pnl_btc} BTC[/]")
-        self.query_one("#perf_treasury_btc").update(f"Total Treasury (BTC):          {treasury_btc} BTC")
+        if table.id == "positions_table":
+            if self.positions_sort_column == column_label:
+                self.positions_sort_reverse = not self.positions_sort_reverse
+            else:
+                self.positions_sort_column = column_label
+                self.positions_sort_reverse = True  # Default to descending for new column
+            self._update_table_headers(table, self.positions_sort_column, self.positions_sort_reverse)
+            self.update_positions_table()
+        elif table.id == "history_table":
+            if self.history_sort_column == column_label:
+                self.history_sort_reverse = not self.history_sort_reverse
+            else:
+                self.history_sort_column = column_label
+                self.history_sort_reverse = True # Default to descending for new column
+            self._update_table_headers(table, self.history_sort_column, self.history_sort_reverse)
+            self.update_history_table()
 
 def run_tui():
-    """Ponto de entrada da linha de comando para a TUI."""
     import argparse
-    parser = argparse.ArgumentParser(description="Executa o dashboard do Jules Bot.")
-    parser.add_argument(
-        "--mode",
-        type=str,
-        choices=["trade", "test"],
-        default="test",
-        help="O modo de negociação a ser monitorado ('trade' ou 'test')."
-    )
+    parser = argparse.ArgumentParser(description="Run the Jules Bot TUI Dashboard.")
+    parser.add_argument("--mode", type=str, choices=["trade", "test"], default="test", help="Trading mode to monitor.")
+    parser.add_argument("--container-id", type=str, required=True, help="The container ID of the running bot for log streaming.")
+    parser.add_argument("--bot-name", type=str, default=os.getenv("BOT_NAME", "jules_bot"), help="The name of the bot to monitor.")
+    parser.add_argument("--host-port", type=int, required=True, help="The host port the bot's API is mapped to.")
     args = parser.parse_args()
-
-    app = TUIApp(mode=args.mode)
+    app = TUIApp(mode=args.mode, container_id=args.container_id, bot_name=args.bot_name, host_port=args.host_port)
     app.run()
 
 if __name__ == "__main__":

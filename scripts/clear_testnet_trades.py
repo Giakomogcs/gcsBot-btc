@@ -10,27 +10,19 @@ from jules_bot.utils.logger import logger
 
 def clear_testnet_trades():
     """
-    Connects to the database and clears all trades from the 'test' environment.
+    Connects to the database and clears all trades from the 'test' environment
+    for a specific bot.
     """
     try:
-        logger.info("Starting the process to clear testnet trades...")
+        # The config_manager singleton is initialized on import from the BOT_NAME env var.
+        # PostgresManager will use it to connect to the correct schema.
+        bot_name = config_manager.bot_name
+        logger.info(f"Starting the process to clear testnet trades for bot '{bot_name}'...")
 
-        # Load database configuration from config.ini
-        db_config = {
-            'user': config_manager.get('POSTGRES', 'user'),
-            'password': config_manager.get('POSTGRES', 'password'),
-            'host': config_manager.get('POSTGRES', 'host'),
-            'port': config_manager.get('POSTGRES', 'port'),
-            'dbname': config_manager.get('POSTGRES', 'dbname')
-        }
-
-        # Initialize the PostgresManager
-        db_manager = PostgresManager(config=db_config)
-
-        # Call the method to clear testnet trades
+        db_manager = PostgresManager()
         db_manager.clear_testnet_trades()
 
-        logger.info("Testnet trades clearing process finished successfully.")
+        logger.info(f"Testnet trades clearing process for bot '{bot_name}' finished successfully.")
 
     except Exception as e:
         logger.error(f"An error occurred during the testnet trade clearing process: {e}", exc_info=True)

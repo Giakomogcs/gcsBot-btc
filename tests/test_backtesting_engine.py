@@ -10,29 +10,41 @@ from jules_bot.database.postgres_manager import PostgresManager
 def mock_config_manager():
     """Provides a mock ConfigManager for testing."""
     mock = MagicMock(spec=ConfigManager)
+    
+    config_data = {
+        'STRATEGY_RULES': {
+            'max_capital_per_trade_percent': '0.02',
+            'base_usd_per_trade': '100.0',
+            'commission_rate': '0.001',
+            'sell_factor': '0.9',
+            'target_profit': '0.05',
+            'max_open_positions': '20',
+            'trailing_stop_profit': '0.015'
+        },
+        'BACKTEST': {
+            'initial_balance': '10000',
+            'commission_fee': '0.001'
+        },
+        'APP': {
+            'symbol': 'BTCUSDT',
+            'strategy_name': 'test_strategy'
+        },
+        'REGIME_0': {
+            'buy_dip_percentage': '0.01',
+            'sell_rise_percentage': '0.01',
+            'order_size_usd': '100.0'
+        }
+    }
+
     def get_section_side_effect(section_name):
-        if section_name == 'STRATEGY_RULES':
-            return {
-                'max_capital_per_trade_percent': '0.02',
-                'base_usd_per_trade': '100.0',
-                'commission_rate': '0.001',
-                'sell_factor': '0.9',
-                'target_profit': '0.05',
-                'max_open_positions': '20'
-            }
-        if section_name == 'BACKTEST':
-            return {
-                'initial_balance': '10000',
-                'commission_fee': '0.001'
-            }
-        if section_name == 'APP':
-            return {
-                'symbol': 'BTCUSDT',
-                'strategy_name': 'test_strategy'
-            }
-        return {}
+        return config_data.get(section_name, {})
+
+    def mock_get_side_effect(section, key, fallback=None):
+        return config_data.get(section, {}).get(key, fallback)
+
     mock.get_section.side_effect = get_section_side_effect
-    mock.get.side_effect = lambda section, key, **kwargs: get_section_side_effect(section).get(key, kwargs.get('fallback'))
+    mock.get.side_effect = mock_get_side_effect
+    
     return mock
 
 @pytest.fixture
@@ -40,13 +52,10 @@ def mock_db_manager():
     """Provides a mock PostgresManager."""
     mock = MagicMock(spec=PostgresManager)
     
-    # Create a simple DataFrame for price data
     price_data = {
         'timestamp': pd.to_datetime(['2023-01-01 12:00:00', '2023-01-01 12:01:00', '2023-01-01 12:02:00']),
-        'open': [100, 101, 110],
-        'high': [101, 110, 111],
-        'low': [99, 100, 109],
-        'close': [101, 110, 105], # Buy at 101, sell at 110
+        'open': [100, 101, 110], 'high': [101, 110, 111],
+        'low': [99, 100, 109], 'close': [101, 110, 105],
         'volume': [10, 12, 15]
     }
     df = pd.DataFrame(price_data).set_index('timestamp')
@@ -56,38 +65,31 @@ def mock_db_manager():
     return mock
 
 @patch('jules_bot.backtesting.engine.Backtester._generate_and_save_summary')
-@patch('jules_bot.backtesting.engine.add_all_features')
-def test_backtester_pnl_calculation(mock_add_all_features, mock_summary, mock_config_manager, mock_db_manager):
+def test_backtester_pnl_calculation(mock_summary, mock_config_manager, mock_db_manager):
     """
-    Tests that the backtester correctly calculates P&L using the StrategyRules method.
+    Tests that the backtester correctly calculates P&L by preparing the data ahead of time.
     """
     # Arrange
-    # The mock feature data needs all columns the backtester expects
-    feature_data = mock_db_manager.get_price_data.return_value.copy()
-    feature_data['ema_100'] = 100
-    feature_data['ema_20'] = 100
-    feature_data['bbl_20_2_0'] = 98
-    # Add the columns required by the new SituationalAwareness model
-    feature_data['atr_14'] = 0.1
-    feature_data['macd_diff_12_26_9'] = 0.1
-    mock_add_all_features.return_value = feature_data
+    prepared_data = mock_db_manager.get_price_data.return_value.copy()
+    prepared_data['ema_100'] = 100
+    prepared_data['ema_20'] = 100
+    prepared_data['bbl_20_2_0'] = 98
+    prepared_data['atr_14'] = 0.1
+    prepared_data['macd_diff_12_26_9'] = 0.1
+    prepared_data['market_regime'] = 0
 
-    # We need to patch the global config_manager and the CapitalManager used by the Backtester
     with patch('jules_bot.backtesting.engine.config_manager', mock_config_manager), \
          patch('jules_bot.backtesting.engine.CapitalManager') as mock_capital_manager, \
          patch('jules_bot.core_logic.strategy_rules.StrategyRules.calculate_sell_target_price') as mock_sell_target:
 
-        # Configure the mock CapitalManager to return a buy decision only on the first cycle
-        # The method now returns 4 values, so we add a dummy value for the last one.
         mock_capital_manager.return_value.get_buy_order_details.side_effect = [
-            (Decimal('100.0'), 'TEST_MODE', 'test buy reason', {})
-        ] + [(Decimal('0'), 'HOLD', 'no signal', {})] * (len(feature_data) - 1)
-
-        # Sell if price is >= 110 (the close of the second candle)
+                (Decimal('100.0'), 'TEST_MODE', 'test buy reason', 'uptrend', Decimal('0.0'))
+            ] + [(Decimal('0'), 'HOLD', 'no signal', 'no_signal', Decimal('0.0'))] * (len(prepared_data) - 1)
+        
+        mock_capital_manager.return_value.difficulty_reset_timeout_hours = 2
         mock_sell_target.return_value = Decimal("110.0")
 
-        backtester = Backtester(db_manager=mock_db_manager, start_date="2023-01-01", end_date="2023-01-01")
-        
+        backtester = Backtester(db_manager=mock_db_manager, data=prepared_data, config_manager=mock_config_manager)
         trade_logger_mock = backtester.trade_logger = MagicMock()
 
         # Act
@@ -98,21 +100,20 @@ def test_backtester_pnl_calculation(mock_add_all_features, mock_summary, mock_co
         assert len(update_calls) == 1, "Expected one sell trade to be updated"
         
         sell_trade_data = update_calls[0][1][0]
-        realized_pnl = sell_trade_data.get('realized_pnl_usd')
+        realized_pnl_usd = sell_trade_data.get('realized_pnl_usd')
 
-        # Manually calculate the expected PnL using Decimal
         buy_price = Decimal("101.0")
         sell_price = Decimal("110.0")
-        
         buy_amount_usdt = Decimal("100.0")
+        commission_rate = Decimal("0.001")
         quantity_bought = buy_amount_usdt / buy_price
-        
+        buy_commission_usd = buy_amount_usdt * commission_rate
         sell_factor = Decimal("0.9")
         quantity_sold = quantity_bought * sell_factor
+        sell_value_gross = quantity_sold * sell_price
+        sell_commission_usd = sell_value_gross * commission_rate
+        gross_pnl = (sell_price - buy_price) * quantity_sold
+        buy_commission_prorated = (quantity_sold / quantity_bought) * buy_commission_usd if quantity_bought > 0 else Decimal('0')
+        expected_pnl = gross_pnl - buy_commission_prorated - sell_commission_usd
 
-        commission_rate = Decimal("0.001")
-        one = Decimal("1")
-
-        expected_pnl = (sell_price * (one - commission_rate) - buy_price * (one + commission_rate)) * quantity_sold
-        
-        assert realized_pnl == pytest.approx(expected_pnl)
+        assert float(realized_pnl_usd) == pytest.approx(float(expected_pnl), rel=1e-9)

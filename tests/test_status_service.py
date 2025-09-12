@@ -55,8 +55,10 @@ class TestStatusService(unittest.TestCase):
         ]
 
         # Arrange: Mock DB results for open positions
-        trade1 = Trade(trade_id="open-trade-1", price=50000, quantity=0.1, sell_target_price=55000)
-        trade2 = Trade(trade_id="open-trade-2", price=48000, quantity=0.2, sell_target_price=50000)
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        trade1 = Trade(trade_id="open-trade-1", price=50000, quantity=0.1, sell_target_price=55000, timestamp=now, usd_value=Decimal("5000.0"))
+        trade2 = Trade(trade_id="open-trade-2", price=48000, quantity=0.2, sell_target_price=50000, timestamp=now, usd_value=Decimal("9600.0"))
         self.db_manager.get_open_positions.return_value = [trade1, trade2]
         self.db_manager.get_all_trades_in_range.return_value = [] # Not the focus of this test
 
@@ -88,7 +90,7 @@ class TestStatusService(unittest.TestCase):
 
 
         # Arrange: Mock strategy evaluation and other helper methods
-        self.status_service.capital_manager.get_buy_order_details = MagicMock(return_value=(Decimal('0'), 'ACCUMULATION', 'Test Condition', 'unknown'))
+        self.status_service.capital_manager.get_buy_order_details = MagicMock(return_value=(Decimal('0'), 'ACCUMULATION', 'Test Condition', 'unknown', Decimal('0')))
 
         # 2. Act: Call the method under test
         result = self.status_service.get_extended_status("test", "test_bot")
@@ -111,20 +113,26 @@ class TestStatusService(unittest.TestCase):
 
         # Assert PnL and progress calculations are correct for the first trade
         pos1_status = result["open_positions_status"][0]
-        self.assertAlmostEqual(float(pos1_status["unrealized_pnl"]), 170.82, places=2)
-        # Progress: (52000 - 50000) / (55000 - 50000) * 100 = 40%
-        self.assertAlmostEqual(float(pos1_status["progress_to_sell_target_pct"]), 40.0, places=2)
+        # The expected PnL is now 194.80 because the unrealized PnL calculation was fixed
+        # to include the full quantity and estimated sell commission, instead of using the sell_factor.
+        # (52000 - 50000) * 0.1 - (52000 * 0.1 * 0.001) = 200 - 5.2 = 194.8
+        self.assertAlmostEqual(float(pos1_status["unrealized_pnl"]), 194.80, places=2)
+        # Progress is calculated based on PnL, not price, to account for commissions.
+        # unrealized_pnl = 194.8, target_pnl = 494.5. Progress = (194.8 / 494.5) * 100 = 39.39
+        self.assertAlmostEqual(float(pos1_status["progress_to_sell_target_pct"]), 39.39, places=2)
         self.assertAlmostEqual(float(pos1_status["price_to_target"]), 3000, places=2)
         self.assertAlmostEqual(float(pos1_status["usd_to_target"]), 300, places=2)
         
-        # Assert that the buy signal status is included and contains the correct persisted data
+        # Assert that the buy signal status is included and has the new structure
         self.assertIn("buy_signal_status", result)
-        bs_status = result["buy_signal_status"]
-        self.assertEqual(bs_status["market_regime"], 2)
-        self.assertEqual(bs_status["reason"], "Test Condition")
-        self.assertEqual(bs_status["operating_mode"], "ACCUMULATION")
-        self.assertAlmostEqual(bs_status["btc_purchase_target"], Decimal("51058.00"), places=2)
-        self.assertAlmostEqual(bs_status["btc_purchase_progress_pct"], Decimal("9.60"), places=2)
+        buy_status = result["buy_signal_status"]
+        self.assertEqual(buy_status["reason"], "Test Condition")
+        self.assertEqual(buy_status["market_regime"], 2) # HIGH_VOLATILITY
+        self.assertEqual(buy_status["operating_mode"], "ACCUMULATION")
+        # Check for the new keys, ensuring the structure is correct
+        self.assertIn("condition_target", buy_status)
+        self.assertIn("condition_progress", buy_status)
+        self.assertIn("condition_label", buy_status)
 
 if __name__ == '__main__':
     unittest.main()

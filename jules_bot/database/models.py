@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, DateTime, JSON, Boolean, Numeric
 from sqlalchemy.sql import func
 import datetime
 from decimal import Decimal
+import pytz
 from .base import Base
 
 class PriceHistory(Base):
@@ -21,7 +22,10 @@ class Trade(Base):
         for key in self.__mapper__.c.keys():
             value = getattr(self, key)
             if isinstance(value, datetime.datetime):
-                result[key] = value.isoformat()
+                # Tornar o datetime ciente do fuso horário (UTC) e converter para America/Sao_Paulo
+                sao_paulo_tz = pytz.timezone('America/Sao_Paulo')
+                aware_datetime = value.replace(tzinfo=pytz.utc).astimezone(sao_paulo_tz)
+                result[key] = aware_datetime.isoformat()
             elif isinstance(value, Decimal):
                 result[key] = str(value)
             else:
@@ -35,11 +39,13 @@ class Trade(Base):
     strategy_name = Column(String, nullable=False)
     symbol = Column(String, nullable=False)
     trade_id = Column(String, nullable=False, unique=True)
+    linked_trade_id = Column(String, nullable=True, index=True) # Used to link a SELL back to a BUY
     exchange = Column(String, nullable=False)
     status = Column(String, nullable=False)
     order_type = Column(String, nullable=False)
     price = Column(Numeric(20, 8), nullable=False)
     quantity = Column(Numeric(20, 8), nullable=False)
+    remaining_quantity = Column(Numeric(20, 8), nullable=True)
     usd_value = Column(Numeric(20, 8), nullable=False)
     commission = Column(Numeric(20, 8))
     commission_asset = Column(String)
@@ -48,13 +54,24 @@ class Trade(Base):
     binance_trade_id = Column(Integer)
     decision_context = Column(JSON)
     sell_target_price = Column(Numeric(20, 8))
+    sell_price = Column(Numeric(20, 8))
+    sell_usd_value = Column(Numeric(20, 8))
     commission_usd = Column(Numeric(20, 8))
     realized_pnl_usd = Column(Numeric(20, 8))
     hodl_asset_amount = Column(Numeric(20, 8))
     hodl_asset_value_at_sell = Column(Numeric(20, 8))
     backtest_id = Column(String)
-    realized_pnl = Column(Numeric(20, 8))
-    held_quantity = Column(Numeric(20, 8))
+
+    # Fields for Trailing Take-Profit
+    is_trailing = Column(Boolean, default=False, nullable=False)
+    highest_price_since_breach = Column(Numeric(20, 8), nullable=True)
+
+    # Fields for Intelligent Trailing Stop
+    is_smart_trailing_active = Column(Boolean, default=False, nullable=False)
+    smart_trailing_activation_price = Column(Numeric(20, 8), nullable=True)
+    smart_trailing_highest_profit = Column(Numeric(20, 8), nullable=True)
+    current_trail_percentage = Column(Numeric(10, 5), nullable=True)
+
 
 class BotStatus(Base):
     __tablename__ = 'bot_status'
@@ -66,6 +83,8 @@ class BotStatus(Base):
     session_pnl_percent = Column(Numeric(20, 8), default=0.0)
     open_positions = Column(Integer, default=0)
     portfolio_value_usd = Column(Numeric(20, 8), default=0.0)
+    cash_balance_usd = Column(Numeric(20, 8), default=0.0)
+    invested_value_usd = Column(Numeric(20, 8), default=0.0)
     market_regime = Column(Integer)
     operating_mode = Column(String)
     buy_target = Column(Numeric(20, 8))

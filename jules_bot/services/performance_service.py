@@ -12,38 +12,57 @@ from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.utils.logger import logger
 
-def get_summary():
+def get_summary(bot_name: str = None):
     """
-    Connects to the database, fetches all sell trades, and calculates a
-    summary of performance including PnL in USD, PnL in BTC, and
-    total assets sent to treasury.
+    Connects to the database, fetches all sell trades for a specific bot,
+    and calculates a summary of performance including PnL in USD, PnL in BTC,
+    and total assets sent to treasury. The connection is scoped to the bot's
+    schema via the config_manager, which must be initialized by the caller.
+
+    Args:
+        bot_name (str, optional): The name of the bot to get the summary for.
+                                This name is used to ensure the DB connection
+                                uses the correct schema.
 
     Returns:
         dict: A dictionary containing the performance summary.
     """
-    logger.info("PerformanceService: Calculating performance summary...")
+    logger.info(f"PerformanceService: Calculating performance summary for bot: {bot_name}...")
     total_usd_pnl = Decimal('0')
     total_btc_pnl = Decimal('0')
     total_treasury_btc = Decimal('0')
     sell_trade_count = 0
 
     try:
-        db_config = config_manager.get_db_config('POSTGRES')
-        db_manager = PostgresManager(config=db_config)
+        # This will connect to the schema for the bot configured in the .env file
+        db_manager = PostgresManager()
 
-        # Fetch all trades from all environments
-        all_trades = db_manager.get_all_trades_in_range(mode='trade')
-        all_trades.extend(db_manager.get_all_trades_in_range(mode='test'))
-        all_trades.extend(db_manager.get_all_trades_in_range(mode='backtest'))
+        # Get the mode ('trade', 'test', etc.) for the current bot.
+        # This ensures we get a summary for the environment the user is running the script against.
+        current_mode = config_manager.get('APP', 'mode', fallback='trade')
+        logger.info(f"PerformanceService: Calculating summary for environment: '{current_mode}'")
 
-        if not all_trades:
-            logger.warning("PerformanceService: No trades found in the database.")
-            return {}
+        # Fetch only successfully closed 'sell' trades for the current environment.
+        # This is the single source of truth for realized PnL.
+        closed_sell_trades = db_manager.get_all_trades_in_range(
+            mode=current_mode,
+            order_type='sell',
+            status='CLOSED'
+        )
 
-        for trade in all_trades:
-            if trade.order_type == 'sell':
-                sell_trade_count += 1
+        if not closed_sell_trades:
+            logger.warning(f"PerformanceService: No closed sell trades found for environment '{current_mode}'.")
+            return {
+                "sell_trade_count": 0,
+                "total_usd_pnl": "0.0000",
+                "total_btc_pnl": "0.00000000",
+                "total_treasury_btc": "0.00000000"
+            }
 
+        sell_trade_count = len(closed_sell_trades)
+
+        for trade in closed_sell_trades:
+                # The loop now only iterates over confirmed, closed sell trades.
                 if trade.realized_pnl_usd is not None:
                     try:
                         total_usd_pnl += Decimal(trade.realized_pnl_usd)

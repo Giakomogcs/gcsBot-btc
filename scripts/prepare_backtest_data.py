@@ -1,5 +1,6 @@
 import sys
 import os
+import argparse
 
 # Adiciona a raiz do projeto ao path para permitir a importação de módulos
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -8,8 +9,7 @@ if project_root not in sys.path:
 
 from collectors.core_price_collector import prepare_backtest_data
 from jules_bot.utils.logger import logger
-
-import argparse
+from jules_bot.utils.config_manager import config_manager
 
 def main():
     """
@@ -26,7 +26,11 @@ def main():
     args = parser.parse_args()
 
     try:
-        logger.info(f"Starting backtest data preparation for the last {args.days} days...")
+        # The config_manager singleton is initialized on import, reading BOT_NAME
+        # from the environment. Any component that uses it will have the correct bot context.
+        bot_name = config_manager.bot_name
+
+        logger.info(f"Starting backtest data preparation for bot '{bot_name}' for the last {args.days} days...")
         
         prepare_backtest_data(days=args.days)
         

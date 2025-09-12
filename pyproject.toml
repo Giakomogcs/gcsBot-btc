@@ -1,5 +1,5 @@
 [tool.pytest.ini_options]
-python_paths = "."
+pythonpath = "."
 markers = [
     "online: marks tests as online (deselect with '-m \"not online\"')"
 ]

@@ -1,0 +1,120 @@
+/* General Layout */
+#main_container {
+  layout: horizontal;
+}
+
+#left_pane {
+  width: 25%;
+  padding: 0 1;
+  border-right: solid $accent;
+}
+
+#middle_pane {
+  width: 75%;
+  padding: 0 1;
+  layout: vertical;
+}
+
+#top_middle_pane {
+  layout: horizontal;
+  height: 40%;
+}
+
+#open_positions {
+  padding-left: 1;
+  height: 100%;
+  width: 100%;
+}
+
+#status_and_strategy {
+  width: 50%;
+  padding-right: 1;
+  border-right: solid $accent;
+}
+
+#portfolio_and_positions {
+  width: 50%;
+  padding-left: 1;
+}
+
+/* Common Widget Styles */
+.title {
+  background: $accent;
+  color: $text;
+  width: 100%;
+  padding: 0 1;
+  margin-top: 1;
+}
+
+#status_container,
+#strategy_container {
+  padding: 0 1;
+  height: auto;
+}
+
+#positions_table,
+#wallet_table {
+  margin-top: 1;
+  max-height: 25;
+}
+
+#history_filter_bar {
+  height: 10%;
+  align: right middle;
+  margin-top: 1;
+}
+
+#history_table {
+  width: 70%;
+  height: 100%;
+}
+
+#portfolio_chart_container {
+  width: 30%;
+  height: 100%;
+  padding-left: 1;
+}
+
+#log_display {
+  height: 1fr;
+  border: round $primary;
+  margin-top: 1;
+}
+
+#portfolio_chart {
+  border: round $primary;
+  height: 100%;
+  margin-top: 1;
+}
+
+#action_bar,
+#log_filter_bar {
+  margin-top: 1;
+  height: auto;
+  align: right middle;
+}
+
+.hidden {
+  display: none;
+}
+
+/* Header Styles */
+CustomHeader {
+  dock: top;
+  width: 100%;
+  background: $primary;
+  color: $text;
+  height: 1;
+}
+
+#header_title {
+  content-align: left middle;
+  width: 1fr;
+}
+
+#status_indicator {
+  width: auto;
+  margin: 0 2;
+  content-align: right middle;
+  height: 100%;
+}

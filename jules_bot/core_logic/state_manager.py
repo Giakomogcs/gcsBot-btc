@@ -1,8 +1,11 @@
 import pandas as pd
 from decimal import Decimal
 import math
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 from jules_bot.utils.logger import logger
 from jules_bot.database.postgres_manager import PostgresManager
+from jules_bot.database.models import Trade
 import uuid
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.services.trade_logger import TradeLogger
@@ -47,6 +50,20 @@ class StateManager:
         # effectively fetching all trades for the given mode.
         return self.db_manager.get_all_trades_in_range(mode=mode)
 
+    def get_trade_history_for_run(self) -> list:
+        """Fetches all trades from the database for the current bot run."""
+        return self.db_manager.get_trades_by_run_id(run_id=self.bot_id)
+
+    def get_trades_in_last_n_hours(self, hours: int) -> list:
+        """Fetches all trades from the database within the last N hours."""
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(hours=hours)
+        return self.db_manager.get_all_trades_in_range(
+            mode=self.mode,
+            start_date=start_date,
+            end_date=end_date
+        )
+
     def get_last_purchase_price(self) -> Decimal:
         """
         Retrieves the purchase price of the most recent 'buy' trade.
@@ -79,151 +96,14 @@ class StateManager:
             'exchange': buy_result.get('exchange', 'binance')
         }
 
+        # A new 'buy' position should never have a 'sell_price'.
+        # This defensively removes the key if it was accidentally included in buy_result.
+        trade_data.pop('sell_price', None)
+        trade_data.pop('sell_usd_value', None)
+
+        # Defensive coding: ensure no rogue PnL keys are present for a BUY trade.
         self.trade_logger.log_trade(trade_data)
 
-    def sync_holdings_with_binance(self, account_manager: AccountManager, strategy_rules: StrategyRules, trader):
-        """
-        Synchronizes the database with current Binance trades. It ensures that every
-        buy trade on Binance is represented as an 'OPEN' or 'CLOSED' position in the
-        local database, preventing duplicates.
-        """
-        logger.info("--- Starting trade synchronization with Binance ---")
-        try:
-            symbol = config_manager.get('APP', 'symbol')
-            if not symbol:
-                logger.error("No symbol configured in APP section. Cannot perform sync.")
-                return
-
-            # 1. Fetch all trades from Binance for the given symbol
-            binance_trades = trader.get_all_my_trades(symbol=symbol)
-            if not binance_trades:
-                logger.info(f"No trades found on Binance for {symbol}. Sync complete.")
-                return
-
-            # 2. Fetch all trades from the local DB for the same symbol and environment
-            db_trades = self.db_manager.get_all_trades_in_range(mode=self.mode, symbol=symbol)
-            existing_binance_trade_ids = {t.binance_trade_id for t in db_trades if t.binance_trade_id}
-            logger.info(f"Found {len(existing_binance_trade_ids)} existing trades in the database for {symbol}.")
-
-            # 3. Reconcile: Iterate through Binance trades and create local records for new BUYS
-            new_trades_synced = 0
-            for b_trade in binance_trades:
-                if b_trade['id'] in existing_binance_trade_ids:
-                    continue
-
-                if b_trade['isBuyer']:
-                    logger.info(f"Found new BUY trade on Binance (ID: {b_trade['id']}). Creating local position.")
-                    self._create_position_from_trade(b_trade, strategy_rules)
-                    new_trades_synced += 1
-
-            if new_trades_synced > 0:
-                logger.info(f"Successfully synced {new_trades_synced} new buy trades from Binance.")
-                # After syncing, reconcile the total position with the actual balance
-                self.reconcile_holdings(symbol, trader)
-            else:
-                logger.info("Database is already in sync with Binance. No new trades to add.")
-
-            logger.info("--- Trade synchronization finished ---")
-
-        except Exception as e:
-            logger.error(f"An error occurred during trade synchronization: {e}", exc_info=True)
-
-    def _create_position_from_trade(self, binance_trade: dict, strategy_rules: StrategyRules):
-        """Helper to create a new DB position from a single Binance trade record."""
-        try:
-            purchase_price = Decimal(str(binance_trade['price']))
-            quantity = Decimal(str(binance_trade['qty']))
-            
-            # Create a new, unique internal trade_id
-            internal_trade_id = str(uuid.uuid4())
-
-            # We pass `params=None` because, during a sync, we don't know what the dynamic
-            # parameters were at the time of the historical trade. The function will use a default.
-            sell_target_price = strategy_rules.calculate_sell_target_price(purchase_price, params=None)
-
-            buy_result = {
-                "trade_id": internal_trade_id,
-                "symbol": binance_trade['symbol'],
-                "price": purchase_price,
-                "quantity": quantity,
-                "usd_value": purchase_price * quantity,
-                "commission": Decimal(str(binance_trade['commission'])),
-                "commission_asset": binance_trade['commissionAsset'],
-                "exchange_order_id": str(binance_trade['orderId']),
-                "binance_trade_id": int(binance_trade['id']),
-                "timestamp": pd.to_datetime(binance_trade['time'], unit='ms', utc=True),
-                "decision_context": {"reason": "sync_from_binance_trade"},
-                "environment": self.mode,
-            }
-            
-            self.create_new_position(buy_result, sell_target_price)
-            logger.info(f"Successfully created new position for Binance trade ID: {binance_trade['id']}")
-
-        except Exception as e:
-            logger.error(f"Failed to create position from trade {binance_trade.get('id')}: {e}", exc_info=True)
-
-    def reconcile_holdings(self, symbol: str, trader):
-        """
-        Adjusts the quantities of open positions to match the actual exchange balance.
-        This is the primary mechanism for self-correcting state drift. It accounts
-        for sells by reducing the quantity of the oldest buy positions first (FIFO).
-        """
-        logger.info(f"Reconciling position quantities for {symbol} with actual exchange balance...")
-        try:
-            # 1. Get all open positions for the symbol from the DB, sorted oldest first
-            open_positions = sorted(
-                self.db_manager.get_open_positions(environment=self.mode, symbol=symbol),
-                key=lambda p: p.timestamp
-            )
-            if not open_positions:
-                logger.info("No open positions found to reconcile.")
-                return
-
-            # 2. Get the total quantity held by the bot for this symbol
-            bot_total_quantity = sum(Decimal(str(p.quantity)) for p in open_positions)
-
-            # 3. Get the actual balance from the exchange
-            asset = symbol.replace('USDT', '')
-            # Ensure the balance from the exchange is treated as a Decimal
-            exchange_balance = Decimal(str(trader.get_account_balance(asset=asset)))
-            
-            logger.info(f"Bot's calculated total quantity for {asset}: {bot_total_quantity:.8f}")
-            logger.info(f"Actual exchange balance for {asset}: {exchange_balance:.8f}")
-
-            # 4. Calculate the discrepancy
-            discrepancy = bot_total_quantity - exchange_balance
-            # Use a Decimal for tolerance comparison
-            if discrepancy <= Decimal('0.00000001'):
-                logger.info("Bot's position quantities are already in sync with the exchange balance.")
-                return
-            
-            logger.warning(f"Discrepancy of {discrepancy:.8f} {asset} found. Reconciling by closing/reducing oldest positions...")
-
-            # 5. Reconcile by reducing quantity from oldest positions first (FIFO)
-            for position in open_positions:
-                if discrepancy <= Decimal('0'):
-                    break
-
-                # Ensure all quantities are Decimal for comparison
-                position_quantity = Decimal(str(position.quantity))
-                quantity_to_reduce = min(position_quantity, discrepancy)
-                
-                new_quantity = position_quantity - quantity_to_reduce
-                
-                # Use a Decimal for tolerance comparison
-                if new_quantity <= Decimal('0.00000001'):
-                    logger.info(f"Closing position {position.trade_id} as it has been fully sold (reconciled).")
-                    self.db_manager.update_trade_status(position.trade_id, 'CLOSED')
-                else:
-                    logger.info(f"Reducing quantity of position {position.trade_id} by {quantity_to_reduce:.8f} to new quantity {new_quantity:.8f}.")
-                    self.db_manager.update_trade_quantity(position.trade_id, new_quantity)
-                
-                discrepancy -= quantity_to_reduce
-
-            logger.info("Finished reconciling position quantities.")
-
-        except Exception as e:
-            logger.error(f"An error occurred during balance reconciliation for {symbol}: {e}", exc_info=True)
 
     def recalculate_open_position_targets(self, strategy_rules: StrategyRules, sa_instance: SituationalAwareness, dynamic_params: DynamicParameters):
         """
@@ -248,6 +128,11 @@ class StateManager:
         if not regime_df.empty:
             current_regime = int(regime_df['market_regime'].iloc[-1])
 
+        # If the regime is undefined, we cannot determine the correct parameters.
+        if current_regime == -1:
+            logger.warning("Cannot recalculate targets because market regime is undefined (-1). Skipping.")
+            return
+
         logger.info(f"Recalculating targets based on current market regime: {current_regime}")
 
         # 2. Get the parameters for the current regime
@@ -259,9 +144,17 @@ class StateManager:
         for position in open_positions:
             try:
                 purchase_price = Decimal(str(position.price))
-                current_target = Decimal(str(position.sell_target_price))
+                
+                # Defensively handle invalid or missing current_target
+                current_target = Decimal('0') # Default value
+                if position.sell_target_price is not None:
+                    try:
+                        current_target = Decimal(str(position.sell_target_price))
+                    except Exception:
+                        logger.warning(f"Could not parse current sell target '{position.sell_target_price}' for trade {position.trade_id}. Defaulting to 0.")
 
-                new_target = strategy_rules.calculate_sell_target_price(purchase_price, params=current_params)
+                quantity = Decimal(str(position.quantity))
+                new_target = strategy_rules.calculate_sell_target_price(purchase_price, quantity, params=current_params)
 
                 # Use a small tolerance for comparison to avoid floating point issues
                 if not math.isclose(new_target, current_target, rel_tol=1e-9):
@@ -278,93 +171,181 @@ class StateManager:
 
         logger.info("--- Finished recalculating sell targets ---")
 
+    def update_trade_trailing_state(self, trade_id: str, is_trailing: bool, highest_price: Optional[Decimal]):
+        """
+        Updates the trailing state fields for a specific trade.
+        """
+        logger.info(f"Updating trailing state for trade {trade_id}: is_trailing={is_trailing}, highest_price={highest_price}")
+        update_data = {
+            "is_trailing": is_trailing,
+            "highest_price_since_breach": highest_price
+        }
+        # The underlying db_manager.update_trade is prepared to handle this dictionary
+        self.db_manager.update_trade(trade_id, update_data)
+
+    def update_trade_smart_trailing_state(
+        self,
+        trade_id: str,
+        is_active: bool,
+        highest_profit: Optional[Decimal] = None,
+        activation_price: Optional[Decimal] = None,
+        current_trail_percentage: Optional[Decimal] = None
+    ):
+        """
+        Updates the state fields for the intelligent trailing stop for a specific trade.
+        """
+        logger.info(
+            f"Updating smart trailing state for {trade_id}: active={is_active}, "
+            f"highest_profit={highest_profit}, activation_price={activation_price}, "
+            f"trail_pct={current_trail_percentage}"
+        )
+        update_data = {
+            "is_smart_trailing_active": is_active,
+            "smart_trailing_highest_profit": highest_profit,
+            "smart_trailing_activation_price": activation_price,
+        }
+        if current_trail_percentage is not None:
+            update_data["current_trail_percentage"] = current_trail_percentage
+
+        # The underlying db_manager.update_trade is prepared to handle this dictionary
+        self.db_manager.update_trade(trade_id, update_data)
 
     def record_partial_sell(self, original_trade_id: str, remaining_quantity: Decimal, sell_data: dict):
         """
-        Records a partial sell and moves the remaining assets to a treasury.
-        1. Logs the sell transaction as a new 'CLOSED' trade.
-        2. Creates a new 'TREASURY' trade for the remaining assets.
-        3. Closes the original 'OPEN' trade.
+        Records a partial sell by creating a new 'sell' record for the sold portion
+        and updating the 'remaining_quantity' of the original 'buy' record.
         """
-        # Step 1: Log the sell transaction as a new record.
+        logger.info(f"Recording partial sell for original trade: {original_trade_id}")
+
+        original_trade = self.db_manager.get_trade_by_trade_id(original_trade_id)
+        if not original_trade:
+            logger.error(f"Could not find original trade {original_trade_id} to record partial sell. Aborting.")
+            return
+
+        # 1. Create a new 'sell' record for the sold portion
         sell_trade_id = str(uuid.uuid4())
-        logger.info(f"Logging partial sell transaction with new trade_id: {sell_trade_id} for original trade: {original_trade_id}")
-        sell_trade_data = {
-            **sell_data,
+        
+        # Calculate PnL percentage
+        buy_usd_value = original_trade.price * Decimal(str(sell_data['quantity']))
+        pnl_percentage = (sell_data.get('realized_pnl_usd', 0) / buy_usd_value) * 100 if buy_usd_value != 0 else 0
+
+        decision_context = sell_data.get('decision_context', {})
+        decision_context['pnl_percentage'] = f"{pnl_percentage:.2f}"
+
+        sell_record_data = {
+            'run_id': self.bot_id, 'environment': self.mode,
+            'strategy_name': original_trade.strategy_name, 'symbol': original_trade.symbol,
+            'trade_id': sell_trade_id, 'linked_trade_id': original_trade_id,
+            'exchange': original_trade.exchange, 'status': 'CLOSED', 'order_type': 'sell',
+            'price': original_trade.price, 'quantity': Decimal(str(sell_data['quantity'])),
+            'usd_value': buy_usd_value, 'sell_price': Decimal(str(sell_data['price'])),
+            'sell_usd_value': Decimal(str(sell_data['usd_value'])),
+            'commission': Decimal(str(sell_data.get('commission', '0'))),
+            'commission_asset': sell_data.get('commission_asset'),
+            'timestamp': datetime.utcfromtimestamp(sell_data['timestamp'] / 1000).replace(tzinfo=timezone.utc),
+            'exchange_order_id': sell_data.get('exchange_order_id'),
+            'binance_trade_id': sell_data.get('binance_trade_id'),
+            'decision_context': decision_context,
+            'realized_pnl_usd': sell_data.get('realized_pnl_usd'),
+            'hodl_asset_amount': sell_data.get('hodl_asset_amount'),
+            'hodl_asset_value_at_sell': sell_data.get('hodl_asset_value_at_sell'),
+        }
+
+        self.trade_logger.log_trade(sell_record_data)
+        logger.info(f"Created new SELL record {sell_trade_id} for partial sell of {original_trade_id} with PnL: ${sell_record_data.get('realized_pnl_usd', 0):.2f}.")
+
+        # 2. Update the original 'buy' trade's remaining_quantity
+        if remaining_quantity > Decimal('1e-8'): # Use tolerance
+            logger.info(f"Updating remaining quantity of original trade {original_trade_id} to {remaining_quantity:.8f}.")
+            
+            new_context_info = {
+                "partial_sell_info": f"Partial sell executed. New sell record: {sell_trade_id}",
+                "last_update_time": datetime.utcnow().isoformat()
+            }
+            existing_context = original_trade.decision_context or {}
+            existing_context.update(new_context_info)
+
+            update_data = {
+                "remaining_quantity": remaining_quantity,
+                "decision_context": existing_context
+            }
+            self.db_manager.update_trade(trade_id=original_trade_id, update_data=update_data)
+        else:
+            # If the remaining quantity is zero, close the original trade
+            logger.info(f"Remaining quantity for {original_trade_id} is zero. Marking as CLOSED.")
+            self.db_manager.update_trade(original_trade_id, {'status': 'CLOSED', 'remaining_quantity': Decimal('0')})
+
+    def close_forced_position(self, trade_id: str, sell_result: dict, realized_pnl_usd: Decimal):
+        """
+        Records a new 'sell' trade to close a position after a forced sell,
+        and updates the original 'buy' trade's status to 'CLOSED'.
+
+        Args:
+            trade_id: The ID of the original 'buy' trade to close.
+            sell_result: The result from trader.execute_sell(), containing the
+                         actual price, quantity, and usd_value of the sale.
+            realized_pnl_usd: The calculated profit or loss for this trade.
+        """
+        logger.info(f"Force closing position {trade_id} with PnL: ${realized_pnl_usd:.2f}")
+
+        original_trade = self.db_manager.get_trade_by_trade_id(trade_id)
+        if not original_trade:
+            logger.error(f"Could not find original trade {trade_id} to close. Aborting.")
+            return
+
+        # 1. Create a new 'sell' record
+        sell_trade_id = str(uuid.uuid4())
+        
+        # Explicitly construct the dictionary to ensure type safety and handle the timestamp correctly.
+        # The 'timestamp' from the trader response is an integer, but TradeLogger expects a datetime object.
+        buy_usd_value = Decimal(str(original_trade.price)) * Decimal(str(sell_result['quantity']))
+        pnl_percentage = (Decimal(str(realized_pnl_usd)) / buy_usd_value) * 100 if buy_usd_value != 0 else 0
+
+        decision_context = sell_result.get('decision_context', {})
+        decision_context['pnl_percentage'] = f"{pnl_percentage:.2f}"
+
+        sell_data = {
             'run_id': self.bot_id,
+            'environment': self.mode,
+            'strategy_name': original_trade.strategy_name,
+            'symbol': original_trade.symbol,
             'trade_id': sell_trade_id,
+            'linked_trade_id': trade_id,
+            'exchange': original_trade.exchange,
             'status': 'CLOSED',
             'order_type': 'sell',
-            'decision_context': {
-                **sell_data.get('decision_context', {}),
-                'closing_partial_trade_id': original_trade_id
-            }
-        }
-        self.trade_logger.log_trade(sell_trade_data)
-
-        # Step 2: If there's a remainder, create a new 'TREASURY' position for it.
-        if remaining_quantity > Decimal('0'):
-            original_trade = self.db_manager.get_trade_by_trade_id(original_trade_id)
-            if not original_trade:
-                logger.error(f"Could not find original trade {original_trade_id} to create treasury position. Aborting treasury creation.")
-                # We should still close the original position to avoid inconsistent state
-                self.db_manager.update_trade_status(original_trade_id, 'CLOSED')
-                return
-
-            treasury_trade_id = str(uuid.uuid4())
-            logger.info(f"Creating new TREASURY position {treasury_trade_id} with remaining quantity: {remaining_quantity:.8f}")
-
-            buy_price = Decimal(str(original_trade.price))
-            treasury_usd_value = remaining_quantity * buy_price
-
-            treasury_data = {
-                'run_id': self.bot_id,
-                'environment': self.mode,
-                'strategy_name': original_trade.strategy_name,
-                'symbol': original_trade.symbol,
-                'trade_id': treasury_trade_id,
-                'exchange': original_trade.exchange,
-                'status': 'TREASURY',
-                'order_type': 'buy',
-                'price': buy_price,
-                'quantity': remaining_quantity,
-                'usd_value': treasury_usd_value,
-                'timestamp': original_trade.timestamp,
-                'decision_context': {'source': 'treasury', 'original_trade_id': original_trade_id}
-            }
-            self.trade_logger.log_trade(treasury_data)
-
-        # Step 3: Close the original position, as it's now fully accounted for.
-        logger.info(f"Closing original position {original_trade_id} after partial sell and treasury creation.")
-        self.db_manager.update_trade_status(original_trade_id, 'CLOSED')
-
-
-    def close_position(self, trade_id: str, exit_data: dict, is_partial_close: bool = True):
-        """
-        Logs the closing of a trade.
-        If this is the final closing of a position (not a partial sell), it updates the original record.
-        If it's a partial sell, this function is now a legacy path and the new record_partial_sell should be used.
-        """
-        logger.info(f"Closing position for trade_id: {trade_id}")
-
-        # The original implementation of this function was flawed because it overwrote the buy record
-        # with sell information. The new `record_partial_sell` is the correct path for partial sells.
-        # This function will now only handle the final closing of a position.
-
-        if is_partial_close:
-             # This indicates a logic error - close_position should not be called for partials anymore.
-             logger.warning("close_position was called for a partial sell. This is a deprecated path. Please use record_partial_sell.")
-             # Fallback to old logic to avoid crashing, but this is not ideal.
-             pass
-
-        trade_data = {
-            **exit_data,
-            'run_id': self.bot_id,
-            'trade_id': trade_id,
-            'status': 'CLOSED',
-            'order_type': 'sell',
-            'strategy_name': exit_data.get('strategy_name', 'default'),
-            'exchange': exit_data.get('exchange', 'binance')
+            'price': original_trade.price,
+            'quantity': Decimal(str(sell_result['quantity'])),
+            'usd_value': buy_usd_value,
+            'sell_price': Decimal(str(sell_result['price'])),
+            'sell_usd_value': Decimal(str(sell_result['usd_value'])),
+            'commission': Decimal(str(sell_result.get('commission', '0'))),
+            'commission_asset': sell_result.get('commission_asset'),
+            'timestamp': datetime.utcfromtimestamp(sell_result['timestamp'] / 1000).replace(tzinfo=timezone.utc),
+            'exchange_order_id': sell_result.get('exchange_order_id'),
+            'binance_trade_id': sell_result.get('binance_trade_id'),
+            'decision_context': decision_context,
+            'realized_pnl_usd': realized_pnl_usd,
         }
 
-        self.trade_logger.log_trade(trade_data)
+        self.trade_logger.log_trade(sell_data)
+        logger.info(f"Created new SELL record {sell_trade_id} for forced sell of {trade_id} with PnL: ${realized_pnl_usd:.2f}.")
+
+        # 2. Update the original 'buy' trade to be closed
+        self.db_manager.update_trade_status(trade_id, 'CLOSED')
+        logger.info(f"Updated original BUY record {trade_id} status to 'CLOSED'.")
+
+    def record_sell_failure(self, trade_id: str, reason: dict):
+        """
+        Updates the status of a trade to 'SELL_ABORTED' after a failed execution.
+        """
+        logger.warning(f"Recording sell failure for trade {trade_id}. Reason: {reason}")
+        context_update = {
+            "sell_failure_reason": reason,
+            "last_update_time": datetime.utcnow().isoformat()
+        }
+        self.db_manager.update_trade_status_and_context(
+            trade_id=trade_id,
+            new_status='SELL_ABORTED',
+            context_update=context_update
+        )

@@ -24,9 +24,7 @@ from sqlalchemy import desc
 class CorePriceCollector:
     def __init__(self, bucket_name: Optional[str] = None):
         logger.info("Initializing CorePriceCollector...")
-        db_config = config_manager.get_db_config('POSTGRES')
-        
-        self.db_manager = PostgresManager(config=db_config)
+        self.db_manager = PostgresManager()
         self.binance_client = None  # Initialize as None. Will be connected on demand.
         self.symbol = config_manager.get('APP', 'symbol')
         self.interval = config_manager.get('DATA', 'interval', fallback='1m')

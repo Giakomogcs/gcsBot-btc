@@ -1,12 +1,13 @@
 # Ficheiro: requirements.txt (VERSÃO DEFINITIVA E ALINHADA)
 
 # --- Core Libraries ---
-numpy==1.26.4
+numpy
 pandas
 setuptools
 
 # --- Machine Learning & AI ---
-scikit-learn
+optuna
+# scikit-learn
 # optuna-integration # Comentado - Descomente apenas se o seu código o usar explicitamente
 # stable-baselines3 # Comentado - Para uso futuro em Reinforcement Learning
 # gymnasium # Comentado - Para uso futuro em Reinforcement Learning
@@ -18,6 +19,8 @@ sqlalchemy
 psycopg2-binary
 alembic
 httpx
+fastapi
+uvicorn
 
 # --- Technical Analysis ---
 # ta # Comentado - pandas-ta geralmente cobre tudo
@@ -29,13 +32,18 @@ python-dotenv
 tqdm
 joblib
 tabulate
-psycopg2-binary
+questionary
 
 # --- Plotting ---
 matplotlib
 seaborn
 textual
+textual-plotext
+textual-timepiece
+whenever
+pytz
 
 # --- Testing ---
 pytest
 aiocsv
+psutil
