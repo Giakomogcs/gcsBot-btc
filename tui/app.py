@@ -686,7 +686,7 @@ class TUIApp(App):
             current_value = pos['current_value']
             local_timestamp = datetime.fromisoformat(pos['timestamp'])
             timestamp = local_timestamp.strftime('%Y-%m-%d %H:%M')
-            trailing_icon = "🛡️" if pos.get("is_smart_trailing_active") else ""
+            trailing_icon = "🛡️" if pos.get("is_smart_trailing_active") else " "
             peak_pnl = Decimal(pos.get('smart_trailing_highest_profit', 0))
             peak_pnl_str = f"${peak_pnl:,.2f}" if peak_pnl > 0 else "N/A"
             trail_pct = Decimal(pos.get('current_trail_percentage', 0))

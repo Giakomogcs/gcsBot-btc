@@ -1,18 +1,10 @@
 [
     {
-        "bot_name": "marcos-bot",
-        "container_id": "a04f7f28529e2b823e98a07b7b701c9fb170f729b1833916d4668aef90cc74d4",
+        "bot_name": "gpt_bot",
+        "container_id": "cf981ad7d480ffc2ac2096aa63c7b41c3fb61559db4cf32c08b4d38a481a6d8c",
         "bot_mode": "test",
-        "start_time": "2025-09-11T23:46:16.618928",
+        "start_time": "2025-09-12T00:09:34.782337",
         "host_port": 8766,
-        "process_type": "bot"
-    },
-    {
-        "bot_name": "gcs-bot",
-        "container_id": "d7cbeab39c0ef2b0d57f390cbd823b6a62b0d16624de22fa0c189b9c707a3337",
-        "bot_mode": "test",
-        "start_time": "2025-09-11T23:52:09.793276",
-        "host_port": 8767,
         "process_type": "bot"
     }
 ]

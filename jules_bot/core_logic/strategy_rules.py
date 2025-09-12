@@ -16,7 +16,8 @@ class StrategyRules:
         self.base_usd_per_trade = self._safe_get_decimal('base_usd_per_trade', '20.0')
         self.sell_factor = self._safe_get_decimal('sell_factor', '0.9')
         self.commission_rate = self._safe_get_decimal('commission_rate', '0.001')
-        self.trailing_stop_profit = self._safe_get_decimal('trailing_stop_profit', '0.10')
+        self.trailing_stop_profit = self._safe_get_decimal('trailing_stop_profit', '0.02')
+        logger.info(f"Trailing stop profit target loaded as: {self.trailing_stop_profit}")
         
         # --- Standard (Fixed) Trailing Stop ---
         self.fixed_trail_percentage = self._safe_get_decimal('dynamic_trail_percentage', '0.02')  # Legacy key
