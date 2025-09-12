@@ -580,11 +580,11 @@ class PostgresManager:
                     filters.append(Trade.order_type == order_type)
                 if status:
                     filters.append(Trade.status == status)
-                # NOTE: The bot_id filter (run_id) is used to isolate trades for a specific bot RUN.
-                # This is crucial for features like the CapitalManager's difficulty factor, which
-                # should not be influenced by previous runs of the same bot.
-                if bot_id:
-                    filters.append(Trade.run_id == bot_id)
+                # The bot_id (run_id) filter is intentionally omitted here for the difficulty
+                # calculation. We want the difficulty to be based on the bot's overall
+                # recent activity, even across restarts, to prevent the reset issue.
+                # The query is already scoped to the bot's schema and environment (mode).
+                pass
 
                 # Handle start_date
                 if start_date:
