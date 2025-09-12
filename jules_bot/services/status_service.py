@@ -181,8 +181,14 @@ class StatusService:
                 pos['unrealized_pnl'] for pos in positions_status
             )
             net_total_pnl = total_realized_pnl + total_unrealized_pnl
+
+            # Filter for buy trades only to get the correct total trade count
+            buy_trades = [
+                trade for trade in full_trade_history if trade.order_type == 'buy'
+            ]
+            total_trades_count = len(buy_trades)
             trade_history_dicts = [trade.to_dict() for trade in full_trade_history]
-            total_trades_count = len(trade_history_dicts)
+
 
             # --- Capital Allocation Calculation ---
             total_btc_balance = next((bal['total'] for bal in wallet_balances if bal['asset'] == 'BTC'), Decimal('0'))

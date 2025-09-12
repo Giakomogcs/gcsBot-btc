@@ -197,9 +197,10 @@ class Backtester:
                         )
                         hodl_asset_amount = original_quantity - sell_quantity
 
+                        sell_trade_id = str(uuid.uuid4())
                         trade_data = {
                             'run_id': self.run_id, 'strategy_name': strategy_name, 'symbol': symbol,
-                            'trade_id': trade_id, 'linked_trade_id': trade_id, # Link sell to buy
+                            'trade_id': sell_trade_id, 'linked_trade_id': trade_id, # Link sell to buy
                             'exchange': "backtest_engine", 'order_type': "sell",
                             'status': "CLOSED", 'price': sell_result['price'], 'quantity': sell_result['quantity'],
                             'usd_value': sell_result['usd_value'], 'commission': sell_result.get('commission_usd', Decimal('0')),
@@ -286,9 +287,16 @@ class Backtester:
                 # This is a new position, so we create a new record.
                 self.trade_logger.log_trade(trade_data)
             elif trade_data.get('order_type') == 'sell':
-                # This is a closing trade, so we update the original record.
-                # The `update_trade` method in the logger handles the data mapping.
-                self.trade_logger.update_trade(trade_data)
+                # Log the sell as a new, separate trade
+                self.trade_logger.log_trade(trade_data)
+
+                # Now, update the original buy trade to set its status to CLOSED
+                # The `update_trade` method uses the trade_id from the dict to find the record,
+                # so we create a new dict with the linked_trade_id as the trade_id.
+                update_data = trade_data.copy()
+                update_data['trade_id'] = trade_data.get('linked_trade_id')
+
+                self.trade_logger.update_trade(update_data)
             else:
                 logger.warning(f"Unknown order type in backtest log: {trade_data.get('order_type')}")
 
@@ -419,8 +427,8 @@ class Backtester:
         profit_factor = Decimal(0)
 
         if not all_trades_df.empty:
-            sell_trades = all_trades_df[all_trades_df['status'] == 'CLOSED'].copy()
             buy_trades = all_trades_df[all_trades_df['order_type'] == 'buy'].copy()
+            sell_trades = all_trades_df[all_trades_df['order_type'] == 'sell'].copy()
             buy_trades_count = len(buy_trades)
             sell_trades_count = len(sell_trades)
 
@@ -512,7 +520,7 @@ class Backtester:
             except (ZeroDivisionError, ValueError, TypeError):
                 calmar_ratio = Decimal(0)
 
-        final_cash_balance = self.mock_trader.balance_usd
+        final_cash_balance = self.mock_trader.get_account_balance()
         final_open_positions_value = final_balance - final_cash_balance
 
         results = {
