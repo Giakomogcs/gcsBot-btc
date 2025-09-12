@@ -223,9 +223,11 @@ class TestConsecutiveBuyDifficulty(unittest.TestCase):
         difficulty = self.capital_manager._calculate_difficulty_factor(trade_history)
         self.assertEqual(difficulty, Decimal('0.006'))
 
-    def test_difficulty_resets_after_sell(self):
-        """A sell should break the streak and reset difficulty to 0."""
+    def test_difficulty_is_reduced_by_sell(self):
+        """A sell should reduce the net buys count, not reset it completely."""
+        # 6 buys and 1 sell = 5 net buys. This is the threshold.
+        # So, difficulty should be the base rate.
         trade_history = [self.create_mock_trade('buy', i) for i in range(6)]
         trade_history.insert(2, self.create_mock_trade('sell', 2.5)) # A sell in the middle
         difficulty = self.capital_manager._calculate_difficulty_factor(trade_history)
-        self.assertEqual(difficulty, 0)
+        self.assertEqual(difficulty, self.capital_manager.base_difficulty_percentage)

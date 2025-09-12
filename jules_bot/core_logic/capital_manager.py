@@ -220,27 +220,21 @@ class CapitalManager:
 
         logger.info(f"Calculating difficulty factor based on {len(sorted_trades)} recent trades.")
 
-        consecutive_buys = 0
+        net_buys = 0
         for trade in sorted_trades:
             order_type = get_attribute(trade, 'order_type')
             if order_type and order_type.lower() == 'buy':
-                consecutive_buys += 1
+                net_buys += 1
             elif order_type and order_type.lower() == 'sell':
-                logger.info(f"Consecutive buy streak broken by a recent sell. Streak was {consecutive_buys}.")
-                break
+                net_buys -= 1
 
-        if consecutive_buys < self.consecutive_buys_threshold:
-            logger.info(f"No difficulty applied. Consecutive buys ({consecutive_buys}) is below threshold ({self.consecutive_buys_threshold}).")
+        effective_buys = max(0, net_buys)
+
+        if effective_buys < self.consecutive_buys_threshold:
+            logger.info(f"No difficulty applied. Net buys ({effective_buys}) is below threshold ({self.consecutive_buys_threshold}).")
             return Decimal('0')
 
-        # --- Difficulty Calculation ---
-        # The first buy at or over the threshold triggers the base difficulty.
-        # Each buy after that adds an increment.
-        # Example: Threshold = 5.
-        # 5 buys -> additional_buys = 0. Difficulty = base.
-        # 6 buys -> additional_buys = 1. Difficulty = base + 1 * increment.
-
-        buys_over_threshold = consecutive_buys - self.consecutive_buys_threshold
+        buys_over_threshold = effective_buys - self.consecutive_buys_threshold
 
         base_difficulty = self.base_difficulty_percentage
         additional_difficulty = Decimal(buys_over_threshold) * self.per_buy_difficulty_increment
@@ -248,7 +242,7 @@ class CapitalManager:
 
         logger.info(
             f"Difficulty applied: {total_difficulty:.4%}. "
-            f"Streak: {consecutive_buys} buys. "
+            f"Net Buys: {effective_buys}. "
             f"Threshold: {self.consecutive_buys_threshold}. "
             f"Base: {base_difficulty:.2%}. "
             f"Increment: {self.per_buy_difficulty_increment:.2%} x {buys_over_threshold} buys over threshold."
