@@ -344,7 +344,9 @@ class Backtester:
         # Performance
         pnl_style = "bold green" if results['net_pnl_usd'] > 0 else "bold red" if results['net_pnl_usd'] < 0 else "default"
         perf_table.add_row("Initial Balance", format_value(results['initial_balance'], 'money'))
-        perf_table.add_row("Final Balance", format_value(results['final_balance'], 'money'))
+        perf_table.add_row("Final Cash Balance", format_value(results.get('final_cash_balance'), 'money'))
+        perf_table.add_row("Open Positions Value", format_value(results.get('final_open_positions_value'), 'money'))
+        perf_table.add_row("Final Total Balance", format_value(results['final_balance'], 'money'))
         perf_table.add_row("Net PnL", f"[{pnl_style}]{format_value(results['net_pnl_usd'], 'money')} ({format_value(results['net_pnl_pct'], 'percent')})[/{pnl_style}]")
         perf_table.add_row("Total Realized PnL", format_value(results['total_realized_pnl'], 'money'))
 
@@ -507,9 +509,14 @@ class Backtester:
             except (ZeroDivisionError, ValueError, TypeError):
                 calmar_ratio = Decimal(0)
 
+        final_cash_balance = self.mock_trader.balance_usd
+        final_open_positions_value = final_balance - final_cash_balance
+
         results = {
             "initial_balance": initial_balance,
             "final_balance": final_balance,
+            "final_cash_balance": final_cash_balance,
+            "final_open_positions_value": final_open_positions_value,
             "net_pnl_usd": net_pnl,
             "net_pnl_pct": net_pnl_percent,
             "total_realized_pnl": total_realized_pnl,

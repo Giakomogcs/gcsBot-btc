@@ -31,7 +31,7 @@ class StatusService:
         self.capital_manager = CapitalManager(self.config_manager, self.strategy)
 
 
-    def update_bot_status(self, bot_id: str, mode: str, reason: str, open_positions: int, portfolio_value: Decimal, market_regime: int, operating_mode: str, buy_target: Decimal, buy_progress: Decimal):
+    def update_bot_status(self, bot_id: str, mode: str, reason: str, open_positions: int, portfolio_value: Decimal, market_regime: int, operating_mode: str, buy_target: Decimal, buy_progress: Decimal, cash_balance: Decimal, invested_value: Decimal):
         """
         Creates or updates the status of a bot in the database.
         """
@@ -45,6 +45,8 @@ class StatusService:
                 status.last_buy_condition = reason
                 status.open_positions = int(open_positions)
                 status.portfolio_value_usd = portfolio_value
+                status.cash_balance_usd = cash_balance
+                status.invested_value_usd = invested_value
                 status.market_regime = int(market_regime)
                 status.operating_mode = operating_mode
                 status.buy_target = buy_target

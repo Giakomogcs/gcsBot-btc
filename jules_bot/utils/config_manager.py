@@ -95,14 +95,14 @@ class ConfigManager:
 
     def get(self, section: str, key: str, fallback: str = None) -> str:
         """
-        Retrieves a specific key, prioritizing overrides, then environment variables,
-        then the config file.
-        The lookup order is:
-        1. Temporary override dictionary (for optimization)
-        2. Bot-specific environment variable (e.g., MYBOT_MAX_TRADE_SIZE_USDT)
-        3. Generic environment variable (e.g., MAX_TRADE_SIZE_USDT)
-        4. Value from the .ini file (which can itself be an @env/ pointer)
-        5. The provided fallback value.
+        Retrieves a specific key from the configuration.
+        The lookup order is as follows:
+        1. Temporary override dictionary (used for optimization).
+        2. The value from the .ini file, which can be a literal value or an
+           @env/ pointer to an environment variable.
+        3. The provided fallback value.
+        This ensures that the .ini file is the single source of truth for which
+        environment variables are used.
         """
         env_key_name = key.upper()
 
@@ -110,26 +110,14 @@ class ConfigManager:
         if self.overrides and env_key_name in self.overrides:
             return self.overrides[env_key_name]
 
-        # 2. Check for bot-specific environment variable (e.g., MY-BOT_MAX_TRADE_SIZE_USDT)
-        if self.bot_name:
-            bot_specific_env_key = f"{self.bot_name.upper().replace('-', '_')}_{env_key_name}"
-            value = os.getenv(bot_specific_env_key)
-            if value is not None:
-                return value
-
-        # 3. Check for generic environment variable
-        value = os.getenv(env_key_name)
-        if value is not None:
-            return value
-
-        # 4. If no direct env var, fall back to the existing .ini logic
+        # 2. Get the raw value from the .ini file
         raw_value = self.config.get(section, key, fallback=None)
 
         if raw_value is None:
             # The key was not found in the .ini file at all.
             return fallback
 
-        # The key exists in the .ini, now try to resolve its value (e.g., from an @env/ pointer).
+        # 3. Resolve the value (e.g., from an @env/ pointer).
         resolved_value = self._resolve_value(raw_value)
 
         if resolved_value is None:

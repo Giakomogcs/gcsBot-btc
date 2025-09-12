@@ -39,6 +39,8 @@ class LivePortfolioManager:
         self.recalculation_interval = recalculation_interval
         self.last_recalculation_time = 0
         self.cached_portfolio_value = Decimal('0.0')
+        self.cached_cash_balance = Decimal('0.0')
+        self.cached_open_positions_value = Decimal('0.0')
         self.symbol = config_manager.get('APP', 'symbol')
 
     def get_total_portfolio_value(self, current_price: Decimal, force_recalculation: bool = False) -> Decimal:
@@ -46,18 +48,18 @@ class LivePortfolioManager:
         if force_recalculation or (current_time - self.last_recalculation_time > self.recalculation_interval):
             logger.info("Recalculating portfolio equity...")
             try:
-                cash_balance = Decimal(self.trader.get_account_balance(asset=self.quote_asset))
+                self.cached_cash_balance = Decimal(self.trader.get_account_balance(asset=self.quote_asset))
                 open_positions = self.state_manager.get_open_positions()
 
-                open_positions_value = sum(
+                self.cached_open_positions_value = sum(
                     Decimal(p.remaining_quantity) * current_price for p in open_positions
                 )
 
-                self.cached_portfolio_value = cash_balance + open_positions_value
+                self.cached_portfolio_value = self.cached_cash_balance + self.cached_open_positions_value
                 self.last_recalculation_time = current_time
                 logger.info(f"Portfolio equity recalculated: ${self.cached_portfolio_value:,.2f}")
 
-                self._create_db_snapshot(cash_balance, open_positions_value, current_price)
+                self._create_db_snapshot(self.cached_cash_balance, self.cached_open_positions_value, current_price)
 
             except Exception as e:
                 logger.error(f"Error during portfolio value calculation: {e}", exc_info=True)
@@ -531,10 +533,16 @@ class TradingBot:
             reason = self.last_decision_reason
             operating_mode = self.last_operating_mode
             buy_target, buy_progress = calculate_buy_progress(market_data, current_params, self.last_difficulty_factor)
+            
+            # Get balance breakdown from the portfolio manager
+            cash_balance = self.live_portfolio_manager.cached_cash_balance
+            invested_value = self.live_portfolio_manager.cached_open_positions_value
+            
             self.status_service.update_bot_status(
                 bot_id=self.bot_name, mode=self.mode, reason=reason, open_positions=len(open_positions),
                 portfolio_value=total_portfolio_value, market_regime=current_regime, operating_mode=operating_mode,
-                buy_target=buy_target, buy_progress=buy_progress
+                buy_target=buy_target, buy_progress=buy_progress,
+                cash_balance=cash_balance, invested_value=invested_value
             )
             status_dir = ".tui_files"
             os.makedirs(status_dir, mode=0o777, exist_ok=True)

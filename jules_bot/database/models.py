@@ -83,6 +83,8 @@ class BotStatus(Base):
     session_pnl_percent = Column(Numeric(20, 8), default=0.0)
     open_positions = Column(Integer, default=0)
     portfolio_value_usd = Column(Numeric(20, 8), default=0.0)
+    cash_balance_usd = Column(Numeric(20, 8), default=0.0)
+    invested_value_usd = Column(Numeric(20, 8), default=0.0)
     market_regime = Column(Integer)
     operating_mode = Column(String)
     buy_target = Column(Numeric(20, 8))

@@ -64,11 +64,11 @@ class DynamicParameters:
             logger.warning(f"'{section_name}' is missing 'buy_dip_percentage'. Using a safe, non-trading fallback of {buy_dip_fallback}.")
 
         # 2. Sell Rise Percentage
-        # First, try 'sell_rise_percentage'.
-        # Second, fall back to 'target_profit' from the same regime section.
-        # Finally, use a hardcoded default if neither is found.
-        target_profit_fallback = self.config_manager.get(section_name, 'target_profit', fallback='0.01')
-        sell_rise_percentage = self._safe_get_decimal(section_name, 'sell_rise_percentage', target_profit_fallback)
+        # Fallback to a default value if not defined for the regime.
+        sell_rise_fallback = '0.01'  # 1%
+        sell_rise_percentage = self._safe_get_decimal(section_name, 'sell_rise_percentage', sell_rise_fallback)
+        if sell_rise_percentage == Decimal(sell_rise_fallback):
+            logger.warning(f"'{section_name}' is missing 'sell_rise_percentage'. Using a default of {sell_rise_fallback}.")
 
         # 3. Order Size
         # Fallback to a default value from the main strategy section if not defined for the regime.

@@ -51,7 +51,8 @@ def test_calculate_realized_pnl(mock_config_manager):
         sell_price=sell_price_profit,
         quantity_sold=quantity_sold,
         buy_commission_usd=Decimal('0.1'),
-            sell_commission_usd=Decimal('0.11')
+            sell_commission_usd=Decimal('0.11'),
+            buy_quantity=quantity_sold  # Assume full sale for this test
     )
 
     # Assert
@@ -68,7 +69,8 @@ def test_calculate_realized_pnl(mock_config_manager):
         sell_price=sell_price_loss,
         quantity_sold=quantity_sold,
         buy_commission_usd=Decimal('0.1'),
-            sell_commission_usd=Decimal('0.09')
+        sell_commission_usd=Decimal('0.09'),
+        buy_quantity=quantity_sold
     )
 
     # Assert
@@ -84,7 +86,8 @@ def test_calculate_realized_pnl(mock_config_manager):
         sell_price=sell_price_breakeven,
         quantity_sold=quantity_sold,
         buy_commission_usd=Decimal('0.1'),
-            sell_commission_usd=Decimal('0.1002002')
+        sell_commission_usd=Decimal('0.1002002'),
+        buy_quantity=quantity_sold
     )
 
     # Assert
