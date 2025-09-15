@@ -319,42 +319,75 @@ class TradingBot:
         if not positions_to_sell_now:
             return
 
-        logger.info(f"Found {len(positions_to_sell_now)} positions that passed the final profitability check.")
-        # Use remaining_quantity for accurate sell calculation
-        total_sell_quantity = sum(Decimal(str(p.remaining_quantity)) * self.strategy_rules.sell_factor for p in positions_to_sell_now)
-        available_balance = Decimal(self.trader.get_account_balance(asset=base_asset))
+        logger.info(f"Found {len(positions_to_sell_now)} positions that passed the final profitability check. Consolidating into a single sell order.")
 
-        if total_sell_quantity > available_balance:
-            logger.critical(f"INSUFFICIENT BALANCE & STATE DESYNC: Attempting to sell {total_sell_quantity:.8f} {base_asset}, but only {available_balance:.8f} is available.")
+        # --- Aggregation Logic ---
+        # This logic assumes a sell_factor of 1 (100% sell). Partial sells are not compatible with this consolidated approach.
+        total_quantity_to_sell = sum(Decimal(str(p.remaining_quantity)) for p in positions_to_sell_now)
+
+        # --- Balance and Minimums Check ---
+        available_balance = Decimal(self.trader.get_account_balance(asset=base_asset))
+        if total_quantity_to_sell > available_balance:
+            logger.critical(f"INSUFFICIENT BALANCE & STATE DESYNC: Attempting to sell {total_quantity_to_sell:.8f} {base_asset}, but only {available_balance:.8f} is available.")
             return
+
+        notional_value = total_quantity_to_sell * current_price
+        if notional_value < self.trader.min_notional:
+            logger.warning(f"Consolidated sell aborted. Notional value ${notional_value:,.2f} is below exchange minimum ${self.trader.min_notional:,.2f}.")
+            return
+
+        # --- Single Sell Execution ---
+        # Create a dummy trade_id for the consolidated sell log, it is not persisted.
+        sell_data = {'quantity': total_quantity_to_sell, 'trade_id': str(uuid.uuid4())}
+        success, sell_result = self.trader.execute_sell(sell_data, self.run_id, market_data)
+
+        if not success:
+            logger.error(f"Consolidated sell of {total_quantity_to_sell:.8f} {base_asset} failed. No positions will be closed.")
+            # Optionally, record a failure for each individual trade
+            error_reason = sell_result if (sell_result and 'error' in sell_result) else {"error": "Unknown consolidated sell error"}
+            for position in positions_to_sell_now:
+                self.state_manager.record_sell_failure(position.trade_id, error_reason)
+            return
+
+        # --- Process Results for Each Position Post-Sale ---
+        logger.info(f"Consolidated sell successful. Processing {len(positions_to_sell_now)} individual positions.")
+        avg_sell_price = Decimal(str(sell_result.get('price', '0')))
+        total_commission_usd = Decimal(str(sell_result.get('commission_usd', '0')))
 
         for position in positions_to_sell_now:
             trade_id = position.trade_id
-            # Use REMAINING quantity for sell calculation
-            remaining_quantity = Decimal(str(position.remaining_quantity))
-            sell_quantity = remaining_quantity * self.strategy_rules.sell_factor
-            hodl_asset_amount = remaining_quantity - sell_quantity
-            
-            # The ORIGINAL quantity is still needed for PnL calculation cost basis
-            original_buy_quantity = Decimal(str(position.quantity))
+            quantity_sold = Decimal(str(position.remaining_quantity))
 
-            sell_position_data = position.to_dict()
-            sell_position_data['quantity'] = sell_quantity
-            success, sell_result = self.trader.execute_sell(sell_position_data, self.run_id, market_data)
-            if success:
-                buy_price = Decimal(str(position.price))
-                sell_price = Decimal(str(sell_result.get('price', '0')))
-                sell_commission_usd = Decimal(str(sell_result.get('commission_usd', '0')))
-                realized_pnl_usd = self.strategy_rules.calculate_realized_pnl(buy_price, sell_price, sell_quantity, Decimal(str(position.commission_usd or '0')), sell_commission_usd, original_buy_quantity)
-                hodl_asset_value_at_sell = hodl_asset_amount * current_price
-                sell_result.update({"realized_pnl_usd": realized_pnl_usd, "hodl_asset_amount": hodl_asset_amount, "hodl_asset_value_at_sell": hodl_asset_value_at_sell})
-                self.state_manager.record_partial_sell(original_trade_id=trade_id, remaining_quantity=hodl_asset_amount, sell_data=sell_result)
-                self.live_portfolio_manager.get_total_portfolio_value(current_price, force_recalculation=True)
-            else:
-                logger.error(f"Sell execution failed for position {trade_id}. Recording failure in database.")
-                # If sell_result is None or doesn't contain an error, provide a default one.
-                error_reason = sell_result if (sell_result and 'error' in sell_result) else {"error": "Unknown error from trader"}
-                self.state_manager.record_sell_failure(trade_id, error_reason)
+            # Pro-rate the commission for this specific position's contribution to the batch
+            pro_rata_commission_usd = (total_commission_usd * quantity_sold) / total_quantity_to_sell if total_quantity_to_sell > 0 else Decimal('0')
+
+            realized_pnl_usd = self.strategy_rules.calculate_realized_pnl(
+                buy_price=Decimal(str(position.price)),
+                sell_price=avg_sell_price,
+                quantity_sold=quantity_sold,
+                buy_commission_usd=Decimal(str(position.commission_usd or '0')),
+                sell_commission_usd=pro_rata_commission_usd,
+                buy_quantity=Decimal(str(position.quantity))
+            )
+
+            # Create a sell_result specific to this trade for record-keeping
+            individual_sell_result = sell_result.copy()
+            individual_sell_result.update({
+                "realized_pnl_usd": realized_pnl_usd,
+                "hodl_asset_amount": Decimal('0'), # Assumes 100% sell
+                "hodl_asset_value_at_sell": Decimal('0')
+            })
+            
+            # Since we sold 100%, we record a partial sell with 0 remaining quantity,
+            # which will mark the original trade as CLOSED.
+            self.state_manager.record_partial_sell(
+                original_trade_id=trade_id,
+                remaining_quantity=Decimal('0'),
+                sell_data=individual_sell_result
+            )
+
+        # Recalculate portfolio value once at the end
+        self.live_portfolio_manager.get_total_portfolio_value(current_price, force_recalculation=True)
 
     def _evaluate_and_execute_buy(self, market_data, open_positions, current_params, current_regime, current_price):
         cash_balance = Decimal(self.trader.get_account_balance("USDT"))
@@ -592,10 +625,6 @@ class TradingBot:
             temp_path = status_file_path + ".tmp"
             with open(temp_path, "w") as f:
                 json.dump(status_data, f, default=str)
-
-            # Set permissions to be world-writable to avoid permission errors in Docker
-            os.chmod(temp_path, 0o666)
-
             os.rename(temp_path, status_file_path)
             logger.info("Status file update complete.")
         except Exception as e:
@@ -636,10 +665,6 @@ class TradingBot:
             temp_path = status_file_path + ".tmp"
             with open(temp_path, "w") as f:
                 json.dump(status_data, f, default=str)
-
-            # Set permissions to be world-writable to avoid permission errors in Docker
-            os.chmod(temp_path, 0o666)
-
             os.rename(temp_path, status_file_path)
             logger.info("Sync status file update complete.")
         except Exception as e:

@@ -33,46 +33,29 @@ Para evitar a exaustão de capital durante tendências de baixa prolongadas, o r
 - **Como Funciona:** Após um número configurável de compras consecutivas (definido por `STRATEGY_RULES_CONSECUTIVE_BUYS_THRESHOLD`), o robô aumenta a exigência para novas compras. Em vez de comprar após uma queda de X%, ele passará a exigir uma queda de X+1, X+2, e assim por diante.
 - **Reset da Dificuldade:** A dificuldade é zerada se ocorrer uma venda ou se não houver novas compras dentro de um período de tempo configurável (`STRATEGY_RULES_DIFFICULTY_RESET_TIMEOUT_HOURS`).
 
-### Detecção de Regime Robusta com Fallback
+### Trailing Stop Dinâmico com Trava de Lucro
 
-Para garantir que o robô continue operando de forma inteligente mesmo em condições de mercado incertas, o sistema de detecção de regime foi aprimorado com duas camadas de robustez.
-
-- **Como Funciona:**
-  1.  **Suavização de Dados:** A lógica que calcula os indicadores de regime (como ATR e MACD) agora é mais resistente a falhas momentâneas nos dados da exchange. Se um dado de um candle falhar, o sistema usará o último valor válido, evitando que o cálculo do regime resulte em "indefinido" por um simples flicker.
-  2.  **Fallback para o Último Regime Válido:** Se, mesmo com a suavização, o regime atual não puder ser determinado, o robô não para mais de operar imediatamente. Em vez disso, ele usará o **último regime válido conhecido** por um período de tempo configurável (definido por `STRATEGY_RULES_REGIME_FALLBACK_TTL_SECONDS`).
-
-- **Benefício:** Esta abordagem evita que o robô fique "paralisado" em momentos de alta volatilidade ou de instabilidade nos dados, permitindo que ele continue a gerenciar posições e a buscar oportunidades com base no contexto de mercado mais recente e válido.
-
-### Trailing Stop Ágil com Dupla Camada de Proteção
-
-Para maximizar os ganhos e proteger o capital de forma robusta, o robô utiliza uma estratégia de trailing stop com uma dupla camada de segurança, combinando uma abordagem percentual e uma de valor absoluto.
+Para maximizar os ganhos e, ao mesmo tempo, proteger o capital, o robô utiliza uma estratégia de trailing stop de nível profissional, que se torna mais flexível à medida que o lucro aumenta.
 
 - **Como Funciona:**
 
-  1.  **Ativação Inteligente:** O trailing stop é acionado quando o lucro não realizado da posição atinge o **maior** dos seguintes valores:
-      *   O lucro percentual definido para o regime de mercado atual (ex: `REGIME_1_TARGET_PROFIT`).
-      *   Um **piso de lucro mínimo absoluto em USD** (configurado por `STRATEGY_RULES_TRAILING_STOP_MIN_PROFIT_USD`).
+  1.  **Ativação (Trava de Lucro):** Quando uma posição atinge um lucro mínimo em dólar (configurado por `STRATEGY_RULES_TRAILING_STOP_PROFIT`), a "trava de segurança" é ativada. A partir desse ponto, o robô tentará sempre fechar a operação com lucro.
+  2.  **Cálculo do Trail Dinâmico:** Em vez de uma porcentagem fixa, o "trail" (a distância do stop ao preço máximo) começa com um valor mínimo e aumenta conforme o lucro da operação cresce. Isso permite um stop mais justo para lucros pequenos e um stop mais flexível para lucros maiores.
+  3.  **Lógica de "Não Retorno":** A porcentagem do trail, uma vez que aumenta, **nunca mais diminui** para aquela operação, mesmo que o lucro recue do seu pico. Isso garante que a proteção de lucro seja sempre mantida ou melhorada.
+  4.  **Execução:** Se o preço do ativo cair e atingir o preço de stop calculado, a venda é executada. Se, no momento da venda, a operação estiver com prejuízo (devido a uma queda extremamente rápida), a venda é cancelada e o trailing stop é resetado para aguardar uma nova oportunidade de lucro.
 
-  2.  **Dupla Camada de Segurança (O Gatilho de Venda):** Uma vez que o trailing está ativo, o robô monitora o pico de lucro da operação e calcula o gatilho de venda usando **duas lógicas ao mesmo tempo**. A venda ocorrerá no cenário que for **mais agressivo** (o que proteger mais o lucro):
-      *   **Lógica 1 (Queda Percentual):** Vender se o lucro cair uma porcentagem X do pico (controlado por `STRATEGY_RULES_DYNAMIC_TRAIL_PERCENTAGE` ou os parâmetros dinâmicos).
-      *   **Lógica 2 (Queda Absoluta):** Vender se o lucro cair um valor Y em dólares do pico (controlado pelo novo `STRATEGY_RULES_TRAILING_STOP_DROP_USD`).
-
-  3.  **Proteção de Lucro Mínimo:** Independentemente do cálculo acima, o robô **nunca** fechará a operação com um lucro inferior ao piso de USD configurado em `STRATEGY_RULES_TRAILING_STOP_MIN_PROFIT_USD`.
-
-- **Benefício:** Esta abordagem oferece o melhor dos dois mundos. Para lucros pequenos, a queda absoluta em USD (ex: $0.03) atua como uma rede de segurança forte e previsível. Para lucros maiores, a queda percentual se torna mais relevante, permitindo que a operação "respire" sem ser vendida prematuramente por pequenas oscilações.
+- **Benefício:** Esta abordagem permite que o robô "surfe" as tendências de alta de forma mais inteligente. Ele protege lucros pequenos de forma agressiva (com um trail curto) e dá mais espaço para a operação respirar quando os lucros já são significativos (com um trail mais longo), evitando vendas prematuras.
 
 - **Variáveis de Configuração:**
 
-| Variável                                             | Descrição                                                                                                                                                              | Valor Padrão |
-| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| `STRATEGY_RULES_USE_DYNAMIC_TRAILING_STOP`           | Ativa (`true`) ou desativa (`false`) a lógica de trail dinâmico, onde o percentual do trail aumenta com o lucro.                                                       | `true`       |
-| `STRATEGY_RULES_TRAILING_STOP_MIN_PROFIT_USD`        | O valor **mínimo absoluto de lucro em USD** que o trailing stop irá proteger. Atua como um piso para a ativação e para a venda final.                                   | `0.02`       |
-| `STRATEGY_RULES_TRAILING_STOP_DROP_USD`              | A **queda absoluta em USD** a partir do pico de lucro que dispara um gatilho de venda. Se `0`, esta lógica é ignorada.                                                  | `0.03`       |
-| `STRATEGY_RULES_DYNAMIC_TRAIL_PERCENTAGE`            | **(Trail Fixo)** A distância percentual do stop se o modo dinâmico (`USE_DYNAMIC_TRAILING_STOP`) estiver desativado.                                                   | `0.02`       |
-| `STRATEGY_RULES_DYNAMIC_TRAIL_MIN_PCT`               | **(Trail Dinâmico)** A **porcentagem mínima** inicial do trail.                                                                                                        | `0.01`       |
-| `STRATEGY_RULES_DYNAMIC_TRAIL_MAX_PCT`               | **(Trail Dinâmico)** A **porcentagem máxima** que o trail pode atingir.                                                                                                | `0.05`       |
-| `STRATEGY_RULES_DYNAMIC_TRAIL_PROFIT_SCALING`        | **(Trail Dinâmico)** O fator que controla a rapidez com que o trail aumenta em relação ao lucro.                                                                       | `0.1`        |
-| `STRATEGY_RULES_TRAILING_STOP_PROFIT`                | **(Legado)** Um valor de lucro em USD que serve como fallback para ativar o trail. É sobreposto pela nova lógica de `MIN_PROFIT_USD`.                                  | `0.02`       |
+| Variável                                      | Descrição                                                                                                                                   | Valor Padrão |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `STRATEGY_RULES_USE_DYNAMIC_TRAILING_STOP`    | Ativa (`true`) ou desativa (`false`) a lógica de trailing stop dinâmico. Se `false`, usará a porcentagem fixa definida abaixo.              | `true`       |
+| `STRATEGY_RULES_TRAILING_STOP_PROFIT`         | O valor de lucro em USD que ativa a "trava de segurança" do trailing stop.                                                                  | `0.02`       |
+| `STRATEGY_RULES_DYNAMIC_TRAIL_PERCENTAGE`     | **(Legado/Fixo)** A distância percentual do stop se o modo dinâmico estiver desativado.                                                     | `0.02`       |
+| `STRATEGY_RULES_DYNAMIC_TRAIL_MIN_PCT`        | A **porcentagem mínima** inicial do trail quando ele é ativado.                                                                             | `0.01`       |
+| `STRATEGY_RULES_DYNAMIC_TRAIL_MAX_PCT`        | A **porcentagem máxima** que o trail pode atingir, não importa quão alto seja o lucro.                                                      | `0.05`       |
+| `STRATEGY_RULES_DYNAMIC_TRAIL_PROFIT_SCALING` | O fator que controla a rapidez com que o trail aumenta em relação ao lucro. Um valor maior torna o trail mais sensível ao aumento de lucro. | `0.1`        |
 
 ## Pré-requisitos
 
@@ -164,8 +147,6 @@ Estas variáveis controlam a lógica de alto nível e as salvaguardas da estrat�
 | `STRATEGY_RULES_CONSECUTIVE_BUYS_THRESHOLD`          | O número de compras consecutivas antes que o fator de dificuldade comece a ser aplicado.                                    | `5`          |
 | `STRATEGY_RULES_DIFFICULTY_ADJUSTMENT_FACTOR`        | O multiplicador usado para aumentar a exigência de compra a cada nível de dificuldade.                                      | `0.005`      |
 | `STRATEGY_RULES_DIFFICULTY_RESET_TIMEOUT_HOURS`      | O número de horas sem compras após o qual o fator de dificuldade é resetado.                                                | `2`          |
-| `STRATEGY_RULES_USE_REGIME_FALLBACK`                 | Ativa (`true`) ou desativa (`false`) a lógica de fallback para o último regime conhecido.                                  | `true`       |
-| `STRATEGY_RULES_REGIME_FALLBACK_TTL_SECONDS`         | O tempo em segundos que o último regime conhecido é considerado válido para ser usado no fallback.                           | `300`        |
 
 ### Parâmetros por Regime de Mercado (`REGIME_*`)
 
