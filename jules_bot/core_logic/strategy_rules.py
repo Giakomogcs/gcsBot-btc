@@ -227,28 +227,18 @@ class StrategyRules:
         params: Dict[str, Decimal] = None
     ) -> Tuple[str, str, Optional[Decimal]]:
         is_active = position.get('is_smart_trailing_active', False)
-        min_profit_target_pct = params.get('target_profit', Decimal('0.02')) if params else Decimal('0.02')
         decision = "HOLD"
         reason = "No action required."
         new_trail_percentage = None
 
         if not is_active:
-            # Determine the actual USD profit required to activate the trail.
-            # It's the greater of the regime's percentage-based target and the absolute minimum floor.
-            try:
-                initial_investment = Decimal(str(position['price'])) * Decimal(str(position['quantity']))
-                min_profit_target_from_regime_usd = initial_investment * min_profit_target_pct
-            except (InvalidOperation, TypeError):
-                # Fallback in case of invalid position data
-                min_profit_target_from_regime_usd = Decimal('1') # Default to $1 to be safe
-
-            activation_profit_target_usd = max(min_profit_target_from_regime_usd, self.trailing_stop_min_profit_usd)
-
-            if net_unrealized_pnl >= activation_profit_target_usd:
+            # Activate the trailing stop as soon as the PnL is above the absolute minimum floor.
+            # This decouples the trailing stop from the regime's take-profit target.
+            if net_unrealized_pnl >= self.trailing_stop_min_profit_usd:
                 decision = "ACTIVATE"
                 reason = (
                     f"Trailing stop activated. PnL (${net_unrealized_pnl:.2f}) "
-                    f"reached activation target (${activation_profit_target_usd:.2f})."
+                    f"reached minimum profit floor (${self.trailing_stop_min_profit_usd:.2f})."
                 )
             return decision, reason, new_trail_percentage
 
