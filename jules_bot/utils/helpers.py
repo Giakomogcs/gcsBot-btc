@@ -48,11 +48,11 @@ def calculate_buy_progress(market_data: dict, current_params: dict, difficulty_f
             # The "start price" for measuring progress is the recent high.
             start_price = high_price
         else:
-            # DOWNTREND LOGIC: Target is the adjusted lower Bollinger Band.
-            difficulty_multiplier = Decimal('1') - difficulty_factor
-            target_price = bbl * difficulty_multiplier
-            # The "start price" for measuring progress is the recent high.
-            # When the current price drops from the high to the target, progress goes from 0 to 100.
+            # DOWNTREND LOGIC: Also based on a dip from the high price.
+            # This unifies the logic for both trends.
+            base_buy_dip = current_params.get('buy_dip_percentage', Decimal('0.02'))
+            adjusted_buy_dip_percentage = base_buy_dip + difficulty_factor
+            target_price = high_price * (Decimal('1') - adjusted_buy_dip_percentage)
             start_price = high_price
 
         progress = _calculate_progress_pct(current_price, start_price, target_price)
