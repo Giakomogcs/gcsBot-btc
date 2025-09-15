@@ -161,6 +161,10 @@ class TradingBot:
         self.last_operating_mode: str = "STARTUP"
         self.last_difficulty_factor: Decimal = Decimal('0')
 
+        # State for Regime Fallback
+        self.last_known_regime = -1
+        self.last_known_regime_timestamp = None
+
     def process_force_buy(self, amount_usd: str):
         """Processes a force buy command received from the API."""
         try:
@@ -412,6 +416,11 @@ class TradingBot:
         base_asset = self.symbol.replace("USDT", "")
         self.reversal_buy_threshold_percent = Decimal(config_manager.get('STRATEGY_RULES', 'reversal_buy_threshold_percent', fallback='0.005'))
         self.reversal_monitoring_timeout_seconds = int(config_manager.get('STRATEGY_RULES', 'reversal_monitoring_timeout_seconds', fallback='300'))
+
+        # Load Regime Fallback settings
+        self.use_regime_fallback = config_manager.getboolean('STRATEGY_RULES', 'use_regime_fallback', fallback=True)
+        self.regime_fallback_ttl_seconds = int(config_manager.get('STRATEGY_RULES', 'regime_fallback_ttl_seconds', fallback=300)) # 5 minutes
+
         logger.info("Situational Awareness model is rule-based and ready.")
         if not self.trader.is_ready:
             logger.critical("Trader could not be initialized. Shutting down bot.")
@@ -473,7 +482,26 @@ class TradingBot:
                         
                         # Encontra o último regime válido, ignorando os -1s que podem aparecer no início do dataset
                         valid_regimes = regime_df[regime_df['market_regime'] != -1]['market_regime']
-                        current_regime = int(valid_regimes.iloc[-1]) if not valid_regimes.empty else -1
+                        calculated_regime = int(valid_regimes.iloc[-1]) if not valid_regimes.empty else -1
+
+                        current_regime = calculated_regime
+                        regime_source = "Calculated"
+
+                        # Se o regime calculado for indefinido, tenta usar o fallback
+                        if calculated_regime == -1 and self.use_regime_fallback:
+                            if self.last_known_regime != -1 and self.last_known_regime_timestamp is not None:
+                                time_since_last_known = time.time() - self.last_known_regime_timestamp
+                                if time_since_last_known < self.regime_fallback_ttl_seconds:
+                                    current_regime = self.last_known_regime
+                                    regime_source = f"Fallback (age: {time_since_last_known:.0f}s)"
+                                    logger.warning(f"Regime indefinido. Usando último regime conhecido: {current_regime} de {time_since_last_known:.0f}s atrás.")
+                                else:
+                                    logger.warning(f"Regime indefinido. Último regime conhecido ({self.last_known_regime}) expirou ({time_since_last_known:.0f}s > {self.regime_fallback_ttl_seconds}s).")
+
+                        # Se o regime atual (calculado ou fallback) for válido, atualiza o estado
+                        if current_regime != -1:
+                            self.last_known_regime = current_regime
+                            self.last_known_regime_timestamp = time.time()
 
                         # Atualiza os parâmetros dinâmicos com o regime encontrado
                         self.dynamic_params.update_parameters(current_regime)
@@ -481,10 +509,10 @@ class TradingBot:
                         # Adiciona uma verificação para logar o regime atual e os parâmetros carregados
                         regime_name_map = {v: k for k, v in self.sa_instance.regime_map.items()}
                         regime_name = regime_name_map.get(current_regime, "UNDEFINED")
-                        logger.info(f"Regime de mercado atual: {regime_name} ({current_regime}). Parâmetros carregados.")
+                        logger.info(f"Regime de mercado atual: {regime_name} ({current_regime}) | Fonte: {regime_source}. Parâmetros carregados.")
                         
                         if current_regime == -1:
-                            logger.warning("Market regime is -1 (undefined). Skipping buy/sell logic for this cycle.")
+                            logger.warning("Market regime is -1 (undefined) and fallback is disabled or expired. Skipping buy/sell logic for this cycle.")
                             time.sleep(10)
                             continue
                         current_params = self.dynamic_params.parameters

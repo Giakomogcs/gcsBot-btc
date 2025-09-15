@@ -33,6 +33,16 @@ Para evitar a exaustão de capital durante tendências de baixa prolongadas, o r
 - **Como Funciona:** Após um número configurável de compras consecutivas (definido por `STRATEGY_RULES_CONSECUTIVE_BUYS_THRESHOLD`), o robô aumenta a exigência para novas compras. Em vez de comprar após uma queda de X%, ele passará a exigir uma queda de X+1, X+2, e assim por diante.
 - **Reset da Dificuldade:** A dificuldade é zerada se ocorrer uma venda ou se não houver novas compras dentro de um período de tempo configurável (`STRATEGY_RULES_DIFFICULTY_RESET_TIMEOUT_HOURS`).
 
+### Detecção de Regime Robusta com Fallback
+
+Para garantir que o robô continue operando de forma inteligente mesmo em condições de mercado incertas, o sistema de detecção de regime foi aprimorado com duas camadas de robustez.
+
+- **Como Funciona:**
+  1.  **Suavização de Dados:** A lógica que calcula os indicadores de regime (como ATR e MACD) agora é mais resistente a falhas momentâneas nos dados da exchange. Se um dado de um candle falhar, o sistema usará o último valor válido, evitando que o cálculo do regime resulte em "indefinido" por um simples flicker.
+  2.  **Fallback para o Último Regime Válido:** Se, mesmo com a suavização, o regime atual não puder ser determinado, o robô não para mais de operar imediatamente. Em vez disso, ele usará o **último regime válido conhecido** por um período de tempo configurável (definido por `STRATEGY_RULES_REGIME_FALLBACK_TTL_SECONDS`).
+
+- **Benefício:** Esta abordagem evita que o robô fique "paralisado" em momentos de alta volatilidade ou de instabilidade nos dados, permitindo que ele continue a gerenciar posições e a buscar oportunidades com base no contexto de mercado mais recente e válido.
+
 ### Trailing Stop Ágil com Dupla Camada de Proteção
 
 Para maximizar os ganhos e proteger o capital de forma robusta, o robô utiliza uma estratégia de trailing stop com uma dupla camada de segurança, combinando uma abordagem percentual e uma de valor absoluto.
@@ -154,6 +164,8 @@ Estas variáveis controlam a lógica de alto nível e as salvaguardas da estrat�
 | `STRATEGY_RULES_CONSECUTIVE_BUYS_THRESHOLD`          | O número de compras consecutivas antes que o fator de dificuldade comece a ser aplicado.                                    | `5`          |
 | `STRATEGY_RULES_DIFFICULTY_ADJUSTMENT_FACTOR`        | O multiplicador usado para aumentar a exigência de compra a cada nível de dificuldade.                                      | `0.005`      |
 | `STRATEGY_RULES_DIFFICULTY_RESET_TIMEOUT_HOURS`      | O número de horas sem compras após o qual o fator de dificuldade é resetado.                                                | `2`          |
+| `STRATEGY_RULES_USE_REGIME_FALLBACK`                 | Ativa (`true`) ou desativa (`false`) a lógica de fallback para o último regime conhecido.                                  | `true`       |
+| `STRATEGY_RULES_REGIME_FALLBACK_TTL_SECONDS`         | O tempo em segundos que o último regime conhecido é considerado válido para ser usado no fallback.                           | `300`        |
 
 ### Parâmetros por Regime de Mercado (`REGIME_*`)
 

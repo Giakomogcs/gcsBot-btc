@@ -55,10 +55,17 @@ class SituationalAwareness:
             min_periods=self.rolling_window // 2
         ).quantile(self.volatility_percentile)
 
+        # Preenche os NaNs iniciais no limiar e nas features para garantir que todas as linhas possam ser avaliadas
+        # Isso torna o cálculo mais robusto contra falhas momentâneas na geração de features
+        df['volatility_threshold'].ffill(inplace=True)
+        df['atr_14'].ffill(inplace=True)
+        df['macd_diff_12_26_9'].ffill(inplace=True)
+
         # Define uma função para aplicar a lógica de regime a cada linha
         def get_regime(row):
-            # Se o limiar de volatilidade for NaN (no início do período de dados), retorna um regime de fallback
-            if pd.isna(row['volatility_threshold']):
+            # Após o ffill, a verificação de isna no threshold não é mais estritamente necessária,
+            # mas é mantida como uma salvaguarda final.
+            if pd.isna(row['volatility_threshold']) or pd.isna(row['atr_14']) or pd.isna(row['macd_diff_12_26_9']):
                 return -1 # Regime indefinido
 
             # 1. Checa por alta volatilidade primeiro, pois é o regime prioritário
