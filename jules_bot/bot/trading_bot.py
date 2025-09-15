@@ -470,12 +470,23 @@ class TradingBot:
                         market_data = final_candle.to_dict()
                         current_price = Decimal(final_candle['close'])
                         regime_df = self.sa_instance.transform(features_df)
-                        current_regime = int(regime_df['market_regime'].iloc[-1]) if not regime_df.empty else -1
+                        
+                        # Encontra o último regime válido, ignorando os -1s que podem aparecer no início do dataset
+                        valid_regimes = regime_df[regime_df['market_regime'] != -1]['market_regime']
+                        current_regime = int(valid_regimes.iloc[-1]) if not valid_regimes.empty else -1
+
+                        # Atualiza os parâmetros dinâmicos com o regime encontrado
+                        self.dynamic_params.update_parameters(current_regime)
+
+                        # Adiciona uma verificação para logar o regime atual e os parâmetros carregados
+                        regime_name_map = {v: k for k, v in self.sa_instance.regime_map.items()}
+                        regime_name = regime_name_map.get(current_regime, "UNDEFINED")
+                        logger.info(f"Regime de mercado atual: {regime_name} ({current_regime}). Parâmetros carregados.")
+                        
                         if current_regime == -1:
                             logger.warning("Market regime is -1 (undefined). Skipping buy/sell logic for this cycle.")
                             time.sleep(10)
                             continue
-                        self.dynamic_params.update_parameters(current_regime)
                         current_params = self.dynamic_params.parameters
                         open_positions = self.state_manager.get_open_positions()
                         sell_candidates = []
