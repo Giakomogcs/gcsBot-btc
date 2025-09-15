@@ -75,11 +75,19 @@ class DynamicParameters:
         order_size_fallback = self.config_manager.get('STRATEGY_RULES', 'base_usd_per_trade', '20.0')
         order_size_usd = self._safe_get_decimal(section_name, 'order_size_usd', order_size_fallback)
 
+        # 4. Target Profit
+        # Fallback to the global target profit if not defined for the regime.
+        target_profit_fallback = self.config_manager.get('STRATEGY_RULES', 'target_profit', '0.01') # Default to 1%
+        target_profit = self._safe_get_decimal(section_name, 'target_profit', target_profit_fallback)
+        if target_profit == Decimal(target_profit_fallback):
+            logger.warning(f"'{section_name}' is missing 'target_profit'. Using a default of {target_profit_fallback}.")
+
 
         self.parameters = {
             'buy_dip_percentage': buy_dip_percentage,
             'sell_rise_percentage': sell_rise_percentage,
             'order_size_usd': order_size_usd,
+            'target_profit': target_profit,
         }
 
     def get_param(self, param_name: str, default: Decimal = None) -> Decimal:

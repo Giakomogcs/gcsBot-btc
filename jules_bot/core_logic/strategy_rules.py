@@ -16,8 +16,6 @@ class StrategyRules:
         self.base_usd_per_trade = self._safe_get_decimal('base_usd_per_trade', '20.0')
         self.sell_factor = self._safe_get_decimal('sell_factor', '0.9')
         self.commission_rate = self._safe_get_decimal('commission_rate', '0.001')
-        self.trailing_stop_profit = self._safe_get_decimal('trailing_stop_profit', '0.02')
-        logger.info(f"Trailing stop profit target loaded as: {self.trailing_stop_profit}")
         
         # --- Standard (Fixed) Trailing Stop ---
         self.fixed_trail_percentage = self._safe_get_decimal('dynamic_trail_percentage', '0.02')  # Legacy key
@@ -223,10 +221,12 @@ class StrategyRules:
     def evaluate_smart_trailing_stop(
         self,
         position: Dict[str, any],
-        net_unrealized_pnl: Decimal
+        net_unrealized_pnl: Decimal,
+        params: Dict[str, Decimal] = None
     ) -> Tuple[str, str, Optional[Decimal]]:
         is_active = position.get('is_smart_trailing_active', False)
-        min_profit_target = self.trailing_stop_profit
+        # Use the dynamic target_profit from params, with a fallback just in case
+        min_profit_target = params.get('target_profit', Decimal('0.02')) if params else Decimal('0.02')
         decision = "HOLD"
         reason = "No action required."
         new_trail_percentage = None

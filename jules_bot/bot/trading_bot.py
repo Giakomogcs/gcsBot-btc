@@ -486,7 +486,7 @@ class TradingBot:
                                 sell_candidates.append((position, "take_profit"))
                                 continue
                             net_unrealized_pnl = self.strategy_rules.calculate_net_unrealized_pnl(entry_price=Decimal(str(position.price)), current_price=current_price, total_quantity=Decimal(str(position.remaining_quantity)), buy_commission_usd=Decimal(str(position.commission_usd or '0')))
-                            decision, reason, new_trail_percentage = self.strategy_rules.evaluate_smart_trailing_stop(position.to_dict(), net_unrealized_pnl)
+                            decision, reason, new_trail_percentage = self.strategy_rules.evaluate_smart_trailing_stop(position.to_dict(), net_unrealized_pnl, self.dynamic_params.parameters)
                             if decision == "ACTIVATE":
                                 logger.info(f"🚀 {reason}")
                                 self.state_manager.update_trade_smart_trailing_state(trade_id=position.trade_id, is_active=True, highest_profit=net_unrealized_pnl, activation_price=current_price)

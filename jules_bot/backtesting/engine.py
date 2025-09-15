@@ -146,7 +146,7 @@ class Backtester:
 
                 # --- Unified Smart Trailing Stop Logic ---
                 decision, reason, new_trail_percentage = self.strategy_rules.evaluate_smart_trailing_stop(
-                    position, net_unrealized_pnl
+                    position, net_unrealized_pnl, current_params
                 )
 
                 if decision == "ACTIVATE":
