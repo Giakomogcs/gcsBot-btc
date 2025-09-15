@@ -16,7 +16,6 @@ class DynamicParameters:
         """
         value_str = self.config_manager.get(section, key, fallback=fallback)
 
-        # This can happen if allow_no_value=True and a key is present without a value
         if value_str is None or not value_str.strip():
             logger.warning(f"Config value for '{key}' in section '{section}' is missing, empty, or just whitespace. Using fallback '{fallback}'.")
             return Decimal(fallback)
@@ -42,46 +41,33 @@ class DynamicParameters:
                 'buy_dip_percentage': Decimal('1'),
                 'sell_rise_percentage': Decimal('1'),
                 'order_size_usd': Decimal('0'),
+                'target_profit': Decimal('1'),
             }
             return
 
         section_name = f'REGIME_{regime}'
-        # If the specific regime section doesn't exist, fall back to the default strategy rules.
+        
         if not self.config_manager.has_section(section_name):
             logger.warning(f"Config section '{section_name}' not found. Falling back to 'STRATEGY_RULES'.")
             section_name = 'STRATEGY_RULES'
 
-        # --- Load Parameters with Clear Fallbacks ---
-        # For each parameter, we first try to get the specific value from the regime section.
-        # If that fails, we have a clear order of fallbacks.
+        # --- Load Parameters ---
+        # Get the default values from the main STRATEGY_RULES section first.
+        default_buy_dip = self.config_manager.get('STRATEGY_RULES', 'buy_dip_percentage', '1.0')
+        default_sell_rise = self.config_manager.get('STRATEGY_RULES', 'sell_rise_percentage', '0.01')
+        default_order_size = self.config_manager.get('STRATEGY_RULES', 'base_usd_per_trade', '20.0')
+        # The default for the trailing stop activation is 'trailing_stop_profit'
+        default_target_profit = self.config_manager.get('STRATEGY_RULES', 'trailing_stop_profit', '0.02')
 
-        # 1. Buy Dip Percentage
-        # Fallback to a very high, "non-trading" value if not defined for the regime.
-        # This prevents the bot from buying with an unexpected default value.
-        buy_dip_fallback = '1.0' # A 100% dip, effectively disabling buys.
-        buy_dip_percentage = self._safe_get_decimal(section_name, 'buy_dip_percentage', buy_dip_fallback)
-        if buy_dip_percentage == Decimal(buy_dip_fallback):
-            logger.warning(f"'{section_name}' is missing 'buy_dip_percentage'. Using a safe, non-trading fallback of {buy_dip_fallback}.")
-
-        # 2. Sell Rise Percentage
-        # Fallback to a default value if not defined for the regime.
-        sell_rise_fallback = '0.01'  # 1%
-        sell_rise_percentage = self._safe_get_decimal(section_name, 'sell_rise_percentage', sell_rise_fallback)
-        if sell_rise_percentage == Decimal(sell_rise_fallback):
-            logger.warning(f"'{section_name}' is missing 'sell_rise_percentage'. Using a default of {sell_rise_fallback}.")
-
-        # 3. Order Size
-        # Fallback to a default value from the main strategy section if not defined for the regime.
-        order_size_fallback = self.config_manager.get('STRATEGY_RULES', 'base_usd_per_trade', '20.0')
-        order_size_usd = self._safe_get_decimal(section_name, 'order_size_usd', order_size_fallback)
-
-        # 4. Target Profit
-        # Fallback to the global target profit if not defined for the regime.
-        target_profit_fallback = self.config_manager.get('STRATEGY_RULES', 'target_profit', '0.01') # Default to 1%
-        target_profit = self._safe_get_decimal(section_name, 'target_profit', target_profit_fallback)
-        if target_profit == Decimal(target_profit_fallback):
-            logger.warning(f"'{section_name}' is missing 'target_profit'. Using a default of {target_profit_fallback}.")
-
+        # Now, load from the current section (which can be a REGIME or STRATEGY_RULES),
+        # using the defaults from STRATEGY_RULES as fallbacks.
+        buy_dip_percentage = self._safe_get_decimal(section_name, 'buy_dip_percentage', default_buy_dip)
+        sell_rise_percentage = self._safe_get_decimal(section_name, 'sell_rise_percentage', default_sell_rise)
+        order_size_usd = self._safe_get_decimal(section_name, 'order_size_usd', default_order_size)
+        
+        # The key is to load the 'target_profit' key from the regime section, but use the default
+        # from 'trailing_stop_profit' as the fallback.
+        target_profit = self._safe_get_decimal(section_name, 'target_profit', default_target_profit)
 
         self.parameters = {
             'buy_dip_percentage': buy_dip_percentage,

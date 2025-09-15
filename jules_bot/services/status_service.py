@@ -105,7 +105,23 @@ class StatusService:
             open_positions_db = self.db_manager.get_open_positions(environment) or []
             open_positions_count = len(open_positions_db)
 
-            positions_status = self._process_open_positions(open_positions_db, current_price)
+            # --- LIVE STRATEGY EVALUATION ---
+            current_regime = -1
+            try:
+                sa_instance = SituationalAwareness()
+                historical_data = self.feature_calculator.get_historical_data_with_features()
+                if historical_data is not None and not historical_data.empty:
+                    regime_df = sa_instance.transform(historical_data)
+                    if not regime_df.empty and 'market_regime' in regime_df.columns:
+                        current_regime = regime_df['market_regime'].iloc[-1]
+            except Exception as e:
+                logger.warning(f"Could not determine market regime for status: {e}")
+
+            dynamic_params = DynamicParameters(self.config_manager)
+            dynamic_params.update_parameters(current_regime)
+            current_params = dynamic_params.parameters
+
+            positions_status = self._process_open_positions(open_positions_db, current_price, current_params)
 
             wallet_balances, total_wallet_usd_value = self._process_wallet_balances(exchange_manager, current_price)
             
@@ -279,7 +295,7 @@ class StatusService:
             except InvalidOperation:
                 pass
 
-    def _process_open_positions(self, open_positions_db, current_price):
+    def _process_open_positions(self, open_positions_db, current_price, params):
         positions_status = []
         for trade in open_positions_db:
             entry_price = Decimal(trade.price) if trade.price is not None else Decimal('0')
@@ -321,7 +337,7 @@ class StatusService:
             final_trigger_profit = Decimal('0')
 
             if is_trailing_active:
-                min_profit_target = self.strategy.trailing_stop_profit
+                min_profit_target = params.get('target_profit', Decimal('0.02'))
                 
                 trail_percentage_to_use = current_trail_pct
                 if self.strategy.use_dynamic_trailing_stop:

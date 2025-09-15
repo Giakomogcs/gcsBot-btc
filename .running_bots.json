@@ -1,1 +1,10 @@
-[]
+[
+    {
+        "bot_name": "marcos_bot",
+        "container_id": "f6c38f2b791e8d559824b6dd2939788f54041c22f15af97c33c07843732fee72",
+        "bot_mode": "test",
+        "start_time": "2025-09-15T14:52:29.525815",
+        "host_port": 8766,
+        "process_type": "bot"
+    }
+]
