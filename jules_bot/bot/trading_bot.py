@@ -592,6 +592,10 @@ class TradingBot:
             temp_path = status_file_path + ".tmp"
             with open(temp_path, "w") as f:
                 json.dump(status_data, f, default=str)
+
+            # Set permissions to be world-writable to avoid permission errors in Docker
+            os.chmod(temp_path, 0o666)
+
             os.rename(temp_path, status_file_path)
             logger.info("Status file update complete.")
         except Exception as e:
@@ -632,6 +636,10 @@ class TradingBot:
             temp_path = status_file_path + ".tmp"
             with open(temp_path, "w") as f:
                 json.dump(status_data, f, default=str)
+
+            # Set permissions to be world-writable to avoid permission errors in Docker
+            os.chmod(temp_path, 0o666)
+
             os.rename(temp_path, status_file_path)
             logger.info("Sync status file update complete.")
         except Exception as e:

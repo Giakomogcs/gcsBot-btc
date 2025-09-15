@@ -57,9 +57,8 @@ class SituationalAwareness:
 
         # Preenche os NaNs iniciais no limiar e nas features para garantir que todas as linhas possam ser avaliadas
         # Isso torna o cálculo mais robusto contra falhas momentâneas na geração de features
-        df['volatility_threshold'].ffill(inplace=True)
-        df['atr_14'].ffill(inplace=True)
-        df['macd_diff_12_26_9'].ffill(inplace=True)
+        cols_to_fill = ['volatility_threshold', 'atr_14', 'macd_diff_12_26_9']
+        df[cols_to_fill] = df[cols_to_fill].ffill()
 
         # Define uma função para aplicar a lógica de regime a cada linha
         def get_regime(row):
