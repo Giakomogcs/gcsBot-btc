@@ -23,37 +23,26 @@ def _calculate_progress_pct(current_price: Decimal, start_price: Decimal, target
 
 def calculate_buy_progress(market_data: dict, current_params: dict, difficulty_factor: Decimal) -> tuple[Decimal, Decimal]:
     """
-    Calculates the target price for the next buy and the progress towards it,
-    considering the correct market regime (uptrend vs. downtrend).
+    Calculates the target price for the next buy and the progress towards it.
+    This logic MUST mirror the logic in `strategy_rules.py` for consistency.
     """
     try:
         current_price = Decimal(str(market_data.get('close')))
-        high_price = Decimal(str(market_data.get('high', current_price)))
-        ema_100 = market_data.get('ema_100')
-        bbl = market_data.get('bbl_20_2_0')
+        ema_20 = market_data.get('ema_20')
 
         # If essential data is missing, can't determine target
-        if any(v is None for v in [current_price, high_price, ema_100, bbl]):
+        if any(v is None for v in [current_price, ema_20]):
             return Decimal('0'), Decimal('0')
 
-        ema_100 = Decimal(str(ema_100))
-        bbl = Decimal(str(bbl))
+        ema_20 = Decimal(str(ema_20))
 
-        # Determine which target is active based on market trend (mirroring strategy_rules.py)
-        if current_price > ema_100:
-            # UPTREND LOGIC: Target is based on a dip from the high price.
-            base_buy_dip = current_params.get('buy_dip_percentage', Decimal('0.02'))
-            adjusted_buy_dip_percentage = base_buy_dip + difficulty_factor
-            target_price = high_price * (Decimal('1') - adjusted_buy_dip_percentage)
-            # The "start price" for measuring progress is the recent high.
-            start_price = high_price
-        else:
-            # DOWNTREND LOGIC: Also based on a dip from the high price.
-            # This unifies the logic for both trends.
-            base_buy_dip = current_params.get('buy_dip_percentage', Decimal('0.02'))
-            adjusted_buy_dip_percentage = base_buy_dip + difficulty_factor
-            target_price = high_price * (Decimal('1') - adjusted_buy_dip_percentage)
-            start_price = high_price
+        # The buy target logic is now unified and based on the EMA20.
+        base_buy_dip = current_params.get('buy_dip_percentage', Decimal('0.02'))
+        adjusted_buy_dip_percentage = base_buy_dip + difficulty_factor
+        target_price = ema_20 * (Decimal('1') - adjusted_buy_dip_percentage)
+
+        # The "start price" for measuring progress is the EMA20.
+        start_price = ema_20
 
         progress = _calculate_progress_pct(current_price, start_price, target_price)
 
