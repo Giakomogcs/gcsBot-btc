@@ -161,6 +161,10 @@ class TradingBot:
         self.last_operating_mode: str = "STARTUP"
         self.last_difficulty_factor: Decimal = Decimal('0')
 
+        # State for Regime Fallback
+        self.last_known_regime = -1
+        self.last_known_regime_timestamp = None
+
     def process_force_buy(self, amount_usd: str):
         """Processes a force buy command received from the API."""
         try:
@@ -315,42 +319,75 @@ class TradingBot:
         if not positions_to_sell_now:
             return
 
-        logger.info(f"Found {len(positions_to_sell_now)} positions that passed the final profitability check.")
-        # Use remaining_quantity for accurate sell calculation
-        total_sell_quantity = sum(Decimal(str(p.remaining_quantity)) * self.strategy_rules.sell_factor for p in positions_to_sell_now)
-        available_balance = Decimal(self.trader.get_account_balance(asset=base_asset))
+        logger.info(f"Found {len(positions_to_sell_now)} positions that passed the final profitability check. Consolidating into a single sell order.")
 
-        if total_sell_quantity > available_balance:
-            logger.critical(f"INSUFFICIENT BALANCE & STATE DESYNC: Attempting to sell {total_sell_quantity:.8f} {base_asset}, but only {available_balance:.8f} is available.")
+        # --- Aggregation Logic ---
+        # This logic assumes a sell_factor of 1 (100% sell). Partial sells are not compatible with this consolidated approach.
+        total_quantity_to_sell = sum(Decimal(str(p.remaining_quantity)) for p in positions_to_sell_now)
+
+        # --- Balance and Minimums Check ---
+        available_balance = Decimal(self.trader.get_account_balance(asset=base_asset))
+        if total_quantity_to_sell > available_balance:
+            logger.critical(f"INSUFFICIENT BALANCE & STATE DESYNC: Attempting to sell {total_quantity_to_sell:.8f} {base_asset}, but only {available_balance:.8f} is available.")
             return
+
+        notional_value = total_quantity_to_sell * current_price
+        if notional_value < self.trader.min_notional:
+            logger.warning(f"Consolidated sell aborted. Notional value ${notional_value:,.2f} is below exchange minimum ${self.trader.min_notional:,.2f}.")
+            return
+
+        # --- Single Sell Execution ---
+        # Create a dummy trade_id for the consolidated sell log, it is not persisted.
+        sell_data = {'quantity': total_quantity_to_sell, 'trade_id': str(uuid.uuid4())}
+        success, sell_result = self.trader.execute_sell(sell_data, self.run_id, market_data)
+
+        if not success:
+            logger.error(f"Consolidated sell of {total_quantity_to_sell:.8f} {base_asset} failed. No positions will be closed.")
+            # Optionally, record a failure for each individual trade
+            error_reason = sell_result if (sell_result and 'error' in sell_result) else {"error": "Unknown consolidated sell error"}
+            for position in positions_to_sell_now:
+                self.state_manager.record_sell_failure(position.trade_id, error_reason)
+            return
+
+        # --- Process Results for Each Position Post-Sale ---
+        logger.info(f"Consolidated sell successful. Processing {len(positions_to_sell_now)} individual positions.")
+        avg_sell_price = Decimal(str(sell_result.get('price', '0')))
+        total_commission_usd = Decimal(str(sell_result.get('commission_usd', '0')))
 
         for position in positions_to_sell_now:
             trade_id = position.trade_id
-            # Use REMAINING quantity for sell calculation
-            remaining_quantity = Decimal(str(position.remaining_quantity))
-            sell_quantity = remaining_quantity * self.strategy_rules.sell_factor
-            hodl_asset_amount = remaining_quantity - sell_quantity
-            
-            # The ORIGINAL quantity is still needed for PnL calculation cost basis
-            original_buy_quantity = Decimal(str(position.quantity))
+            quantity_sold = Decimal(str(position.remaining_quantity))
 
-            sell_position_data = position.to_dict()
-            sell_position_data['quantity'] = sell_quantity
-            success, sell_result = self.trader.execute_sell(sell_position_data, self.run_id, market_data)
-            if success:
-                buy_price = Decimal(str(position.price))
-                sell_price = Decimal(str(sell_result.get('price', '0')))
-                sell_commission_usd = Decimal(str(sell_result.get('commission_usd', '0')))
-                realized_pnl_usd = self.strategy_rules.calculate_realized_pnl(buy_price, sell_price, sell_quantity, Decimal(str(position.commission_usd or '0')), sell_commission_usd, original_buy_quantity)
-                hodl_asset_value_at_sell = hodl_asset_amount * current_price
-                sell_result.update({"realized_pnl_usd": realized_pnl_usd, "hodl_asset_amount": hodl_asset_amount, "hodl_asset_value_at_sell": hodl_asset_value_at_sell})
-                self.state_manager.record_partial_sell(original_trade_id=trade_id, remaining_quantity=hodl_asset_amount, sell_data=sell_result)
-                self.live_portfolio_manager.get_total_portfolio_value(current_price, force_recalculation=True)
-            else:
-                logger.error(f"Sell execution failed for position {trade_id}. Recording failure in database.")
-                # If sell_result is None or doesn't contain an error, provide a default one.
-                error_reason = sell_result if (sell_result and 'error' in sell_result) else {"error": "Unknown error from trader"}
-                self.state_manager.record_sell_failure(trade_id, error_reason)
+            # Pro-rate the commission for this specific position's contribution to the batch
+            pro_rata_commission_usd = (total_commission_usd * quantity_sold) / total_quantity_to_sell if total_quantity_to_sell > 0 else Decimal('0')
+
+            realized_pnl_usd = self.strategy_rules.calculate_realized_pnl(
+                buy_price=Decimal(str(position.price)),
+                sell_price=avg_sell_price,
+                quantity_sold=quantity_sold,
+                buy_commission_usd=Decimal(str(position.commission_usd or '0')),
+                sell_commission_usd=pro_rata_commission_usd,
+                buy_quantity=Decimal(str(position.quantity))
+            )
+
+            # Create a sell_result specific to this trade for record-keeping
+            individual_sell_result = sell_result.copy()
+            individual_sell_result.update({
+                "realized_pnl_usd": realized_pnl_usd,
+                "hodl_asset_amount": Decimal('0'), # Assumes 100% sell
+                "hodl_asset_value_at_sell": Decimal('0')
+            })
+            
+            # Since we sold 100%, we record a partial sell with 0 remaining quantity,
+            # which will mark the original trade as CLOSED.
+            self.state_manager.record_partial_sell(
+                original_trade_id=trade_id,
+                remaining_quantity=Decimal('0'),
+                sell_data=individual_sell_result
+            )
+
+        # Recalculate portfolio value once at the end
+        self.live_portfolio_manager.get_total_portfolio_value(current_price, force_recalculation=True)
 
     def _evaluate_and_execute_buy(self, market_data, open_positions, current_params, current_regime, current_price):
         cash_balance = Decimal(self.trader.get_account_balance("USDT"))
@@ -412,6 +449,11 @@ class TradingBot:
         base_asset = self.symbol.replace("USDT", "")
         self.reversal_buy_threshold_percent = Decimal(config_manager.get('STRATEGY_RULES', 'reversal_buy_threshold_percent', fallback='0.005'))
         self.reversal_monitoring_timeout_seconds = int(config_manager.get('STRATEGY_RULES', 'reversal_monitoring_timeout_seconds', fallback='300'))
+
+        # Load Regime Fallback settings
+        self.use_regime_fallback = config_manager.getboolean('STRATEGY_RULES', 'use_regime_fallback', fallback=True)
+        self.regime_fallback_ttl_seconds = int(config_manager.get('STRATEGY_RULES', 'regime_fallback_ttl_seconds', fallback=300)) # 5 minutes
+
         logger.info("Situational Awareness model is rule-based and ready.")
         if not self.trader.is_ready:
             logger.critical("Trader could not be initialized. Shutting down bot.")
@@ -470,12 +512,42 @@ class TradingBot:
                         market_data = final_candle.to_dict()
                         current_price = Decimal(final_candle['close'])
                         regime_df = self.sa_instance.transform(features_df)
-                        current_regime = int(regime_df['market_regime'].iloc[-1]) if not regime_df.empty else -1
+                        
+                        # Encontra o último regime válido, ignorando os -1s que podem aparecer no início do dataset
+                        valid_regimes = regime_df[regime_df['market_regime'] != -1]['market_regime']
+                        calculated_regime = int(valid_regimes.iloc[-1]) if not valid_regimes.empty else -1
+
+                        current_regime = calculated_regime
+                        regime_source = "Calculated"
+
+                        # Se o regime calculado for indefinido, tenta usar o fallback
+                        if calculated_regime == -1 and self.use_regime_fallback:
+                            if self.last_known_regime != -1 and self.last_known_regime_timestamp is not None:
+                                time_since_last_known = time.time() - self.last_known_regime_timestamp
+                                if time_since_last_known < self.regime_fallback_ttl_seconds:
+                                    current_regime = self.last_known_regime
+                                    regime_source = f"Fallback (age: {time_since_last_known:.0f}s)"
+                                    logger.warning(f"Regime indefinido. Usando último regime conhecido: {current_regime} de {time_since_last_known:.0f}s atrás.")
+                                else:
+                                    logger.warning(f"Regime indefinido. Último regime conhecido ({self.last_known_regime}) expirou ({time_since_last_known:.0f}s > {self.regime_fallback_ttl_seconds}s).")
+
+                        # Se o regime atual (calculado ou fallback) for válido, atualiza o estado
+                        if current_regime != -1:
+                            self.last_known_regime = current_regime
+                            self.last_known_regime_timestamp = time.time()
+
+                        # Atualiza os parâmetros dinâmicos com o regime encontrado
+                        self.dynamic_params.update_parameters(current_regime)
+
+                        # Adiciona uma verificação para logar o regime atual e os parâmetros carregados
+                        regime_name_map = {v: k for k, v in self.sa_instance.regime_map.items()}
+                        regime_name = regime_name_map.get(current_regime, "UNDEFINED")
+                        logger.info(f"Regime de mercado atual: {regime_name} ({current_regime}) | Fonte: {regime_source}. Parâmetros carregados.")
+                        
                         if current_regime == -1:
-                            logger.warning("Market regime is -1 (undefined). Skipping buy/sell logic for this cycle.")
+                            logger.warning("Market regime is -1 (undefined) and fallback is disabled or expired. Skipping buy/sell logic for this cycle.")
                             time.sleep(10)
                             continue
-                        self.dynamic_params.update_parameters(current_regime)
                         current_params = self.dynamic_params.parameters
                         open_positions = self.state_manager.get_open_positions()
                         sell_candidates = []
@@ -486,7 +558,7 @@ class TradingBot:
                                 sell_candidates.append((position, "take_profit"))
                                 continue
                             net_unrealized_pnl = self.strategy_rules.calculate_net_unrealized_pnl(entry_price=Decimal(str(position.price)), current_price=current_price, total_quantity=Decimal(str(position.remaining_quantity)), buy_commission_usd=Decimal(str(position.commission_usd or '0')))
-                            decision, reason, new_trail_percentage = self.strategy_rules.evaluate_smart_trailing_stop(position.to_dict(), net_unrealized_pnl)
+                            decision, reason, new_trail_percentage = self.strategy_rules.evaluate_smart_trailing_stop(position.to_dict(), net_unrealized_pnl, self.dynamic_params.parameters)
                             if decision == "ACTIVATE":
                                 logger.info(f"🚀 {reason}")
                                 self.state_manager.update_trade_smart_trailing_state(trade_id=position.trade_id, is_active=True, highest_profit=net_unrealized_pnl, activation_price=current_price)

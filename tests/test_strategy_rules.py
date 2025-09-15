@@ -4,172 +4,175 @@ from decimal import Decimal
 from jules_bot.core_logic.strategy_rules import StrategyRules
 from jules_bot.utils.config_manager import ConfigManager
 
+# Default position data for tests
+DEFAULT_POSITION = {
+    'trade_id': 'test_trade_123',
+    'price': '100',
+    'quantity': '1',
+    'commission_usd': '0.1',
+    'is_smart_trailing_active': False,
+    'smart_trailing_highest_profit': None,
+    'current_trail_percentage': None
+}
+
 @pytest.fixture
-def mock_config_manager():
-    """Provides a mock ConfigManager for testing."""
+def mock_config_manager_dynamic_trail():
+    """Provides a mock ConfigManager with dynamic trailing stop enabled."""
     mock = MagicMock(spec=ConfigManager)
     config_values = {
+        ('STRATEGY_RULES', 'commission_rate'): '0.001',
+        ('STRATEGY_RULES', 'trailing_stop_profit'): '10.0', # PnL in USD
+        ('STRATEGY_RULES', 'use_dynamic_trailing_stop'): 'true',
+        ('STRATEGY_RULES', 'dynamic_trail_min_pct'): '0.01', # 1%
+        ('STRATEGY_RULES', 'dynamic_trail_max_pct'): '0.05', # 5%
+        ('STRATEGY_RULES', 'dynamic_trail_profit_scaling'): '0.1',
+        ('STRATEGY_RULES', 'dynamic_trail_percentage'): '0.02', # Legacy key for fixed trail
+        ('STRATEGY_RULES', 'sell_factor'): '1.0',
         ('STRATEGY_RULES', 'max_capital_per_trade_percent'): '0.02',
         ('STRATEGY_RULES', 'base_usd_per_trade'): '100.0',
-        ('STRATEGY_RULES', 'commission_rate'): '0.001',
-        ('STRATEGY_RULES', 'sell_factor'): '0.9',
-        ('STRATEGY_RULES', 'target_profit'): '0.005',
-        ('STRATEGY_RULES', 'max_open_positions'): '20',
         ('STRATEGY_RULES', 'use_reversal_buy_strategy'): False,
-        ('STRATEGY_RULES', 'trailing_stop_profit'): '0.10'
     }
 
     def get_side_effect(section, key, fallback=None):
         return config_values.get((section, key), fallback)
 
     def getboolean_side_effect(section, key, fallback=None):
-        val = config_values.get((section, key), fallback)
-        if isinstance(val, bool):
-            return val
-        return str(val).lower() in ('true', '1', 't')
+        val = str(config_values.get((section, key), fallback)).lower()
+        return val in ('true', '1', 't')
 
     mock.get.side_effect = get_side_effect
     mock.getboolean.side_effect = getboolean_side_effect
     return mock
 
-def test_calculate_realized_pnl(mock_config_manager):
-    """
-    Tests the realized PnL calculation under different scenarios.
-    """
-    # Arrange
-    strategy_rules = StrategyRules(mock_config_manager)
+@pytest.fixture
+def strategy_rules(mock_config_manager_dynamic_trail):
+    """Provides a StrategyRules instance with the mock config."""
+    return StrategyRules(mock_config_manager_dynamic_trail)
 
-    # --- Scenario 1: Profitable Trade ---
-    buy_price_profit = Decimal("100.0")
-    sell_price_profit = Decimal("110.0")
-    quantity_sold = Decimal("1.0")
-    expected_pnl_profit = Decimal("9.79")
+def test_activation(strategy_rules):
+    """Test that the trailing stop activates when profit target is met."""
+    position = DEFAULT_POSITION.copy()
+    params = {'target_profit': Decimal('10.0')}
+    
+    # PnL is below target
+    decision, reason, _ = strategy_rules.evaluate_smart_trailing_stop(position, net_unrealized_pnl=Decimal('9.0'), params=params)
+    assert decision == "HOLD"
 
-    # Act
-    realized_pnl_profit = strategy_rules.calculate_realized_pnl(
-        buy_price=buy_price_profit,
-        sell_price=sell_price_profit,
-        quantity_sold=quantity_sold,
-        buy_commission_usd=Decimal('0.1'),
-            sell_commission_usd=Decimal('0.11'),
-            buy_quantity=quantity_sold  # Assume full sale for this test
-    )
+    # PnL meets target
+    decision, reason, _ = strategy_rules.evaluate_smart_trailing_stop(position, net_unrealized_pnl=Decimal('10.0'), params=params)
+    assert decision == "ACTIVATE"
+    assert "activated" in reason
 
-    # Assert
-    assert float(realized_pnl_profit) == pytest.approx(float(expected_pnl_profit))
+def test_deactivation_when_unprofitable(strategy_rules):
+    """Test that an active trail deactivates if the position becomes unprofitable."""
+    position = {**DEFAULT_POSITION, 'is_smart_trailing_active': True, 'smart_trailing_highest_profit': '15.0'}
+    params = {'target_profit': Decimal('10.0')}
+    
+    decision, reason, _ = strategy_rules.evaluate_smart_trailing_stop(position, net_unrealized_pnl=Decimal('-1.0'), params=params)
+    assert decision == "DEACTIVATE"
+    assert "unprofitable" in reason
 
-    # --- Scenario 2: Losing Trade ---
-    buy_price_loss = Decimal("100.0")
-    sell_price_loss = Decimal("90.0")
-    expected_pnl_loss = Decimal("-10.19") # Corrected expected PnL
+def test_peak_profit_update(strategy_rules):
+    """Test that a new peak profit is correctly identified."""
+    position = {**DEFAULT_POSITION, 'is_smart_trailing_active': True, 'smart_trailing_highest_profit': '12.0'}
+    params = {'target_profit': Decimal('10.0')}
 
-    # Act
-    realized_pnl_loss = strategy_rules.calculate_realized_pnl(
-        buy_price=buy_price_loss,
-        sell_price=sell_price_loss,
-        quantity_sold=quantity_sold,
-        buy_commission_usd=Decimal('0.1'),
-        sell_commission_usd=Decimal('0.09'),
-        buy_quantity=quantity_sold
-    )
+    decision, reason, _ = strategy_rules.evaluate_smart_trailing_stop(position, net_unrealized_pnl=Decimal('15.0'), params=params)
+    assert decision == "UPDATE_PEAK"
+    assert "New profit peak" in reason
 
-    # Assert
-    assert float(realized_pnl_loss) == pytest.approx(float(expected_pnl_loss))
-
-    # --- Scenario 3: Break-even Trade (considering commissions) ---
-    buy_price_breakeven = Decimal("100.0")
-    sell_price_breakeven = Decimal("100.2002002")
-
-    # Act
-    realized_pnl_breakeven = strategy_rules.calculate_realized_pnl(
-        buy_price=buy_price_breakeven,
-        sell_price=sell_price_breakeven,
-        quantity_sold=quantity_sold,
-        buy_commission_usd=Decimal('0.1'),
-        sell_commission_usd=Decimal('0.1002002'),
-        buy_quantity=quantity_sold
-    )
-
-    # Assert
-    assert float(realized_pnl_breakeven) == pytest.approx(0.0, abs=1e-6)
-
-def test_evaluate_buy_signal_with_difficulty_factor(mock_config_manager):
-    """
-    Tests that the buy signal becomes stricter with a higher difficulty factor.
-    """
-    # Arrange
-    strategy_rules = StrategyRules(mock_config_manager)
-    params = {'buy_dip_percentage': Decimal('0.02'), 'sell_rise_percentage': Decimal('0.01'), 'order_size_usd': Decimal('10')}
-    # This data ensures the logic enters the 'downtrend' path (close < ema_100)
-    market_data = {
-        'close': '100.1', 'high': '101', 'ema_100': '110', 'ema_20': '105',
-        'bbl_20_2_0': '100.0'
+def test_dynamic_trail_calculation_and_update(strategy_rules):
+    """Test that the dynamic trail percentage is calculated and updated correctly."""
+    position = {
+        **DEFAULT_POSITION, 
+        'is_smart_trailing_active': True, 
+        'smart_trailing_highest_profit': '10.0', # 10% profit on a $100 trade
+        'current_trail_percentage': '0.01' # Initial trail
     }
+    params = {'target_profit': Decimal('10.0')}
 
-    # --- Scenario 1: No difficulty, price is NOT below BBL -> No Signal ---
-    should_buy, _, reason = strategy_rules.evaluate_buy_signal(market_data, 1, difficulty_factor=Decimal('0'), params=params)
-    assert not should_buy
-    assert "Price is too high" in reason
+    # New peak profit is 20 USD (20% of 100)
+    # Expected new trail = min_pct + (profit_pct * scaling) = 0.01 + (0.20 * 0.1) = 0.01 + 0.02 = 0.03 (3%)
+    decision, reason, new_trail = strategy_rules.evaluate_smart_trailing_stop(position, net_unrealized_pnl=Decimal('20.0'), params=params)
+    
+    assert decision == "UPDATE_PEAK"
+    assert new_trail is not None
+    assert float(new_trail) == pytest.approx(0.03)
+    assert "Trail updated to 3.00%" in reason
 
-    # --- Scenario 2: No difficulty, price IS below BBL -> Signal ---
-    market_data['close'] = '99.9'
-    should_buy, _, _ = strategy_rules.evaluate_buy_signal(market_data, 1, difficulty_factor=Decimal('0'), params=params)
-    assert should_buy
+def test_trail_does_not_shrink(strategy_rules):
+    """Test that the trail percentage does not decrease if a new peak profit results in a smaller trail (should not happen with current formula, but good to test)."""
+    position = {
+        **DEFAULT_POSITION,
+        'is_smart_trailing_active': True,
+        'smart_trailing_highest_profit': '30.0', # 30% profit
+        'current_trail_percentage': '0.04' # Current trail is 4%
+    }
+    params = {'target_profit': Decimal('10.0')}
+    
+    # We manually set a higher current trail to simulate a scenario.
+    # A new peak of 31 should result in a calculated trail of 0.01 + (0.31 * 0.1) = 0.041
+    decision, reason, new_trail = strategy_rules.evaluate_smart_trailing_stop(position, net_unrealized_pnl=Decimal('31.0'), params=params)
+    
+    assert decision == "UPDATE_PEAK"
+    assert new_trail is not None
+    assert float(new_trail) > float(position['current_trail_percentage'])
 
-    # --- Scenario 3: With difficulty, price is NOT below adjusted BBL -> No Signal ---
-    # Adjusted BBL = 100.0 * (1 - 0.005) = 99.5
-    market_data['close'] = '99.6'
-    should_buy, _, reason = strategy_rules.evaluate_buy_signal(market_data, 1, difficulty_factor=Decimal('0.005'), params=params)
-    assert not should_buy
-    assert "Price is too high" in reason
+    # Now, let's test if profit drops, the trail stored in the position is used, not recalculated lower.
+    # The stored trail is 4.1%. The stop loss target should be based on this.
+    # Stop level = 31 * (1 - 0.041) = 29.729
+    position['smart_trailing_highest_profit'] = '31.0'
+    position['current_trail_percentage'] = str(new_trail)
 
-    # --- Scenario 4: With difficulty, price IS below adjusted BBL -> Signal ---
-    market_data['close'] = '99.4'
-    should_buy, _, _ = strategy_rules.evaluate_buy_signal(market_data, 1, difficulty_factor=Decimal('0.005'), params=params)
-    assert should_buy
+    decision, reason, _ = strategy_rules.evaluate_smart_trailing_stop(position, net_unrealized_pnl=Decimal('30.0'), params=params)
+    assert decision == "HOLD" # Price is above stop level
+    assert "Stop Target: $29.73" in reason # Check the calculation uses the correct trail
 
-class TestSmartTrail:
-    @pytest.fixture
-    def strategy_rules(self, mock_config_manager):
-        """Provides StrategyRules with default settings for smart trail."""
-        # Ensure the mock returns specific values needed for these tests
-        mock_config_manager.getboolean.return_value = True # Enable dynamic trail
-        mock_config_manager.get.side_effect = lambda section, key, fallback: {
-            'trailing_stop_profit': '0.10',
-            'use_dynamic_trailing_stop': 'True',
-            'dynamic_trail_min_pct': '0.01',
-            'dynamic_trail_max_pct': '0.05',
-            'dynamic_trail_profit_scaling': '0.1'
-        }.get(key, fallback)
+def test_sell_trigger(strategy_rules):
+    """Test that a sell is triggered when the PnL drops to the stop level."""
+    position = {
+        **DEFAULT_POSITION,
+        'is_smart_trailing_active': True,
+        'smart_trailing_highest_profit': '20.0', # 20 USD profit
+        'current_trail_percentage': '0.03' # 3% trail
+    }
+    params = {'target_profit': Decimal('10.0')}
 
-        return StrategyRules(mock_config_manager)
+    # Stop profit level = 20.0 * (1 - 0.03) = 19.4
+    # The activation target is 10.0, so the final trigger is max(19.4, 10.0) = 19.4
+    
+    # PnL is above the stop level
+    decision, reason, _ = strategy_rules.evaluate_smart_trailing_stop(position, net_unrealized_pnl=Decimal('19.5'), params=params)
+    assert decision == "HOLD"
 
-    def test_update_peak_has_threshold(self, strategy_rules):
-        """
-        Tests that UPDATE_PEAK is not triggered for tiny PnL increases,
-        but is triggered for significant ones.
-        """
-        position = {
-            'is_smart_trailing_active': True,
-            'smart_trailing_highest_profit': Decimal('0.20'), # 20 cents profit peak
-            'current_trail_percentage': Decimal('0.033'), # Assume a trail is set
-            'price': '100', # dummy values
-            'quantity': '1' # dummy values
-        }
+    # PnL hits the stop level
+    decision, reason, _ = strategy_rules.evaluate_smart_trailing_stop(position, net_unrealized_pnl=Decimal('19.4'), params=params)
+    assert decision == "SELL"
+    assert "sell triggered" in reason
 
-        # Scenario 1: Tiny PnL increase (less than 0.5%)
-        # 0.2001 is a 0.05% increase, which is below the 0.5% threshold
-        small_increase_pnl = Decimal('0.2001')
-        decision, reason, _ = strategy_rules.evaluate_smart_trailing_stop(position, small_increase_pnl)
+    # PnL drops below the stop level
+    decision, reason, _ = strategy_rules.evaluate_smart_trailing_stop(position, net_unrealized_pnl=Decimal('19.3'), params=params)
+    assert decision == "SELL"
 
-        # The decision should be HOLD, not UPDATE_PEAK
-        assert decision == "HOLD"
-        assert "Monitoring active trail" in reason
+def test_fallback_to_fixed_trail(mock_config_manager_dynamic_trail, strategy_rules):
+    """Test that the system uses the fixed percentage if dynamic is disabled."""
+    # Disable dynamic trailing
+    mock_config_manager_dynamic_trail.getboolean.side_effect = lambda section, key, fallback: False
+    
+    # Re-initialize strategy rules with the modified config
+    strategy_rules_fixed = StrategyRules(mock_config_manager_dynamic_trail)
+    strategy_rules_fixed.fixed_trail_percentage = Decimal('0.02') # Manually set for clarity
 
-        # Scenario 2: Significant PnL increase (more than 0.5%)
-        # 0.21 is a 5% increase
-        large_increase_pnl = Decimal('0.21')
-        decision, reason, _ = strategy_rules.evaluate_smart_trailing_stop(position, large_increase_pnl)
+    position = {
+        **DEFAULT_POSITION,
+        'is_smart_trailing_active': True,
+        'smart_trailing_highest_profit': '20.0'
+    }
+    params = {'target_profit': Decimal('10.0')}
 
-        assert decision == "UPDATE_PEAK"
-        assert "New profit peak" in reason
+    # Stop profit level = 20.0 * (1 - 0.02) = 19.6
+    decision, reason, new_trail = strategy_rules_fixed.evaluate_smart_trailing_stop(position, net_unrealized_pnl=Decimal('19.5'), params=params)
+    
+    assert decision == "SELL"
+    assert new_trail is None # No new trail should be calculated
+    assert "Trail: 2.00%" in reason

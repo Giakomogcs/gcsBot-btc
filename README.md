@@ -526,6 +526,59 @@ Tanto o relatório de **backtest** quanto o painel de monitoramento **(TUI)** fo
 | **Open Positions**             | O número de posições de compra que ainda não foram vendidas.                                                                                                                                                                                                            | TUI e Backtest         |
 | **Win Rate (Taxa de Vitória)** | A porcentagem de operações de **venda** que foram fechadas com lucro. **Importante:** Esta métrica **não considera as posições abertas**, que podem estar com prejuízo não realizado. É por isso que é possível ter uma alta taxa de vitória e um PnL líquido negativo. | Relatório de Backtest  |
 
+## Entendendo a Tela de Posições Abertas (TUI)
+
+Para acompanhar a estratégia do robô em tempo real, é fundamental entender cada coluna na tela de "Open Positions".
+
+### Diferença Crucial: Target de Venda vs. Trail (Trailing Stop)
+
+**Sim, são duas coisas completamente diferentes.** É a distinção mais importante para entender a estratégia.
+
+1.  **Target de Venda (`sell_rise_percentage`)**:
+
+    - **O que é?** É um **alvo fixo** de lucro, definido no momento da compra. Pense nele como uma ordem de "Take Profit" simples.
+    - **Como funciona?** Se você configurou o regime para vender com 0.8% de lucro, o sistema calcula o preço exato que corresponde a esse lucro e define esse preço como o alvo inicial. Se o mercado atingir esse preço, ele vende.
+    - **Ponto-chave:** Este alvo **não se move**. Se o preço continuar subindo depois de atingir o alvo, essa lógica simples não captura os lucros adicionais.
+
+2.  **Trail (Trailing Stop)**:
+    - **O que é?** É um **alvo dinâmico e inteligente** que é ativado para proteger os lucros e, ao mesmo tempo, permitir que eles continuem a crescer.
+    - **Como funciona?**
+      - **Ativação:** O trailing stop só é "ativado" depois que a sua posição atinge um lucro mínimo (o `target_profit` do regime).
+      - **Rastreamento:** Uma vez ativo, ele não olha mais para o alvo fixo. Em vez disso, ele marca o **pico de lucro** que a operação já atingiu. A ordem de venda passa a ser um percentual (`current_trail_percentage`) _abaixo_ desse pico.
+    - **Exemplo Prático:**
+      - Sua operação atinge 1% de lucro e o trailing stop de 2% é ativado. O pico de lucro é 1%. O gatilho de venda é 0.98% (2% abaixo de 1%).
+      - O mercado continua subindo e seu lucro chega a 5%. O pico agora é 5%. O gatilho de venda se move para 4.9% (2% abaixo de 5%).
+      - O mercado vira e o lucro cai para 4.9%. **O robô vende**, garantindo um lucro muito maior do que o alvo fixo inicial.
+
+**Em resumo:** O **Target de Venda** é o plano A (vender com um lucro mínimo). O **Trail** é o plano B (se o lucro continuar subindo, ative um sistema mais inteligente para maximizar os ganhos).
+
+---
+
+### Detalhamento das Colunas
+
+#### Informações Básicas da Posição
+
+- **trade_id**: Identificador único da operação de compra.
+- **timestamp**: Data e hora em que a compra foi realizada.
+- **entry_price**: O preço médio que você pagou pelo ativo naquela operação.
+- **current_price**: O preço atual do ativo no mercado.
+- **quantity**: A quantidade do ativo que você possui nesta posição.
+
+#### Lucro e Alvo (PnL - Profit and Loss)
+
+- **unrealized_pnl**: O seu lucro ou prejuízo **atual** em dólar, se você vendesse a posição agora.
+- **unrealized_pnl_pct**: O mesmo que o de cima, mas em porcentagem.
+- **sell_target_price**: O preço de venda do **alvo fixo** (o nosso "plano A").
+- **target_pnl**: O lucro em dólar que você teria se a venda ocorresse no `sell_target_price`.
+- **progress_to_sell_target_pct**: O quão perto (em %) você está de atingir o `sell_target_price`.
+
+#### Dados do Trailing Stop (a parte dinâmica)
+
+- **is_smart_trailing_active**: Mostra `True` ou `False`. Indica se o trailing stop já foi ativado para esta posição.
+- **smart_trailing_highest_profit**: O **pico de lucro** em dólar que esta posição já alcançou desde que o trailing foi ativado.
+- **current_trail_percentage**: O percentual do seu trailing stop. É a "distância" que o lucro pode cair do pico antes de a venda ser acionada.
+- **final_trigger_profit**: **Esta é uma das colunas mais importantes.** Mostra o valor exato de lucro em dólar que, se atingido, irá disparar a venda pelo trailing stop.
+
 ## Estrutura do Projeto
 
 A estrutura de pastas do projeto foi organizada para separar as responsabilidades e facilitar a manutenção e o desenvolvimento.

@@ -16,14 +16,14 @@ class StrategyRules:
         self.base_usd_per_trade = self._safe_get_decimal('base_usd_per_trade', '20.0')
         self.sell_factor = self._safe_get_decimal('sell_factor', '0.9')
         self.commission_rate = self._safe_get_decimal('commission_rate', '0.001')
-        self.trailing_stop_profit = self._safe_get_decimal('trailing_stop_profit', '0.02')
-        logger.info(f"Trailing stop profit target loaded as: {self.trailing_stop_profit}")
         
         # --- Standard (Fixed) Trailing Stop ---
         self.fixed_trail_percentage = self._safe_get_decimal('dynamic_trail_percentage', '0.02')  # Legacy key
 
         # --- Dynamic Trailing Stop ---
         self.use_dynamic_trailing_stop = self.config_manager.getboolean(self.section_name, 'use_dynamic_trailing_stop', fallback=False)
+        self.trailing_stop_min_profit_usd = self._safe_get_decimal('trailing_stop_min_profit_usd', '0.02') # Absolute minimum profit to protect
+        self.trailing_stop_drop_usd = self._safe_get_decimal('trailing_stop_drop_usd', '0.0') # Absolute USD drop from peak to trigger sell
         self.dynamic_trail_min_pct = self._safe_get_decimal('dynamic_trail_min_pct', '0.01')      # e.g., 1%
         self.dynamic_trail_max_pct = self._safe_get_decimal('dynamic_trail_max_pct', '0.05')      # e.g., 5%
         self.dynamic_trail_profit_scaling = self._safe_get_decimal('dynamic_trail_profit_scaling', '0.1') # Determines how fast the trail widens
@@ -223,26 +223,31 @@ class StrategyRules:
     def evaluate_smart_trailing_stop(
         self,
         position: Dict[str, any],
-        net_unrealized_pnl: Decimal
+        net_unrealized_pnl: Decimal,
+        params: Dict[str, Decimal] = None
     ) -> Tuple[str, str, Optional[Decimal]]:
         is_active = position.get('is_smart_trailing_active', False)
-        min_profit_target = self.trailing_stop_profit
         decision = "HOLD"
         reason = "No action required."
         new_trail_percentage = None
 
         if not is_active:
-            if net_unrealized_pnl >= min_profit_target:
+            # Activate the trailing stop as soon as the PnL is above the absolute minimum floor.
+            # This decouples the trailing stop from the regime's take-profit target.
+            if net_unrealized_pnl >= self.trailing_stop_min_profit_usd:
                 decision = "ACTIVATE"
-                reason = f"Trailing stop activated. PnL ({net_unrealized_pnl:.2f}) reached target ({min_profit_target:.2f})."
+                reason = (
+                    f"Trailing stop activated. PnL (${net_unrealized_pnl:.2f}) "
+                    f"reached minimum profit floor (${self.trailing_stop_min_profit_usd:.2f})."
+                )
             return decision, reason, new_trail_percentage
 
-        # --- Determine the highest profit peak ---
+        # --- From here, the trailing stop is active ---
+
         # Get the stored highest profit. It can be None if it was never set or was reset.
         stored_highest_profit_raw = position.get('smart_trailing_highest_profit')
 
         # If there is no stored profit or it's zero, the current PNL becomes the de-facto highest profit.
-        # This happens on the first run after activation or if the state is inconsistent.
         if stored_highest_profit_raw is None or Decimal(str(stored_highest_profit_raw)) == 0:
             highest_profit = net_unrealized_pnl
         else:
@@ -251,20 +256,19 @@ class StrategyRules:
             
         current_trail_pct = Decimal(str(position.get('current_trail_percentage') or self.fixed_trail_percentage))
 
+        # If PnL drops below zero, deactivate to wait for it to become profitable again.
         if net_unrealized_pnl < 0:
             decision = "DEACTIVATE"
             reason = f"Trailing stop deactivated. Position became unprofitable (PnL: {net_unrealized_pnl:.2f})."
             return decision, reason, new_trail_percentage
 
-        # The only time the highest_profit should be updated is when the current PNL is even higher.
-        # The only time the highest_profit should be updated is when the current PNL is significantly higher.
+        # Check for a new profit peak
         if net_unrealized_pnl > highest_profit:
-            # Add a threshold (e.g., 0.5% increase) to prevent tiny, frequent updates.
-            # This is critical for performance when many positions are in profit.
+            # Add a threshold to prevent tiny, frequent database updates.
             if highest_profit <= 0 or (net_unrealized_pnl - highest_profit) / highest_profit > Decimal('0.005'):
                 decision = "UPDATE_PEAK"
                 reason = f"New profit peak for trailing stop: {net_unrealized_pnl:.2f}."
-                highest_profit = net_unrealized_pnl
+                highest_profit = net_unrealized_pnl # Use the new peak for the rest of this cycle's logic
                 if self.use_dynamic_trailing_stop:
                     calculated_trail = self._calculate_dynamic_trail_percentage(
                         highest_profit_pnl=highest_profit,
@@ -274,29 +278,40 @@ class StrategyRules:
                     if calculated_trail > current_trail_pct:
                         new_trail_percentage = calculated_trail
                         reason += f" Trail updated to {new_trail_percentage:.2%}"
+                # Return early after updating the peak. The sell decision will be made in the next cycle.
                 return decision, reason, new_trail_percentage
 
+        # --- Sell Trigger Logic ---
         # If profit has not increased, check if it has dropped enough to trigger a sale.
         trail_percentage_to_use = current_trail_pct
         if self.use_dynamic_trailing_stop:
-            # In dynamic mode, the current_trail_pct is already the calculated one.
             trail_percentage_to_use = current_trail_pct
         else:
-            # In fixed mode, always use the configured fixed percentage.
             trail_percentage_to_use = self.fixed_trail_percentage
 
-        # Calculate the profit level that would trigger a sale.
-        stop_profit_level = highest_profit * (Decimal('1') - trail_percentage_to_use)
-        
-        # Ensure the trigger doesn't fall below the absolute minimum profit required to trail.
-        final_trigger_profit = max(stop_profit_level, min_profit_target)
+        # --- Dual Trigger Calculation: Use the more aggressive of Percentage vs. Absolute Drop ---
+        # 1. Calculate the trigger based on percentage drop
+        trigger_profit_pct = highest_profit * (Decimal('1') - trail_percentage_to_use)
+
+        # 2. Calculate the trigger based on absolute USD drop (if configured)
+        trigger_profit_abs = Decimal('-1') # Default to a value that will be ignored
+        if self.trailing_stop_drop_usd > 0:
+            trigger_profit_abs = highest_profit - self.trailing_stop_drop_usd
+
+        # The actual stop profit level is the more aggressive of the two (the higher value)
+        stop_profit_level = max(trigger_profit_pct, trigger_profit_abs)
+
+        # --- Final Safeguard ---
+        # Ensure the final trigger doesn't fall below the absolute minimum profit floor.
+        safe_profit_floor = self.trailing_stop_min_profit_usd
+        final_trigger_profit = max(stop_profit_level, safe_profit_floor)
 
         if net_unrealized_pnl <= final_trigger_profit:
             decision = "SELL"
             reason = (
                 f"Trailing stop sell triggered. "
                 f"PnL (${net_unrealized_pnl:,.2f}) <= Target (${final_trigger_profit:,.2f}). "
-                f"Trail: {trail_percentage_to_use:.2%}"
+                f"Peak: ${highest_profit:.2f}, Trail: {trail_percentage_to_use:.2%}"
             )
         else:
             reason = (
