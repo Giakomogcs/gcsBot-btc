@@ -3,6 +3,7 @@ from typing import Optional
 import uuid
 import json
 import os
+import shutil
 import tempfile
 import threading
 import uvicorn
@@ -595,48 +596,68 @@ class TradingBot:
         finally:
             self.shutdown()
 
-    def _update_status_file(self, market_data, current_params, open_positions, total_portfolio_value, current_regime):
-        """
-        Gathers the bot's current state and writes it to the JSON file for the TUI.
-        This version receives pre-calculated data to avoid redundant computations.
-        """
-        logger.info("Starting status file update...")
+    def _ensure_tui_directory_exists(self):
+        """Ensures the .tui_files directory exists."""
+        status_dir = ".tui_files"
         try:
-            reason = self.last_decision_reason
-            operating_mode = self.last_operating_mode
-            buy_target, buy_progress = calculate_buy_progress(market_data, current_params, self.last_difficulty_factor)
+            os.makedirs(status_dir, exist_ok=True)
+        except OSError as e:
+            logger.error(f"Error creating TUI directory '{status_dir}': {e}", exc_info=True)
+            raise
+
+    def _write_status_file_for_tui(self, status_data: dict):
+        """
+        Safely writes the status data to a file for the TUI to consume.
+        Uses a temporary file and atomic move for safety.
+        """
+        try:
+            self._ensure_tui_directory_exists()
+            status_file_path = os.path.join(".tui_files", f".bot_status_{self.bot_name}.json")
             
-            # Get balance breakdown from the portfolio manager
-            cash_balance = self.live_portfolio_manager.cached_cash_balance
-            invested_value = self.live_portfolio_manager.cached_open_positions_value
-            
-            self.status_service.update_bot_status(
-                bot_id=self.bot_name, mode=self.mode, reason=reason, open_positions=len(open_positions),
-                portfolio_value=total_portfolio_value, market_regime=current_regime, operating_mode=operating_mode,
-                buy_target=buy_target, buy_progress=buy_progress,
-                cash_balance=cash_balance, invested_value=invested_value
-            )
-            status_dir = ".tui_files"
-            os.makedirs(status_dir, mode=0o777, exist_ok=True)
-            status_file_path = os.path.join(status_dir, f".bot_status_{self.bot_name}.json")
-            status_data = self.status_service.get_extended_status(self.mode, self.bot_name)
-            portfolio_history = self.db_manager.get_portfolio_history(self.bot_name)
-            status_data['portfolio_history'] = [p.to_dict() for p in portfolio_history]
-            temp_path = status_file_path + ".tmp"
-            with open(temp_path, "w") as f:
-                json.dump(status_data, f, default=str)
-            os.rename(temp_path, status_file_path)
+            # Use a temporary file in the same directory to ensure atomic move
+            with tempfile.NamedTemporaryFile(mode='w', delete=False, dir=".tui_files", prefix=f".bot_status_{self.bot_name}_", suffix=".tmp") as temp_f:
+                json.dump(status_data, temp_f, default=str)
+                temp_path = temp_f.name
+
+            # shutil.move is more robust than os.rename across filesystems (common in Docker)
+            shutil.move(temp_path, status_file_path)
             logger.info("Status file update complete.")
         except Exception as e:
             logger.error(f"Failed to write status file for TUI during update: {e}", exc_info=True)
+
+
+    def _update_status_file(self, market_data, current_params, open_positions, total_portfolio_value, current_regime):
+        """
+        Gathers the bot's current state and triggers the write to the JSON file for the TUI.
+        """
+        logger.info("Starting status file update...")
+        # 1. Update the status in the database (internal state)
+        self.status_service.update_bot_status(
+            bot_id=self.bot_name, mode=self.mode, reason=self.last_decision_reason,
+            open_positions=len(open_positions), portfolio_value=total_portfolio_value,
+            market_regime=current_regime, operating_mode=self.last_operating_mode,
+            buy_target=calculate_buy_progress(market_data, current_params, self.last_difficulty_factor)[0],
+            buy_progress=calculate_buy_progress(market_data, current_params, self.last_difficulty_factor)[1],
+            cash_balance=self.live_portfolio_manager.cached_cash_balance,
+            invested_value=self.live_portfolio_manager.cached_open_positions_value
+        )
+        # 2. Get the full, extended status for the TUI
+        status_data = self.status_service.get_extended_status(self.mode, self.bot_name)
+
+        # 3. Add portfolio history to the TUI data
+        portfolio_history = self.db_manager.get_portfolio_history(self.bot_name)
+        status_data['portfolio_history'] = [p.to_dict() for p in portfolio_history]
+
+        # 4. Write the final data to the file
+        self._write_status_file_for_tui(status_data)
+
 
     def _update_sync_status_file(self):
         """A lightweight status update for showing sync status in the TUI."""
         logger.info("Updating TUI with sync status...")
         try:
-            status_dir = ".tui_files"
-            os.makedirs(status_dir, mode=0o777, exist_ok=True)
-            status_file_path = os.path.join(status_dir, f".bot_status_{self.bot_name}.json")
+            self._ensure_tui_directory_exists()
+            status_file_path = os.path.join(".tui_files", f".bot_status_{self.bot_name}.json")
             
             status_data = {}
             # Read existing data if possible to not overwrite everything
@@ -650,23 +671,17 @@ class TradingBot:
             # Override only the necessary fields for sync status
             if self.is_syncing:
                 status_data['bot_status'] = "SYNCHRONIZING..."
-                # Ensure nested dict exists
-                if 'buy_signal_status' not in status_data:
-                    status_data['buy_signal_status'] = {}
+                if 'buy_signal_status' not in status_data: status_data['buy_signal_status'] = {}
                 status_data['buy_signal_status']['operating_mode'] = "SYNCHRONIZING..."
                 status_data['buy_signal_status']['reason'] = "Performing state synchronization with the exchange."
             else:
-                # Revert to last known operating mode after sync
                 status_data['bot_status'] = "RUNNING"
                 if 'buy_signal_status' in status_data:
                     status_data['buy_signal_status']['operating_mode'] = self.last_operating_mode
                     status_data['buy_signal_status']['reason'] = self.last_decision_reason
 
-            temp_path = status_file_path + ".tmp"
-            with open(temp_path, "w") as f:
-                json.dump(status_data, f, default=str)
-            os.rename(temp_path, status_file_path)
-            logger.info("Sync status file update complete.")
+            # Write the updated data to the file
+            self._write_status_file_for_tui(status_data)
         except Exception as e:
             logger.error(f"Failed to write sync status file for TUI: {e}", exc_info=True)
 

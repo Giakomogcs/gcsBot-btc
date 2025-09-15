@@ -218,20 +218,22 @@ class CapitalManager:
                     logger.info(f"Difficulty reset due to inactivity. Last trade was {time_since_last_trade.total_seconds() / 3600:.2f} hours ago (threshold: {self.difficulty_reset_timeout_hours}h).")
                     return Decimal('0')
 
-        logger.info(f"Calculating difficulty factor based on {len(sorted_trades)} recent trades.")
+        logger.info(f"Calculating difficulty factor based on up to {len(sorted_trades)} recent trades.")
 
-        net_buys = 0
+        consecutive_buys = 0
         for trade in sorted_trades:
             order_type = get_attribute(trade, 'order_type')
             if order_type and order_type.lower() == 'buy':
-                net_buys += 1
+                consecutive_buys += 1
             elif order_type and order_type.lower() == 'sell':
-                net_buys -= 1
+                # A sell breaks the consecutive buy streak, so we stop counting.
+                break
 
-        effective_buys = max(0, net_buys)
+        # 'effective_buys' is now the count of true consecutive buys from the most recent trade.
+        effective_buys = consecutive_buys
 
         if effective_buys < self.consecutive_buys_threshold:
-            logger.info(f"No difficulty applied. Net buys ({effective_buys}) is below threshold ({self.consecutive_buys_threshold}).")
+            logger.info(f"No difficulty applied. Consecutive buys ({effective_buys}) is below threshold ({self.consecutive_buys_threshold}).")
             return Decimal('0')
 
         buys_over_threshold = effective_buys - self.consecutive_buys_threshold
@@ -242,7 +244,7 @@ class CapitalManager:
 
         logger.info(
             f"Difficulty applied: {total_difficulty:.4%}. "
-            f"Net Buys: {effective_buys}. "
+            f"Consecutive Buys: {effective_buys}. "
             f"Threshold: {self.consecutive_buys_threshold}. "
             f"Base: {base_difficulty:.2%}. "
             f"Increment: {self.per_buy_difficulty_increment:.2%} x {buys_over_threshold} buys over threshold."

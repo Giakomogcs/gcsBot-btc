@@ -55,34 +55,39 @@ class SituationalAwareness:
             min_periods=self.rolling_window // 2
         ).quantile(self.volatility_percentile)
 
-        # Preenche os NaNs iniciais no limiar e nas features para garantir que todas as linhas possam ser avaliadas
-        # Isso torna o cálculo mais robusto contra falhas momentâneas na geração de features
+        # Preenche os NaNs. Primeiro, bfill para preencher os valores do início da série
+        # e depois ffill para o restante. Isso garante que o cálculo de regime não falhe
+        # nas primeiras linhas se elas contiverem NaNs.
         cols_to_fill = ['volatility_threshold', 'atr_14', 'macd_diff_12_26_9']
-        df[cols_to_fill] = df[cols_to_fill].ffill()
+        df[cols_to_fill] = df[cols_to_fill].bfill().ffill()
 
-        # Define uma função para aplicar a lógica de regime a cada linha
+        # Define uma função para aplicar a lógica de regime a cada linha de forma mais clara
         def get_regime(row):
-            # Após o ffill, a verificação de isna no threshold não é mais estritamente necessária,
-            # mas é mantida como uma salvaguarda final.
+            # A verificação de NaN é uma salvaguarda. Com bfill().ffill(), isso não deve ocorrer
+            # a menos que toda a coluna seja NaN.
             if pd.isna(row['volatility_threshold']) or pd.isna(row['atr_14']) or pd.isna(row['macd_diff_12_26_9']):
-                return -1 # Regime indefinido
+                return -1  # Regime Indefinido
 
-            # 1. Checa por alta volatilidade primeiro, pois é o regime prioritário
-            if row['atr_14'] > row['volatility_threshold']:
+            is_high_volatility = row['atr_14'] > row['volatility_threshold']
+            is_uptrend = row['macd_diff_12_26_9'] > 0
+            is_downtrend = row['macd_diff_12_26_9'] < 0
+
+            # A alta volatilidade tem a maior prioridade e sobrepõe outras condições.
+            if is_high_volatility:
                 return self.regime_map["HIGH_VOLATILITY"]
 
-            # 2. Checa por tendência de alta
-            if row['macd_diff_12_26_9'] > 0:
+            # Em seguida, verificamos as tendências.
+            if is_uptrend:
                 return self.regime_map["UPTREND"]
 
-            # 3. Checa por tendência de baixa
-            if row['macd_diff_12_26_9'] < 0:
+            if is_downtrend:
                 return self.regime_map["DOWNTREND"]
 
-            # 4. Se nenhuma das condições acima for atendida, é um mercado em range
+            # Se não houver volatilidade alta e o MACD estiver próximo de zero, consideramos "Ranging".
+            # Este é o caso em que não é nem tendência de alta nem de baixa.
             return self.regime_map["RANGING"]
 
-        # Aplica a função para determinar o regime. fillna(-1) para casos onde as features são NaN
+        # Aplica a função para determinar o regime. fillna(-1) para os casos (raros) em que todas as features são NaN.
         df['market_regime'] = df.apply(get_regime, axis=1).fillna(-1).astype(int)
         
         # Limpa a coluna de limiar que não é mais necessária fora deste contexto

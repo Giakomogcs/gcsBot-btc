@@ -120,11 +120,13 @@ class StrategyRules:
                 else:
                     reason = f"Price ${current_price:,.2f} is above EMA100 but below EMA20 ${ema_20:,.2f}"
             else:
-                if current_price <= adjusted_bbl:
-                    return True, "downtrend", f"Aggressive first entry (volatility breakout at difficulty {difficulty_factor})"
+                # DOWNTREND: Use the same dip-buying logic as uptrend.
+                if current_price <= price_dip_target:
+                    return True, "downtrend", f"Aggressive first entry (dip buy at {adjusted_buy_dip_percentage:.2%})"
                 else:
-                    reason = f"Buy target: ${adjusted_bbl:,.2f}. Price is too high."
+                    reason = f"Buy target: ${price_dip_target:,.2f}. Price is too high."
         else:
+            # Logic for when there are existing open positions
             if current_price > ema_100:
                 if high_price > ema_20 and current_price < ema_20:
                     return True, "uptrend", "Uptrend pullback"
@@ -136,10 +138,11 @@ class StrategyRules:
                 else:
                     reason = f"In uptrend (price > EMA100), but no pullback signal found"
             else:
-                if current_price <= adjusted_bbl:
-                    return True, "downtrend", f"Downtrend volatility breakout (difficulty {difficulty_factor})"
+                # DOWNTREND: Use the same dip-buying logic as uptrend.
+                if current_price <= price_dip_target:
+                    return True, "downtrend", f"Downtrend dip buy signal on existing position at {adjusted_buy_dip_percentage:.2%}"
                 else:
-                    reason = f"Buy target: ${adjusted_bbl:,.2f}. Price is too high."
+                    reason = f"Buy target: ${price_dip_target:,.2f}. Price is too high."
         
         return False, "unknown", reason or "No signal"
 
