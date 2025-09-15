@@ -50,7 +50,7 @@ class LiveFeatureCalculator:
         
         # 1. Dados de Velas (OHLCV) da Binance (base principal)
         # Aumentar o limite para garantir que a janela rolante do SA tenha dados suficientes (e.g., 72 períodos)
-        df_candles = self.exchange_manager.get_historical_candles(self.symbol, '1m', limit=200)
+        df_candles = self.exchange_manager.get_historical_candles(self.symbol, '1m', limit=500)
         if df_candles.empty:
             logger.error("Falha ao obter velas históricas da Binance. Abortando ciclo.")
             return pd.DataFrame()
