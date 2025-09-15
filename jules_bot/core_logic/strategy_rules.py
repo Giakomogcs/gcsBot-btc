@@ -105,7 +105,7 @@ class StrategyRules:
 
         base_buy_dip = params.get('buy_dip_percentage', Decimal('0.02')) if params else Decimal('0.02')
         adjusted_buy_dip_percentage = base_buy_dip + difficulty_factor
-        price_dip_target = high_price * (Decimal('1') - adjusted_buy_dip_percentage)
+        price_dip_target = ema_20 * (Decimal('1') - adjusted_buy_dip_percentage)
 
         reason = ""
         if open_positions_count == 0:
