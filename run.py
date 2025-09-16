@@ -884,13 +884,14 @@ def backtest(
     bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="O nome do bot para executar."),
     days: int = typer.Option(30, "--days", "-d", help="Número de dias de dados recentes para o backtest."),
     optimize: bool = typer.Option(False, "--optimize", help="Rodar o otimizador para encontrar os melhores parâmetros por regime de mercado."),
-    use_genius: bool = typer.Option(False, "--use-genius", help="Rodar backtests usando os .env de resultados do Genius Optimizer.")
+    use_best: bool = typer.Option(False, "--use-best", help="Rodar um backtest com os melhores parâmetros gerais encontrados pelo Genius Optimizer."),
+    use_genius: bool = typer.Option(False, "--use-genius", help="[LEGACY] Rodar backtests usando os .env de resultados do Genius Optimizer para cada regime.")
 ):
     """Executa um backtest, com a opção de otimizar ou usar resultados da otimização."""
     final_bot_name = _setup_bot_run(bot_name)
 
-    if optimize and use_genius:
-        print("❌ Erro: As opções '--optimize' e '--use-genius' são mutuamente exclusivas.")
+    if sum([optimize, use_genius, use_best]) > 1:
+        print("❌ Erro: As opções '--optimize', '--use-best' e '--use-genius' são mutuamente exclusivas.")
         raise typer.Exit(1)
     
     print("\n--- Etapa 1 de 2: Preparando dados históricos ---")
@@ -900,6 +901,26 @@ def backtest(
 
     if optimize:
         _run_optimizer(final_bot_name, days)
+        raise typer.Exit()
+
+    if use_best:
+        print("\n--- Etapa 2 de 2: Rodando backtest com os MELHORES parâmetros encontrados ---")
+        best_params_file = "optimize/genius/.env.best_overall"
+        if not os.path.exists(best_params_file):
+            print(f"❌ Arquivo de melhores parâmetros '{best_params_file}' não encontrado.")
+            print("   Você precisa rodar a otimização primeiro com a flag '--optimize'.")
+            raise typer.Exit(1)
+
+        print(f"   (usando arquivo de parâmetros: {best_params_file})")
+        success = run_command_in_container(
+            ["scripts/run_backtest.py", str(days)],
+            final_bot_name,
+            extra_env_files=[best_params_file]
+        )
+        if not success:
+            print("❌ Falha na execução do backtest com os melhores parâmetros.")
+        else:
+            print("\n✅ Backtest com melhores parâmetros finalizado com sucesso.")
         raise typer.Exit()
 
     if use_genius:

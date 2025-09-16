@@ -13,6 +13,7 @@ from jules_bot.genius_optimizer.results import (
     save_best_params_for_regime,
     generate_importance_report,
     aggregate_results,
+    save_best_overall_params,
     GENIUS_OUTPUT_DIR
 )
 
@@ -135,6 +136,9 @@ class GeniusOptimizer:
                     best_trial_file = tui_callback_dir / "best_overall_trial.json"
                     with open(best_trial_file, "w") as f:
                         json.dump(best_trial_summary, f, indent=4)
+
+                    # Also save the parameters to the .env.best_overall file
+                    save_best_overall_params(self.bot_name, best_trial_summary)
 
                     logger.info(f"🏆 New best trial found! Score: {trial.value:.4f}, Regime: {regime}, Trial: {trial.number}")
 

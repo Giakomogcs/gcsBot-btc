@@ -81,6 +81,27 @@ def aggregate_results():
         logger.error(f"❌ Failed to aggregate results: {e}", exc_info=True)
 
 
+def save_best_overall_params(bot_name: str, best_trial_data: dict):
+    """
+    Saves the best overall parameters to a dedicated .env file.
+    """
+    file_path = os.path.join(GENIUS_OUTPUT_DIR, ".env.best_overall")
+    env_prefix = bot_name.upper()
+
+    try:
+        with open(file_path, "w") as f:
+            f.write(f"# [GENIUS OPTIMIZER] Best Overall Parameters for bot '{bot_name}'\n")
+            f.write(f"# Score: {best_trial_data.get('score', 'N/A')}\n")
+            f.write(f"# From Regime: {best_trial_data.get('regime', 'N/A')}, Trial: {best_trial_data.get('trial_number', 'N/A')}\n\n")
+
+            for key, value in best_trial_data.get("params", {}).items():
+                prefixed_key = f"{env_prefix}_{key}"
+                f.write(f"{prefixed_key}={value}\n")
+        logger.info(f"✅ Best overall parameters saved to '{file_path}'")
+    except Exception as e:
+        logger.error(f"❌ Failed to save best overall .env file: {e}", exc_info=True)
+
+
 def generate_importance_report(study: optuna.Study, regime: int):
     """
     Generates and saves a parameter importance plot for a given study.

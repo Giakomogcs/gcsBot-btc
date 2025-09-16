@@ -147,7 +147,7 @@ class ComparisonWidget(Container):
             if metric_type in ["money", "ratio"]:
                 return f"[{style}]{delta:+,.2f}[/{style}]"
             if metric_type == "integer":
-                 return f"[{style}]{delta:+d}[/{style}]"
+                 return f"[{style}]{int(delta):+d}[/{style}]"
             return ""
         except (InvalidOperation, TypeError):
             return ""
