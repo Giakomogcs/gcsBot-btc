@@ -572,6 +572,18 @@ class TradingBot:
                                 position.smart_trailing_highest_profit = net_unrealized_pnl
                                 if new_trail_percentage:
                                     position.current_trail_percentage = new_trail_percentage
+                            elif decision == "DEACTIVATE":
+                                logger.info(f"🔵 {reason}")
+                                self.state_manager.update_trade_smart_trailing_state(
+                                    trade_id=position.trade_id,
+                                    is_active=False,
+                                    highest_profit=Decimal('0'),
+                                    activation_price=None,
+                                    current_trail_percentage=None
+                                )
+                                position.is_smart_trailing_active = False
+                                position.smart_trailing_highest_profit = Decimal('0')
+                                position.smart_trailing_activation_price = None
                             elif decision == "SELL":
                                 logger.info(f"✅ {reason}")
                                 sell_candidates.append((position, "trailing_stop"))
