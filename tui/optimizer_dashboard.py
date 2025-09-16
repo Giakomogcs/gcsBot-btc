@@ -5,6 +5,7 @@ from pathlib import Path
 from rich.text import Text
 from rich.panel import Panel
 from datetime import datetime
+import psutil
 
 from textual.app import App, ComposeResult
 from textual.widgets import Header, Footer, Static, Log, DataTable
@@ -64,6 +65,7 @@ class ComparisonWidget(Container):
             "sharpe_ratio": "Sharpe Ratio",
             "sortino_ratio": "Sortino Ratio",
             "total_trades": "Total Trades",
+            "sell_trades_count": "Sell Trades" # Added for clarity
         }
 
         for key, name in key_metrics.items():
@@ -107,7 +109,8 @@ class ComparisonWidget(Container):
             for key, value in sorted(params.items()):
                 value_str = f"{value:.6f}" if isinstance(value, float) else str(value)
 
-                if original_params and original_params.get(key) != value:
+                # Compare as strings to handle different types gracefully
+                if original_params and str(original_params.get(key)) != str(value):
                     key = f"[bold yellow]{key}[/bold yellow]"
                     value_str = f"[bold yellow]{value_str}[/bold yellow]"
 
@@ -138,7 +141,6 @@ class OptimizerDashboard(App):
         text-align: center;
         padding-top: 1;
         text-style: bold;
-        font-size: 110%;
     }
     .table_container {
         layout: vertical;
@@ -183,6 +185,7 @@ class OptimizerDashboard(App):
         self.processed_trial_files = set()
         self.baseline_data = {}
         self.best_trial_data = {}
+        self.optimizer_process_found = False # Track if we've ever seen the process
 
     def compose(self) -> ComposeResult:
         """Create child widgets for the app."""
@@ -206,9 +209,28 @@ class OptimizerDashboard(App):
         TUI_FILES_DIR.mkdir(exist_ok=True)
         self.update_timer = self.set_interval(1.5, self.update_dashboard)
 
+    def _is_optimizer_running(self) -> bool:
+        """Check if the optimizer script is currently running using psutil."""
+        for p in psutil.process_iter(['name', 'cmdline']):
+            if p.info['cmdline'] and 'run_genius_optimizer.py' in ' '.join(p.info['cmdline']):
+                self.optimizer_process_found = True
+                return True
+        return False
+
     def update_dashboard(self) -> None:
         """Polls the directory for JSON files and updates the dashboard."""
         status_bar = self.query_one("#status_bar", Static)
+
+        # --- Update Overall Status ---
+        is_running = self._is_optimizer_running()
+        if is_running:
+             status_bar.update("⚡ OPTIMIZING... ⚡")
+        elif self.optimizer_process_found and not is_running:
+            # If we've seen the process before but now it's gone, it's completed.
+            status_bar.update("✅ OPTIMIZATION COMPLETED ✅")
+        else:
+            # Haven't seen the process yet.
+            status_bar.update("⚪ Waiting for optimization to begin...")
 
         # --- Load Baseline Summary (once) ---
         if not self.baseline_data:
@@ -239,7 +261,8 @@ class OptimizerDashboard(App):
                     self.best_trial_data = new_data
                     best_performer_widget = self.query_one("#best_performer_widget", ComparisonWidget)
                     best_performer_widget.update_data(self.best_trial_data)
-                    status_bar.update(f"🏆 New best trial found! Score: {self.best_trial_data.get('score', 0):.4f}")
+                    # Status bar is now handled by the running check above
+                    # status_bar.update(f"🏆 New best trial found! Score: {self.best_trial_data.get('score', 0):.4f}")
 
             except (json.JSONDecodeError, IOError, KeyError) as e:
                 self.log(f"Error processing best trial file: {e}")
