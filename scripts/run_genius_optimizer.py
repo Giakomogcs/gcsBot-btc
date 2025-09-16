@@ -40,12 +40,18 @@ def run_baseline_backtest(bot_name: str, days: int):
         # Serialize results to be JSON-friendly (convert Decimals to strings)
         serializable_results = {k: str(v) if isinstance(v, Decimal) else v for k, v in results.items()}
 
+        # Also include the parameters from the config manager
+        final_data = {
+            "summary": serializable_results,
+            "params": config_manager.get_all_params_as_dict()
+        }
+
         tui_files_dir = Path(".tui_files")
         tui_files_dir.mkdir(exist_ok=True)
         baseline_file = tui_files_dir / "baseline_summary.json"
 
         with open(baseline_file, "w") as f:
-            json.dump(serializable_results, f, indent=4)
+            json.dump(final_data, f, indent=4)
 
         logger.info(f"✅ Baseline backtest summary saved to {baseline_file}")
 

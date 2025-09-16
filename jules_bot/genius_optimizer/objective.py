@@ -70,10 +70,9 @@ def create_objective_function(bot_name: str, db_manager: PostgresManager, active
             score = calculate_genius_score(results)
 
             if results:
-                trial.set_user_attr("final_balance", float(results.get("final_balance", 0.0)))
-                trial.set_user_attr("sharpe_ratio", float(results.get("sharpe_ratio", 0.0)))
-                trial.set_user_attr("max_drawdown", float(results.get("max_drawdown", 0.0)))
-                trial.set_user_attr("win_rate", float(results.get("win_rate", 0.0)))
+                # Serialize results to be JSON-friendly (convert Decimals to strings)
+                serializable_results = {k: str(v) if isinstance(v, Decimal) else v for k, v in results.items()}
+                trial.set_user_attr("full_summary", serializable_results)
 
             return score
 
