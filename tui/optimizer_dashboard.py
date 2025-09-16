@@ -256,7 +256,7 @@ class OptimizerDashboard(App):
                 trial_num = data.get('number', -1)
                 params_str = ", ".join([f"{k.split('_')[-1]}={v:.3f}" if isinstance(v, float) else f"{k.split('_')[-1]}={v}" for k, v in data.get("params", {}).items()])
 
-                log_line = Text.from_markup(
+                log_line = (
                     f"[{datetime.now():%H:%M:%S}] [b]Regime {regime} | Trial {trial_num}[/b]\n"
                     f"  - [b]Score[/b]: {score:10.4f} | [b]Balance[/b]: ${float(balance):,.2f} | [b]PnL%[/b]: {float(pnl_pct):.2%}\n"
                     f"  - [b]Params[/b]: [dim]({params_str})[/dim]\n"
