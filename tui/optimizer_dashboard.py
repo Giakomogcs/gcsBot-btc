@@ -64,8 +64,8 @@ class ComparisonWidget(Container):
             "max_drawdown": "Max Drawdown %",
             "sharpe_ratio": "Sharpe Ratio",
             "sortino_ratio": "Sortino Ratio",
-            "total_trades": "Total Trades",
-            "sell_trades_count": "Sell Trades" # Added for clarity
+            "sell_trades_count": "Sell Trades",
+            "buy_trades_count": "Buy Trades"
         }
 
         for key, name in key_metrics.items():
@@ -211,10 +211,14 @@ class OptimizerDashboard(App):
 
     def _is_optimizer_running(self) -> bool:
         """Check if the optimizer script is currently running using psutil."""
-        for p in psutil.process_iter(['name', 'cmdline']):
-            if p.info['cmdline'] and 'run_genius_optimizer.py' in ' '.join(p.info['cmdline']):
-                self.optimizer_process_found = True
-                return True
+        try:
+            for p in psutil.process_iter(['name', 'cmdline']):
+                if p.info['cmdline'] and 'run_genius_optimizer.py' in ' '.join(p.info['cmdline']):
+                    self.optimizer_process_found = True
+                    return True
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+            # Process might have ended between iter and getting info
+            pass
         return False
 
     def update_dashboard(self) -> None:
@@ -261,8 +265,6 @@ class OptimizerDashboard(App):
                     self.best_trial_data = new_data
                     best_performer_widget = self.query_one("#best_performer_widget", ComparisonWidget)
                     best_performer_widget.update_data(self.best_trial_data)
-                    # Status bar is now handled by the running check above
-                    # status_bar.update(f"🏆 New best trial found! Score: {self.best_trial_data.get('score', 0):.4f}")
 
             except (json.JSONDecodeError, IOError, KeyError) as e:
                 self.log(f"Error processing best trial file: {e}")

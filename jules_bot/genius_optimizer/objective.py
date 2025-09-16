@@ -51,8 +51,10 @@ def create_objective_function(bot_name: str, db_manager: PostgresManager, active
         try:
             config_overrides = define_search_space(trial, active_params)
 
+            # Each trial needs its own ConfigManager instance to hold the overrides.
+            # The global config_manager is a singleton and should not be modified here.
+            # The bot_name is automatically picked up from the environment, so no .initialize() is needed.
             trial_config_manager = ConfigManager()
-            trial_config_manager.initialize(bot_name)
             trial_config_manager.apply_overrides(config_overrides)
 
             if not trial_config_manager.get('BACKTEST', 'initial_balance'):
