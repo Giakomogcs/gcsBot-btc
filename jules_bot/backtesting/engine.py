@@ -107,159 +107,157 @@ class Backtester:
         pruning_frequency = 1000  # Check every 1000 candles (approx. 16 hours of 1m data)
 
         for i, (current_time, candle) in enumerate(self.feature_data.iterrows()):
-            current_price = Decimal(str(candle['close']))
-            self.mock_trader.set_current_time_and_price(current_time, current_price)
+            # --- High-Fidelity OHLC Simulation ---
+            # Instead of just using the 'close' price, we simulate the price movement
+            # within the candle to catch trailing stops and other price-sensitive triggers.
+            open_price = Decimal(str(candle['open']))
+            high_price = Decimal(str(candle['high']))
+            low_price = Decimal(str(candle['low']))
+            close_price = Decimal(str(candle['close']))
 
+            # Determine the order of price movement based on the candle type
+            if close_price >= open_price: # Bullish or neutral candle
+                price_path = [open_price, low_price, high_price, close_price]
+            else: # Bearish candle
+                price_path = [open_price, high_price, low_price, close_price]
+
+            # The regime and parameters are constant for the duration of the candle
             current_regime = candle.get('market_regime', -1)
             self.dynamic_params.update_parameters(int(current_regime))
             current_params = self.dynamic_params.parameters
 
-            cash_balance = self.mock_trader.get_account_balance()
-            current_open_positions_value = sum(pos['quantity'] * current_price for pos in open_positions.values())
-            total_portfolio_value = cash_balance + current_open_positions_value
-            portfolio_history.append(total_portfolio_value)
+            # --- Loop through the simulated price path for the current candle ---
+            for current_price in price_path:
+                self.mock_trader.set_current_time_and_price(current_time, current_price)
 
-            # --- Pruning Check ---
-            if trial and i > 0 and i % pruning_frequency == 0:
-                trial.report(float(total_portfolio_value), i)
-                if trial.should_prune():
-                    # If the trial is unpromising, Optuna will tell us to stop early.
-                    if optuna:
-                        raise optuna.TrialPruned()
+                # --- SELL LOGIC ---
+                # Check all open positions against the current price point
+                positions_to_sell_now = []
+                for trade_id, position in list(open_positions.items()):
+                    # Skip if this position is already marked for sale in this candle's path
+                    if any(p['trade_id'] == trade_id for p in positions_to_sell_now):
+                        continue
 
-            positions_to_sell_now = []
-            for trade_id, position in list(open_positions.items()):
-                sell_target_price = position.get('sell_target_price', Decimal('inf'))
-                if current_price >= sell_target_price:
-                    positions_to_sell_now.append(position)
-                    continue
-
-                entry_price = position['price']
-
-                # Calculate the current net unrealized PnL for the position
-                net_unrealized_pnl = self.strategy_rules.calculate_net_unrealized_pnl(
-                    entry_price=entry_price,
-                    current_price=current_price,
-                    total_quantity=position['quantity'],
-                    buy_commission_usd=position.get('commission_usd', Decimal('0'))
-                )
-
-                # --- Unified Smart Trailing Stop Logic ---
-                decision, reason, new_trail_percentage = self.strategy_rules.evaluate_smart_trailing_stop(
-                    position, net_unrealized_pnl, current_params
-                )
-
-                if decision == "ACTIVATE":
-                    logger.info(f"🚀 Backtest: {reason}")
-                    position['is_smart_trailing_active'] = True
-                    position['smart_trailing_highest_profit'] = net_unrealized_pnl
-                
-                elif decision == "DEACTIVATE":
-                    logger.warning(f"🟡 Backtest: {reason}")
-                    position['is_smart_trailing_active'] = False
-                    position['smart_trailing_highest_profit'] = None
-                    position['current_trail_percentage'] = None
-
-                elif decision == "UPDATE_PEAK":
-                    logger.info(f"📈 Backtest: {reason}")
-                    position['smart_trailing_highest_profit'] = net_unrealized_pnl
-                    if new_trail_percentage:
-                        position['current_trail_percentage'] = new_trail_percentage
-
-                elif decision == "SELL":
-                    # --- UNIFIED PROFITABILITY GATE ---
-                    # This check is crucial and mimics the live bot's final safety net.
-                    break_even_price = self.strategy_rules.calculate_break_even_price(position['price'])
-                    if current_price > break_even_price:
-                        logger.info(f"✅ Backtest: {reason}. Position is profitable, marking for sale.")
+                    sell_target_price = position.get('sell_target_price', Decimal('inf'))
+                    if current_price >= sell_target_price:
                         positions_to_sell_now.append(position)
-                    else:
-                        logger.warning(
-                            f"❌ Backtest: SALE CANCELED for position {trade_id}. Reason: {reason}. "
-                            f"Current price ${current_price:,.2f} is not above break-even price ${break_even_price:,.2f}."
-                        )
-                        # Reset the trailing stop to prevent a loss-making sale on the next tick.
+                        continue
+
+                    entry_price = position['price']
+                    net_unrealized_pnl = self.strategy_rules.calculate_net_unrealized_pnl(
+                        entry_price=entry_price, current_price=current_price,
+                        total_quantity=position['quantity'], buy_commission_usd=position.get('commission_usd', Decimal('0'))
+                    )
+
+                    decision, reason, new_trail_percentage = self.strategy_rules.evaluate_smart_trailing_stop(
+                        position, net_unrealized_pnl, current_params
+                    )
+
+                    if decision == "ACTIVATE":
+                        position['is_smart_trailing_active'] = True
+                        position['smart_trailing_highest_profit'] = net_unrealized_pnl
+                    elif decision == "DEACTIVATE":
                         position['is_smart_trailing_active'] = False
                         position['smart_trailing_highest_profit'] = None
+                        position['current_trail_percentage'] = None
+                    elif decision == "UPDATE_PEAK":
+                        position['smart_trailing_highest_profit'] = net_unrealized_pnl
+                        if new_trail_percentage:
+                            position['current_trail_percentage'] = new_trail_percentage
+                    elif decision == "SELL":
+                        break_even_price = self.strategy_rules.calculate_break_even_price(position['price'])
+                        if current_price > break_even_price:
+                            positions_to_sell_now.append(position)
+                        else:
+                            position['is_smart_trailing_active'] = False
+                            position['smart_trailing_highest_profit'] = None
 
-            if positions_to_sell_now:
-                for position in positions_to_sell_now:
-                    trade_id = position['trade_id']
-                    original_quantity = position['quantity']
-                    sell_quantity = original_quantity * strategy_rules.sell_factor
+                if positions_to_sell_now:
+                    for position in positions_to_sell_now:
+                        if position['trade_id'] not in open_positions: continue # Already sold in this path
 
-                    success, sell_result = self.mock_trader.execute_sell({'quantity': sell_quantity}, self.run_id, candle.to_dict())
+                        trade_id = position['trade_id']
+                        original_quantity = position['quantity']
+                        sell_quantity = original_quantity * strategy_rules.sell_factor
+
+                        success, sell_result = self.mock_trader.execute_sell({'quantity': sell_quantity}, self.run_id, candle.to_dict())
+                        if success:
+                            realized_pnl_usd = strategy_rules.calculate_realized_pnl(
+                                buy_price=position['price'], sell_price=sell_result['price'], quantity_sold=sell_result['quantity'],
+                                buy_commission_usd=position['commission_usd'], sell_commission_usd=sell_result.get('commission_usd', Decimal('0')),
+                                buy_quantity=position['quantity']
+                            )
+
+                            trade_data = {
+                                'run_id': self.run_id, 'strategy_name': strategy_name, 'symbol': symbol,
+                                'trade_id': str(uuid.uuid4()), 'linked_trade_id': trade_id,
+                                'exchange': "backtest_engine", 'order_type': "sell", 'status': "CLOSED",
+                                'price': sell_result['price'], 'quantity': sell_result['quantity'], 'usd_value': sell_result['usd_value'],
+                                'commission': sell_result.get('commission_usd', Decimal('0')), 'commission_asset': "USDT",
+                                'timestamp': current_time, 'decision_context': candle.to_dict(),
+                                'commission_usd': sell_result.get('commission_usd', Decimal('0')), 'realized_pnl_usd': realized_pnl_usd
+                            }
+                            all_trades_for_run.append(BacktestTrade(**trade_data))
+                            del open_positions[trade_id]
+
+                # --- BUY LOGIC ---
+                # The buy logic should only be evaluated ONCE per candle, typically based on the final state (close price).
+                # Running it on every price tick would be unrealistic and could lead to multiple buys in one minute.
+                if current_price != close_price:
+                    continue
+
+                cash_balance = self.mock_trader.get_account_balance()
+                total_portfolio_value = self.mock_trader.get_total_portfolio_value()
+
+                market_data = candle.to_dict()
+                timeout_hours = self.capital_manager.difficulty_reset_timeout_hours
+                start_date_for_difficulty = current_time - timedelta(hours=timeout_hours)
+
+                recent_trades_for_difficulty = [t for t in all_trades_for_run if t.timestamp and t.timestamp >= start_date_for_difficulty]
+
+                buy_amount_usdt, op_mode, reason, _, diff_factor = self.capital_manager.get_buy_order_details(
+                    market_data=market_data, open_positions=list(open_positions.values()),
+                    portfolio_value=total_portfolio_value, free_cash=cash_balance,
+                    params=current_params, trade_history=recent_trades_for_difficulty,
+                    current_time=current_time
+                )
+
+                if buy_amount_usdt > 0 and cash_balance >= min_trade_size:
+                    decision_context_buy = {**candle.to_dict(), 'operating_mode': op_mode, 'buy_trigger_reason': reason, 'market_regime': current_regime}
+                    success, buy_result = self.mock_trader.execute_buy(buy_amount_usdt, self.run_id, decision_context_buy)
                     if success:
-                        realized_pnl_usd = strategy_rules.calculate_realized_pnl(
-                            buy_price=position['price'], sell_price=sell_result['price'], quantity_sold=sell_result['quantity'],
-                            buy_commission_usd=position['commission_usd'], sell_commission_usd=sell_result.get('commission_usd', Decimal('0')),
-                            buy_quantity=position['quantity']
-                        )
-                        hodl_asset_amount = original_quantity - sell_quantity
+                        new_trade_id = str(uuid.uuid4())
+                        sell_target_price = strategy_rules.calculate_sell_target_price(buy_result['price'], buy_result['quantity'], params=current_params)
 
-                        sell_trade_id = str(uuid.uuid4())
+                        position_data = {
+                            'trade_id': new_trade_id, 'price': buy_result['price'], 'quantity': buy_result['quantity'],
+                            'usd_value': buy_result['usd_value'], 'sell_target_price': sell_target_price,
+                            'commission_usd': buy_result.get('commission_usd', Decimal('0')),
+                            'is_smart_trailing_active': False, 'smart_trailing_highest_profit': None,
+                            'activation_price': None, 'current_trail_percentage': None,
+                        }
+                        open_positions[new_trade_id] = position_data
+
                         trade_data = {
                             'run_id': self.run_id, 'strategy_name': strategy_name, 'symbol': symbol,
-                            'trade_id': sell_trade_id, 'linked_trade_id': trade_id, # Link sell to buy
-                            'exchange': "backtest_engine", 'order_type': "sell",
-                            'status': "CLOSED", 'price': sell_result['price'], 'quantity': sell_result['quantity'],
-                            'usd_value': sell_result['usd_value'], 'commission': sell_result.get('commission_usd', Decimal('0')),
-                            'commission_asset': "USDT", 'timestamp': current_time, 'decision_context': candle.to_dict(),
-                            'commission_usd': sell_result.get('commission_usd', Decimal('0')), 'realized_pnl_usd': realized_pnl_usd
+                            'trade_id': new_trade_id, 'exchange': "backtest_engine", 'order_type': "buy", 'status': "OPEN",
+                            'price': buy_result['price'], 'quantity': buy_result['quantity'], 'usd_value': buy_result['usd_value'],
+                            'commission': buy_result.get('commission_usd', Decimal('0')), 'commission_asset': "USDT",
+                            'timestamp': current_time, 'decision_context': decision_context_buy,
+                            'sell_target_price': sell_target_price, 'commission_usd': buy_result.get('commission_usd', Decimal('0'))
                         }
                         all_trades_for_run.append(BacktestTrade(**trade_data))
-                        del open_positions[trade_id]
 
-            # BUY LOGIC
-            market_data = candle.to_dict()
-            # Filter trade history to match the live bot's rolling window for difficulty calculation.
-            timeout_hours = self.capital_manager.difficulty_reset_timeout_hours
-            start_date_for_difficulty = current_time - timedelta(hours=timeout_hours)
+            # --- End of Candle Operations ---
+            # Portfolio history and pruning should be updated once per candle (at the close).
+            final_portfolio_value = self.mock_trader.get_total_portfolio_value()
+            portfolio_history.append(final_portfolio_value)
             
-            recent_trades_for_difficulty = [
-                t for t in all_trades_for_run 
-                if t.timestamp and t.timestamp >= start_date_for_difficulty
-            ]
-
-            buy_amount_usdt, op_mode, reason, _, diff_factor = self.capital_manager.get_buy_order_details(
-                market_data=market_data, open_positions=list(open_positions.values()),
-                portfolio_value=total_portfolio_value, free_cash=cash_balance,
-                params=current_params, trade_history=recent_trades_for_difficulty,
-                current_time=current_time
-            )
-
-            if buy_amount_usdt > 0 and cash_balance >= min_trade_size:
-                decision_context_buy = {**candle.to_dict(), 'operating_mode': op_mode, 'buy_trigger_reason': reason, 'market_regime': current_regime}
-                success, buy_result = self.mock_trader.execute_buy(buy_amount_usdt, self.run_id, decision_context_buy)
-                if success:
-                    new_trade_id = str(uuid.uuid4())
-                    sell_target_price = strategy_rules.calculate_sell_target_price(buy_result['price'], buy_result['quantity'], params=current_params)
-
-                    position_data = {
-                        'trade_id': new_trade_id,
-                        'price': buy_result['price'],
-                        'quantity': buy_result['quantity'],
-                        'usd_value': buy_result['usd_value'],
-                        'sell_target_price': sell_target_price,
-                        'commission_usd': buy_result.get('commission_usd', Decimal('0')),
-                        # State for the new unified smart trailing logic
-                        'is_smart_trailing_active': False,
-                        'smart_trailing_highest_profit': None,
-                        'activation_price': None,
-                        'current_trail_percentage': None,
-                    }
-                    open_positions[new_trade_id] = position_data
-
-                    trade_data = {
-                        'run_id': self.run_id, 'strategy_name': strategy_name, 'symbol': symbol,
-                        'trade_id': new_trade_id, 'exchange': "backtest_engine", 'order_type': "buy",
-                        'status': "OPEN", 'price': buy_result['price'], 'quantity': buy_result['quantity'],
-                        'usd_value': buy_result['usd_value'], 'commission': buy_result.get('commission_usd', Decimal('0')),
-                        'commission_asset': "USDT", 'timestamp': current_time,
-                        'decision_context': decision_context_buy, 'sell_target_price': sell_target_price,
-                        'commission_usd': buy_result.get('commission_usd', Decimal('0'))
-                    }
-                    all_trades_for_run.append(BacktestTrade(**trade_data))
+            if trial and i > 0 and i % pruning_frequency == 0:
+                trial.report(float(final_portfolio_value), i)
+                if trial.should_prune():
+                    if optuna:
+                        raise optuna.TrialPruned()
 
         self._log_trades_to_db(all_trades_for_run)
         results = self._generate_and_save_summary(open_positions, portfolio_history)
@@ -565,6 +563,9 @@ class Backtester:
 
         # Display the results in a clean table format
         self._display_results_table(results)
+
+        # Add the raw trade list to the results for detailed TUI comparison
+        results["trades"] = [trade.to_dict() for trade in all_trades_for_run]
 
         return results
 

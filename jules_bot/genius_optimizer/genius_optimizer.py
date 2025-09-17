@@ -47,6 +47,7 @@ class GeniusOptimizer:
         logger.info(f"Cleaning up old TUI files in {tui_dir}...")
         files_to_delete = list(tui_dir.glob("genius_*.json"))
         files_to_delete.extend(list(tui_dir.glob("best_overall_trial.json")))
+        files_to_delete.extend(list(tui_dir.glob("progress_status.json"))) # Also remove progress file
         # We keep the baseline summary, as it's generated before this class is instantiated
 
         for f in files_to_delete:
@@ -117,30 +118,39 @@ class GeniusOptimizer:
             with open(file_path, "w") as f:
                 json.dump(trial_data, f, indent=4)
 
-            # --- Update the global best trial file (thread-safe) ---
+            # --- Update global state (thread-safe) ---
             with self.global_best_lock:
-                # Use the in-memory score for a quick check
+                # 1. Update overall progress
+                progress_file = tui_callback_dir / "progress_status.json"
+                try:
+                    if progress_file.exists():
+                        with open(progress_file, "r+") as f:
+                            progress_data = json.load(f)
+                            progress_data["completed_trials"] += 1
+                            f.seek(0)
+                            json.dump(progress_data, f)
+                            f.truncate()
+                except (IOError, json.JSONDecodeError) as e:
+                    logger.warning(f"Could not update progress file: {e}")
+
+                # 2. Check for new best trial
                 if trial.value is not None and trial.value > self.best_overall_score:
                     self.best_overall_score = trial.value # Update in-memory score
 
-                    # Prepare the data for the best trial summary
                     best_trial_summary = {
                         "regime": regime,
                         "trial_number": trial.number,
                         "score": trial.value,
                         "params": trial.params,
-                        "summary": trial.user_attrs.get("full_summary", {}) # Get the full summary dict
+                        "summary": trial.user_attrs.get("full_summary", {})
                     }
 
-                    # Write the new best to the file
                     best_trial_file = tui_callback_dir / "best_overall_trial.json"
                     with open(best_trial_file, "w") as f:
                         json.dump(best_trial_summary, f, indent=4)
 
-                    # Also save the parameters to the .env.best_overall file
                     save_best_overall_params(self.bot_name, best_trial_summary)
-
-                    logger.info(f"🏆 New best trial found! Score: {trial.value:.4f}, Regime: {regime}, Trial: {trial.number}")
+                    logger.info(f"🏆 New best trial! Score: {trial.value:.4f}, R: {regime}, T: {trial.number}")
 
 
         study.optimize(
@@ -172,11 +182,22 @@ class GeniusOptimizer:
             logger.error("No data segments were created. Aborting optimization.")
             return
 
-        # 2. Run optimization for each regime in parallel
-        logger.info(f"STEP 2: Running optimization for {len(segmented_data)} market regimes in parallel...")
+        # 2. Initialize progress tracking for the TUI
+        total_trials = len(segmented_data) * self.n_trials
+        progress_data = {"total_trials": total_trials, "completed_trials": 0}
+        tui_dir = Path(".tui_files")
+        tui_dir.mkdir(exist_ok=True)
+        try:
+            with open(tui_dir / "progress_status.json", "w") as f:
+                json.dump(progress_data, f)
+        except IOError as e:
+            logger.error(f"Could not write initial progress file: {e}")
+            # Don't abort, the TUI will just not show a progress bar
         
+        # 3. Run optimization for each regime in parallel
+        logger.info(f"STEP 2: Running optimization for {len(segmented_data)} market regimes ({total_trials} total trials)...")
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(segmented_data)) as executor:
-            # Create a future for each regime optimization
             futures = {
                 executor.submit(self.run_study_for_regime, regime, data_segment): regime
                 for regime, data_segment in segmented_data.items()

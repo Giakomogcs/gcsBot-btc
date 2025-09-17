@@ -9,7 +9,7 @@ import psutil
 from decimal import Decimal, InvalidOperation
 
 from textual.app import App, ComposeResult
-from textual.widgets import Header, Footer, Static, Log, DataTable
+from textual.widgets import Header, Footer, Static, Log, DataTable, Progress
 from textual.containers import Container, Vertical, ScrollableContainer
 from textual.timer import Timer
 
@@ -153,6 +153,116 @@ class ComparisonWidget(Container):
             return ""
 
 
+class TradesComparisonWidget(Container):
+    """A widget to display a side-by-side comparison of trades."""
+
+    def compose(self) -> ComposeResult:
+        with Container(classes="trades_main_container"):
+            with Vertical(classes="trade_list_container"):
+                yield Static("Baseline Trades", classes="widget_title")
+                yield DataTable(id="baseline_trades_table")
+            with Vertical(classes="trade_list_container"):
+                yield Static("Best Performer Trades", classes="widget_title")
+                yield DataTable(id="best_trades_table")
+
+    def on_mount(self) -> None:
+        for table_id in ["#baseline_trades_table", "#best_trades_table"]:
+            table = self.query_one(table_id, DataTable)
+            table.add_column("Time", width=20)
+            table.add_column("Type", width=6)
+            table.add_column("Price", width=12, key="price")
+            table.add_column("Qty", width=15, key="qty")
+            table.add_column("PnL ($)", width=12, key="pnl")
+            table.add_row("[dim]Waiting for data...[/dim]", "", "", "", "")
+
+    def update_data(self, baseline_data: dict, best_data: dict):
+        baseline_trades = baseline_data.get("summary", {}).get("trades", [])
+        best_trades = best_data.get("summary", {}).get("trades", [])
+
+        self._update_table("#baseline_trades_table", baseline_trades)
+        self._update_table("#best_trades_table", best_trades)
+
+    def _update_table(self, table_id: str, trades: list):
+        table = self.query_one(table_id, DataTable)
+        table.clear()
+
+        if not trades:
+            table.add_row("[dim]No trades executed.[/dim]", "", "", "", "")
+            return
+
+        for trade in trades:
+            ts = datetime.fromisoformat(trade.get("timestamp")).strftime("%Y-%m-%d %H:%M:%S")
+            order_type = trade.get("order_type", "").upper()
+
+            style = "green" if order_type == "BUY" else "red" if order_type == "SELL" else ""
+            type_str = f"[{style}]{order_type}[/{style}]" if style else order_type
+
+            price = Decimal(trade.get("price", 0))
+            qty = Decimal(trade.get("quantity", 0))
+
+            pnl_str = ""
+            if order_type == "SELL":
+                pnl = Decimal(trade.get("realized_pnl_usd", 0))
+                pnl_style = "bold green" if pnl > 0 else "bold red" if pnl < 0 else "dim"
+                pnl_str = f"[{pnl_style}]{pnl:+.2f}[/{pnl_style}]"
+
+            table.add_row(
+                ts,
+                type_str,
+                f"{price:,.4f}",
+                f"{qty:.6f}",
+                pnl_str
+            )
+
+
+class TopTrialsWidget(Container):
+    """A widget to display a leaderboard of the top performing trials."""
+
+    def compose(self) -> ComposeResult:
+        yield Static("🏆 Top 5 Performing Trials 🏆", classes="widget_title")
+        yield DataTable(id="top_trials_table")
+
+    def on_mount(self) -> None:
+        table = self.query_one(DataTable)
+        table.add_column("Rank", width=6)
+        table.add_column("Score", width=12, key="score")
+        table.add_column("Regime", width=8)
+        table.add_column("Trial #", width=8)
+        table.add_column("Key Params", width=100)
+        table.add_row("[dim]Waiting for trials...[/dim]", "", "", "", "")
+
+    def update_data(self, top_trials: list):
+        table = self.query_one(DataTable)
+        table.clear()
+
+        if not top_trials:
+            table.add_row("[dim]Waiting for trials...[/dim]", "", "", "", "")
+            return
+
+        for i, trial in enumerate(top_trials):
+            rank = i + 1
+            score = trial.get("score", 0)
+            regime = trial.get("regime", "N/A")
+            trial_num = trial.get("number", "N/A")
+
+            params = trial.get("params", {})
+            # Display a few key parameters to keep the table clean
+            key_params = {
+                k.replace("STRATEGY_RULES_", "").replace(f"REGIME_{regime}_", ""): v
+                for k, v in params.items()
+                if "PERCENTAGE" in k or "PROFIT" in k or "SCALING" in k
+            }
+            params_str = " | ".join([f"{k}: {v:.4f}" for k, v in key_params.items()])
+
+            table.add_row(
+                f"#{rank}",
+                f"{score:.4f}",
+                str(regime),
+                str(trial_num),
+                f"[dim]{params_str}[/dim]"
+            )
+
+
 class OptimizerDashboard(App):
     CSS = """
     Screen { background: $surface; }
@@ -163,9 +273,13 @@ class OptimizerDashboard(App):
     .summary_table { height: 12; margin-bottom: 1; }
     .params_table { height: 100%; }
     #status_bar { dock: top; height: 3; content-align: center middle; background: $panel; border: round white; }
+    #progress_container { dock: top; height: 5; content-align: center middle; padding: 1; display: none; }
     #trial_log_container { height: 24; border: heavy white; padding: 1; margin: 1 0; }
     .log_header { width: 100%; text-align: center; text-style: bold; }
     .log_box { height: 100%; border: none; }
+    .trades_main_container { layout: horizontal; grid-size: 2; grid-gutter: 1; height: 24; margin-top: 1; }
+    .trade_list_container { border: round white; padding: 0 1; }
+    TopTrialsWidget { height: 10; border: round white; margin-top: 1; padding: 0 1; }
     """
     BINDINGS = [("q", "quit", "Quit")]
 
@@ -176,14 +290,20 @@ class OptimizerDashboard(App):
         self.baseline_data = {}
         self.best_trial_data = {}
         self.optimizer_process_found = False
+        self.progress_task_id = None
+        self.start_time = None
 
     def compose(self) -> ComposeResult:
         yield Header(name="⚡ Genius Optimizer Dashboard ⚡")
         yield Static("⚪ Waiting for optimization to begin...", id="status_bar")
+        with Container(id="progress_container"):
+            yield Progress(id="overall_progress")
         with ScrollableContainer():
             with Container(id="main_container"):
                 yield ComparisonWidget(title="📊 Baseline (.env)", id="baseline_widget")
                 yield ComparisonWidget(title="🏆 Best Performer", id="best_performer_widget")
+            yield TradesComparisonWidget(id="trades_comparison_widget")
+            yield TopTrialsWidget()
             yield Vertical(
                 Static("Live Trial Log", classes="log_header"),
                 Log(id="live_trial_log", auto_scroll=True, classes="log_box"),
@@ -193,6 +313,8 @@ class OptimizerDashboard(App):
 
     def on_mount(self) -> None:
         TUI_FILES_DIR.mkdir(exist_ok=True)
+        progress_bar = self.query_one(Progress)
+        self.progress_task_id = progress_bar.add_task("total", total=100)
         self.update_timer = self.set_interval(1.5, self.update_dashboard)
 
     def _is_optimizer_running(self) -> bool:
@@ -206,15 +328,53 @@ class OptimizerDashboard(App):
         return False
 
     def update_dashboard(self) -> None:
+        # --- Status Bar Update ---
         status_bar = self.query_one("#status_bar", Static)
         is_running = self._is_optimizer_running()
         if is_running:
-             status_bar.update("⚡ OPTIMIZING... ⚡")
+            status_bar.update("⚡ OPTIMIZING... ⚡")
+            if self.start_time is None: self.start_time = time.time()
         elif self.optimizer_process_found and not is_running:
             status_bar.update("✅ OPTIMIZATION COMPLETED ✅")
         else:
             status_bar.update("⚪ Waiting for optimization to begin...")
 
+        # --- Progress Bar Update ---
+        progress_file = TUI_FILES_DIR / "progress_status.json"
+        progress_container = self.query_one("#progress_container")
+        if progress_file.exists():
+            progress_container.styles.display = "block"
+            try:
+                with open(progress_file, "r") as f:
+                    progress_data = json.load(f)
+
+                completed = progress_data.get("completed_trials", 0)
+                total = progress_data.get("total_trials", 1)
+
+                progress_bar = self.query_one(Progress)
+                progress_bar.update(self.progress_task_id, completed=completed, total=total)
+
+                # Calculate ETA
+                eta_str = "Calculating..."
+                if self.start_time and completed > 0:
+                    elapsed_time = time.time() - self.start_time
+                    time_per_trial = elapsed_time / completed
+                    remaining_trials = total - completed
+                    eta_seconds = remaining_trials * time_per_trial
+
+                    if eta_seconds > 3600:
+                        eta_str = f"{eta_seconds / 3600:.1f} hours"
+                    elif eta_seconds > 60:
+                        eta_str = f"{eta_seconds / 60:.1f} minutes"
+                    else:
+                        eta_str = f"{eta_seconds:.0f} seconds"
+
+                progress_bar.tasks[0].description = f"Overall Progress (ETA: {eta_str})"
+
+            except (json.JSONDecodeError, IOError):
+                pass # Fail silently if file is being written or is corrupt
+
+        # --- Baseline Widget Update ---
         if not self.baseline_data:
             baseline_file = TUI_FILES_DIR / "baseline_summary.json"
             if baseline_file.exists():
@@ -235,10 +395,38 @@ class OptimizerDashboard(App):
                     self.best_trial_data = new_data
                     best_performer_widget = self.query_one("#best_performer_widget", ComparisonWidget)
                     best_performer_widget.update_data(self.best_trial_data, self.baseline_data)
+
+                    # Update the trades comparison widget as well
+                    if self.baseline_data:
+                        trades_widget = self.query_one(TradesComparisonWidget)
+                        trades_widget.update_data(self.baseline_data, self.best_trial_data)
+
             except (json.JSONDecodeError, IOError, KeyError) as e:
                 self.log(f"Error processing best trial file: {e}")
 
         trial_files = glob.glob(str(TUI_FILES_DIR / "genius_trial_*.json"))
+
+        # --- Top Trials Leaderboard Update ---
+        # This part always re-reads all files to update the leaderboard.
+        all_trials = []
+        for file_path in trial_files:
+            try:
+                with open(file_path, "r") as f:
+                    all_trials.append(json.load(f))
+            except (IOError, json.JSONDecodeError):
+                continue # Skip corrupted or currently being written files
+
+        if all_trials:
+            # Sort by score descending and take the top 5
+            sorted_trials = sorted(all_trials, key=lambda t: t.get("score", -9999), reverse=True)
+            top_5_trials = sorted_trials[:5]
+
+            # Update the widget
+            top_trials_widget = self.query_one(TopTrialsWidget)
+            top_trials_widget.update_data(top_5_trials)
+
+        # --- Live Log Update ---
+        # This part only processes new files to append to the log.
         new_trial_files = sorted([f for f in trial_files if f not in self.processed_trial_files])
 
         trial_log = self.query_one("#live_trial_log", Log)

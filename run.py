@@ -903,27 +903,46 @@ def backtest(
         _run_optimizer(final_bot_name, days)
         raise typer.Exit()
 
-    if use_best:
+    # This variable will hold the final decision on whether to use the best params.
+    # It can be set by the flag or by the interactive prompt.
+    should_use_best = use_best
+    best_params_file = "optimize/genius/.env.best_overall"
+
+    # --- Interactive prompt if no mode is specified ---
+    if not any([optimize, use_genius, use_best]):
+        if questionary is None:
+            print("⚠️  A biblioteca 'questionary' não está instalada. Rodando com parâmetros padrão.")
+        else:
+            if not os.path.exists(best_params_file):
+                print("ℹ️  Arquivo de melhores parâmetros não encontrado. Rodando com parâmetros padrão do .env.")
+            else:
+                choice = questionary.select(
+                    "Qual conjunto de parâmetros você gostaria de usar para o backtest?",
+                    choices=[
+                        questionary.Choice("Padrão (do arquivo .env)", "default"),
+                        questionary.Choice("Melhores Otimizados (encontrados pelo Genius Optimizer)", "best"),
+                    ],
+                    default="default"
+                ).ask()
+
+                if choice is None: # User pressed Ctrl+C
+                    raise typer.Exit()
+                if choice == "best":
+                    should_use_best = True
+
+    # --- Execution Logic ---
+    extra_env_files = []
+    if should_use_best:
         print("\n--- Etapa 2 de 2: Rodando backtest com os MELHORES parâmetros encontrados ---")
-        best_params_file = "optimize/genius/.env.best_overall"
         if not os.path.exists(best_params_file):
             print(f"❌ Arquivo de melhores parâmetros '{best_params_file}' não encontrado.")
             print("   Você precisa rodar a otimização primeiro com a flag '--optimize'.")
             raise typer.Exit(1)
 
         print(f"   (usando arquivo de parâmetros: {best_params_file})")
-        success = run_command_in_container(
-            ["scripts/run_backtest.py", str(days)],
-            final_bot_name,
-            extra_env_files=[best_params_file]
-        )
-        if not success:
-            print("❌ Falha na execução do backtest com os melhores parâmetros.")
-        else:
-            print("\n✅ Backtest com melhores parâmetros finalizado com sucesso.")
-        raise typer.Exit()
+        extra_env_files.append(best_params_file)
 
-    if use_genius:
+    elif use_genius:
         print("\n--- Etapa 2 de 2: Rodando backtests com os resultados do Genius Optimizer ---")
         genius_dir = "optimize/genius"
         env_files = glob.glob(os.path.join(genius_dir, ".env.*"))
@@ -942,25 +961,29 @@ def backtest(
             print(f"   (usando arquivo de parâmetros: {env_file})")
             print("="*80 + "\n")
 
-            # Rodar o backtest com o arquivo .env específico do regime
             success = run_command_in_container(
                 ["scripts/run_backtest.py", str(days)],
                 final_bot_name,
                 extra_env_files=[env_file]
             )
-
             if not success:
                 print(f"⚠️  Backtest para o regime {regime_name} falhou. Verifique os logs acima.")
-
             print(f"\n--- ✅ Backtest para o regime {regime_name} finalizado ---")
 
         print("\n🎉 Todos os backtests baseados no Genius Optimizer foram concluídos.")
-
+        raise typer.Exit()
     else:
         print(f"\n--- Etapa 2 de 2: Rodando backtest padrão para {days} dias ---")
-        if not run_command_in_container(["scripts/run_backtest.py", str(days)], final_bot_name, extra_env_files=None):
-            print("❌ Falha na execução do backtest.")
-            return
+
+    # Common execution for default and --use-best
+    success = run_command_in_container(
+        ["scripts/run_backtest.py", str(days)],
+        final_bot_name,
+        extra_env_files=extra_env_files if extra_env_files else None
+    )
+    if not success:
+        print("❌ Falha na execução do backtest.")
+    else:
         print("\n✅ Backtest finalizado com sucesso.")
 
 @app.command("clean")
