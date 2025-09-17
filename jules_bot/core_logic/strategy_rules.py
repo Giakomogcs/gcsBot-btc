@@ -234,14 +234,19 @@ class StrategyRules:
         reason = "No action required."
         new_trail_percentage = None
 
+        if params is None:
+            params = {}
+
+        # Use the regime-specific target_profit if available, otherwise use the global fallback.
+        activation_profit_target = params.get('target_profit', self.trailing_stop_min_profit_usd)
+
         if not is_active:
-            # Activate the trailing stop as soon as the PnL is above the absolute minimum floor.
-            # This decouples the trailing stop from the regime's take-profit target.
-            if net_unrealized_pnl >= self.trailing_stop_min_profit_usd:
+            # Activate the trailing stop as soon as the PnL is above the regime's target profit.
+            if net_unrealized_pnl >= activation_profit_target:
                 decision = "ACTIVATE"
                 reason = (
                     f"Trailing stop activated. PnL (${net_unrealized_pnl:.2f}) "
-                    f"reached minimum profit floor (${self.trailing_stop_min_profit_usd:.2f})."
+                    f"reached activation target (${activation_profit_target:.2f})."
                 )
             return decision, reason, new_trail_percentage
 

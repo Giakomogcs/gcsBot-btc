@@ -72,7 +72,8 @@ def get_docker_compose_command():
 def run_docker_compose_command(command_args: list, **kwargs):
     try:
         base_command = get_docker_compose_command()
-        full_command = base_command + command_args
+        # Add the project name flag to ensure consistent network naming
+        full_command = base_command + ["-p", PROJECT_NAME] + command_args
         print(f"   (usando comando: `{' '.join(full_command)}`)")
         kwargs.setdefault('capture_output', True)
         kwargs.setdefault('text', True)
@@ -135,7 +136,7 @@ def _ensure_env_is_running(rebuild: bool = False):
             return False
     try:
         base_command = get_docker_compose_command()
-        check_command = base_command + ["ps", "-q", "postgres"]
+        check_command = base_command + ["-p", PROJECT_NAME, "ps", "-q", "postgres"]
         result = subprocess.run(check_command, capture_output=True, text=True, check=False)
 
         if not result.stdout.strip():

@@ -42,8 +42,9 @@ class ComparisonWidget(Container):
 
         params_table = self.query_one("#params_table", DataTable)
         params_table.add_column("Parameter", width=30)
-        params_table.add_column("Value", width=25)
-        params_table.add_row("[dim]Waiting for data...[/dim]", "")
+        params_table.add_column("Best Value", width=20)
+        params_table.add_column("Baseline Value", width=20)
+        params_table.add_row("[dim]Waiting for data...[/dim]", "", "")
 
     def update_data(self, data: dict, baseline_data: dict = None):
         """Updates the widget's tables with new data."""
@@ -94,23 +95,32 @@ class ComparisonWidget(Container):
         params_table = self.query_one("#params_table", DataTable)
         params_table.clear()
         params_table.add_column("Parameter", width=30)
-        params_table.add_column("Value", width=25)
+        params_table.add_column("Best Value", width=20)
+        params_table.add_column("Baseline Value", width=20)
+
 
         if not params:
-            params_table.add_row("[dim]Not applicable.[/dim]", "")
+            params_table.add_row("[dim]Not applicable.[/dim]", "", "")
         else:
-            original_params = self.baseline_summary.get("params") if self.baseline_summary else (baseline_data.get("params") if baseline_data else None)
+            baseline_params = self.baseline_summary.get("params") if self.baseline_summary else (baseline_data.get("params") if baseline_data else {})
 
-            for key, value in sorted(params.items()):
-                value_str = f"{value:.6f}" if isinstance(value, float) else str(value)
+            all_keys = sorted(list(set(params.keys()) | set(baseline_params.keys())))
 
-                if not is_baseline and original_params and str(original_params.get(key)) != str(value):
+            for key in all_keys:
+                best_val = params.get(key)
+                baseline_val = baseline_params.get(key)
+
+                # Format values
+                best_val_str = f"{best_val:.6f}" if isinstance(best_val, float) else str(best_val) if best_val is not None else "[dim]N/A[/dim]"
+                baseline_val_str = f"{baseline_val:.6f}" if isinstance(baseline_val, float) else str(baseline_val) if baseline_val is not None else "[dim]N/A[/dim]"
+
+                key_str = key
+                # Highlight if the value has changed
+                if not is_baseline and str(best_val) != str(baseline_val):
                     key_str = f"[bold yellow]{key}[/bold yellow]"
-                    value_str = f"[bold yellow]{value_str}[/bold yellow]"
-                else:
-                    key_str = key
+                    best_val_str = f"[bold yellow]{best_val_str}[/bold yellow]"
 
-                params_table.add_row(key_str, value_str)
+                params_table.add_row(key_str, best_val_str, baseline_val_str)
 
     def _format_metric(self, value, metric_type):
         if value is None: return "[dim]N/A[/dim]"
@@ -290,14 +300,14 @@ class OptimizerDashboard(App):
         self.baseline_data = {}
         self.best_trial_data = {}
         self.optimizer_process_found = False
-        self.progress_task_id = None
         self.start_time = None
 
     def compose(self) -> ComposeResult:
         yield Header(name="⚡ Genius Optimizer Dashboard ⚡")
         yield Static("⚪ Waiting for optimization to begin...", id="status_bar")
         with Container(id="progress_container"):
-            yield ProgressBar(id="overall_progress")
+            yield Static("", id="progress_label")
+            yield ProgressBar(id="overall_progress", show_eta=False)
         with ScrollableContainer():
             with Container(id="main_container"):
                 yield ComparisonWidget(title="📊 Baseline (.env)", id="baseline_widget")
@@ -313,8 +323,6 @@ class OptimizerDashboard(App):
 
     def on_mount(self) -> None:
         TUI_FILES_DIR.mkdir(exist_ok=True)
-        progress_bar = self.query_one(ProgressBar)
-        self.progress_task_id = progress_bar.add_task("total", total=100)
         self.update_timer = self.set_interval(1.5, self.update_dashboard)
 
     def _is_optimizer_running(self) -> bool:
@@ -352,7 +360,7 @@ class OptimizerDashboard(App):
                 total = progress_data.get("total_trials", 1)
 
                 progress_bar = self.query_one(ProgressBar)
-                progress_bar.update(self.progress_task_id, completed=completed, total=total)
+                progress_bar.update(progress=completed, total=total)
 
                 # Calculate ETA
                 eta_str = "Calculating..."
@@ -369,7 +377,8 @@ class OptimizerDashboard(App):
                     else:
                         eta_str = f"{eta_seconds:.0f} seconds"
 
-                progress_bar.tasks[0].description = f"Overall Progress (ETA: {eta_str})"
+                progress_label = self.query_one("#progress_label", Static)
+                progress_label.update(f"Overall Progress (ETA: {eta_str})")
 
             except (json.JSONDecodeError, IOError):
                 pass # Fail silently if file is being written or is corrupt

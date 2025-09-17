@@ -56,8 +56,8 @@ class DynamicParameters:
         default_buy_dip = self.config_manager.get('STRATEGY_RULES', 'buy_dip_percentage', '1.0')
         default_sell_rise = self.config_manager.get('STRATEGY_RULES', 'sell_rise_percentage', '0.01')
         default_order_size = self.config_manager.get('STRATEGY_RULES', 'base_usd_per_trade', '20.0')
-        # The default for the trailing stop activation is 'trailing_stop_profit'
-        default_target_profit = self.config_manager.get('STRATEGY_RULES', 'trailing_stop_profit', '0.02')
+        # The default for the trailing stop activation is 'trailing_stop_min_profit_usd'
+        default_target_profit = self.config_manager.get('STRATEGY_RULES', 'trailing_stop_min_profit_usd', '0.02')
 
         # Now, load from the current section (which can be a REGIME or STRATEGY_RULES),
         # using the defaults from STRATEGY_RULES as fallbacks.
@@ -66,7 +66,7 @@ class DynamicParameters:
         order_size_usd = self._safe_get_decimal(section_name, 'order_size_usd', default_order_size)
         
         # The key is to load the 'target_profit' key from the regime section, but use the default
-        # from 'trailing_stop_profit' as the fallback.
+        # from 'trailing_stop_min_profit_usd' as the fallback.
         target_profit = self._safe_get_decimal(section_name, 'target_profit', default_target_profit)
 
         self.parameters = {
