@@ -9,7 +9,7 @@ import psutil
 from decimal import Decimal, InvalidOperation
 
 from textual.app import App, ComposeResult
-from textual.widgets import Header, Footer, Static, Log, DataTable, Progress
+from textual.widgets import Header, Footer, Static, Log, DataTable, ProgressBar
 from textual.containers import Container, Vertical, ScrollableContainer
 from textual.timer import Timer
 
@@ -297,7 +297,7 @@ class OptimizerDashboard(App):
         yield Header(name="⚡ Genius Optimizer Dashboard ⚡")
         yield Static("⚪ Waiting for optimization to begin...", id="status_bar")
         with Container(id="progress_container"):
-            yield Progress(id="overall_progress")
+            yield ProgressBar(id="overall_progress")
         with ScrollableContainer():
             with Container(id="main_container"):
                 yield ComparisonWidget(title="📊 Baseline (.env)", id="baseline_widget")
@@ -313,7 +313,7 @@ class OptimizerDashboard(App):
 
     def on_mount(self) -> None:
         TUI_FILES_DIR.mkdir(exist_ok=True)
-        progress_bar = self.query_one(Progress)
+        progress_bar = self.query_one(ProgressBar)
         self.progress_task_id = progress_bar.add_task("total", total=100)
         self.update_timer = self.set_interval(1.5, self.update_dashboard)
 
@@ -351,7 +351,7 @@ class OptimizerDashboard(App):
                 completed = progress_data.get("completed_trials", 0)
                 total = progress_data.get("total_trials", 1)
 
-                progress_bar = self.query_one(Progress)
+                progress_bar = self.query_one(ProgressBar)
                 progress_bar.update(self.progress_task_id, completed=completed, total=total)
 
                 # Calculate ETA

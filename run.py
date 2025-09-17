@@ -779,11 +779,16 @@ def _get_optimizer_settings() -> dict:
         "DIFFICULTY": "Parâmetros de Dificuldade de Compra"
     }
     
-    # Adicionando a opção "Otimizar Todos"
     all_param_keys = list(param_groups.keys())
     choices = [
         questionary.Choice(title=">> OTIMIZAR TODOS OS GRUPOS <<", value="ALL"),
         questionary.Separator(),
+        questionary.Choice(
+            title="Parâmetros de Regime (Ex: Buy/Sell %)",
+            value="REGIME_PARAMS",
+            checked=True,
+            disabled=True # Always included
+        ),
     ] + [
         questionary.Choice(title=v, value=k, checked=True) 
         for k, v in param_groups.items()
@@ -794,23 +799,22 @@ def _get_optimizer_settings() -> dict:
         choices=choices,
     ).ask()
 
-
     if not selected_keys: 
         print("Nenhum grupo de parâmetros selecionado. Abortando.")
         raise typer.Exit()
 
-    # Se "ALL" foi selecionado, usar todas as chaves de parâmetros
     if "ALL" in selected_keys:
         settings["active_params"] = {key: True for key in all_param_keys}
     else:
-        settings["active_params"] = {key: True for key in selected_keys}
+        # Filter out the disabled 'REGIME_PARAMS' key if it's there
+        settings["active_params"] = {key: True for key in selected_keys if key != "REGIME_PARAMS"}
+
     return settings
 
 def _run_optimizer(bot_name: str, days: int):
     """
     Launches the Genius Optimizer in a background container.
     """
-    # Check if a bot with the same name is already running in test/trade mode.
     existing_bot_process = process_manager.get_bot_by_name(bot_name)
     if existing_bot_process and existing_bot_process.process_type == 'bot':
         print(f"❌ Erro: O bot '{bot_name}' já está em execução no modo '{existing_bot_process.bot_mode.upper()}'.")
@@ -818,13 +822,14 @@ def _run_optimizer(bot_name: str, days: int):
         print(f"   Para parar o bot, use: python run.py stop-bot --name {bot_name}")
         raise typer.Exit(1)
 
-    # 1. Get settings from the user
     settings = _get_optimizer_settings()
 
-    # 2. Confirm with the user
+    # Explicitly add the regime parameters to the list for display purposes
+    active_param_display_list = ["Parâmetros de Regime"] + list(settings['active_params'].keys())
+
     print("\n--- 🧠 Iniciando Otimizador ---")
     print(f"   - Bot: {bot_name}, Dias: {days}, Trials por Regime: {settings['n_trials']}")
-    print(f"   - Parâmetros Ativos: {list(settings['active_params'].keys())}")
+    print(f"   - Parâmetros Ativos: {active_param_display_list}")
     if not typer.confirm("Deseja continuar com a otimização?", default=True):
         raise typer.Exit()
     
