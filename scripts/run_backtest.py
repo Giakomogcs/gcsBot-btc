@@ -8,9 +8,10 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+from collectors.core_price_collector import prepare_backtest_data
 from jules_bot.backtesting.engine import Backtester
-from jules_bot.utils.config_manager import config_manager
 from jules_bot.database.postgres_manager import PostgresManager
+from jules_bot.utils.config_manager import config_manager
 from jules_bot.utils.logger import logger
 
 def main():
@@ -66,8 +67,26 @@ def main():
             logger.error(f"Error: Invalid date format. Please use YYYY-MM-DD. Details: {e}")
             sys.exit(1)
 
+    # Determine the number of days required for data preparation
+    prep_days = 0
+    if args.days:
+        prep_days = args.days
+    elif args.start_date:
+        start_dt = datetime.strptime(args.start_date, '%Y-%m-%d')
+        # Calculate days from today to the requested start date
+        prep_days = (datetime.today() - start_dt).days + 2 # Add a small buffer
+
+    if prep_days <= 0:
+        logger.warning(f"Calculated days for data prep is {prep_days}. The start date is likely in the future. Defaulting to 1 day.")
+        prep_days = 1
+
     try:
         logger.info("--- Starting New Backtest Simulation ---")
+
+        # Step 1: Ensure data is prepared and up-to-date
+        logger.info(f"Ensuring historical data is available for the last {prep_days} days...")
+        prepare_backtest_data(days=prep_days)
+        logger.info("Data preparation step completed.")
         
         # The config_manager singleton initializes itself on import, using the
         # BOT_NAME from the environment. PostgresManager will then use this

@@ -11,6 +11,7 @@ if project_root not in sys.path:
 
 from pathlib import Path
 from decimal import Decimal
+from collectors.core_price_collector import prepare_backtest_data
 from jules_bot.genius_optimizer.genius_optimizer import GeniusOptimizer
 from jules_bot.utils.config_manager import config_manager
 from jules_bot.utils.logger import logger
@@ -84,7 +85,12 @@ def main(
         # using the BOT_NAME environment variable. No explicit re-initialization is needed.
         # config_manager.initialize(bot_name) # This was the source of the crash.
 
-        # 1. Run baseline backtest before starting the optimization
+        # 1. Ensure data is prepared and up-to-date
+        logger.info(f"Ensuring historical data is available for the last {days} days...")
+        prepare_backtest_data(days=days)
+        logger.info("Data preparation step completed.")
+
+        # 2. Run baseline backtest before starting the optimization
         run_baseline_backtest(bot_name, days)
         
         # 2. Run the main optimization process

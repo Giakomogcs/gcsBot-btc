@@ -54,8 +54,8 @@ class ComparisonWidget(Container):
         is_baseline = baseline_data is None
         self.baseline_summary = baseline_data.get("summary", baseline_data) if baseline_data else {}
 
-        summary = data.get("summary", data)
-        params = data.get("params")
+        summary = data.get("summary", {})
+        params = data.get("params", {})
 
         # === Update Metrics Table ===
         metrics_table = self.query_one("#metrics_table", DataTable)
@@ -102,7 +102,13 @@ class ComparisonWidget(Container):
         if not params:
             params_table.add_row("[dim]Not applicable.[/dim]", "", "")
         else:
-            baseline_params = self.baseline_summary.get("params") if self.baseline_summary else (baseline_data.get("params") if baseline_data else {})
+            # Safely get baseline_params, defaulting to an empty dict
+            baseline_params = {}
+            if baseline_data:
+                baseline_params = baseline_data.get("params", {})
+            elif self.baseline_summary:
+                baseline_params = self.baseline_summary.get("params", {})
+
 
             all_keys = sorted(list(set(params.keys()) | set(baseline_params.keys())))
 
