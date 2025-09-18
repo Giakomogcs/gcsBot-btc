@@ -196,7 +196,23 @@ class TradingBot:
             sell_target_price = self.strategy_rules.calculate_sell_target_price(purchase_price, quantity_bought, params=None)
             self.state_manager.create_new_position(buy_result, sell_target_price)
             logger.info("Force buy executed and position created successfully. Updating status file.")
-            self._update_status_file()  # Update TUI immediately
+            try:
+                # Gather data for status update
+                current_price_str = self.trader.get_current_price(self.symbol)
+                # Use purchase_price as a fallback if the live price isn't available for any reason
+                current_price = Decimal(current_price_str) if current_price_str else purchase_price
+
+                features_df = self.feature_calculator.get_features_dataframe()
+                market_data = features_df.iloc[-1].to_dict() if not features_df.empty else {}
+
+                current_params = self.dynamic_params.parameters
+                open_positions = self.state_manager.get_open_positions()
+                total_portfolio_value = self.live_portfolio_manager.get_total_portfolio_value(current_price, force_recalculation=True)
+                current_regime = self.last_known_regime if self.last_known_regime is not None else -1
+
+                self._update_status_file(market_data, current_params, open_positions, total_portfolio_value, current_regime)
+            except Exception as e:
+                logger.error(f"Error updating status file after force buy: {e}", exc_info=True)
             return {"status": "success", "trade_details": buy_result}
         else:
             logger.error(f"Force buy for ${amount_decimal:.2f} failed during execution.")
@@ -258,7 +274,23 @@ class TradingBot:
             )
             self.state_manager.close_forced_position(trade_id, sell_result, realized_pnl_usd)
             logger.info(f"Force sell for trade {trade_id} executed successfully. Updating status file.")
-            self._update_status_file()  # Update TUI immediately
+            try:
+                # Gather data for status update
+                current_price_str = self.trader.get_current_price(self.symbol)
+                # Use the sell price as a fallback
+                current_price = Decimal(current_price_str) if current_price_str else sell_price
+
+                features_df = self.feature_calculator.get_features_dataframe()
+                market_data = features_df.iloc[-1].to_dict() if not features_df.empty else {}
+
+                current_params = self.dynamic_params.parameters
+                open_positions = self.state_manager.get_open_positions()
+                total_portfolio_value = self.live_portfolio_manager.get_total_portfolio_value(current_price, force_recalculation=True)
+                current_regime = self.last_known_regime if self.last_known_regime is not None else -1
+
+                self._update_status_file(market_data, current_params, open_positions, total_portfolio_value, current_regime)
+            except Exception as e:
+                logger.error(f"Error updating status file after force sell: {e}", exc_info=True)
             return {"status": "success", "pnl_usd": f"{realized_pnl_usd:.2f}", "trade_details": sell_result}
         else:
             logger.error(f"Force sell for trade {trade_id} failed during execution.")

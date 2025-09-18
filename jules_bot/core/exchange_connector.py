@@ -26,8 +26,8 @@ class ExchangeManager:
             api_secret = config_manager.get('BINANCE_TESTNET', 'api_secret')
             testnet = True
         elif self.mode == 'trade':
-            api_key = config_manager.get('BINANCE_LIVE', 'api_key')
-            api_secret = config_manager.get('BINANCE_LIVE', 'api_secret')
+            api_key = config_manager.get('BINANCE_LIVE', 'api_key', force_bot_specific=True)
+            api_secret = config_manager.get('BINANCE_LIVE', 'api_secret', force_bot_specific=True)
             testnet = False
         else:
             logging.warning("ExchangeManager initialized without a client (mode is not 'trade' or 'test').")

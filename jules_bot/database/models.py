@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, JSON, Boolean, Numeric
+from sqlalchemy import Column, Integer, String, DateTime, JSON, Boolean, Numeric, BigInteger
 from sqlalchemy.sql import func
 import datetime
 from decimal import Decimal
@@ -50,8 +50,8 @@ class Trade(Base):
     commission = Column(Numeric(20, 8))
     commission_asset = Column(String)
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
-    exchange_order_id = Column(String)
-    binance_trade_id = Column(Integer)
+    exchange_order_id = Column(BigInteger)
+    binance_trade_id = Column(BigInteger)
     decision_context = Column(JSON)
     sell_target_price = Column(Numeric(20, 8))
     sell_price = Column(Numeric(20, 8))

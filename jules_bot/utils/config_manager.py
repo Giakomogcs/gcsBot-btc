@@ -43,36 +43,39 @@ class ConfigManager:
         """
         self.overrides = None
 
-    def _resolve_value(self, value: str) -> Optional[str]:
+    def _resolve_value(self, value: str, force_bot_specific: bool = False) -> Optional[str]:
         """
         Resolves a value from an environment variable if it starts with @env/.
         If a bot_name is set, it first tries to resolve a bot-specific env var.
+        If force_bot_specific is True, it will not fall back to a generic env var.
         """
         if not isinstance(value, str) or not value.startswith('@env/'):
             return value
 
         env_var_name = value[5:]
         env_var_value = None
+        bot_specific_env_var = None
 
         # 1. Try to get bot-specific environment variable first
         if self.bot_name:
-            # e.g., GCS-BOT_BINANCE_API_KEY -> GCS_BOT_BINANCE_API_KEY
-            # Normalize bot name to uppercase, replacing hyphens with underscores.
             normalized_bot_name = self.bot_name.upper().replace("-", "_")
             bot_specific_env_var = f"{normalized_bot_name}_{env_var_name}"
             env_var_value = os.getenv(bot_specific_env_var)
 
-        # 2. If not found, fall back to the generic environment variable
-        if env_var_value is None:
+        # If bot-specific var is found, we can proceed.
+        if env_var_value is not None:
+            pass
+        # If not found, check if we must enforce it.
+        elif force_bot_specific:
+            raise ValueError(f"Required bot-specific environment variable '{bot_specific_env_var}' is not set.")
+        # Otherwise, fall back to the generic environment variable.
+        else:
             env_var_value = os.getenv(env_var_name)
 
         # Special case for POSTGRES_HOST: if running locally (not in Docker),
         # and the host is set to 'postgres', override to 'localhost'.
         if env_var_name == 'POSTGRES_HOST':
-            # A simple way to check if we're not in a Docker container.
-            # This works for Linux-based Docker containers.
             is_running_locally = not os.path.exists('/.dockerenv')
-
             if is_running_locally and (env_var_value == 'postgres' or env_var_value is None):
                 return 'localhost'
 
@@ -93,7 +96,7 @@ class ConfigManager:
         """
         return self.config.has_section(section)
 
-    def get(self, section: str, key: str, fallback: str = None) -> str:
+    def get(self, section: str, key: str, fallback: str = None, force_bot_specific: bool = False) -> str:
         """
         Retrieves a specific key from the configuration.
         The lookup order is as follows:
@@ -118,7 +121,7 @@ class ConfigManager:
             return fallback
 
         # 3. Resolve the value (e.g., from an @env/ pointer).
-        resolved_value = self._resolve_value(raw_value)
+        resolved_value = self._resolve_value(raw_value, force_bot_specific=force_bot_specific)
 
         if resolved_value is None:
             # The key was in the .ini but pointed to an env var that was not set.
