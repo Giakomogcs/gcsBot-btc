@@ -22,41 +22,6 @@
 
 O **Robô de Automação Jules** é um sistema de trading automatizado, robusto e flexível, projetado para operar no mercado de criptomoedas da Binance. Sua arquitetura é centrada em Docker, permitindo que cada bot opere em um contêiner isolado, garantindo estabilidade e escalabilidade. O sistema é controlado por uma poderosa interface de linha de comando (`run.py`) que gerencia todo o ciclo de vida dos bots, desde a criação e configuração até a execução e monitoramento em tempo real.
 
-## Estratégias de Trading Implementadas
-
-As seguintes estratégias foram implementadas para tornar o robô mais inteligente e adaptável às condições de mercado.
-
-### Fator de Dificuldade de Compra Incremental
-
-Para evitar a exaustão de capital durante tendências de baixa prolongadas, o robô emprega um fator de dificuldade de compra que se torna progressivamente mais rigoroso.
-
-- **Como Funciona:** Após um número configurável de compras consecutivas (definido por `STRATEGY_RULES_CONSECUTIVE_BUYS_THRESHOLD`), o robô aumenta a exigência para novas compras. Em vez de comprar após uma queda de X%, ele passará a exigir uma queda de X+1, X+2, e assim por diante.
-- **Reset da Dificuldade:** A dificuldade é zerada se ocorrer uma venda ou se não houver novas compras dentro de um período de tempo configurável (`STRATEGY_RULES_DIFFICULTY_RESET_TIMEOUT_HOURS`).
-
-### Trailing Stop Dinâmico com Trava de Lucro
-
-Para maximizar os ganhos e, ao mesmo tempo, proteger o capital, o robô utiliza uma estratégia de trailing stop de nível profissional, que se torna mais flexível à medida que o lucro aumenta.
-
-- **Como Funciona:**
-
-  1.  **Ativação (Trava de Lucro):** Quando uma posição atinge um lucro mínimo em dólar (configurado por `STRATEGY_RULES_TRAILING_STOP_PROFIT`), a "trava de segurança" é ativada. A partir desse ponto, o robô tentará sempre fechar a operação com lucro.
-  2.  **Cálculo do Trail Dinâmico:** Em vez de uma porcentagem fixa, o "trail" (a distância do stop ao preço máximo) começa com um valor mínimo e aumenta conforme o lucro da operação cresce. Isso permite um stop mais justo para lucros pequenos e um stop mais flexível para lucros maiores.
-  3.  **Lógica de "Não Retorno":** A porcentagem do trail, uma vez que aumenta, **nunca mais diminui** para aquela operação, mesmo que o lucro recue do seu pico. Isso garante que a proteção de lucro seja sempre mantida ou melhorada.
-  4.  **Execução:** Se o preço do ativo cair e atingir o preço de stop calculado, a venda é executada. Se, no momento da venda, a operação estiver com prejuízo (devido a uma queda extremamente rápida), a venda é cancelada e o trailing stop é resetado para aguardar uma nova oportunidade de lucro.
-
-- **Benefício:** Esta abordagem permite que o robô "surfe" as tendências de alta de forma mais inteligente. Ele protege lucros pequenos de forma agressiva (com um trail curto) e dá mais espaço para a operação respirar quando os lucros já são significativos (com um trail mais longo), evitando vendas prematuras.
-
-- **Variáveis de Configuração:**
-
-| Variável                                      | Descrição                                                                                                                                   | Valor Padrão |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| `STRATEGY_RULES_USE_DYNAMIC_TRAILING_STOP`    | Ativa (`true`) ou desativa (`false`) a lógica de trailing stop dinâmico. Se `false`, usará a porcentagem fixa definida abaixo.              | `true`       |
-| `STRATEGY_RULES_TRAILING_STOP_PROFIT`         | O valor de lucro em USD que ativa a "trava de segurança" do trailing stop.                                                                  | `0.02`       |
-| `STRATEGY_RULES_DYNAMIC_TRAIL_PERCENTAGE`     | **(Legado/Fixo)** A distância percentual do stop se o modo dinâmico estiver desativado.                                                     | `0.02`       |
-| `STRATEGY_RULES_DYNAMIC_TRAIL_MIN_PCT`        | A **porcentagem mínima** inicial do trail quando ele é ativado.                                                                             | `0.01`       |
-| `STRATEGY_RULES_DYNAMIC_TRAIL_MAX_PCT`        | A **porcentagem máxima** que o trail pode atingir, não importa quão alto seja o lucro.                                                      | `0.05`       |
-| `STRATEGY_RULES_DYNAMIC_TRAIL_PROFIT_SCALING` | O fator que controla a rapidez com que o trail aumenta em relação ao lucro. Um valor maior torna o trail mais sensível ao aumento de lucro. | `0.1`        |
-
 ## Pré-requisitos
 
 Para executar este projeto, você precisará ter os seguintes softwares instalados em sua máquina:
@@ -112,58 +77,200 @@ O projeto utiliza um arquivo `.env` para gerenciar segredos e configurações.
     cp .env.example .env
     ```
 
-2.  **Edite o arquivo `.env`** e preencha as variáveis essenciais. No mínimo, você precisará configurar suas chaves de API da Binance.
+2.  **Edite o arquivo `.env`** e preencha as variáveis de acordo com o guia detalhado abaixo.
 
-    Abaixo estão as variáveis mais críticas para o funcionamento do robô:
+## Guia Completo das Variáveis de Ambiente (.env)
 
-| Variável                     | Descrição                                                      | Exemplo de Valor                  |
-| ---------------------------- | -------------------------------------------------------------- | --------------------------------- |
-| `POSTGRES_USER`              | Nome de usuário para o banco de dados PostgreSQL.              | `gcs_user`                        |
-| `POSTGRES_PASSWORD`          | Senha para o banco de dados PostgreSQL.                        | `gcs_password`                    |
-| `POSTGRES_DB`                | Nome do banco de dados a ser utilizado.                        | `gcs_db`                          |
-| `BINANCE_API_KEY`            | Sua chave de API para a conta de produção da Binance.          | `AbCdEfGhIjKlMnOpQrStUvWxYz...`   |
-| `BINANCE_API_SECRET`         | Seu segredo de API para a conta de produção da Binance.        | `1a2b3c4d5e6f7g8h9i0j1k2l3m4n...` |
-| `BINANCE_TESTNET_API_KEY`    | Sua chave de API para a conta de teste (Testnet) da Binance.   | `...`                             |
-| `BINANCE_TESTNET_API_SECRET` | Seu segredo de API para a conta de teste (Testnet) da Binance. | `...`                             |
+Este guia detalha todas as variáveis de ambiente que podem ser configuradas no arquivo `.env`. A configuração correta é crucial para o funcionamento, a estratégia e a segurança do seu robô.
 
-## Configuração Detalhada de Estratégias
+**Hierarquia de Configuração:** O sistema carrega as configurações na seguinte ordem de precedência (onde 1 é o mais alto):
 
-Para um controle fino sobre o comportamento do robô, as seguintes variáveis podem ser ajustadas no seu arquivo `.env`.
+1.  **Variáveis de Ambiente do Sistema:** Definidas diretamente no seu terminal ou contêiner Docker.
+2.  **Arquivo `.env`:** Onde você define suas configurações personalizadas.
+3.  **Arquivo `config.ini`:** Contém os valores padrão do sistema.
 
-### Regras Gerais da Estratégia (`STRATEGY_RULES_*`)
+---
 
-Estas variáveis controlam a lógica de alto nível e as salvaguardas da estratégia de trading.
+### Configurações do Núcleo do Bot (Core Bot Settings)
 
-| Variável                                             | Descrição                                                                                                                   | Valor Padrão |
-| ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| `STRATEGY_RULES_COMMISSION_RATE`                     | A taxa de comissão da exchange (ex: 0.001 para 0.1%). Usada para calcular o preço de break-even.                            | `0.001`      |
-| `STRATEGY_RULES_SELL_FACTOR`                         | A porcentagem de uma posição a ser vendida quando o alvo de lucro é atingido (ex: 1 para vender 100%, 0.5 para vender 50%). | `1`          |
-| `STRATEGY_RULES_MAX_OPEN_POSITIONS`                  | O número máximo de posições que o robô pode manter abertas simultaneamente.                                                 | `150`        |
-| `STRATEGY_RULES_USE_DYNAMIC_CAPITAL`                 | Se `true`, ativa lógicas dinâmicas como o fator de dificuldade.                                                             | `true`       |
-| `STRATEGY_RULES_WORKING_CAPITAL_PERCENTAGE`          | A porcentagem do capital total da carteira que deve ser usada para trading ativo.                                           | `0.85`       |
-| `STRATEGY_RULES_USE_REVERSAL_BUY_STRATEGY`           | Se `true`, ativa a estratégia que monitora por uma reversão de preço antes de confirmar uma compra em um dip.               | `true`       |
-| `STRATEGY_RULES_REVERSAL_BUY_THRESHOLD_PERCENT`      | A porcentagem que o preço precisa subir do ponto mais baixo para confirmar uma compra por reversão.                         | `0.005`      |
-| `STRATEGY_RULES_REVERSAL_MONITORING_TIMEOUT_SECONDS` | O tempo em segundos que o robô monitora por uma reversão antes de cancelar a tentativa de compra.                           | `100`        |
-| `STRATEGY_RULES_CONSECUTIVE_BUYS_THRESHOLD`          | O número de compras consecutivas antes que o fator de dificuldade comece a ser aplicado.                                    | `5`          |
-| `STRATEGY_RULES_DIFFICULTY_ADJUSTMENT_FACTOR`        | O multiplicador usado para aumentar a exigência de compra a cada nível de dificuldade.                                      | `0.005`      |
-| `STRATEGY_RULES_DIFFICULTY_RESET_TIMEOUT_HOURS`      | O número de horas sem compras após o qual o fator de dificuldade é resetado.                                                | `2`          |
+Estas variáveis controlam o comportamento fundamental e a identidade do bot.
 
-### Parâmetros por Regime de Mercado (`REGIME_*`)
+| Variável                            | Descrição                                                                                                                                                                                                                                                                                                                                                                               | Valor Padrão |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `BOT_NAME`                          | O nome único do seu bot. Usado para prefixar logs, contêineres Docker e buscar variáveis de ambiente específicas (ex: `MEU_BOT_API_KEY`).                                                                                                                                                                                                                                               | `jules_bot`  |
+| `BOT_MODE`                          | Define o modo de operação. `live` para negociações reais, `test` para paper trading na Testnet da Binance.                                                                                                                                                                                                                                                                              | `test`       |
+| `ENV_FILE`                          | O caminho para o arquivo de ambiente a ser carregado.                                                                                                                                                                                                                                                                                                                                   | `.env`       |
+| `JULES_BOT_SCRIPT_MODE`             | Usado internamente para controlar o comportamento do script. `0` para modo normal.                                                                                                                                                                                                                                                                                                      | `0`          |
+| `APP_SYMBOL`                        | O par de moedas que o robô irá negociar (ex: `BTCUSDT`, `ETHUSDT`).                                                                                                                                                                                                                                                                                                                     | `BTCUSDT`    |
+| `APP_FORCE_OFFLINE_MODE`            | **`true`**: Força o bot a operar em modo offline, sem se conectar à exchange. Nenhuma transação real ou consulta de saldo será feita. Útil para depuração de lógica interna.<br>**`false`**: O bot se conectará à Binance (Live ou Testnet).                                                                                                                                            | `false`      |
+| `APP_USE_TESTNET`                   | **`true`**: O bot se conectará à API da **Testnet** da Binance. Ele usará as chaves `BINANCE_TESTNET_API_KEY` e `BINANCE_TESTNET_API_SECRET`.<br>**`false`**: O bot se conectará à API de produção (**Live**) da Binance. Ele usará as chaves `BINANCE_API_KEY` e `BINANCE_API_SECRET`.<br>_Nota: Esta variável é frequentemente controlada pelo comando `run.py` (`trade` ou `test`)._ | `true`       |
+| `APP_EQUITY_RECALCULATION_INTERVAL` | O intervalo em segundos para recalcular o valor total do portfólio.                                                                                                                                                                                                                                                                                                                     | `300`        |
 
-O robô identifica 4 regimes de mercado e aplica um conjunto diferente de parâmetros para cada um, permitindo uma estratégia adaptativa.
+---
 
-- **Regime 0:** Baixa Volatilidade / Mercado em Range (Estratégia Conservadora)
-- **Regime 1:** Tendência de Alta Moderada (Estratégia Equilibrada)
-- **Regime 2:** Alta Volatilidade / Tendência Forte (Estratégia Agressiva)
-- **Regime 3:** Tendência de Baixa / Cautela (Estratégia Muito Conservadora)
+### Banco de Dados (PostgreSQL)
 
-| Variável                        | Descrição                                                                                | Valor Padrão (Regime 1) |
-| ------------------------------- | ---------------------------------------------------------------------------------------- | ----------------------- |
-| `REGIME_X_BUY_DIP_PERCENTAGE`   | A porcentagem de queda a partir de um topo recente necessária para iniciar uma compra.   | `0.003`                 |
-| `REGIME_X_SELL_RISE_PERCENTAGE` | A porcentagem de lucro inicial que, ao ser atingida, ativa o Trailing Take-Profit.       | `0.008`                 |
-| `REGIME_X_ORDER_SIZE_USD`       | O tamanho base da ordem em USD para este regime (se não estiver usando sizing dinâmico). | `10`                    |
+Credenciais para a conexão com o banco de dados PostgreSQL. **Devem ser idênticas às definidas no `docker-compose.yml`**.
 
-_Substitua `X` pelo número do regime (0, 1, 2 ou 3) para configurar cada um individualmente._
+| Variável            | Descrição                                 | Valor Padrão   |
+| ------------------- | ----------------------------------------- | -------------- |
+| `POSTGRES_HOST`     | O endereço do servidor do banco de dados. | `postgres`     |
+| `POSTGRES_PORT`     | A porta do servidor do banco de dados.    | `5432`         |
+| `POSTGRES_USER`     | Nome de usuário para a conexão.           | `gcs_user`     |
+| `POSTGRES_PASSWORD` | Senha para a conexão.                     | `gcs_password` |
+| `POSTGRES_DB`       | O nome do banco de dados a ser utilizado. | `gcs_db`       |
+
+---
+
+### Chaves de API da Binance (Binance API Keys)
+
+As chaves de API são essenciais para que o bot possa interagir com sua conta na Binance.
+
+#### Chaves Padrão
+
+Estas chaves são usadas se nenhuma chave específica para o bot (ver abaixo) for encontrada.
+
+| Variável                     | Descrição                                           |
+| ---------------------------- | --------------------------------------------------- |
+| `BINANCE_API_KEY`            | Sua chave de API para a conta de produção (Live).   |
+| `BINANCE_API_SECRET`         | Seu segredo de API para a conta de produção (Live). |
+| `BINANCE_TESTNET_API_KEY`    | Sua chave de API para a conta de teste (Testnet).   |
+| `BINANCE_TESTNET_API_SECRET` | Seu segredo de API para a conta de teste (Testnet). |
+
+#### Chaves Específicas por Bot (Overrides)
+
+Para gerenciar múltiplos bots, você pode (e deve) usar chaves de API diferentes para cada um. O sistema busca automaticamente por variáveis que seguem o padrão `NOME_DO_BOT_...`.
+
+**Exemplo:** Se `BOT_NAME=meu-bot`, o sistema irá procurar por:
+
+- `MEU_BOT_BINANCE_API_KEY`
+- `MEU_BOT_BINANCE_API_SECRET`
+- `MEU_BOT_BINANCE_TESTNET_API_KEY`
+- `MEU_BOT_BINANCE_TESTNET_API_SECRET`
+
+Se encontradas, essas chaves terão precedência sobre as chaves padrão.
+
+---
+
+### Regras Gerais da Estratégia (Core Trading Strategy Rules)
+
+Controles de alto nível sobre a lógica de negociação e gerenciamento de risco.
+
+| Variável                                             | Descrição                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Valor Padrão |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `STRATEGY_RULES_COMMISSION_RATE`                     | Taxa de comissão da exchange (ex: 0.001 para 0.1%). Crucial para calcular o break-even.                                                                                                                                                                                                                                                                                                                                                                                                  | `0.001`      |
+| `STRATEGY_RULES_SELL_FACTOR`                         | A porcentagem de uma posição a ser vendida quando o alvo é atingido (1 = 100%).                                                                                                                                                                                                                                                                                                                                                                                                          | `1`          |
+| `STRATEGY_RULES_TARGET_PROFIT`                       | **(Legado)** Alvo de lucro base. Geralmente sobrescrito pelos parâmetros de regime.                                                                                                                                                                                                                                                                                                                                                                                                      | `0.0035`     |
+| `STRATEGY_RULES_MAX_CAPITAL_PER_TRADE_PERCENT`       | O percentual máximo do capital total que pode ser alocado em uma única operação.                                                                                                                                                                                                                                                                                                                                                                                                         | `0.15`       |
+| `STRATEGY_RULES_BASE_USD_PER_TRADE`                  | O valor base em USD para uma operação, se o dimensionamento dinâmico não estiver ativo.                                                                                                                                                                                                                                                                                                                                                                                                  | `10`         |
+| `STRATEGY_RULES_MAX_OPEN_POSITIONS`                  | Número máximo de posições abertas simultaneamente.                                                                                                                                                                                                                                                                                                                                                                                                                                       | `150`        |
+| `STRATEGY_RULES_USE_DYNAMIC_CAPITAL`                 | **`true`**: Ativa o "Fator de Dificuldade" dinâmico. Após um certo número de compras consecutivas, o robô torna-se progressivamente mais cauteloso, exigindo quedas de preço maiores para comprar. <br>**`false`**: A lógica de dificuldade é desativada. O robô apenas respeitará o limite fixo de `STRATEGY_RULES_MAX_OPEN_POSITIONS`.<br>**Variáveis dependentes (quando `true`)**: `STRATEGY_RULES_CONSECUTIVE_BUYS_THRESHOLD`, `STRATEGY_RULES_DIFFICULTY_RESET_TIMEOUT_HOURS`.     | `true`       |
+| `STRATEGY_RULES_WORKING_CAPITAL_PERCENTAGE`          | A porcentagem do capital total que o bot deve considerar como "capital de trabalho".                                                                                                                                                                                                                                                                                                                                                                                                     | `0.85`       |
+| `STRATEGY_RULES_USE_FORMULA_SIZING`                  | **`true`**: Ativa o dimensionamento de ordem mais avançado, baseado em uma fórmula logarítmica. O tamanho da ordem (como % do caixa) aumenta ligeiramente à medida que seu portfólio cresce.<br>**`false`**: Usa o método de porcentagem simples (se `USE_PERCENTAGE_BASED_SIZING` for `true`) ou um valor fixo em USD.<br>**Variáveis dependentes (quando `true`)**: `STRATEGY_RULES_MIN_ORDER_PERCENTAGE`, `STRATEGY_RULES_MAX_ORDER_PERCENTAGE`, `STRATEGY_RULES_LOG_SCALING_FACTOR`. | `true`       |
+| `STRATEGY_RULES_USE_PERCENTAGE_BASED_SIZING`         | **`true`**: O tamanho da ordem é uma porcentagem fixa do caixa livre. Ativado apenas se `USE_FORMULA_SIZING` for `false`.<br>**`false`**: Se `USE_FORMULA_SIZING` também for `false`, o robô usará um valor fixo em USD (`REGIME_X_ORDER_SIZE_USD`).<br>**Variável dependente (quando `true`)**: `STRATEGY_RULES_ORDER_SIZE_FREE_CASH_PERCENTAGE`.                                                                                                                                       | `true`       |
+| `STRATEGY_RULES_USE_REVERSAL_BUY_STRATEGY`           | **`true`**: Ao detectar uma compra por `dip`, o robô aguarda uma pequena reversão de alta antes de comprar, para evitar "comprar facas caindo".<br>**`false`**: O robô compra assim que o alvo de `dip` é atingido.<br>**Variáveis dependentes (quando `true`)**: `STRATEGY_RULES_REVERSAL_BUY_THRESHOLD_PERCENT`, `STRATEGY_RULES_REVERSAL_MONITORING_TIMEOUT_SECONDS`.                                                                                                                 | `true`       |
+| `STRATEGY_RULES_REVERSAL_BUY_THRESHOLD_PERCENT`      | A porcentagem que o preço deve subir do ponto mais baixo para confirmar a compra por reversão.                                                                                                                                                                                                                                                                                                                                                                                           | `0.005`      |
+| `STRATEGY_RULES_REVERSAL_MONITORING_TIMEOUT_SECONDS` | Tempo em segundos para aguardar a reversão antes de cancelar a tentativa.                                                                                                                                                                                                                                                                                                                                                                                                                | `100`        |
+| `STRATEGY_RULES_DIFFICULTY_ADJUSTMENT_FACTOR`        | O multiplicador que aumenta a exigência de compra a cada nível de dificuldade.                                                                                                                                                                                                                                                                                                                                                                                                           | `0.006`      |
+| `STRATEGY_RULES_CONSECUTIVE_BUYS_THRESHOLD`          | Número de compras consecutivas que ativa o Fator de Dificuldade.                                                                                                                                                                                                                                                                                                                                                                                                                         | `3`          |
+| `STRATEGY_RULES_DIFFICULTY_RESET_TIMEOUT_HOURS`      | Horas sem compras para resetar o Fator de Dificuldade.                                                                                                                                                                                                                                                                                                                                                                                                                                   | `2`          |
+
+---
+
+### Parâmetros de Trailing Stop Dinâmico
+
+Configura a estratégia de trailing stop para maximizar lucros enquanto protege o capital.
+
+| Variável                                      | Descrição                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Valor Padrão |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `STRATEGY_RULES_USE_DYNAMIC_TRAILING_STOP`    | **`true`**: Ativa o trailing stop dinâmico. A distância do stop (`trail`) aumenta conforme o lucro aumenta. Isso protege lucros pequenos de forma agressiva e dá mais espaço para a operação "respirar" quando os lucros são maiores.<br>**`false`**: Usa um trailing stop com uma porcentagem **fixa**.<br>**Variáveis dependentes**: <br>- Se `true`: `DYNAMIC_TRAIL_MIN_PCT`, `DYNAMIC_TRAIL_MAX_PCT`, `DYNAMIC_TRAIL_PROFIT_SCALING`.<br>- Se `false`: `DYNAMIC_TRAIL_PERCENTAGE`.<br>_Nota: `TRAILING_STOP_PROFIT` é usado em ambos os modos para a ativação inicial._ | `true`       |
+| `STRATEGY_RULES_TRAILING_STOP_PROFIT`         | O valor de lucro em USD que ativa a "trava de segurança" do trailing stop.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | `0.015`      |
+| `STRATEGY_RULES_DYNAMIC_TRAIL_PERCENTAGE`     | **(Legado/Fixo)** A distância percentual do stop se o modo dinâmico estiver desativado.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | `0.02`       |
+| `STRATEGY_RULES_DYNAMIC_TRAIL_MIN_PCT`        | A **porcentagem mínima** inicial do trail quando ele é ativado.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `0.01`       |
+| `STRATEGY_RULES_DYNAMIC_TRAIL_MAX_PCT`        | A **porcentagem máxima** que o trail pode atingir.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `0.05`       |
+| `STRATEGY_RULES_DYNAMIC_TRAIL_PROFIT_SCALING` | Fator que controla a rapidez com que o trail aumenta em relação ao lucro.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `0.1`        |
+
+---
+
+### Identificadores da Estratégia
+
+Metadados para identificar e restringir a estratégia.
+
+| Variável                               | Descrição                                                        | Valor Padrão       |
+| -------------------------------------- | ---------------------------------------------------------------- | ------------------ |
+| `TRADING_STRATEGY_NAME`                | Nome descritivo para a estratégia em uso.                        | `default_strategy` |
+| `TRADING_STRATEGY_MIN_TRADE_SIZE_USDT` | O valor mínimo em USDT para uma única ordem, conforme a Binance. | `5.0`              |
+| `TRADING_STRATEGY_MAX_TRADE_SIZE_USDT` | O valor máximo em USDT para uma única ordem.                     | `1000.0`           |
+
+---
+
+### Parâmetros por Regime de Mercado
+
+O robô pode se adaptar a diferentes condições de mercado. Configure os parâmetros para cada regime.
+
+- **Regime 0:** Baixa Volatilidade / Mercado em Range (Conservador)
+- **Regime 1:** Tendência de Alta Moderada (Equilibrado)
+- **Regime 2:** Alta Volatilidade / Tendência Forte (Agressivo)
+- **Regime 3:** Tendência de Baixa / Cautela (Muito Conservador)
+
+| Variável (substitua `X` pelo número do regime) | Descrição                                                                      |
+| ---------------------------------------------- | ------------------------------------------------------------------------------ |
+| `REGIME_X_TARGET_PROFIT`                       | O alvo de lucro percentual para este regime.                                   |
+| `REGIME_X_BUY_DIP_PERCENTAGE`                  | A porcentagem de queda necessária para iniciar uma compra.                     |
+| `REGIME_X_SELL_RISE_PERCENTAGE`                | A porcentagem de lucro que ativa o Trailing Take-Profit.                       |
+| `REGIME_X_ORDER_SIZE_USD`                      | O tamanho base da ordem em USD para este regime (se não usar sizing dinâmico). |
+
+---
+
+### Configurações de Backtesting
+
+Parâmetros específicos para a execução de simulações (backtests).
+
+| Variável                         | Descrição                                                                    | Valor Padrão |
+| -------------------------------- | ---------------------------------------------------------------------------- | ------------ |
+| `BACKTEST_INITIAL_BALANCE`       | O saldo inicial em USDT para iniciar a simulação do backtest.                | `100`        |
+| `BACKTEST_COMMISSION_FEE`        | A taxa de comissão por operação a ser simulada no backtest (em porcentagem). | `0.1`        |
+| `BACKTEST_DEFAULT_LOOKBACK_DAYS` | O número padrão de dias de dados históricos a serem usados no backtest.      | `30`         |
+
+---
+
+### Configurações de Dados
+
+Define os caminhos e fontes para os dados usados pelo bot.
+
+| Variável                          | Descrição                                                    | Valor Padrão                             |
+| --------------------------------- | ------------------------------------------------------------ | ---------------------------------------- |
+| `DATA_HISTORICAL_DATA_BUCKET`     | Nome do "bucket" ou agrupamento para dados históricos.       | `btc_data`                               |
+| `DATA_PATHS_HISTORICAL_DATA_FILE` | Caminho para o arquivo CSV com os dados históricos de preço. | `data/input/history/BTCUSDT-1m-data.csv` |
+| `DATA_PATHS_MACRO_DATA_DIR`       | Diretório para arquivos de dados macroeconômicos.            | `data/input/macro`                       |
+| `DATA_PATHS_MODELS_DIR`           | Diretório para salvar modelos de machine learning treinados. | `data/models`                            |
+
+---
+
+### Configurações do Pipeline de Dados
+
+Parâmetros para o pré-processamento de dados e engenharia de features.
+
+| Variável                              | Descrição                                                                         | Valor Padrão                                |
+| ------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------- |
+| `DATA_PIPELINE_FUTURE_PERIODS`        | Número de períodos futuros a serem considerados para a criação de alvos (labels). | `60`                                        |
+| `DATA_PIPELINE_PROFIT_MULT`           | Multiplicador para definir o limiar de lucro no labeling.                         | `4.0`                                       |
+| `DATA_PIPELINE_STOP_MULT`             | Multiplicador para definir o limiar de stop-loss no labeling.                     | `1.5`                                       |
+| `DATA_PIPELINE_REGIME_FEATURES`       | Lista de indicadores técnicos usados para determinar o regime de mercado.         | `["atr_14", "macd_diff_12_26_9", "rsi_14"]` |
+| `DATA_PIPELINE_REGIME_ROLLING_WINDOW` | A janela móvel (em períodos) para suavizar os features de regime.                 | `72`                                        |
+| `DATA_PIPELINE_START_DATE_INGESTION`  | A data de início para a ingestão de dados históricos.                             | `2023-01-01`                                |
+
+---
+
+### Configurações da API
+
+Se você usar a API interna do bot para monitoramento, estas são as configurações.
+
+| Variável              | Descrição                                             | Valor Padrão |
+| --------------------- | ----------------------------------------------------- | ------------ |
+| `API_PORT`            | A porta em que a API será executada.                  | `8765`       |
+| `API_MEASUREMENT`     | O nome da "medição" ou tabela para os dados de preço. | `price_data` |
+| `API_UPDATE_INTERVAL` | O intervalo de atualização da API em segundos.        | `5`          |
 
 ## Guia de Uso e Comandos
 
@@ -182,6 +289,7 @@ Para uma validação verdadeiramente robusta da estratégia, foi implementado um
 O WFO é executado diretamente através de seu próprio script, que oferece controle total sobre os períodos de treinamento e teste.
 
 **Uso:**
+
 ```bash
 python scripts/run_walk_forward_optimizer.py [OPÇÕES]
 ```
@@ -202,7 +310,9 @@ python scripts/run_walk_forward_optimizer.py [OPÇÕES]
 # O otimizador rodará 200 testes por janela
 python scripts/run_walk_forward_optimizer.py --total-days 180 --training-days 60 --testing-days 30 --trials 200
 ```
+
 **O que acontece:**
+
 1.  **Preparação de Dados:** O script garante automaticamente que todos os dados de minuto a minuto necessários para o período total sejam baixados.
 2.  **Loop de Otimização:** O script inicia o loop, otimizando e testando em cada janela.
 3.  **Relatório Final:** Ao final, um relatório consolidado é exibido, mostrando o desempenho real (out-of-sample) da estratégia adaptativa ao longo de todo o período.
