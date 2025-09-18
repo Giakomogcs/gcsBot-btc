@@ -66,9 +66,10 @@ class LiveFeatureCalculator:
             df_sentiment = pd.DataFrame()
 
         # 4. Combinar todas as fontes de dados
-        df_combined = df_candles.join(df_macro, how='left')
+        # Adicionado rsuffix para evitar erro de colunas sobrepostas com df_macro
+        df_combined = df_candles.join(df_macro, how='left', rsuffix='_macro')
         if not df_sentiment.empty:
-             df_combined = df_combined.join(df_sentiment, how='left')
+             df_combined = df_combined.join(df_sentiment, how='left', rsuffix='_sentiment')
 
         df_combined.ffill(inplace=True)
         if df_combined.isnull().values.any():
