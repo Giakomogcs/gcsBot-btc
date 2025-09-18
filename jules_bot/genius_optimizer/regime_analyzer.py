@@ -5,15 +5,22 @@ from jules_bot.research.feature_engineering import add_all_features
 from jules_bot.bot.situational_awareness import SituationalAwareness
 from jules_bot.utils.config_manager import config_manager
 
+from typing import Optional
+
 class RegimeAnalyzer:
     """
     Analyzes historical data to identify and segment it by market regime.
     This class encapsulates the logic for fetching data, calculating features,
     determining regimes, and splitting the data for the optimizer.
     """
-    def __init__(self, db_manager: PostgresManager, days: int):
+    def __init__(self, db_manager: PostgresManager, days: Optional[int] = None, start_date: Optional[str] = None, end_date: Optional[str] = None):
+        if not days and not (start_date and end_date):
+            raise ValueError("RegimeAnalyzer requires either 'days' or both 'start_date' and 'end_date'.")
+
         self.db_manager = db_manager
         self.days = days
+        self.start_date = start_date
+        self.end_date = end_date
         self.full_data = None
         self.segmented_data = {}
         self.symbol = config_manager.get('APP', 'symbol')
@@ -21,18 +28,27 @@ class RegimeAnalyzer:
 
     def load_data(self):
         """
-        Loads the full historical dataset from the database.
+        Loads the full historical dataset from the database using either a 'days'
+        lookback or a specific start/end date range.
         """
-        logger.info(f"Loading historical data for the last {self.days} days...")
-        start_date_str = f"-{self.days}d"
-        end_date_str = "now()"
+        if self.start_date and self.end_date:
+            logger.info(f"Loading historical data from {self.start_date} to {self.end_date}...")
+            start_date_str = self.start_date
+            end_date_str = self.end_date
+            error_msg_period = f"from {self.start_date} to {self.end_date}"
+        else:
+            logger.info(f"Loading historical data for the last {self.days} days...")
+            start_date_str = f"-{self.days}d"
+            end_date_str = "now()"
+            error_msg_period = f"in the last {self.days} days"
+
         self.full_data = self.db_manager.get_price_data(
             measurement=self.symbol,
             start_date=start_date_str,
             end_date=end_date_str
         )
         if self.full_data.empty:
-            raise ValueError(f"No historical data found for symbol {self.symbol} in the last {self.days} days.")
+            raise ValueError(f"No historical data found for symbol {self.symbol} {error_msg_period}.")
         logger.info(f"Loaded {len(self.full_data)} rows of historical data.")
 
     def calculate_regimes(self):

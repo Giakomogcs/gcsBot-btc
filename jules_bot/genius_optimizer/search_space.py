@@ -68,8 +68,8 @@ def define_search_space(trial: optuna.Trial, active_params: Dict[str, Any]) -> D
         overrides["STRATEGY_RULES_CONSECUTIVE_BUYS_THRESHOLD"] = trial.suggest_int(
             "STRATEGY_RULES_CONSECUTIVE_BUYS_THRESHOLD", 3, 10
         )
-        overrides["STRATEGY_RULES_DIFFICULTY_ADJUSTMENT_FACTOR"] = trial.suggest_float(
-            "STRATEGY_RULES_DIFFICULTY_ADJUSTMENT_FACTOR", 0.001, 0.01, log=True
+        overrides["STRATEGY_RULES_PER_BUY_DIFFICULTY_INCREMENT"] = trial.suggest_float(
+            "STRATEGY_RULES_PER_BUY_DIFFICULTY_INCREMENT", 0.001, 0.01, log=True
         )
         overrides["STRATEGY_RULES_DIFFICULTY_RESET_TIMEOUT_HOURS"] = trial.suggest_int(
             "STRATEGY_RULES_DIFFICULTY_RESET_TIMEOUT_HOURS", 1, 12

@@ -72,7 +72,8 @@ def get_docker_compose_command():
 def run_docker_compose_command(command_args: list, **kwargs):
     try:
         base_command = get_docker_compose_command()
-        full_command = base_command + command_args
+        # Add the project name flag to ensure consistent network naming
+        full_command = base_command + ["-p", PROJECT_NAME] + command_args
         print(f"   (usando comando: `{' '.join(full_command)}`)")
         kwargs.setdefault('capture_output', True)
         kwargs.setdefault('text', True)
@@ -135,7 +136,7 @@ def _ensure_env_is_running(rebuild: bool = False):
             return False
     try:
         base_command = get_docker_compose_command()
-        check_command = base_command + ["ps", "-q", "postgres"]
+        check_command = base_command + ["-p", PROJECT_NAME, "ps", "-q", "postgres"]
         result = subprocess.run(check_command, capture_output=True, text=True, check=False)
 
         if not result.stdout.strip():
@@ -779,11 +780,16 @@ def _get_optimizer_settings() -> dict:
         "DIFFICULTY": "Parâmetros de Dificuldade de Compra"
     }
     
-    # Adicionando a opção "Otimizar Todos"
     all_param_keys = list(param_groups.keys())
     choices = [
         questionary.Choice(title=">> OTIMIZAR TODOS OS GRUPOS <<", value="ALL"),
         questionary.Separator(),
+        questionary.Choice(
+            title="Parâmetros de Regime (Ex: Buy/Sell %)",
+            value="REGIME_PARAMS",
+            checked=True,
+            disabled=True # Always included
+        ),
     ] + [
         questionary.Choice(title=v, value=k, checked=True) 
         for k, v in param_groups.items()
@@ -794,23 +800,22 @@ def _get_optimizer_settings() -> dict:
         choices=choices,
     ).ask()
 
-
     if not selected_keys: 
         print("Nenhum grupo de parâmetros selecionado. Abortando.")
         raise typer.Exit()
 
-    # Se "ALL" foi selecionado, usar todas as chaves de parâmetros
     if "ALL" in selected_keys:
         settings["active_params"] = {key: True for key in all_param_keys}
     else:
-        settings["active_params"] = {key: True for key in selected_keys}
+        # Filter out the disabled 'REGIME_PARAMS' key if it's there
+        settings["active_params"] = {key: True for key in selected_keys if key != "REGIME_PARAMS"}
+
     return settings
 
 def _run_optimizer(bot_name: str, days: int):
     """
     Launches the Genius Optimizer in a background container.
     """
-    # Check if a bot with the same name is already running in test/trade mode.
     existing_bot_process = process_manager.get_bot_by_name(bot_name)
     if existing_bot_process and existing_bot_process.process_type == 'bot':
         print(f"❌ Erro: O bot '{bot_name}' já está em execução no modo '{existing_bot_process.bot_mode.upper()}'.")
@@ -818,13 +823,14 @@ def _run_optimizer(bot_name: str, days: int):
         print(f"   Para parar o bot, use: python run.py stop-bot --name {bot_name}")
         raise typer.Exit(1)
 
-    # 1. Get settings from the user
     settings = _get_optimizer_settings()
 
-    # 2. Confirm with the user
+    # Explicitly add the regime parameters to the list for display purposes
+    active_param_display_list = ["Parâmetros de Regime"] + list(settings['active_params'].keys())
+
     print("\n--- 🧠 Iniciando Otimizador ---")
     print(f"   - Bot: {bot_name}, Dias: {days}, Trials por Regime: {settings['n_trials']}")
-    print(f"   - Parâmetros Ativos: {list(settings['active_params'].keys())}")
+    print(f"   - Parâmetros Ativos: {active_param_display_list}")
     if not typer.confirm("Deseja continuar com a otimização?", default=True):
         raise typer.Exit()
     
@@ -884,13 +890,14 @@ def backtest(
     bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="O nome do bot para executar."),
     days: int = typer.Option(30, "--days", "-d", help="Número de dias de dados recentes para o backtest."),
     optimize: bool = typer.Option(False, "--optimize", help="Rodar o otimizador para encontrar os melhores parâmetros por regime de mercado."),
-    use_genius: bool = typer.Option(False, "--use-genius", help="Rodar backtests usando os .env de resultados do Genius Optimizer.")
+    use_best: bool = typer.Option(False, "--use-best", help="Rodar um backtest com os melhores parâmetros gerais encontrados pelo Genius Optimizer."),
+    use_genius: bool = typer.Option(False, "--use-genius", help="[LEGACY] Rodar backtests usando os .env de resultados do Genius Optimizer para cada regime.")
 ):
     """Executa um backtest, com a opção de otimizar ou usar resultados da otimização."""
     final_bot_name = _setup_bot_run(bot_name)
 
-    if optimize and use_genius:
-        print("❌ Erro: As opções '--optimize' e '--use-genius' são mutuamente exclusivas.")
+    if sum([optimize, use_genius, use_best]) > 1:
+        print("❌ Erro: As opções '--optimize', '--use-best' e '--use-genius' são mutuamente exclusivas.")
         raise typer.Exit(1)
     
     print("\n--- Etapa 1 de 2: Preparando dados históricos ---")
@@ -902,7 +909,46 @@ def backtest(
         _run_optimizer(final_bot_name, days)
         raise typer.Exit()
 
-    if use_genius:
+    # This variable will hold the final decision on whether to use the best params.
+    # It can be set by the flag or by the interactive prompt.
+    should_use_best = use_best
+    best_params_file = "optimize/genius/.env.best_overall"
+
+    # --- Interactive prompt if no mode is specified ---
+    if not any([optimize, use_genius, use_best]):
+        if questionary is None:
+            print("⚠️  A biblioteca 'questionary' não está instalada. Rodando com parâmetros padrão.")
+        else:
+            if not os.path.exists(best_params_file):
+                print("ℹ️  Arquivo de melhores parâmetros não encontrado. Rodando com parâmetros padrão do .env.")
+            else:
+                choice = questionary.select(
+                    "Qual conjunto de parâmetros você gostaria de usar para o backtest?",
+                    choices=[
+                        questionary.Choice("Padrão (do arquivo .env)", "default"),
+                        questionary.Choice("Melhores Otimizados (encontrados pelo Genius Optimizer)", "best"),
+                    ],
+                    default="default"
+                ).ask()
+
+                if choice is None: # User pressed Ctrl+C
+                    raise typer.Exit()
+                if choice == "best":
+                    should_use_best = True
+
+    # --- Execution Logic ---
+    extra_env_files = []
+    if should_use_best:
+        print("\n--- Etapa 2 de 2: Rodando backtest com os MELHORES parâmetros encontrados ---")
+        if not os.path.exists(best_params_file):
+            print(f"❌ Arquivo de melhores parâmetros '{best_params_file}' não encontrado.")
+            print("   Você precisa rodar a otimização primeiro com a flag '--optimize'.")
+            raise typer.Exit(1)
+
+        print(f"   (usando arquivo de parâmetros: {best_params_file})")
+        extra_env_files.append(best_params_file)
+
+    elif use_genius:
         print("\n--- Etapa 2 de 2: Rodando backtests com os resultados do Genius Optimizer ---")
         genius_dir = "optimize/genius"
         env_files = glob.glob(os.path.join(genius_dir, ".env.*"))
@@ -921,25 +967,29 @@ def backtest(
             print(f"   (usando arquivo de parâmetros: {env_file})")
             print("="*80 + "\n")
 
-            # Rodar o backtest com o arquivo .env específico do regime
             success = run_command_in_container(
                 ["scripts/run_backtest.py", str(days)],
                 final_bot_name,
                 extra_env_files=[env_file]
             )
-
             if not success:
                 print(f"⚠️  Backtest para o regime {regime_name} falhou. Verifique os logs acima.")
-
             print(f"\n--- ✅ Backtest para o regime {regime_name} finalizado ---")
 
         print("\n🎉 Todos os backtests baseados no Genius Optimizer foram concluídos.")
-
+        raise typer.Exit()
     else:
         print(f"\n--- Etapa 2 de 2: Rodando backtest padrão para {days} dias ---")
-        if not run_command_in_container(["scripts/run_backtest.py", str(days)], final_bot_name, extra_env_files=None):
-            print("❌ Falha na execução do backtest.")
-            return
+
+    # Common execution for default and --use-best
+    success = run_command_in_container(
+        ["scripts/run_backtest.py", str(days)],
+        final_bot_name,
+        extra_env_files=extra_env_files if extra_env_files else None
+    )
+    if not success:
+        print("❌ Falha na execução do backtest.")
+    else:
         print("\n✅ Backtest finalizado com sucesso.")
 
 @app.command("clean")

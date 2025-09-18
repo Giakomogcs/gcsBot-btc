@@ -4,6 +4,7 @@ import optuna
 from pathlib import Path
 import json
 import concurrent.futures
+import threading
 from jules_bot.utils.logger import logger
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.genius_optimizer.objective import create_objective_function
@@ -12,8 +13,11 @@ from jules_bot.genius_optimizer.results import (
     save_best_params_for_regime,
     generate_importance_report,
     aggregate_results,
+    save_best_overall_params,
     GENIUS_OUTPUT_DIR
 )
+
+from typing import Optional
 
 class GeniusOptimizer:
     """
@@ -21,15 +25,44 @@ class GeniusOptimizer:
     Orchestrates the entire process of data segmentation, regime-specific
     optimization, and results aggregation.
     """
-    def __init__(self, bot_name: str, days: int, n_trials: int, active_params: dict):
+    def __init__(self, bot_name: str, n_trials: int, active_params: dict, days: Optional[int] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, seed_params: Optional[dict] = None):
         self.bot_name = bot_name
         self.days = days
+        self.start_date = start_date
+        self.end_date = end_date
         self.n_trials = n_trials
         self.active_params = active_params
+        self.seed_params = seed_params
         self.studies = {}
         self.db_manager = PostgresManager() # Initialize db manager for the whole process
+        self.global_best_lock = threading.Lock() # Lock for thread-safe access to the global best trial file
+        self.best_overall_score = float('-inf') # Track the best score in memory
+        self.best_trial_summary = None # To store the best trial's data for WFO return
         os.makedirs(GENIUS_OUTPUT_DIR, exist_ok=True)
+        # Clean up old TUI files before a new run
+        if not seed_params: # Only cleanup for a fresh run, not for WFO windows
+            self._cleanup_tui_files()
         logger.info("🧠 Genius Optimizer initialized.")
+
+    def _cleanup_tui_files(self):
+        """Removes old trial and summary files from the .tui_files directory."""
+        tui_dir = Path(".tui_files")
+        if not tui_dir.exists():
+            tui_dir.mkdir(exist_ok=True)
+            return
+
+        logger.info(f"Cleaning up old TUI files in {tui_dir}...")
+        files_to_delete = list(tui_dir.glob("genius_*.json"))
+        files_to_delete.extend(list(tui_dir.glob("best_overall_trial.json")))
+        files_to_delete.extend(list(tui_dir.glob("progress_status.json"))) # Also remove progress file
+        # We keep the baseline summary, as it's generated before this class is instantiated
+
+        for f in files_to_delete:
+            try:
+                os.remove(f)
+            except OSError as e:
+                logger.warning(f"Could not remove TUI file {f}: {e}")
+
 
     def run_study_for_regime(self, regime: int, data_segment: pd.DataFrame):
         """
@@ -59,6 +92,17 @@ class GeniusOptimizer:
             load_if_exists=True
         )
 
+        # Enqueue seed parameters if this is a walk-forward run
+        if self.seed_params:
+            # We need to filter seed_params to only include hyperparameters
+            # relevant to the current study space, which is defined by active_params
+            hyperparameter_names = self.active_params.keys()
+            filtered_seed_params = {k: v for k, v in self.seed_params.items() if k in hyperparameter_names}
+
+            if filtered_seed_params:
+                logger.info(f"Enqueuing seed parameters from previous WFO window for Regime {regime}.")
+                study.enqueue_trial(filtered_seed_params)
+
         # Prune previous trials if they are no longer relevant
         if study.trials and any(t.state == optuna.trial.TrialState.PRUNED for t in study.trials):
              logger.info("Pruning previous failed trials from the study.")
@@ -70,45 +114,61 @@ class GeniusOptimizer:
 
         def tui_callback(study: optuna.study.Study, trial: optuna.trial.FrozenTrial):
             """
-            Callback to write trial results to a JSON file for the TUI to read.
+            Callback to write trial results to JSON files for the TUI to read.
             This will be called after each trial is completed.
             """
-            # We add user attrs in the objective function to get more detailed results
-            final_balance = trial.user_attrs.get("final_balance", 0.0)
-            max_drawdown = trial.user_attrs.get("max_drawdown", 0.0)
-            win_rate = trial.user_attrs.get("win_rate", 0.0)
+            if trial.state != optuna.trial.TrialState.COMPLETE:
+                return # Don't log non-completed trials
 
+            # --- Log individual trial file (for the live log) ---
+            # This part remains mostly the same.
             trial_data = {
                 "regime": regime,
                 "number": trial.number,
                 "state": trial.state.name,
                 "score": trial.value,
-                "final_balance": final_balance,
-                "max_drawdown": max_drawdown,
-                "win_rate": win_rate,
                 "params": trial.params,
                 "datetime_start": trial.datetime_start.isoformat() if trial.datetime_start else None,
+                # Add the full summary to the individual log file as well
+                "summary": trial.user_attrs.get("full_summary", {})
             }
-            # A unique filename for each trial to avoid race conditions
             file_path = tui_callback_dir / f"genius_trial_{regime}_{trial.number}.json"
             with open(file_path, "w") as f:
                 json.dump(trial_data, f, indent=4)
 
-            # Also write a summary of the best trial so far for this regime
-            best_trial = study.best_trial
-            if best_trial:
-                best_trial_data = {
-                    "regime": regime,
-                    "number": best_trial.number,
-                    "score": best_trial.value,
-                    "params": best_trial.params,
-                    "final_balance": best_trial.user_attrs.get("final_balance", 0.0),
-                    "max_drawdown": best_trial.user_attrs.get("max_drawdown", 0.0),
-                    "win_rate": best_trial.user_attrs.get("win_rate", 0.0),
-                }
-                summary_path = tui_callback_dir / f"genius_summary_regime_{regime}.json"
-                with open(summary_path, "w") as f:
-                    json.dump(best_trial_data, f, indent=4)
+            # --- Update global state (thread-safe) ---
+            with self.global_best_lock:
+                # 1. Update overall progress
+                progress_file = tui_callback_dir / "progress_status.json"
+                try:
+                    if progress_file.exists():
+                        with open(progress_file, "r+") as f:
+                            progress_data = json.load(f)
+                            progress_data["completed_trials"] += 1
+                            f.seek(0)
+                            json.dump(progress_data, f)
+                            f.truncate()
+                except (IOError, json.JSONDecodeError) as e:
+                    logger.warning(f"Could not update progress file: {e}")
+
+                # 2. Check for new best trial
+                if trial.value is not None and trial.value > self.best_overall_score:
+                    self.best_overall_score = trial.value # Update in-memory score
+
+                    self.best_trial_summary = {
+                        "regime": regime,
+                        "trial_number": trial.number,
+                        "score": trial.value,
+                        "params": trial.params,
+                        "summary": trial.user_attrs.get("full_summary", {})
+                    }
+
+                    best_trial_file = tui_callback_dir / "best_overall_trial.json"
+                    with open(best_trial_file, "w") as f:
+                        json.dump(self.best_trial_summary, f, indent=4)
+
+                    save_best_overall_params(self.bot_name, self.best_trial_summary)
+                    logger.info(f"🏆 New best trial! Score: {trial.value:.4f}, R: {regime}, T: {trial.number}")
 
 
         study.optimize(
@@ -125,26 +185,43 @@ class GeniusOptimizer:
         save_best_params_for_regime(study, regime, self.bot_name)
         generate_importance_report(study, regime)
 
-    def run(self):
+    def run(self) -> Optional[dict]:
         """
         The main entry point to start the optimization process.
+        Returns the best overall parameters found, for use in WFO.
         """
         logger.info("🚀 Starting Genius Optimization process...")
 
         # 1. Segment data by market regime
         logger.info("STEP 1: Analyzing and segmenting historical data...")
-        regime_analyzer = RegimeAnalyzer(db_manager=self.db_manager, days=self.days)
+        regime_analyzer = RegimeAnalyzer(
+            db_manager=self.db_manager,
+            days=self.days,
+            start_date=self.start_date,
+            end_date=self.end_date
+        )
         segmented_data = regime_analyzer.run()
 
         if not segmented_data:
             logger.error("No data segments were created. Aborting optimization.")
-            return
+            return None
 
-        # 2. Run optimization for each regime in parallel
-        logger.info(f"STEP 2: Running optimization for {len(segmented_data)} market regimes in parallel...")
+        # 2. Initialize progress tracking for the TUI
+        total_trials = len(segmented_data) * self.n_trials
+        progress_data = {"total_trials": total_trials, "completed_trials": 0}
+        tui_dir = Path(".tui_files")
+        tui_dir.mkdir(exist_ok=True)
+        try:
+            with open(tui_dir / "progress_status.json", "w") as f:
+                json.dump(progress_data, f)
+        except IOError as e:
+            logger.error(f"Could not write initial progress file: {e}")
+            # Don't abort, the TUI will just not show a progress bar
         
+        # 3. Run optimization for each regime in parallel
+        logger.info(f"STEP 2: Running optimization for {len(segmented_data)} market regimes ({total_trials} total trials)...")
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(segmented_data)) as executor:
-            # Create a future for each regime optimization
             futures = {
                 executor.submit(self.run_study_for_regime, regime, data_segment): regime
                 for regime, data_segment in segmented_data.items()
@@ -164,3 +241,5 @@ class GeniusOptimizer:
 
         logger.info("✅ Genius Optimization process finished successfully!")
         logger.info(f"All results and reports saved in '{GENIUS_OUTPUT_DIR}' directory.")
+
+        return self.best_trial_summary['params'] if self.best_trial_summary and 'params' in self.best_trial_summary else None

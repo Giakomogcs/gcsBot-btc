@@ -169,6 +169,44 @@ _Substitua `X` pelo número do regime (0, 1, 2 ou 3) para configurar cada um ind
 
 A interação com o robô é feita principalmente através do script `run.py`. Ele oferece uma interface de linha de comando para gerenciar todo o ciclo de vida do ambiente e dos bots.
 
+### Otimização Walk-Forward (WFO) - Otimização Profissional
+
+Para uma validação verdadeiramente robusta da estratégia, foi implementado um **Adaptive Walk-Forward Optimizer**. Este é o método mais avançado de otimização disponível no projeto.
+
+- **O que é?** Em vez de otimizar usando um único período de dados históricos (o que pode levar a um "superajuste"), o WFO divide o período total em múltiplas janelas de tempo. Ele treina a estratégia em um segmento de dados e, em seguida, a testa em um segmento futuro que a estratégia nunca viu. Esse processo é repetido, deslizando a janela de tempo até o presente.
+- **Vantagem:** O resultado final é uma medida muito mais realista de como a estratégia se comportaria em condições de mercado imprevisíveis.
+- **Inteligência Adaptativa:** Esta implementação possui "memória". Os melhores parâmetros de uma janela são usados como ponto de partida para a próxima, criando uma estratégia que aprende e se adapta ao longo do tempo.
+
+#### Como Executar o WFO
+
+O WFO é executado diretamente através de seu próprio script, que oferece controle total sobre os períodos de treinamento e teste.
+
+**Uso:**
+```bash
+python scripts/run_walk_forward_optimizer.py [OPÇÕES]
+```
+
+**Opções:**
+| Nome | Atalho | Descrição | Padrão |
+| --- | --- | --- | --- |
+| `--total-days` | `-d` | O número total de dias para todo o período da análise. | `180` |
+| `--training-days` | `-t` | O número de dias em cada janela de treino (in-sample). | `60` |
+| `--testing-days` | `-v` | O número de dias em cada janela de teste (out-of-sample). | `30` |
+| `--trials` | `-n` | O número de testes de otimização a serem executados por janela. | `100` |
+
+**Exemplo de Execução:**
+
+```bash
+# Executar um WFO nos últimos 6 meses (180 dias)
+# Cada janela terá 60 dias de treino e 30 dias de teste
+# O otimizador rodará 200 testes por janela
+python scripts/run_walk_forward_optimizer.py --total-days 180 --training-days 60 --testing-days 30 --trials 200
+```
+**O que acontece:**
+1.  **Preparação de Dados:** O script garante automaticamente que todos os dados de minuto a minuto necessários para o período total sejam baixados.
+2.  **Loop de Otimização:** O script inicia o loop, otimizando e testando em cada janela.
+3.  **Relatório Final:** Ao final, um relatório consolidado é exibido, mostrando o desempenho real (out-of-sample) da estratégia adaptativa ao longo de todo o período.
+
 ### Comandos de Gerenciamento do Ambiente
 
 Estes comandos controlam o ambiente Docker subjacente, que inclui o banco de dados PostgreSQL.
@@ -371,7 +409,7 @@ python run.py display --bot-name meu-primeiro-bot
 
 #### `backtest`
 
-**Descrição:** Executa um processo de backtesting. Pode ser um backtest simples com os parâmetros atuais ou um fluxo completo de otimização para encontrar os melhores parâmetros antes da simulação final.
+**Descrição:** Executa um processo de backtesting. Pode ser um backtest simples com os parâmetros atuais ou um fluxo completo de otimização para encontrar os melhores parâmetros. **A preparação dos dados históricos necessários é feita automaticamente.**
 
 **Uso:**
 
@@ -489,6 +527,13 @@ python scripts/force_sell.py [ID_DO_TRADE] [PERCENTUAL]
 export BOT_NAME=meu-primeiro-bot
 python scripts/force_sell.py abc-123 100
 ```
+
+---
+
+#### `run_walk_forward_optimizer.py`
+
+**Descrição:** Executa a otimização Walk-Forward. Veja a seção "Otimização Walk-Forward (WFO)" acima para detalhes completos.
+**Uso:** `python scripts/run_walk_forward_optimizer.py --total-days 180 --training-days 60 --testing-days 30`
 
 ---
 

@@ -1,9 +1,9 @@
 [
     {
-        "bot_name": "marcos_bot",
-        "container_id": "4851bb78d2fd91d55fbb1a295e49908b1d9654346f563db9c23816f94b484ae9",
-        "bot_mode": "test",
-        "start_time": "2025-09-15T15:24:47.198435",
+        "bot_name": "real_binance_gcs",
+        "container_id": "3f27dc65b5644e7ca75c50f7321bda856cce78626c9c7333dc07228560d91c6d",
+        "bot_mode": "trade",
+        "start_time": "2025-09-18T14:50:36.228810",
         "host_port": 8766,
         "process_type": "bot"
     }

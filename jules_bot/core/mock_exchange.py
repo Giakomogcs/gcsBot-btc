@@ -14,10 +14,13 @@ class MockTrader(Trader):
         self.btc_balance = Decimal('0.0')
         self.commission_rate = Decimal(commission_fee_rate)
 
+        from jules_bot.utils.config_manager import config_manager as global_config_manager
+        self.slippage_rate = Decimal(global_config_manager.get('BACKTEST', 'slippage_rate', fallback='0.0'))
+
         self._current_price = Decimal('0.0')
         self._current_timestamp = pd.Timestamp.now(tz='UTC')
 
-        logging.info(f"MockTrader initialized. Initial balance: ${self.usd_balance:,.2f} USD.")
+        logging.info(f"MockTrader initialized. Initial balance: ${self.usd_balance:,.2f} USD. Slippage: {self.slippage_rate:.4%}")
 
     def set_current_time_and_price(self, timestamp: pd.Timestamp, price: Decimal):
         self._current_timestamp = timestamp
@@ -37,22 +40,26 @@ class MockTrader(Trader):
         if price <= 0:
             return False, {"error": "Invalid price."}
 
+        # Apply slippage for buys (price is higher)
+        execution_price = price * (Decimal('1') + self.slippage_rate)
+
         amount_usdt = Decimal(amount_usdt)
-        commission_usd = amount_usdt * self.commission_rate
+        # The quantity of crypto received is based on the amount spent on the asset itself.
+        quantity_bought = amount_usdt / execution_price
+
+        # Commission is calculated on the value of the asset at the execution price
+        commission_usd = (quantity_bought * execution_price) * self.commission_rate
         total_cost = amount_usdt + commission_usd
 
         if self.usd_balance < total_cost:
             logging.warning(f"Insufficient funds. Required: ${total_cost:,.2f}, Available: ${self.usd_balance:,.2f}.")
             return False, {"error": "Insufficient USD balance."}
 
-        # The quantity of crypto received is based on the amount spent on the asset itself, not the total cost including fee.
-        quantity_bought = amount_usdt / price
-
         self.usd_balance -= total_cost
         self.btc_balance += quantity_bought
 
         trade_data = {
-            "trade_id": str(uuid.uuid4()), "symbol": self.symbol, "price": price,
+            "trade_id": str(uuid.uuid4()), "symbol": self.symbol, "price": execution_price,
             "quantity": quantity_bought, "usd_value": amount_usdt,
             "commission_usd": commission_usd, "timestamp": self.get_current_timestamp()
         }
@@ -65,7 +72,11 @@ class MockTrader(Trader):
             return False, {"error": "Insufficient BTC balance."}
 
         price = self.get_current_price()
-        usd_value = quantity_to_sell * price
+
+        # Apply slippage for sells (price is lower)
+        execution_price = price * (Decimal('1') - self.slippage_rate)
+
+        usd_value = quantity_to_sell * execution_price
         commission_usd = usd_value * self.commission_rate
         net_usd_value = usd_value - commission_usd
 
@@ -73,7 +84,7 @@ class MockTrader(Trader):
         self.usd_balance += net_usd_value
 
         exit_data = {
-            "price": price, "quantity": quantity_to_sell,
+            "price": execution_price, "quantity": quantity_to_sell,
             "usd_value": usd_value, # Return gross USD value before commission
             "commission_usd": commission_usd,
             "timestamp": self.get_current_timestamp()

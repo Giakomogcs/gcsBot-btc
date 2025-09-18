@@ -177,6 +177,24 @@ class ConfigManager:
         else:
             raise ValueError(f"Invalid database type: {db_type}")
 
+    def get_all_params_as_dict(self) -> Dict[str, str]:
+        """
+        Returns all configuration parameters from all sections as a single dictionary.
+        This is useful for logging or creating baseline parameter sets.
+        Keys are in the format 'SECTION_key'.
+        """
+        all_params = {}
+        for section in self.config.sections():
+            for key, _ in self.config.items(section):
+                # Use the existing `get` method to ensure correct resolution
+                # of env vars and overrides.
+                value = self.get(section, key)
+
+                # Create a standardized key, e.g., 'STRATEGY_RULES_use_dynamic_trailing_stop'
+                dict_key = f"{section.upper()}_{key}"
+                all_params[dict_key] = value
+        return all_params
+
 
 # Instantiate the config manager for global use
 config_manager = ConfigManager()
