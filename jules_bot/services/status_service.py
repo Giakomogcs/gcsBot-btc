@@ -198,11 +198,9 @@ class StatusService:
             )
             net_total_pnl = total_realized_pnl + total_unrealized_pnl
 
-            # Filter for buy trades only to get the correct total trade count
-            buy_trades = [
-                trade for trade in full_trade_history if trade.order_type == 'buy'
-            ]
-            total_trades_count = len(buy_trades)
+            # Total trades are the sum of open positions and closed positions (sells).
+            sell_trades_count = sum(1 for trade in full_trade_history if trade.order_type == 'sell')
+            total_trades_count = open_positions_count + sell_trades_count
             trade_history_dicts = [trade.to_dict() for trade in full_trade_history]
 
 
