@@ -314,7 +314,7 @@ class TradingBot:
                 logger.warning(f"❌ SALE CANCELED for position {position.trade_id}. Reason: {reason}. Current price ${current_price:,.2f} is not above break-even price ${break_even_price:,.2f}.")
                 if reason == 'trailing_stop' and position.is_smart_trailing_active:
                     logger.warning(f"RESETTING SMART TRAILING for {position.trade_id} to prevent loss.")
-                    self.state_manager.update_trade_smart_trailing_state(trade_id=position.trade_id, is_active=False, highest_profit=None, activation_price=None)
+                    self.state_manager.update_trade_smart_trailing_state(trade_id=position.trade_id, is_active=False, highest_profit=Decimal('0'), activation_price=None)
                     position.is_smart_trailing_active = False
 
         if not positions_to_sell_now:
