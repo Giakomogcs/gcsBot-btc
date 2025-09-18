@@ -286,12 +286,12 @@ Para uma validação verdadeiramente robusta da estratégia, foi implementado um
 
 #### Como Executar o WFO
 
-O WFO é executado diretamente através de seu próprio script, que oferece controle total sobre os períodos de treinamento e teste.
+O WFO é executado de forma simples e direta através do `run.py`.
 
 **Uso:**
 
 ```bash
-python scripts/run_walk_forward_optimizer.py [OPÇÕES]
+python run.py wfo [OPÇÕES]
 ```
 
 **Opções:**
@@ -308,7 +308,7 @@ python scripts/run_walk_forward_optimizer.py [OPÇÕES]
 # Executar um WFO nos últimos 6 meses (180 dias)
 # Cada janela terá 60 dias de treino e 30 dias de teste
 # O otimizador rodará 200 testes por janela
-python scripts/run_walk_forward_optimizer.py --total-days 180 --training-days 60 --testing-days 30 --trials 200
+python run.py wfo --total-days 180 --training-days 60 --testing-days 30 --trials 200
 ```
 
 **O que acontece:**
@@ -519,7 +519,7 @@ python run.py display --bot-name meu-primeiro-bot
 
 #### `backtest`
 
-**Descrição:** Executa um processo de backtesting. Pode ser um backtest simples com os parâmetros atuais ou um fluxo completo de otimização para encontrar os melhores parâmetros. **A preparação dos dados históricos necessários é feita automaticamente.**
+**Descrição:** Executa um backtest para um período histórico. Permite testar a estratégia com os parâmetros padrão do `.env` ou com o melhor conjunto de parâmetros encontrado pela otimização `wfo`.
 
 **Uso:**
 
@@ -532,8 +532,7 @@ python run.py backtest [OPÇÕES]
 | --- | --- | --- |
 | `--bot-name, -n` | O nome do bot para o qual o backtest será executado. Se omitido, será interativo. | `jules_bot` |
 | `--days, -d` | O número de dias de dados históricos a serem usados no backtest. | `30` |
-| `--optimize` | Se esta flag for usada, ativa o modo de otimização antes do backtest final. | `False` |
-| `--jobs, -j` | Número de processos de otimização para rodar em paralelo. | Nº de CPUs da máquina |
+| `--use-best` | Se esta flag for usada, o backtest rodará com os melhores parâmetros encontrados pelo `wfo`, localizados em `optimize/wfo_best_params.env`. | `False` |
 
 **Exemplos de Uso:**
 
@@ -541,22 +540,18 @@ python run.py backtest [OPÇÕES]
     Executa um backtest simples usando as configurações atuais do seu arquivo `.env`.
 
     ```bash
-    python run.py backtest --bot-name meu-primeiro-bot --days 90
+    python run.py backtest --days 90
     ```
 
-2.  **Backtest com Otimização:**
-    Ativa o fluxo de otimização profissional com um dashboard de monitoramento em tempo real.
+2.  **Backtest com os Melhores Parâmetros (Pós-WFO):**
+    Se você já executou `python run.py wfo`, pode usar esta opção para rodar um backtest usando o melhor conjunto de parâmetros encontrado.
+
     ```bash
-    python run.py backtest --optimize
+    python run.py backtest --days 90 --use-best
     ```
-    - **O que acontece:**
-      1.  **Configuração Interativa:** O script fará perguntas para configurar a otimização (número de testes, perfil de carteira, etc.).
-      2.  **Dashboard de Otimização:** Um painel de controle (TUI) será iniciado no seu terminal, mostrando o progresso de todos os jobs de otimização em tempo real.
-      3.  **Otimização Paralela:** O Optuna rodará vários backtests em segundo plano, de forma eficiente (usando "pruning" para descartar testes ruins), para encontrar a melhor combinação de parâmetros. O progresso é salvo em `optimize/jules_bot_optimization.db` e pode ser retomado de onde parou.
-      4.  **Salvar Resultados:** Os melhores parâmetros são salvos automaticamente no arquivo `optimize/.best_params.env`.
-      5.  **Backtest Final:** Um último backtest, com relatório detalhado e limpo, é executado usando os parâmetros do `optimize/.best_params.env`.
 
-Este fluxo integrado garante que você possa encontrar e testar a melhor estratégia de forma robusta e profissional com um único comando, agora com visibilidade total do processo.
+3.  **Modo Interativo:**
+    Se você simplesmente rodar `python run.py backtest` e um arquivo `optimize/wfo_best_params.env` existir, o script perguntará qual conjunto de parâmetros você deseja usar.
 
 ### Scripts de Utilidade
 

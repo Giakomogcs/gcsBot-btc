@@ -1,10 +1,1 @@
-[
-    {
-        "bot_name": "real_binance_gcs",
-        "container_id": "f6f2bece1f90076d5690f44b890b769194d10ee8eb5df094b6fda808c4f837c5",
-        "bot_mode": "trade",
-        "start_time": "2025-09-18T16:40:57.754038",
-        "host_port": 8766,
-        "process_type": "bot"
-    }
-]
+[]

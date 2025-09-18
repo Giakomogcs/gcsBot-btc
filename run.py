@@ -592,58 +592,6 @@ def _clear_tui_files():
                     print(f"⚠️  Aviso: Não foi possível deletar o arquivo {f}: {e}")
             print("✅ Limpeza concluída.")
 
-def _save_best_params(bot_name: str):
-    """
-    Loads the completed study, finds the best trial, and saves its parameters.
-    """
-    if optuna is None:
-        print("❌ A biblioteca 'optuna' não está instalada. Não foi possível salvar os melhores parâmetros.")
-        return
-
-    print("💾 Salvando os melhores parâmetros encontrados...")
-    try:
-        # We need to import these here as they are not top-level dependencies of run.py
-        from jules_bot.optimizer import OPTIMIZE_OUTPUT_DIR, BEST_PARAMS_FILE
-
-        study_name = f"optimization_{bot_name}"
-        storage_url = f"sqlite:///{OPTIMIZE_OUTPUT_DIR}jules_bot_optimization.db"
-
-        study = optuna.load_study(study_name=study_name, storage=storage_url)
-        best_trial = study.best_trial
-
-        print(f"🏆 Melhor trial: #{best_trial.number} -> Saldo Final: ${best_trial.value:,.2f}")
-
-        # --- Save best trial summary for TUI ---
-        tui_callback_dir = Path(".tui_files")
-        tui_callback_dir.mkdir(exist_ok=True)
-        best_trial_data = {
-            "number": best_trial.number,
-            "value": best_trial.value,
-            "params": best_trial.params,
-        }
-        with open(tui_callback_dir / "best_trial_summary.json", "w") as f:
-            json.dump(best_trial_data, f, indent=4)
-        # --- End of new code ---
-
-        with open(BEST_PARAMS_FILE, 'w') as f:
-            f.write(f"# Best parameters for bot '{bot_name}' from study '{study_name}'\n")
-            f.write(f"# Final Balance: {best_trial.value:.2f}\n\n")
-            for key, value in best_trial.params.items():
-                # This logic is copied from the original optimizer.py
-                if "PROFIT_MULTIPLIER" in key:
-                    base_profit = best_trial.params.get("STRATEGY_RULES_TARGET_PROFIT", 0.005)
-                    original_key = key.replace("_PROFIT_MULTIPLIER", "_TARGET_PROFIT")
-                    final_value = base_profit * value
-                    f.write(f"{original_key.upper()}={final_value}\n")
-                else:
-                    f.write(f"{key.upper()}={value}\n")
-        print(f"✅ Melhores parâmetros salvos com sucesso em '{BEST_PARAMS_FILE}'.")
-
-    except ValueError:
-        print("⚠️  Aviso: Nenhum trial foi completado com sucesso. Não foi possível determinar os melhores parâmetros.")
-    except Exception as e:
-        print(f"❌ Erro ao salvar os melhores parâmetros: {e}")
-
 NEW_BOT_TEMPLATE = """
 # ==============================================================================
 # BOT: {bot_name}
@@ -754,179 +702,91 @@ def validate(bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", he
     else:
         print("✅ Script de validação concluído.")
 
-def _get_optimizer_settings() -> dict:
-    """Gets settings for the Genius Optimizer interactively."""
-    if questionary is None:
-        print("❌ A biblioteca 'questionary' é necessária para a otimização. Instale com 'pip install questionary'")
-        raise typer.Exit(1)
+@app.command()
+def wfo(
+    bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="The name of the bot to run the WFO for."),
+    total_days: int = typer.Option(180, "--total-days", "-d", help="The total number of days for the entire WFO period."),
+    training_days: int = typer.Option(60, "--training-days", "-t", help="The number of days in each training window (in-sample)."),
+    testing_days: int = typer.Option(30, "--testing-days", "-v", help="The number of days in each testing window (out-of-sample)."),
+    trials: int = typer.Option(100, "--trials", help="The number of optimization trials to run per window."),
+):
+    """
+    Runs a full Walk-Forward Optimization (WFO) to find robust trading strategy parameters.
+    """
+    final_bot_name = _setup_bot_run(bot_name)
 
-    settings = {}
-    print("\n--- 🧠 Configurações do Otimizador ---")
+    print("\n--- 🧠 Starting Walk-Forward Optimization ---")
+    print("This process will run in the foreground and may take a significant amount of time.")
+    print(f"Bot Context: {final_bot_name}")
+    print(f"Total Period: {total_days} days | Training: {training_days} days | Testing: {testing_days} days | Trials/Window: {trials}")
 
-    trials_str = questionary.text(
-        "Quantas combinações de parâmetros (trials) você deseja testar por regime?",
-        default="50",
-        validate=lambda text: text.isdigit() and int(text) > 0 or "Por favor, insira um número inteiro positivo."
-    ).ask()
-    if not trials_str: raise typer.Exit()
-    settings["n_trials"] = int(trials_str)
-
-    param_groups = {
-        "USE_DYNAMIC_TRAILING_STOP": "Lógica de Trailing Stop Dinâmico",
-        "USE_REVERSAL_BUY_STRATEGY": "Lógica de Compra por Reversão",
-        "DYNAMIC_TRAIL": "Parâmetros do Trailing Stop",
-        "REVERSAL_BUY": "Parâmetros da Compra por Reversão",
-        "SIZING": "Parâmetros de Dimensionamento de Ordem",
-        "DIFFICULTY": "Parâmetros de Dificuldade de Compra"
-    }
-    
-    all_param_keys = list(param_groups.keys())
-    choices = [
-        questionary.Choice(title=">> OTIMIZAR TODOS OS GRUPOS <<", value="ALL"),
-        questionary.Separator(),
-        questionary.Choice(
-            title="Parâmetros de Regime (Ex: Buy/Sell %)",
-            value="REGIME_PARAMS",
-            checked=True,
-            disabled=True # Always included
-        ),
-    ] + [
-        questionary.Choice(title=v, value=k, checked=True) 
-        for k, v in param_groups.items()
-    ]
-
-    selected_keys = questionary.checkbox(
-        "Selecione os grupos de parâmetros para otimizar (use a barra de espaço para selecionar):",
-        choices=choices,
-    ).ask()
-
-    if not selected_keys: 
-        print("Nenhum grupo de parâmetros selecionado. Abortando.")
+    if not typer.confirm("Do you want to proceed?", default=True):
+        print("👋 Operation cancelled.")
         raise typer.Exit()
 
-    if "ALL" in selected_keys:
-        settings["active_params"] = {key: True for key in all_param_keys}
-    else:
-        # Filter out the disabled 'REGIME_PARAMS' key if it's there
-        settings["active_params"] = {key: True for key in selected_keys if key != "REGIME_PARAMS"}
-
-    return settings
-
-def _run_optimizer(bot_name: str, days: int):
-    """
-    Launches the Genius Optimizer in a background container.
-    """
-    existing_bot_process = process_manager.get_bot_by_name(bot_name)
-    if existing_bot_process and existing_bot_process.process_type == 'bot':
-        print(f"❌ Erro: O bot '{bot_name}' já está em execução no modo '{existing_bot_process.bot_mode.upper()}'.")
-        print("   Você não pode iniciar uma otimização para um bot que já está ativo.")
-        print(f"   Para parar o bot, use: python run.py stop-bot --name {bot_name}")
+    # The WFO script handles its own data preparation, so we don't need to call it here.
+    # We just need to ensure the Docker environment is up and running.
+    if not _ensure_env_is_running():
+        print("❌ Failed to ensure Docker environment is running. Aborting WFO.")
         raise typer.Exit(1)
 
-    settings = _get_optimizer_settings()
-
-    # Explicitly add the regime parameters to the list for display purposes
-    active_param_display_list = ["Parâmetros de Regime"] + list(settings['active_params'].keys())
-
-    print("\n--- 🧠 Iniciando Otimizador ---")
-    print(f"   - Bot: {bot_name}, Dias: {days}, Trials por Regime: {settings['n_trials']}")
-    print(f"   - Parâmetros Ativos: {active_param_display_list}")
-    if not typer.confirm("Deseja continuar com a otimização?", default=True):
-        raise typer.Exit()
-    
-    # 3. Clear old TUI files
-    _clear_tui_files()
-
-    # 4. Check if an optimizer for THIS bot is already running
-    optimizer_process_name = f"{bot_name}-optimizer"
-    existing_optimizer = process_manager.get_bot_by_name(optimizer_process_name)
-    if existing_optimizer:
-        print(f"⚠️  Um otimizador para o bot '{bot_name}' já está em execução (Container: {existing_optimizer.container_id[:12]}).")
-        if typer.confirm("Deseja pará-lo e iniciar um novo?"):
-            subprocess.run(SUDO_PREFIX + ["docker", "stop", existing_optimizer.container_id], capture_output=True)
-            process_manager.remove_running_bot(optimizer_process_name)
-            print("✅ Otimizador anterior parado.")
-        else:
-            print("👋 Operação cancelada.")
-            raise typer.Exit()
-
-    # 5. Launch the optimizer script in a background container
-    print("\n⚙️  Iniciando a otimização em segundo plano...")
-    active_params_json = json.dumps(settings['active_params'])
     command = [
-        "scripts/run_genius_optimizer.py",
-        bot_name,
-        str(days),
-        str(settings['n_trials']),
-        active_params_json
+        "scripts/run_walk_forward_optimizer.py",
+        f"--total-days={total_days}",
+        f"--training-days={training_days}",
+        f"--testing-days={testing_days}",
+        f"--trials={trials}",
     ]
-    
-    container_id = run_script_in_background_container(
-        process_name=optimizer_process_name,
-        context_bot_name=bot_name,
-        command=command
+
+    success = run_command_in_container(
+        command,
+        final_bot_name,
+        interactive=False # It's a long-running script, but not interactive in the tty sense
     )
 
-    if not container_id:
-        print("❌ Falha ao iniciar o container do otimizador. Abortando.")
-        raise typer.Exit(1)
+    if not success:
+        print("\n❌ Walk-Forward Optimization failed. Check the logs above for errors.")
+    else:
+        print("\n✅ Walk-Forward Optimization finished successfully.")
 
-    # 6. Register the running optimizer process
-    process_manager.add_running_bot(
-        bot_name=optimizer_process_name,
-        container_id=container_id,
-        bot_mode="optimizer",
-        host_port=0,  # No port needed
-        process_type="optimizer"
-    )
-    
-    print(f"\n✅ Otimizador iniciado em segundo plano (Container: {container_id[:12]}).")
-    print(f"   Para acompanhar o progresso, use: 'python run.py display'")
-    print(f"   Para ver os logs, use:           'python run.py logs'")
-    print(f"   Para parar o otimizador, use:      'python run.py stop-bot'")
 
 @app.command()
 def backtest(
     bot_name: Optional[str] = typer.Option(None, "--bot-name", "-n", help="O nome do bot para executar."),
     days: int = typer.Option(30, "--days", "-d", help="Número de dias de dados recentes para o backtest."),
-    optimize: bool = typer.Option(False, "--optimize", help="Rodar o otimizador para encontrar os melhores parâmetros por regime de mercado."),
-    use_best: bool = typer.Option(False, "--use-best", help="Rodar um backtest com os melhores parâmetros gerais encontrados pelo Genius Optimizer."),
-    use_genius: bool = typer.Option(False, "--use-genius", help="[LEGACY] Rodar backtests usando os .env de resultados do Genius Optimizer para cada regime.")
+    optimize: bool = typer.Option(False, "--optimize", help="[DEPRECATED] Rodar o otimizador para encontrar os melhores parâmetros por regime de mercado."),
+    use_best: bool = typer.Option(False, "--use-best", help="Rodar um backtest com os melhores parâmetros encontrados pelo Walk-Forward Optimizer."),
 ):
     """Executa um backtest, com a opção de otimizar ou usar resultados da otimização."""
     final_bot_name = _setup_bot_run(bot_name)
 
-    if sum([optimize, use_genius, use_best]) > 1:
-        print("❌ Erro: As opções '--optimize', '--use-best' e '--use-genius' são mutuamente exclusivas.")
+    if optimize:
+        print("❌ Erro: A flag '--optimize' foi descontinuada. Use o comando 'wfo' para otimizações.")
         raise typer.Exit(1)
-    
+
     print("\n--- Etapa 1 de 2: Preparando dados históricos ---")
     if not run_command_in_container(["scripts/prepare_backtest_data.py", str(days)], final_bot_name):
         print("❌ Falha na preparação dos dados. Abortando backtest.")
         return
 
-    if optimize:
-        _run_optimizer(final_bot_name, days)
-        raise typer.Exit()
-
     # This variable will hold the final decision on whether to use the best params.
     # It can be set by the flag or by the interactive prompt.
     should_use_best = use_best
-    best_params_file = "optimize/genius/.env.best_overall"
+    best_params_file = "optimize/wfo_best_params.env"
 
     # --- Interactive prompt if no mode is specified ---
-    if not any([optimize, use_genius, use_best]):
+    if not use_best:
         if questionary is None:
             print("⚠️  A biblioteca 'questionary' não está instalada. Rodando com parâmetros padrão.")
         else:
             if not os.path.exists(best_params_file):
-                print("ℹ️  Arquivo de melhores parâmetros não encontrado. Rodando com parâmetros padrão do .env.")
+                print("ℹ️  Arquivo de melhores parâmetros do WFO não encontrado. Rodando com parâmetros padrão do .env.")
             else:
                 choice = questionary.select(
                     "Qual conjunto de parâmetros você gostaria de usar para o backtest?",
                     choices=[
                         questionary.Choice("Padrão (do arquivo .env)", "default"),
-                        questionary.Choice("Melhores Otimizados (encontrados pelo Genius Optimizer)", "best"),
+                        questionary.Choice("Melhores Otimizados (encontrados pelo Walk-Forward Optimizer)", "best"),
                     ],
                     default="default"
                 ).ask()
@@ -939,45 +799,14 @@ def backtest(
     # --- Execution Logic ---
     extra_env_files = []
     if should_use_best:
-        print("\n--- Etapa 2 de 2: Rodando backtest com os MELHORES parâmetros encontrados ---")
+        print("\n--- Etapa 2 de 2: Rodando backtest com os MELHORES parâmetros do WFO ---")
         if not os.path.exists(best_params_file):
             print(f"❌ Arquivo de melhores parâmetros '{best_params_file}' não encontrado.")
-            print("   Você precisa rodar a otimização primeiro com a flag '--optimize'.")
+            print("   Você precisa rodar a otimização primeiro com o comando 'wfo'.")
             raise typer.Exit(1)
 
         print(f"   (usando arquivo de parâmetros: {best_params_file})")
         extra_env_files.append(best_params_file)
-
-    elif use_genius:
-        print("\n--- Etapa 2 de 2: Rodando backtests com os resultados do Genius Optimizer ---")
-        genius_dir = "optimize/genius"
-        env_files = glob.glob(os.path.join(genius_dir, ".env.*"))
-
-        if not env_files:
-            print(f"❌ Nenhum arquivo de resultado do Genius Optimizer (.env.*) encontrado em '{genius_dir}'.")
-            print("   Você precisa rodar a otimização primeiro com a flag '--optimize'.")
-            raise typer.Exit(1)
-
-        print(f"✅ Encontrados {len(env_files)} arquivos de resultado. Rodando um backtest para cada um...")
-
-        for env_file in sorted(env_files):
-            regime_name = os.path.basename(env_file).replace('.env.', '').upper()
-            print("\n" + "="*80)
-            print(f"⚡️ INICIANDO BACKTEST PARA O REGIME: {regime_name} ⚡️")
-            print(f"   (usando arquivo de parâmetros: {env_file})")
-            print("="*80 + "\n")
-
-            success = run_command_in_container(
-                ["scripts/run_backtest.py", str(days)],
-                final_bot_name,
-                extra_env_files=[env_file]
-            )
-            if not success:
-                print(f"⚠️  Backtest para o regime {regime_name} falhou. Verifique os logs acima.")
-            print(f"\n--- ✅ Backtest para o regime {regime_name} finalizado ---")
-
-        print("\n🎉 Todos os backtests baseados no Genius Optimizer foram concluídos.")
-        raise typer.Exit()
     else:
         print(f"\n--- Etapa 2 de 2: Rodando backtest padrão para {days} dias ---")
 

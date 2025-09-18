@@ -74,28 +74,76 @@ def run_backtest_for_window(start_date: datetime, end_date: datetime, params: di
         logger.info("Configuration overrides cleared.")
 
 
-def aggregate_and_display_wfo_results(all_results: List[dict]):
+def save_best_wfo_params(best_params: dict):
     """
-    Aggregates results from all OOS windows and displays a final report.
+    Saves the best overall parameters found by the WFO to a .env file.
     """
-    if not all_results:
+    output_dir = "optimize"
+    os.makedirs(output_dir, exist_ok=True)
+    filepath = os.path.join(output_dir, "wfo_best_params.env")
+
+    logger.info(f"💾 Saving best WFO parameters to '{filepath}'...")
+
+    try:
+        with open(filepath, 'w') as f:
+            f.write("# Best parameters found by Walk-Forward Optimization\n")
+            f.write(f"# Generated on: {datetime.now().isoformat()}\n\n")
+            for key, value in best_params.items():
+                f.write(f"{key.upper()}={value}\n")
+        logger.info("✅ Best parameters saved successfully.")
+    except IOError as e:
+        logger.error(f"❌ Failed to save best WFO parameters: {e}")
+
+
+def aggregate_and_display_wfo_results(all_results_with_params: List[tuple]):
+    """
+    Aggregates results from all OOS windows, displays a final report,
+    and saves the best parameter set.
+    """
+    if not all_results_with_params:
         logger.warning("No out-of-sample results to aggregate.")
         return
 
     console = Console()
     console.print("\n--- 📊 [bold cyan]Walk-Forward Optimization Final Report[/bold cyan] ---")
-    console.print(f"Aggregated results from {len(all_results)} out-of-sample windows.")
+    console.print(f"Aggregated results from {len(all_results_with_params)} out-of-sample windows.")
 
-    # Combine all trades into a single list
     all_trades = []
-    for result_set in all_results:
+    window_performances = []
+
+    # Unpack results and params, calculate metrics for each window
+    for result_set, params in all_results_with_params:
         all_trades.extend(result_set.get("trades", []))
+
+        # Calculate profit factor for this specific window
+        window_trades_df = pd.DataFrame(result_set.get("trades", []))
+        if not window_trades_df.empty:
+            sell_trades = window_trades_df[window_trades_df['order_type'] == 'sell']
+            winning_trades = sell_trades[sell_trades['realized_pnl_usd'] > 0]
+            losing_trades = sell_trades[sell_trades['realized_pnl_usd'] < 0]
+            gross_profit = winning_trades['realized_pnl_usd'].sum()
+            gross_loss = abs(losing_trades['realized_pnl_usd'].sum())
+            profit_factor = gross_profit / gross_loss if gross_loss > 0 else 0.0
+            window_performances.append({'profit_factor': profit_factor, 'params': params})
+        else:
+            window_performances.append({'profit_factor': 0.0, 'params': params})
+
 
     if not all_trades:
         console.print("[yellow]No trades were executed across all out-of-sample periods.[/yellow]")
         return
 
-    # Create a DataFrame for easier analysis
+    # --- Find and Save Best Parameters ---
+    if window_performances:
+        best_window = max(window_performances, key=lambda x: x['profit_factor'])
+        best_params = best_window['params']
+        logger.info(f"🏆 Best performing window had Profit Factor: {best_window['profit_factor']:.2f}")
+        save_best_wfo_params(best_params)
+    else:
+        logger.warning("Could not determine best parameters as no windows had trades.")
+
+
+    # --- Aggregate Overall Metrics for Display ---
     trades_df = pd.DataFrame(all_trades)
     trades_df['timestamp'] = pd.to_datetime(trades_df['timestamp'])
     numeric_cols = ['price', 'quantity', 'usd_value', 'commission_usd', 'realized_pnl_usd']
@@ -103,23 +151,17 @@ def aggregate_and_display_wfo_results(all_results: List[dict]):
         if col in trades_df.columns:
             trades_df[col] = pd.to_numeric(trades_df[col])
 
-    # --- Calculate Overall Metrics ---
-    initial_balance = all_results[0]['initial_balance']
-    final_balance = all_results[-1]['final_balance']
+    initial_balance = all_results_with_params[0][0]['initial_balance']
+    final_balance = all_results_with_params[-1][0]['final_balance']
     net_pnl_usd = final_balance - initial_balance
     net_pnl_pct = (net_pnl_usd / initial_balance) * 100 if initial_balance > 0 else 0
 
-    buy_trades = trades_df[trades_df['order_type'] == 'buy']
     sell_trades = trades_df[trades_df['order_type'] == 'sell']
-
     total_realized_pnl = sell_trades['realized_pnl_usd'].sum()
     total_fees = trades_df['commission_usd'].sum()
-
     winning_trades = sell_trades[sell_trades['realized_pnl_usd'] > 0]
     losing_trades = sell_trades[sell_trades['realized_pnl_usd'] < 0]
-
     win_rate = (len(winning_trades) / len(sell_trades)) * 100 if not sell_trades.empty else 0
-
     gross_profit = winning_trades['realized_pnl_usd'].sum()
     gross_loss = abs(losing_trades['realized_pnl_usd'].sum())
     profit_factor = gross_profit / gross_loss if gross_loss > 0 else float('inf')
@@ -164,7 +206,7 @@ def run_wfo(
     start_date = end_date - timedelta(days=total_days)
 
     current_training_start = start_date
-    all_oos_results = []
+    all_oos_results_with_params = []
     seeded_params = None
     window_num = 1
 
@@ -202,7 +244,8 @@ def run_wfo(
             params=best_params_found
         )
         if oos_results:
-            all_oos_results.append(oos_results)
+            # Store both the results and the parameters that generated them
+            all_oos_results_with_params.append((oos_results, best_params_found))
             logger.info(f"Window #{window_num}: Out-of-sample backtest complete.")
         else:
             logger.warning(f"Window #{window_num}: Out-of-sample backtest failed to produce results.")
@@ -214,8 +257,8 @@ def run_wfo(
         logger.info("-" * 50)
 
 
-    # 6. Aggregate and display final results
-    aggregate_and_display_wfo_results(all_oos_results)
+    # 6. Aggregate, display, and save final results
+    aggregate_and_display_wfo_results(all_oos_results_with_params)
     logger.info("--- ✅ Walk-Forward Optimization Finished ---")
 
 
