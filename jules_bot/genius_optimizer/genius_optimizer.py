@@ -5,6 +5,7 @@ from pathlib import Path
 import json
 import concurrent.futures
 import threading
+from tqdm.auto import tqdm
 from jules_bot.utils.logger import logger
 from jules_bot.database.postgres_manager import PostgresManager
 from jules_bot.genius_optimizer.objective import create_objective_function
@@ -25,7 +26,7 @@ class GeniusOptimizer:
     Orchestrates the entire process of data segmentation, regime-specific
     optimization, and results aggregation.
     """
-    def __init__(self, bot_name: str, n_trials: int, active_params: dict, days: Optional[int] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, seed_params: Optional[dict] = None):
+    def __init__(self, bot_name: str, n_trials: int, active_params: dict, days: Optional[int] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, seed_params: Optional[dict] = None, progress_bar_desc: Optional[str] = None):
         self.bot_name = bot_name
         self.days = days
         self.start_date = start_date
@@ -33,11 +34,13 @@ class GeniusOptimizer:
         self.n_trials = n_trials
         self.active_params = active_params
         self.seed_params = seed_params
+        self.progress_bar_desc = progress_bar_desc
         self.studies = {}
         self.db_manager = PostgresManager() # Initialize db manager for the whole process
         self.global_best_lock = threading.Lock() # Lock for thread-safe access to the global best trial file
         self.best_overall_score = float('-inf') # Track the best score in memory
         self.best_trial_summary = None # To store the best trial's data for WFO return
+        self.progress_bar = None
         os.makedirs(GENIUS_OUTPUT_DIR, exist_ok=True)
         # Clean up old TUI files before a new run
         if not seed_params: # Only cleanup for a fresh run, not for WFO windows
@@ -117,6 +120,10 @@ class GeniusOptimizer:
             Callback to write trial results to JSON files for the TUI to read.
             This will be called after each trial is completed.
             """
+            # --- Update shared progress bar ---
+            if self.progress_bar:
+                self.progress_bar.update(1)
+
             if trial.state != optuna.trial.TrialState.COMPLETE:
                 return # Don't log non-completed trials
 
@@ -221,6 +228,10 @@ class GeniusOptimizer:
         # 3. Run optimization for each regime in parallel
         logger.info(f"STEP 2: Running optimization for {len(segmented_data)} market regimes ({total_trials} total trials)...")
 
+        # Set up the progress bar
+        pbar_desc = self.progress_bar_desc or "Optimizing"
+        self.progress_bar = tqdm(total=total_trials, desc=pbar_desc, unit="trial", leave=False)
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(segmented_data)) as executor:
             futures = {
                 executor.submit(self.run_study_for_regime, regime, data_segment): regime
@@ -231,9 +242,11 @@ class GeniusOptimizer:
                 regime = futures[future]
                 try:
                     # block and get the result, or exception
-                    future.result()  
+                    future.result()
                 except Exception as exc:
                     logger.error(f"Regime {regime} optimization generated an exception: {exc}", exc_info=True)
+        
+        self.progress_bar.close()
 
         # 3. Aggregate final results
         logger.info("STEP 3: Aggregating best parameters from all regimes...")

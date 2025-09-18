@@ -22,7 +22,7 @@ from rich.table import Table
 
 app = typer.Typer()
 
-def run_optimization_for_window(start_date: datetime, end_date: datetime, n_trials: int, seed_params: Optional[dict] = None) -> Optional[dict]:
+def run_optimization_for_window(start_date: datetime, end_date: datetime, n_trials: int, seed_params: Optional[dict] = None, window_num: int = 0) -> Optional[dict]:
     """
     Runs the Genius Optimizer for a specific time window.
     """
@@ -32,13 +32,16 @@ def run_optimization_for_window(start_date: datetime, end_date: datetime, n_tria
     active_params_json = config_manager.get('OPTIMIZER', 'active_params_json')
     active_params = json.loads(active_params_json)
 
+    progress_bar_desc = f"Window {window_num} Trials"
+
     optimizer = GeniusOptimizer(
         bot_name=config_manager.bot_name,
         n_trials=n_trials,
         active_params=active_params,
         start_date=start_date.strftime('%Y-%m-%d'),
         end_date=end_date.strftime('%Y-%m-%d'),
-        seed_params=seed_params
+        seed_params=seed_params,
+        progress_bar_desc=progress_bar_desc
     )
     best_params = optimizer.run()
     return best_params
@@ -184,6 +187,9 @@ def aggregate_and_display_wfo_results(all_results_with_params: List[tuple]):
     console.print(table)
 
 
+import math
+from tqdm.auto import tqdm
+
 def run_wfo(
     total_days: int,
     training_days: int,
@@ -204,58 +210,63 @@ def run_wfo(
     # 2. Define the windows for the walk-forward analysis
     end_date = datetime.now()
     start_date = end_date - timedelta(days=total_days)
+    
+    # Calculate the number of windows
+    num_windows = math.floor((total_days - training_days) / testing_days)
+    if num_windows <= 0:
+        logger.error("Not enough days for a single walk-forward window. Increase total_days or decrease training/testing days.")
+        return
 
     current_training_start = start_date
     all_oos_results_with_params = []
     seeded_params = None
-    window_num = 1
 
-    while True:
-        # Define the boundaries for the current window
-        current_training_end = current_training_start + timedelta(days=training_days)
-        current_testing_end = current_training_end + timedelta(days=testing_days)
+    # Main progress bar for the WFO windows
+    with tqdm(total=num_windows, desc="WFO Windows", unit="window") as pbar_windows:
+        for window_num in range(1, num_windows + 1):
+            pbar_windows.set_description(f"WFO Window {window_num}/{num_windows}")
+            
+            # Define the boundaries for the current window
+            current_training_end = current_training_start + timedelta(days=training_days)
+            current_testing_end = current_training_end + timedelta(days=testing_days)
 
-        if current_testing_end > end_date:
-            logger.info("Reached the end of the total period. Concluding WFO.")
-            break
+            logger.info(f"--- Running WFO Window #{window_num} ---")
+            logger.info(f"Training Period: {current_training_start.date()} -> {current_training_end.date()}")
+            logger.info(f"Testing Period:  {current_training_end.date()} -> {current_testing_end.date()}")
 
-        logger.info(f"--- Running WFO Window #{window_num} ---")
-        logger.info(f"Training Period: {current_training_start.date()} -> {current_training_end.date()}")
-        logger.info(f"Testing Period:  {current_training_end.date()} -> {current_testing_end.date()}")
+            # 3. Run Genius Optimizer on the training (in-sample) data
+            best_params_found = run_optimization_for_window(
+                start_date=current_training_start,
+                end_date=current_training_end,
+                n_trials=n_trials_per_window,
+                seed_params=seeded_params,
+                window_num=window_num
+            )
 
-        # 3. Run Genius Optimizer on the training (in-sample) data
-        best_params_found = run_optimization_for_window(
-            start_date=current_training_start,
-            end_date=current_training_end,
-            n_trials=n_trials_per_window,
-            seed_params=seeded_params
-        )
+            if not best_params_found:
+                logger.warning(f"Window #{window_num}: Optimization did not return any parameters. Skipping this window.")
+                current_training_start += timedelta(days=testing_days) # Slide the window
+                pbar_windows.update(1)
+                continue
 
-        if not best_params_found:
-            logger.warning(f"Window #{window_num}: Optimization did not return any parameters. Skipping this window.")
+            # 4. Run Backtest on the testing (out-of-sample) data
+            oos_results = run_backtest_for_window(
+                start_date=current_training_end,
+                end_date=current_testing_end,
+                params=best_params_found
+            )
+            if oos_results:
+                # Store both the results and the parameters that generated them
+                all_oos_results_with_params.append((oos_results, best_params_found))
+                logger.info(f"Window #{window_num}: Out-of-sample backtest complete.")
+            else:
+                logger.warning(f"Window #{window_num}: Out-of-sample backtest failed to produce results.")
+
+            # 5. Prepare for the next window
+            seeded_params = best_params_found # Carry over the knowledge
             current_training_start += timedelta(days=testing_days) # Slide the window
-            window_num += 1
-            continue
-
-        # 4. Run Backtest on the testing (out-of-sample) data
-        oos_results = run_backtest_for_window(
-            start_date=current_training_end,
-            end_date=current_testing_end,
-            params=best_params_found
-        )
-        if oos_results:
-            # Store both the results and the parameters that generated them
-            all_oos_results_with_params.append((oos_results, best_params_found))
-            logger.info(f"Window #{window_num}: Out-of-sample backtest complete.")
-        else:
-            logger.warning(f"Window #{window_num}: Out-of-sample backtest failed to produce results.")
-
-        # 5. Prepare for the next window
-        seeded_params = best_params_found # Carry over the knowledge
-        current_training_start += timedelta(days=testing_days) # Slide the window
-        window_num += 1
-        logger.info("-" * 50)
-
+            pbar_windows.update(1)
+            logger.info("-" * 50)
 
     # 6. Aggregate, display, and save final results
     aggregate_and_display_wfo_results(all_oos_results_with_params)
