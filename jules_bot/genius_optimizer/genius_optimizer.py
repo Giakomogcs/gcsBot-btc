@@ -17,24 +17,31 @@ from jules_bot.genius_optimizer.results import (
     GENIUS_OUTPUT_DIR
 )
 
+from typing import Optional
+
 class GeniusOptimizer:
     """
     The main class for the "Genius Optimizer".
     Orchestrates the entire process of data segmentation, regime-specific
     optimization, and results aggregation.
     """
-    def __init__(self, bot_name: str, days: int, n_trials: int, active_params: dict):
+    def __init__(self, bot_name: str, n_trials: int, active_params: dict, days: Optional[int] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, seed_params: Optional[dict] = None):
         self.bot_name = bot_name
         self.days = days
+        self.start_date = start_date
+        self.end_date = end_date
         self.n_trials = n_trials
         self.active_params = active_params
+        self.seed_params = seed_params
         self.studies = {}
         self.db_manager = PostgresManager() # Initialize db manager for the whole process
         self.global_best_lock = threading.Lock() # Lock for thread-safe access to the global best trial file
         self.best_overall_score = float('-inf') # Track the best score in memory
+        self.best_trial_summary = None # To store the best trial's data for WFO return
         os.makedirs(GENIUS_OUTPUT_DIR, exist_ok=True)
         # Clean up old TUI files before a new run
-        self._cleanup_tui_files()
+        if not seed_params: # Only cleanup for a fresh run, not for WFO windows
+            self._cleanup_tui_files()
         logger.info("🧠 Genius Optimizer initialized.")
 
     def _cleanup_tui_files(self):
@@ -84,6 +91,17 @@ class GeniusOptimizer:
             direction="maximize",
             load_if_exists=True
         )
+
+        # Enqueue seed parameters if this is a walk-forward run
+        if self.seed_params:
+            # We need to filter seed_params to only include hyperparameters
+            # relevant to the current study space, which is defined by active_params
+            hyperparameter_names = self.active_params.keys()
+            filtered_seed_params = {k: v for k, v in self.seed_params.items() if k in hyperparameter_names}
+
+            if filtered_seed_params:
+                logger.info(f"Enqueuing seed parameters from previous WFO window for Regime {regime}.")
+                study.enqueue_trial(filtered_seed_params)
 
         # Prune previous trials if they are no longer relevant
         if study.trials and any(t.state == optuna.trial.TrialState.PRUNED for t in study.trials):
@@ -137,7 +155,7 @@ class GeniusOptimizer:
                 if trial.value is not None and trial.value > self.best_overall_score:
                     self.best_overall_score = trial.value # Update in-memory score
 
-                    best_trial_summary = {
+                    self.best_trial_summary = {
                         "regime": regime,
                         "trial_number": trial.number,
                         "score": trial.value,
@@ -147,9 +165,9 @@ class GeniusOptimizer:
 
                     best_trial_file = tui_callback_dir / "best_overall_trial.json"
                     with open(best_trial_file, "w") as f:
-                        json.dump(best_trial_summary, f, indent=4)
+                        json.dump(self.best_trial_summary, f, indent=4)
 
-                    save_best_overall_params(self.bot_name, best_trial_summary)
+                    save_best_overall_params(self.bot_name, self.best_trial_summary)
                     logger.info(f"🏆 New best trial! Score: {trial.value:.4f}, R: {regime}, T: {trial.number}")
 
 
@@ -167,20 +185,26 @@ class GeniusOptimizer:
         save_best_params_for_regime(study, regime, self.bot_name)
         generate_importance_report(study, regime)
 
-    def run(self):
+    def run(self) -> Optional[dict]:
         """
         The main entry point to start the optimization process.
+        Returns the best overall parameters found, for use in WFO.
         """
         logger.info("🚀 Starting Genius Optimization process...")
 
         # 1. Segment data by market regime
         logger.info("STEP 1: Analyzing and segmenting historical data...")
-        regime_analyzer = RegimeAnalyzer(db_manager=self.db_manager, days=self.days)
+        regime_analyzer = RegimeAnalyzer(
+            db_manager=self.db_manager,
+            days=self.days,
+            start_date=self.start_date,
+            end_date=self.end_date
+        )
         segmented_data = regime_analyzer.run()
 
         if not segmented_data:
             logger.error("No data segments were created. Aborting optimization.")
-            return
+            return None
 
         # 2. Initialize progress tracking for the TUI
         total_trials = len(segmented_data) * self.n_trials
@@ -217,3 +241,5 @@ class GeniusOptimizer:
 
         logger.info("✅ Genius Optimization process finished successfully!")
         logger.info(f"All results and reports saved in '{GENIUS_OUTPUT_DIR}' directory.")
+
+        return self.best_trial_summary['params'] if self.best_trial_summary and 'params' in self.best_trial_summary else None

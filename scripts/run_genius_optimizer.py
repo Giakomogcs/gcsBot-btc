@@ -96,9 +96,9 @@ def main(
         # 2. Run the main optimization process
         genius_optimizer = GeniusOptimizer(
             bot_name=bot_name,
-            days=days,
             n_trials=n_trials,
-            active_params=active_params
+            active_params=active_params,
+            days=days
         )
         genius_optimizer.run()
 

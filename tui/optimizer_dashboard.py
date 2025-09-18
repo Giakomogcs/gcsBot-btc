@@ -52,10 +52,12 @@ class ComparisonWidget(Container):
             return
 
         is_baseline = baseline_data is None
-        self.baseline_summary = baseline_data.get("summary", baseline_data) if baseline_data else {}
 
+        # Correctly and safely extract all data parts at the beginning
         summary = data.get("summary", {})
         params = data.get("params", {})
+        baseline_summary_metrics = baseline_data.get("summary", {}) if baseline_data else {}
+        baseline_params = baseline_data.get("params", {}) if baseline_data else {}
 
         # === Update Metrics Table ===
         metrics_table = self.query_one("#metrics_table", DataTable)
@@ -80,8 +82,9 @@ class ComparisonWidget(Container):
             value_str = self._format_metric(value, metric_type)
 
             improvement_str = ""
-            if not is_baseline and self.baseline_summary:
-                baseline_value = self.baseline_summary.get(key)
+            # Use the correctly separated baseline_summary_metrics
+            if not is_baseline and baseline_summary_metrics:
+                baseline_value = baseline_summary_metrics.get(key)
                 improvement_str = self._calculate_improvement(value, baseline_value, metric_type)
 
             metrics_table.add_row(name, value_str, improvement_str)
@@ -102,14 +105,7 @@ class ComparisonWidget(Container):
         if not params:
             params_table.add_row("[dim]Not applicable.[/dim]", "", "")
         else:
-            # Safely get baseline_params, defaulting to an empty dict
-            baseline_params = {}
-            if baseline_data:
-                baseline_params = baseline_data.get("params", {})
-            elif self.baseline_summary:
-                baseline_params = self.baseline_summary.get("params", {})
-
-
+            # Use the correctly separated baseline_params
             all_keys = sorted(list(set(params.keys()) | set(baseline_params.keys())))
 
             for key in all_keys:
