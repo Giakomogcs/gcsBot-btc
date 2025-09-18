@@ -298,18 +298,30 @@ class PostgresManager:
     def get_price_data(self, measurement: str, start_date: str = "-30d", end_date: str = "now()") -> pd.DataFrame:
         """
         Fetches price data from the database for a specific measurement within a given date range.
-        `start_date` and `end_date` should be in a format that PostgreSQL can understand,
-        e.g., 'YYYY-MM-DD HH:MI:SS' or relative like '-30d'.
+        `start_date` and `end_date` can be absolute (e.g., 'YYYY-MM-DD HH:MI:SS') or
+        relative (e.g., '-30d').
         """
         logger.info(f"DB: Fetching price data for {measurement} from {start_date} to {end_date}")
         with self.get_db() as db:
             try:
-                # The query now correctly uses the date range to filter data at the database level.
-                query = db.query(PriceHistory).filter(
-                    PriceHistory.symbol == measurement,
-                    PriceHistory.timestamp >= text(f"now() - interval '{start_date.replace('-', '')}'") if '-' in start_date else text(f"'{start_date}'"),
-                    PriceHistory.timestamp <= text("now()") if end_date == "now()" else text(f"'{end_date}'")
-                ).order_by(PriceHistory.timestamp)
+                filters = [PriceHistory.symbol == measurement]
+
+                # Handle start_date
+                if isinstance(start_date, str) and start_date.endswith('d'):
+                    # Handles relative dates like '-30d'
+                    interval_days = start_date.replace('-', '').replace('d', '')
+                    filters.append(PriceHistory.timestamp >= text(f"now() - interval '{interval_days} days'"))
+                else:
+                    # Handles absolute date strings like '2023-01-01'
+                    filters.append(PriceHistory.timestamp >= text(f"'{start_date}'"))
+
+                # Handle end_date
+                if end_date == "now()":
+                    filters.append(PriceHistory.timestamp <= text("now()"))
+                else:
+                    filters.append(PriceHistory.timestamp <= text(f"'{end_date}'"))
+
+                query = db.query(PriceHistory).filter(and_(*filters)).order_by(PriceHistory.timestamp)
 
                 df = pd.read_sql(query.statement, self.engine, index_col='timestamp')
 

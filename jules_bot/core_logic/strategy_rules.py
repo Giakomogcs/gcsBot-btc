@@ -17,13 +17,15 @@ class StrategyRules:
         self.sell_factor = self._safe_get_decimal('sell_factor', '0.9')
         self.commission_rate = self._safe_get_decimal('commission_rate', '0.001')
         
-        # --- Standard (Fixed) Trailing Stop ---
-        self.fixed_trail_percentage = self._safe_get_decimal('dynamic_trail_percentage', '0.02')  # Legacy key
+        # --- Difficulty Adjustment ---
+        self.difficulty_adjustment_factor = self._safe_get_decimal('difficulty_adjustment_factor', '0.006')
+        self.consecutive_buys_threshold = int(self.config_manager.get(self.section_name, 'consecutive_buys_threshold', fallback=2))
+        self.difficulty_reset_timeout_hours = int(self.config_manager.get(self.section_name, 'difficulty_reset_timeout_hours', fallback=2))
 
-        # --- Dynamic Trailing Stop ---
+        # --- Standard & Dynamic Trailing Stop ---
+        self.trailing_stop_profit = self._safe_get_decimal('trailing_stop_profit', '0.015') # Profit % to activate trailing stop
+        self.fixed_trail_percentage = self._safe_get_decimal('dynamic_trail_percentage', '0.02')  # Legacy key for fixed trail
         self.use_dynamic_trailing_stop = self.config_manager.getboolean(self.section_name, 'use_dynamic_trailing_stop', fallback=False)
-        self.trailing_stop_min_profit_usd = self._safe_get_decimal('trailing_stop_min_profit_usd', '0.02') # Absolute minimum profit to protect
-        self.trailing_stop_drop_usd = self._safe_get_decimal('trailing_stop_drop_usd', '0.0') # Absolute USD drop from peak to trigger sell
         self.dynamic_trail_min_pct = self._safe_get_decimal('dynamic_trail_min_pct', '0.01')      # e.g., 1%
         self.dynamic_trail_max_pct = self._safe_get_decimal('dynamic_trail_max_pct', '0.05')      # e.g., 5%
         self.dynamic_trail_profit_scaling = self._safe_get_decimal('dynamic_trail_profit_scaling', '0.1') # Determines how fast the trail widens
@@ -100,11 +102,12 @@ class StrategyRules:
         ema_100 = Decimal(str(ema_100))
         ema_20 = Decimal(str(ema_20))
         
-        difficulty_multiplier = Decimal('1') - difficulty_factor
+        difficulty_multiplier = Decimal('1') - (difficulty_factor * self.difficulty_adjustment_factor)
         adjusted_bbl = Decimal(str(bbl)) * difficulty_multiplier
 
         base_buy_dip = params.get('buy_dip_percentage', Decimal('0.02')) if params else Decimal('0.02')
-        adjusted_buy_dip_percentage = base_buy_dip + difficulty_factor
+        # Apply difficulty factor to the buy dip percentage
+        adjusted_buy_dip_percentage = base_buy_dip + (difficulty_factor * self.difficulty_adjustment_factor)
         price_dip_target = ema_20 * (Decimal('1') - adjusted_buy_dip_percentage)
 
         reason = ""
@@ -237,7 +240,7 @@ class StrategyRules:
         if params is None:
             params = {}
 
-        activation_profit_target = params.get('target_profit', self.trailing_stop_min_profit_usd)
+        activation_profit_target = params.get('target_profit', self.trailing_stop_profit)
 
         if not is_active:
             if net_unrealized_pnl >= activation_profit_target:
@@ -281,16 +284,13 @@ class StrategyRules:
                         reason += f" Trail updated to {new_trail_percentage:.2%}"
 
         # Now, calculate the sell trigger based on the absolute latest peak.
-        trigger_profit_pct = highest_profit * (Decimal('1') - trail_percentage_to_use)
-        trigger_profit_abs = highest_profit - self.trailing_stop_drop_usd if self.trailing_stop_drop_usd > 0 else Decimal('-1')
-        stop_profit_level = max(trigger_profit_pct, trigger_profit_abs)
-        final_trigger_profit = max(stop_profit_level, self.trailing_stop_min_profit_usd)
+        stop_profit_level = highest_profit * (Decimal('1') - trail_percentage_to_use)
 
-        if net_unrealized_pnl <= final_trigger_profit:
+        if net_unrealized_pnl <= stop_profit_level:
             decision = "SELL" # A sell decision overrides an update decision.
             reason = (
                 f"Trailing stop sell triggered. "
-                f"PnL (${net_unrealized_pnl:,.2f}) <= Target (${final_trigger_profit:,.2f}). "
+                f"PnL (${net_unrealized_pnl:,.2f}) <= Target (${stop_profit_level:,.2f}). "
                 f"Peak: ${highest_profit:.2f}, Trail: {trail_percentage_to_use:.2%}"
             )
         elif decision != "UPDATE_PEAK": # Don't overwrite the "UPDATE_PEAK" reason.
@@ -298,7 +298,7 @@ class StrategyRules:
                 f"Monitoring active trail. "
                 f"PnL: ${net_unrealized_pnl:,.2f}, "
                 f"Peak: ${highest_profit:.2f}, "
-                f"Stop Target: ${final_trigger_profit:,.2f}, "
+                f"Stop Target: ${stop_profit_level:,.2f}, "
                 f"Trail: {trail_percentage_to_use:.2%}"
             )
         
