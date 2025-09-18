@@ -60,7 +60,12 @@ class LiveFeatureCalculator:
             df_macro = self.db_manager.get_price_data("macro_data_1m", start_date="-3d")
             df_sentiment_live = self._get_live_sentiment_data()
             df_sentiment_db = self.db_manager.get_price_data("sentiment_fear_and_greed", start_date="-3d")
-            df_sentiment = pd.concat([df_sentiment_db, df_sentiment_live]).drop_duplicates() if not (df_sentiment_db.empty and df_sentiment_live.empty) else pd.DataFrame()
+            # Correção para FutureWarning: concatenar apenas DataFrames não vazios
+            sentiment_dfs = [df for df in [df_sentiment_db, df_sentiment_live] if not df.empty]
+            if sentiment_dfs:
+                df_sentiment = pd.concat(sentiment_dfs).drop_duplicates()
+            else:
+                df_sentiment = pd.DataFrame()
         else:
             df_macro = pd.DataFrame()
             df_sentiment = pd.DataFrame()
@@ -71,7 +76,9 @@ class LiveFeatureCalculator:
         if not df_sentiment.empty:
              df_combined = df_combined.join(df_sentiment, how='left', rsuffix='_sentiment')
 
-        df_combined.ffill(inplace=True)
+        # Correção para FutureWarning: usar infer_objects após ffill
+        df_combined = df_combined.ffill()
+        df_combined = df_combined.infer_objects(copy=False)
         if df_combined.isnull().values.any():
             logger.warning("NaNs encontrados após o ffill. Preenchendo com 0.")
             df_combined.fillna(0, inplace=True)
