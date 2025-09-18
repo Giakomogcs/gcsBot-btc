@@ -19,8 +19,8 @@ class StrategyRules:
         
         # --- Difficulty Adjustment ---
         self.difficulty_adjustment_factor = self._safe_get_decimal('difficulty_adjustment_factor', '0.006')
-        self.consecutive_buys_threshold = self.config_manager.getint(self.section_name, 'consecutive_buys_threshold', fallback=2)
-        self.difficulty_reset_timeout_hours = self.config_manager.getint(self.section_name, 'difficulty_reset_timeout_hours', fallback=2)
+        self.consecutive_buys_threshold = int(self.config_manager.get(self.section_name, 'consecutive_buys_threshold', fallback=2))
+        self.difficulty_reset_timeout_hours = int(self.config_manager.get(self.section_name, 'difficulty_reset_timeout_hours', fallback=2))
 
         # --- Standard & Dynamic Trailing Stop ---
         self.trailing_stop_profit = self._safe_get_decimal('trailing_stop_profit', '0.015') # Profit % to activate trailing stop
@@ -80,11 +80,10 @@ class StrategyRules:
         
         return final_trail
 
-    def evaluate_buy_signal(self, market_data: dict, open_positions_count: int, difficulty_factor: Decimal = None, params: Dict[str, Decimal] = None) -> tuple[bool, str, str, Optional[Decimal]]:
+    def evaluate_buy_signal(self, market_data: dict, open_positions_count: int, difficulty_factor: Decimal = None, params: Dict[str, Decimal] = None) -> tuple[bool, str, str]:
         """
         Evaluates if a buy signal is present, providing detailed reasons for no signal.
         Uses dynamic parameters for buy dip percentage.
-        Returns the buy target price when a dip buy is signaled.
         """
         if difficulty_factor is None:
             difficulty_factor = Decimal('0')
@@ -96,7 +95,7 @@ class StrategyRules:
         bbl = market_data.get('bbl_20_2_0')
 
         if any(v is None for v in [current_price, high_price, ema_100, ema_20, bbl]):
-            return False, "unknown", "Not enough indicator data", None
+            return False, "unknown", "Not enough indicator data"
 
         current_price = Decimal(str(current_price))
         high_price = Decimal(str(high_price))
@@ -115,40 +114,40 @@ class StrategyRules:
         if open_positions_count == 0:
             if current_price > ema_100:
                 if current_price > ema_20:
-                    return True, "uptrend", "Aggressive first entry (price > ema_20)", None
+                    return True, "uptrend", "Aggressive first entry (price > ema_20)"
                 elif current_price <= price_dip_target:
                     if self.use_reversal_buy_strategy:
-                        return True, "START_MONITORING", f"Dip target hit at {adjusted_buy_dip_percentage:.2%}. Starting monitoring.", price_dip_target
+                        return True, "START_MONITORING", f"Dip target hit at {adjusted_buy_dip_percentage:.2%}. Starting reversal monitoring."
                     else:
-                        return True, "uptrend", f"Dip buy signal triggered at {adjusted_buy_dip_percentage:.2%}", price_dip_target
+                        return True, "uptrend", f"Dip buy signal triggered at {adjusted_buy_dip_percentage:.2%}"
                 else:
                     reason = f"Price ${current_price:,.2f} is above EMA100 but below EMA20 ${ema_20:,.2f}"
             else:
                 # DOWNTREND: Use the same dip-buying logic as uptrend.
                 if current_price <= price_dip_target:
-                    return True, "downtrend", f"Aggressive first entry (dip buy at {adjusted_buy_dip_percentage:.2%})", price_dip_target
+                    return True, "downtrend", f"Aggressive first entry (dip buy at {adjusted_buy_dip_percentage:.2%})"
                 else:
                     reason = f"Buy target: ${price_dip_target:,.2f}. Price is too high."
         else:
             # Logic for when there are existing open positions
             if current_price > ema_100:
                 if high_price > ema_20 and current_price < ema_20:
-                    return True, "uptrend", "Uptrend pullback", None
+                    return True, "uptrend", "Uptrend pullback"
                 elif current_price <= price_dip_target:
                     if self.use_reversal_buy_strategy:
-                        return True, "START_MONITORING", f"Dip target hit on existing position at {adjusted_buy_dip_percentage:.2%}. Starting monitoring.", price_dip_target
+                        return True, "START_MONITORING", f"Dip target hit on existing position at {adjusted_buy_dip_percentage:.2%}. Starting reversal monitoring."
                     else:
-                        return True, "uptrend", f"Dip buy signal on existing position at {adjusted_buy_dip_percentage:.2%}", price_dip_target
+                        return True, "uptrend", f"Dip buy signal on existing position at {adjusted_buy_dip_percentage:.2%}"
                 else:
                     reason = f"In uptrend (price > EMA100), but no pullback signal found"
             else:
                 # DOWNTREND: Use the same dip-buying logic as uptrend.
                 if current_price <= price_dip_target:
-                    return True, "downtrend", f"Downtrend dip buy signal on existing position at {adjusted_buy_dip_percentage:.2%}", price_dip_target
+                    return True, "downtrend", f"Downtrend dip buy signal on existing position at {adjusted_buy_dip_percentage:.2%}"
                 else:
                     reason = f"Buy target: ${price_dip_target:,.2f}. Price is too high."
         
-        return False, "unknown", reason or "No signal", None
+        return False, "unknown", reason or "No signal"
 
     def calculate_sell_target_price(self, purchase_price: Decimal, quantity: "Decimal | None" = None, params: "Dict[str, Decimal] | None" = None) -> Decimal:
         purchase_price = Decimal(purchase_price)
